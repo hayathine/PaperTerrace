@@ -110,5 +110,5 @@ async def analyze_url(url: str = Form(...)):
     clean_text = soup.get_text(separator=" ")  # タグの間にスペースを入れて結合
 
     # メソッド名を更新
-    ruby_html = service.tokenize_to_html(clean_text)
+    ruby_html = await service.tokenize_to_html(clean_text)
     return f'<div class="leading-relaxed tracking-wide">{ruby_html}</div>'

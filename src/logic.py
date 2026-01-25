@@ -1,5 +1,7 @@
+import asyncio
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 
 import spacy
 from dotenv import load_dotenv
@@ -9,8 +11,16 @@ from jamdict import Jamdict
 load_dotenv()
 
 # spaCyの英語モデルをロード
-nlp = spacy.load("en_core_web_sm")
+nlp = spacy.load(
+    "en_core_web_sm",
+    disable=[
+        "ner",
+        "parser",
+        "tok2vec",
+    ],
+)
 jam = Jamdict()
+executor = ThreadPoolExecutor(max_workers=4)
 
 
 class Translate:
@@ -36,7 +46,7 @@ class EnglishAnalysisService:
         self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         self.model = os.getenv("API_MODEL")
 
-    def tokenize_to_html(self, text: str) -> str:
+    async def tokenize_to_html(self, text: str) -> str:
         """テキストを段落ごとに分け、それぞれを<p>タグで囲んで返す"""
 
         # 1. 準備：改行コードを統一 (\r\n -> \n)
@@ -45,7 +55,7 @@ class EnglishAnalysisService:
         # 2. 段落（2回以上の改行）でテキストを分割
         # これにより、PDF特有の「1行ごとの改行」は無視し、大きなまとまりだけを保持します
         paragraphs = re.split(r"\n{2,}", text)
-
+        loop = asyncio.get_event_loop()
         html_output = []
 
         for p_text in paragraphs:
@@ -56,7 +66,7 @@ class EnglishAnalysisService:
                 continue
 
             # 段落ごとにspaCyで解析
-            doc = nlp(p_text)
+            doc = await loop.run_in_executor(executor, nlp, p_text)
             p_tokens_html = []
 
             for token in doc:
