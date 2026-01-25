@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AI English Reader</title>
+    <script src="https://unpkg.com/htmx.org@1.9.10"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+  </head>
+  <body class="bg-gray-50 text-gray-900 min-h-screen">
+    <div class="container mx-auto px-4 py-12 max-w-4xl">
+      <header class="text-center mb-12">
+        <h1 class="text-4xl font-extrabold text-indigo-700 mb-2">
+          English Vocab Analyzer
+        </h1>
+        <p class="text-gray-600">
+          Jamdict と Gemini AI によるハイブリッド単語抽出
+        </p>
+      </header>
+
+      <div class="bg-white rounded-xl shadow-lg p-6 mb-8">
+        <div class="flex space-x-4 border-b mb-6 text-sm font-medium">
+          <button class="py-2 px-4 border-b-2 border-indigo-500">
+            Manual Text
+          </button>
+        </div>
+
+        <div class="space-y-6">
+          <form
+            hx-post="/analyze_txt"
+            hx-target="#results"
+            hx-indicator="#loading"
+          >
+            <textarea
+              name="html_text"
+              rows="4"
+              class="w-full border-gray-300 rounded-lg shadow-sm focus:ring-indigo-500 focus:border-indigo-500 p-3 border"
+              placeholder="Paste English text here..."
+            ></textarea>
+            <button
+              type="submit"
+              class="mt-4 w-full bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg hover:bg-indigo-700 transition"
+            >
+              Analyze Text
+            </button>
+          </form>
+
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form
+              hx-post="/analyze-url"
+              hx-target="#results"
+              hx-indicator="#loading"
+              class="bg-gray-50 p-4 rounded-lg border"
+            >
+              <label class="block text-sm font-bold mb-2">From URL</label>
+              <input
+                type="url"
+                name="url"
+                class="w-full p-2 border rounded text-sm"
+                placeholder="https://example.com/news"
+              />
+              <button
+                type="submit"
+                class="mt-2 text-indigo-600 text-sm font-bold hover:underline"
+              >
+                Extract from Web
+              </button>
+            </form>
+
+            <form
+              hx-post="/analyze-pdf"
+              hx-target="#results"
+              hx-encoding="multipart/form-data"
+              hx-indicator="#loading"
+              class="bg-gray-50 p-4 rounded-lg border"
+            >
+              <label class="block text-sm font-bold mb-2">From PDF</label>
+              <input
+                type="file"
+                name="file"
+                accept="application/pdf"
+                class="w-full text-sm file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+              />
+              <button
+                type="submit"
+                class="mt-2 text-indigo-600 text-sm font-bold hover:underline"
+              >
+                Analyze PDF
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+<div class="container mx-auto px-4 py-8 max-w-[95%]">
+    
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-8">
+        
+        <div class="lg:col-span-3 bg-white rounded-xl shadow-lg p-10 min-h-[800px]">
+            <h2 class="text-xs font-bold text-gray-400 uppercase tracking-tighter mb-6">Reader View</h2>
+            <div id="results" class="prose prose-indigo whitespace-normal max-w-none text-2xl leading-[1.8] text-gray-800">
+                <p class="text-gray-400 italic">Ready to analyze...</p>
+            </div>
+        </div>
+
+        <div class="lg:col-span-1">
+            <div class="sticky top-8">
+                <h2 class="text-xs font-bold text-gray-400 uppercase tracking-tighter mb-4">Dictionary / AI</h2>
+                <div id="definition-box" class="min-h-[200px] bg-white  rounded-xl shadow-md border border-gray-100 p-6">
+                    <div class="text-center">
+                        <p class="text-gray-400 text-sm">本文の単語をクリックすると<br>詳細が表示されます</p>
+                    </div>
+                </div>
+                
+                <div id="history-box" class="mt-4 p-4 text-xs text-gray-400">
+                    </div>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+</div>
+      </div>
+    </div>
+  </body>
+</html>

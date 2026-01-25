@@ -1,0 +1,50 @@
+[project]
+name = "furigana"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "chardet>=5.2.0",
+    "datetime>=6.0",
+    "dotenv>=0.9.9",
+    "en-core-web-lg",
+    "fastapi>=0.128.0",
+    "genai>=1.0.3",
+    "google-genai>=1.60.0",
+    "httpx>=0.28.1",
+    "jamdict>=0.1a11.post2",
+    "jamdict-data>=1.5",
+    "jinja2>=3.1.6",
+    "pdfplumber>=0.11.9",
+    "pip>=25.3",
+    "pydantic>=2.12.5",
+    "pymupdf>=1.26.7",
+    "python-json-logger>=4.0.0",
+    "python-multipart>=0.0.21",
+    "spacy>=3.8.11",
+    "tiktoken>=0.12.0",
+    "uuid6>=2025.0.1",
+    "uvicorn>=0.40.0",
+]
+
+[dependency-groups]
+dev = [
+    "ty>=0.0.13",
+    "ruff>=0.14.14",
+    "unidic-lite>=1.0.8",
+]
+
+[tool.ruff]
+# 一行の最大文字数
+line-length = 88
+
+[tool.ruff.lint]
+# 有効にするルールセット（E: エラー, F: Pyflakes, I: isortなど）
+select = ["E", "F", "I"]
+# 無視するルール
+ignore = []
+
+[tool.uv.sources]
+en-core-web-lg = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" }
