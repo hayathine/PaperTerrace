@@ -89,7 +89,7 @@ class EnglishAnalysisService:
         if lookup_res.entries:
             # 見つかった日本語の候補をすべて並べる（例：タイプ, 種類, 型）
             ja_candidates = []
-            for entry in lookup_res.entries[1:3]:
+            for entry in lookup_res.entries[:3]:
                 if entry.kanji_forms:
                     ja_candidates.append(entry.kanji_forms[0].text)
                 elif entry.kana_forms:
