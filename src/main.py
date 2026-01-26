@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 # logic.pyで定義したクラス/関数をインポート（前回の回答のロジックを含む想定）
-from .logic import EnglishAnalysisService
+from .feature.word_focus import EnglishAnalysisService
 
 app = FastAPI()
 templates = Jinja2Templates(directory="src/templates")

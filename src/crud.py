@@ -1,12 +1,11 @@
 # src/history.py
 import json
+import os
 import sqlite3
 from datetime import datetime
 
 from src.base_model import History, User
 from src.logger import logger
-
-DB_PATH = "furigana.db"
 
 
 class HistoryManager:
@@ -18,7 +17,7 @@ class HistoryManager:
     user_id: ユーザー識別子（将来的な認証機能導入に備えて）
     """
 
-    def __init__(self, db_path=DB_PATH):
+    def __init__(self, db_path=os.get_env("FURIGANA_DB_PATH")):
         self.db_path = db_path
         self._create_table()
 
@@ -69,7 +68,7 @@ history_manager = HistoryManager()
 
 
 class UserManager:
-    def __init__(self, db_path=DB_PATH):
+    def __init__(self, db_path=os.getenv("FURIGANA_DB_PATH")):
         self.db_path = db_path
         self._create_table()
 
@@ -116,3 +115,36 @@ class UserManager:
 
 
 user_manager = UserManager()
+
+
+class WordNetManager:
+    """日本語 WordNet を使用した国語辞典クエリを担当"""
+
+    def __init__(self, db_path=os.getenv("WN_DB_PATH")):
+        self.db_path = db_path
+
+    def get_definitions(self, lemma: str) -> list[str]:
+        """単語の日本語定義を取得する"""
+        query = """
+            SELECT def.def 
+            FROM word AS w
+            JOIN sense AS s ON w.wordid = s.wordid
+            JOIN definition AS def ON s.synset = def.synset
+            WHERE w.lemma = ? AND def.lang = 'jpn'
+        """
+        try:
+            with sqlite3.connect(self.db_path) as conn:
+                cur = conn.execute(query, (lemma,))
+                rows = cur.fetchall()
+                # 重複を除いてリストで返す
+                return list(set(row[0] for row in rows))
+        except sqlite3.OperationalError:
+            logger.error(f"WordNet DB not found at {self.db_path}")
+            return []
+        except Exception as e:
+            logger.error(f"WordNet query error: {e}")
+            return []
+
+
+# インスタンス化してエクスポート
+wordnet_manager = WordNetManager()
