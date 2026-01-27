@@ -21,7 +21,7 @@ async def register_user(
 ):
     """
     Register a new user or return existing user.
-    
+
     Called after Firebase authentication to create/update local user record.
     """
     storage = get_storage_provider()
@@ -124,7 +124,7 @@ async def get_current_user_stats(user: CurrentUser):
 async def delete_current_user(user: CurrentUser):
     """
     Delete the current user's account.
-    
+
     This does not delete the Firebase account, only the local profile.
     Papers owned by this user will be marked as orphaned.
     """

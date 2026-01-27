@@ -20,7 +20,7 @@ async def explore_papers(
 ):
     """
     Get public papers for exploration.
-    
+
     Sort options:
     - recent: Most recently uploaded
     - popular: Most viewed
@@ -55,9 +55,7 @@ async def explore_papers(
                     created_at=paper["created_at"],
                     owner_id=paper.get("owner_id"),
                     owner_name=owner_data.get("display_name") if owner_data else None,
-                    owner_image_url=owner_data.get("profile_image_url")
-                    if owner_data
-                    else None,
+                    owner_image_url=owner_data.get("profile_image_url") if owner_data else None,
                 )
             )
 
@@ -121,9 +119,7 @@ async def search_papers(
                     created_at=paper["created_at"],
                     owner_id=paper.get("owner_id"),
                     owner_name=owner_data.get("display_name") if owner_data else None,
-                    owner_image_url=owner_data.get("profile_image_url")
-                    if owner_data
-                    else None,
+                    owner_image_url=owner_data.get("profile_image_url") if owner_data else None,
                 )
             )
 

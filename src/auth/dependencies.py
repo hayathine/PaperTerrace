@@ -20,9 +20,7 @@ class AuthenticatedUser:
         self.email_verified: bool = decoded_token.get("email_verified", False)
         self.name: str = decoded_token.get("name", "")
         self.picture: str = decoded_token.get("picture", "")
-        self.provider: str = decoded_token.get("firebase", {}).get(
-            "sign_in_provider", ""
-        )
+        self.provider: str = decoded_token.get("firebase", {}).get("sign_in_provider", "")
         self._raw_token = decoded_token
 
     def __repr__(self):
@@ -35,9 +33,9 @@ async def get_current_user(
 ) -> AuthenticatedUser:
     """
     Dependency to get the current authenticated user.
-    
+
     Extracts and verifies the Firebase ID token from the Authorization header.
-    
+
     Usage:
         @app.get("/protected")
         async def protected_route(user: AuthenticatedUser = Depends(get_current_user)):
@@ -86,14 +84,14 @@ async def get_optional_user(
 ) -> AuthenticatedUser | None:
     """
     Dependency to optionally get the current user.
-    
+
     Returns None if no valid token is provided, instead of raising an error.
     Useful for routes that work differently for authenticated vs anonymous users.
-    
+
     Usage:
         @app.get("/papers/{id}")
         async def get_paper(
-            id: str, 
+            id: str,
             user: AuthenticatedUser | None = Depends(get_optional_user)
         ):
             # If user is logged in, they can see their private papers

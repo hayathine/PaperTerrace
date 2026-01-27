@@ -16,7 +16,7 @@ router = APIRouter(prefix="/users", tags=["Users"])
 async def get_user_profile(user_id: str):
     """
     Get a user's public profile.
-    
+
     Only returns public profile information.
     """
     storage = get_storage_provider()
@@ -58,7 +58,7 @@ async def get_user_papers(
 ):
     """
     Get a user's public papers.
-    
+
     Only returns papers with visibility='public'.
     """
     storage = get_storage_provider()
