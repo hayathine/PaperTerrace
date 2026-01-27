@@ -154,6 +154,7 @@ class SQLiteStorage(StorageInterface):
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
         self.init_tables()
+        self._migrate_tables()
         logger.info(f"SQLiteStorage initialized with db: {self.db_path}")
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -161,6 +162,37 @@ class SQLiteStorage(StorageInterface):
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         return conn
+
+    def _migrate_tables(self) -> None:
+        """Add missing columns to existing tables (handles schema migrations)."""
+        with self._get_connection() as conn:
+            # Get existing columns in papers table
+            cursor = conn.execute("PRAGMA table_info(papers)")
+            existing_columns = {row[1] for row in cursor.fetchall()}
+
+            # Define columns that should exist in papers table
+            migrations = [
+                ("owner_id", "TEXT"),
+                ("visibility", "TEXT DEFAULT 'private'"),
+                ("title", "TEXT"),
+                ("authors", "TEXT"),
+                ("abstract", "TEXT"),
+                ("tags", "TEXT"),
+                ("view_count", "INTEGER DEFAULT 0"),
+                ("like_count", "INTEGER DEFAULT 0"),
+                ("updated_at", "TIMESTAMP"),
+            ]
+
+            for column_name, column_type in migrations:
+                if column_name not in existing_columns:
+                    try:
+                        conn.execute(f"ALTER TABLE papers ADD COLUMN {column_name} {column_type}")
+                        logger.info(f"Added column '{column_name}' to papers table")
+                    except sqlite3.OperationalError as e:
+                        # Column might already exist, ignore
+                        logger.debug(f"Column migration skipped: {e}")
+
+            conn.commit()
 
     def init_tables(self) -> None:
         """Initialize required database tables."""
@@ -276,9 +308,7 @@ class SQLiteStorage(StorageInterface):
     def get_paper(self, paper_id: str) -> dict | None:
         """Get a paper by ID."""
         with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM papers WHERE paper_id = ?", (paper_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM papers WHERE paper_id = ?", (paper_id,)).fetchone()
             if row:
                 data = dict(row)
                 # Parse tags JSON
@@ -295,9 +325,7 @@ class SQLiteStorage(StorageInterface):
     def get_paper_by_hash(self, file_hash: str) -> dict | None:
         """Get a paper by file hash."""
         with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM papers WHERE file_hash = ?", (file_hash,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM papers WHERE file_hash = ?", (file_hash,)).fetchone()
             return dict(row) if row else None
 
     def list_papers(self, limit: int = 50) -> list[dict]:
@@ -436,9 +464,7 @@ class SQLiteStorage(StorageInterface):
 
         values.append(user_id)
         with self._get_connection() as conn:
-            cursor = conn.execute(
-                f"UPDATE users SET {', '.join(fields)} WHERE id = ?", values
-            )
+            cursor = conn.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = ?", values)
             conn.commit()
             return cursor.rowcount > 0
 
@@ -655,4 +681,3 @@ def get_storage_provider() -> StorageInterface:
     if provider_type == "cloudsql":
         return CloudSQLStorage()
     return SQLiteStorage()
-
