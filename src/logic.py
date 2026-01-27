@@ -66,6 +66,7 @@ class PDFOCRService:
             file_hash=file_hash,
             filename=filename,
             ocr_text=ocr_text,
+            model_name=self.model,
         )
         logger.info("OCR extraction completed and saved to database.")
         return ocr_text
