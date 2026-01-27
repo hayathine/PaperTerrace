@@ -11,7 +11,12 @@ tasks:
     cmds:
       - echo "{{.GREETING}}"
     silent: true
-  
+
+  redis:
+    desc: "Start Redis container"
+    cmds:
+      - docker run -d --name paper-terrace-redis -p 6379:6379 redis:latest || docker start paper-terrace-redisU
+
   run:
     desc: "Run local server"
     cmds:
