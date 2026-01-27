@@ -2,8 +2,16 @@
 関連する論文を調査・取得する機能を提供するモジュール
 """
 
+import json
+
 from src.logger import logger
 from src.providers import get_ai_provider
+
+
+class ResearchRadarError(Exception):
+    """Research Radar-specific exception."""
+
+    pass
 
 
 class ResearchRadarService:
@@ -15,10 +23,10 @@ class ResearchRadarService:
     async def find_related_papers(self, abstract: str) -> list[dict]:
         """
         Extract related paper suggestions based on the abstract.
-        
+
         Args:
             abstract: The paper's abstract or summary
-            
+
         Returns:
             List of suggested related papers with title, authors, relevance
         """
@@ -41,27 +49,44 @@ class ResearchRadarService:
 実在する可能性が高い論文を提案してください。JSONのみを出力してください。"""
 
         try:
+            logger.debug(
+                "Finding related papers",
+                extra={"abstract_length": len(abstract)},
+            )
             response = await self.ai_provider.generate(prompt)
-            import json
             response = response.strip()
             if response.startswith("```"):
                 response = response.split("```")[1]
                 if response.startswith("json"):
                     response = response[4:]
+
             papers = json.loads(response)
-            logger.info(f"Found {len(papers)} related paper suggestions")
+
+            logger.info(
+                "Related papers found",
+                extra={"paper_count": len(papers)},
+            )
             return papers
+        except json.JSONDecodeError as e:
+            logger.exception(
+                "Failed to parse related papers JSON",
+                extra={"error": str(e)},
+            )
+            return []
         except Exception as e:
-            logger.error(f"Related papers search failed: {e}")
+            logger.exception(
+                "Related papers search failed",
+                extra={"error": str(e)},
+            )
             return []
 
     async def generate_search_queries(self, text: str) -> list[str]:
         """
         Generate search queries for finding related work.
-        
+
         Args:
             text: The paper text
-            
+
         Returns:
             List of search query strings
         """
@@ -85,10 +110,10 @@ class ResearchRadarService:
     async def analyze_citations(self, text: str) -> list[dict]:
         """
         Analyze citation patterns and intent in the paper.
-        
+
         Args:
             text: The paper text
-            
+
         Returns:
             List of citations with their intent analysis
         """
@@ -112,6 +137,7 @@ class ResearchRadarService:
         try:
             response = await self.ai_provider.generate(prompt)
             import json
+
             response = response.strip()
             if response.startswith("```"):
                 response = response.split("```")[1]

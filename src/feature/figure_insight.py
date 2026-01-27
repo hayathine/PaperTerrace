@@ -6,6 +6,12 @@ from src.logger import logger
 from src.providers import get_ai_provider
 
 
+class FigureInsightError(Exception):
+    """Figure insight-specific exception."""
+
+    pass
+
+
 class FigureInsightService:
     """Figure and table insight service using vision AI."""
 
@@ -17,12 +23,12 @@ class FigureInsightService:
     ) -> str:
         """
         Analyze a figure image and generate insights.
-        
+
         Args:
             image_bytes: The image data
             caption: Optional figure caption
             mime_type: Image MIME type
-            
+
         Returns:
             Analysis and insights in Japanese
         """
@@ -40,23 +46,39 @@ class FigureInsightService:
 視覚的な情報を言語化して、図を見なくても内容が理解できるように説明してください。"""
 
         try:
-            analysis = await self.ai_provider.generate_with_image(
-                prompt, image_bytes, mime_type
+            logger.debug(
+                "Analyzing figure",
+                extra={"image_size": len(image_bytes), "mime_type": mime_type},
             )
-            logger.info("Figure analysis generated")
+            analysis = await self.ai_provider.generate_with_image(prompt, image_bytes, mime_type)
+            analysis = analysis.strip()
+
+            if not analysis:
+                logger.warning("Empty figure analysis result")
+                raise FigureInsightError("Empty analysis result")
+
+            logger.info(
+                "Figure analysis generated",
+                extra={"output_length": len(analysis)},
+            )
             return analysis
+        except FigureInsightError:
+            raise
         except Exception as e:
-            logger.error(f"Figure analysis failed: {e}")
-            return f"図の分析に失敗しました: {str(e)}"
+            logger.exception(
+                "Figure analysis failed",
+                extra={"error": str(e), "mime_type": mime_type},
+            )
+            return f"図の分析に失敗しました: {e}"
 
     async def analyze_table_text(self, table_text: str, context: str = "") -> str:
         """
         Analyze a table in text format.
-        
+
         Args:
             table_text: The table content as text
             context: Surrounding text for context
-            
+
         Returns:
             Analysis in Japanese
         """
@@ -82,16 +104,14 @@ class FigureInsightService:
             logger.error(f"Table analysis failed: {e}")
             return f"表の分析に失敗しました: {str(e)}"
 
-    async def compare_figures(
-        self, description1: str, description2: str
-    ) -> str:
+    async def compare_figures(self, description1: str, description2: str) -> str:
         """
         Compare two figures based on their descriptions.
-        
+
         Args:
             description1: Description of first figure
             description2: Description of second figure
-            
+
         Returns:
             Comparison analysis in Japanese
         """

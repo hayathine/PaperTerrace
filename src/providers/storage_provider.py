@@ -60,9 +60,7 @@ class StorageInterface(ABC):
         ...
 
     @abstractmethod
-    def save_memo(
-        self, memo_id: str, session_id: str, term: str, note: str
-    ) -> str:
+    def save_memo(self, memo_id: str, session_id: str, term: str, note: str) -> str:
         """Save a memo. Returns memo_id."""
         ...
 
@@ -162,17 +160,13 @@ class SQLiteStorage(StorageInterface):
     def get_paper(self, paper_id: str) -> dict | None:
         """Get a paper by ID."""
         with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM papers WHERE paper_id = ?", (paper_id,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM papers WHERE paper_id = ?", (paper_id,)).fetchone()
             return dict(row) if row else None
 
     def get_paper_by_hash(self, file_hash: str) -> dict | None:
         """Get a paper by file hash."""
         with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM papers WHERE file_hash = ?", (file_hash,)
-            ).fetchone()
+            row = conn.execute("SELECT * FROM papers WHERE file_hash = ?", (file_hash,)).fetchone()
             return dict(row) if row else None
 
     def list_papers(self, limit: int = 50) -> list[dict]:
@@ -187,18 +181,14 @@ class SQLiteStorage(StorageInterface):
     def delete_paper(self, paper_id: str) -> bool:
         """Delete a paper by ID."""
         with self._get_connection() as conn:
-            cursor = conn.execute(
-                "DELETE FROM papers WHERE paper_id = ?", (paper_id,)
-            )
+            cursor = conn.execute("DELETE FROM papers WHERE paper_id = ?", (paper_id,))
             conn.commit()
             deleted = cursor.rowcount > 0
             if deleted:
                 logger.info(f"Paper deleted: {paper_id}")
             return deleted
 
-    def save_memo(
-        self, memo_id: str, session_id: str, term: str, note: str
-    ) -> str:
+    def save_memo(self, memo_id: str, session_id: str, term: str, note: str) -> str:
         """Save a memo."""
         with self._get_connection() as conn:
             conn.execute(
@@ -224,9 +214,7 @@ class SQLiteStorage(StorageInterface):
     def delete_memo(self, memo_id: str) -> bool:
         """Delete a memo by ID."""
         with self._get_connection() as conn:
-            cursor = conn.execute(
-                "DELETE FROM memos WHERE memo_id = ?", (memo_id,)
-            )
+            cursor = conn.execute("DELETE FROM memos WHERE memo_id = ?", (memo_id,))
             conn.commit()
             deleted = cursor.rowcount > 0
             if deleted:
@@ -237,7 +225,7 @@ class SQLiteStorage(StorageInterface):
 class CloudSQLStorage(StorageInterface):
     """
     Cloud SQL storage implementation (stub for future GCP deployment).
-    
+
     To use Cloud SQL, set:
     - STORAGE_PROVIDER=cloudsql
     - CLOUDSQL_CONNECTION_NAME=project:region:instance
@@ -246,9 +234,7 @@ class CloudSQLStorage(StorageInterface):
 
     def __init__(self):
         self.connection_name = os.getenv("CLOUDSQL_CONNECTION_NAME")
-        logger.info(
-            f"CloudSQLStorage initialized (stub) - connection: {self.connection_name}"
-        )
+        logger.info(f"CloudSQLStorage initialized (stub) - connection: {self.connection_name}")
 
     def init_tables(self) -> None:
         raise NotImplementedError("CloudSQLStorage is a stub.")
@@ -281,7 +267,7 @@ class CloudSQLStorage(StorageInterface):
 def get_storage_provider() -> StorageInterface:
     """
     Factory function to get the configured storage provider.
-    
+
     Set STORAGE_PROVIDER environment variable:
     - "sqlite" (default): Use local SQLite
     - "cloudsql": Use Cloud SQL (requires GCP setup)

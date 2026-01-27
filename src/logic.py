@@ -42,9 +42,7 @@ class PDFOCRService:
                 )
             """)
 
-    async def extract_text_with_ai(
-        self, file_bytes: bytes, filename: str = "unknown.pdf"
-    ) -> str:
+    async def extract_text_with_ai(self, file_bytes: bytes, filename: str = "unknown.pdf") -> str:
         file_hash = _get_file_hash(file_bytes)
         cached_ocr = get_ocr_from_db(file_hash)
         if cached_ocr:
@@ -122,9 +120,7 @@ class EnglishAnalysisService:
                 e.kanji_forms[0].text if e.kanji_forms else e.kana_forms[0].text
                 for e in lookup_res.entries[:3]
             ]
-            return self._format_bubble(
-                lemma, " / ".join(list(dict.fromkeys(ja))), "Jamdict"
-            )
+            return self._format_bubble(lemma, " / ".join(list(dict.fromkeys(ja))), "Jamdict")
 
         prompt = f"英単語「{lemma}」の日本語訳を3つ程度簡潔に。"
         res = self.client.models.generate_content(model=self.model, contents=prompt)

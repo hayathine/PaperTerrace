@@ -98,9 +98,7 @@ async def analyze_txt(html_text: str = Form(...)):
 
 
 @app.post("/analyze-pdf")
-async def analyze_pdf(
-    file: UploadFile = File(...), session_id: Optional[str] = Form(None)
-):
+async def analyze_pdf(file: UploadFile = File(...), session_id: Optional[str] = Form(None)):
     # ファイル名がない、またはサイズが0の場合はエラーを返す
     if not file.filename or file.size == 0:
 
@@ -125,9 +123,7 @@ async def analyze_pdf(
         paper_id = cached_paper["paper_id"]
     else:
         # AI OCR を実行
-        raw_text = await service.ocr_service.extract_text_with_ai(
-            content, file.filename
-        )
+        raw_text = await service.ocr_service.extract_text_with_ai(content, file.filename)
 
         # APIエラーが返ってきた場合の処理
         if raw_text.startswith("ERROR_API_FAILED:"):
@@ -294,9 +290,7 @@ async def analyze_citations(session_id: str = Form(...)):
 
 
 @app.post("/explain-paragraph")
-async def explain_paragraph(
-    paragraph: str = Form(...), session_id: str = Form(...)
-):
+async def explain_paragraph(paragraph: str = Form(...), session_id: str = Form(...)):
     context = session_contexts.get(session_id, "")
     explanation = await paragraph_explain_service.explain(paragraph, context)
     return JSONResponse({"explanation": explanation})
@@ -314,9 +308,7 @@ async def explain_terms(paragraph: str = Form(...)):
 
 
 @app.post("/analyze-figure")
-async def analyze_figure(
-    file: UploadFile = File(...), caption: str = Form("")
-):
+async def analyze_figure(file: UploadFile = File(...), caption: str = Form("")):
     content = await file.read()
     mime_type = file.content_type or "image/png"
     analysis = await figure_insight_service.analyze_figure(content, caption, mime_type)
@@ -324,9 +316,7 @@ async def analyze_figure(
 
 
 @app.post("/analyze-table")
-async def analyze_table(
-    table_text: str = Form(...), session_id: str = Form("")
-):
+async def analyze_table(table_text: str = Form(...), session_id: str = Form("")):
     context = session_contexts.get(session_id, "")
     analysis = await figure_insight_service.analyze_table_text(table_text, context)
     return JSONResponse({"analysis": analysis})
@@ -377,9 +367,7 @@ async def get_memos(session_id: str):
 
 @app.post("/memo")
 async def add_memo(request: MemoRequest):
-    memo = sidebar_memo_service.add_memo(
-        request.session_id, request.term, request.note
-    )
+    memo = sidebar_memo_service.add_memo(request.session_id, request.term, request.note)
     return JSONResponse(memo)
 
 

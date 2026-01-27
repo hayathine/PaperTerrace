@@ -6,6 +6,12 @@ from src.logger import logger
 from src.providers import get_ai_provider
 
 
+class ParagraphExplainError(Exception):
+    """Paragraph explanation-specific exception."""
+
+    pass
+
+
 class ParagraphExplainService:
     """Paragraph explanation service for deep understanding."""
 
@@ -15,11 +21,11 @@ class ParagraphExplainService:
     async def explain(self, paragraph: str, full_context: str = "") -> str:
         """
         Generate a detailed explanation of a paragraph.
-        
+
         Args:
             paragraph: The paragraph to explain
             full_context: The full paper text for context
-            
+
         Returns:
             Detailed explanation in Japanese
         """
@@ -45,23 +51,41 @@ class ParagraphExplainService:
 専門的な内容も、大学院生が理解できるレベルで説明してください。"""
 
         try:
+            logger.debug(
+                "Generating paragraph explanation",
+                extra={"paragraph_length": len(paragraph)},
+            )
             explanation = await self.ai_provider.generate(prompt)
-            logger.info("Paragraph explanation generated")
+            explanation = explanation.strip()
+
+            if not explanation:
+                logger.warning("Empty paragraph explanation result")
+                raise ParagraphExplainError("Empty explanation result")
+
+            logger.info(
+                "Paragraph explanation generated",
+                extra={"input_length": len(paragraph), "output_length": len(explanation)},
+            )
             return explanation
+        except ParagraphExplainError:
+            raise
         except Exception as e:
-            logger.error(f"Paragraph explanation failed: {e}")
-            return f"解説の生成に失敗しました: {str(e)}"
+            logger.exception(
+                "Paragraph explanation failed",
+                extra={"error": str(e)},
+            )
+            return f"解説の生成に失敗しました: {e}"
 
     async def explain_terminology(
         self, paragraph: str, terms: list[str] | None = None
     ) -> list[dict]:
         """
         Extract and explain technical terms in a paragraph.
-        
+
         Args:
             paragraph: The paragraph to analyze
             terms: Optional list of specific terms to explain
-            
+
         Returns:
             List of term explanations
         """
@@ -86,6 +110,7 @@ class ParagraphExplainService:
         try:
             response = await self.ai_provider.generate(prompt)
             import json
+
             response = response.strip()
             if response.startswith("```"):
                 response = response.split("```")[1]
