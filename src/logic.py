@@ -105,10 +105,23 @@ class EnglishAnalysisService:
         self._unknown_words = set()  # Jamdictにない単語を収集
 
     async def tokenize_stream(self, text: str):
+        """2段階ストリーム: まずプレーンテキストを表示、次にインタラクティブHTMLに置換"""
         paragraphs = re.split(r"\n{2,}", text.replace("\r\n", "\n"))
         loop = asyncio.get_event_loop()
 
-        for p_text in paragraphs:
+        # Phase 1: プレーンテキストを即座に表示
+        for i, p_text in enumerate(paragraphs):
+            p_text = p_text.replace("\n", " ").strip()
+            if not p_text:
+                continue
+            # プレーンテキストをまず表示（後で置換するためにIDを付与）
+            yield f'data: <p id="p-{i}" class="mb-6 text-slate-600">{p_text}</p>\n\n'
+
+        # Phase 1 完了を通知
+        yield 'data: <div id="tokenize-status" class="fixed bottom-4 right-4 bg-indigo-500 text-white px-4 py-2 rounded-lg shadow-lg animate-pulse">📝 分析中...</div>\n\n'
+
+        # Phase 2: インタラクティブHTMLに置換
+        for i, p_text in enumerate(paragraphs):
             p_text = p_text.replace("\n", " ").strip()
             if not p_text:
                 continue
@@ -117,7 +130,6 @@ class EnglishAnalysisService:
             p_tokens_html = []
 
             for token in doc:
-                # トークン後のスペースを取得
                 whitespace = token.whitespace_
 
                 if token.is_punct or token.is_space:
@@ -129,7 +141,6 @@ class EnglishAnalysisService:
                     self.word_cache[lemma] = await loop.run_in_executor(
                         executor, _lookup_word, lemma
                     )
-                    # Jamdictにない単語を収集
                     if not self.word_cache[lemma]:
                         self._unknown_words.add(lemma)
 
@@ -144,7 +155,12 @@ class EnglishAnalysisService:
                     f'hx-target="#definition-box">{token.text}</span>{whitespace}'
                 )
 
-            yield f'data: <p class="mb-6">{"".join(p_tokens_html)}</p>\n\n'
+            # outerHTMLで置換するスクリプトを送信
+            interactive_html = "".join(p_tokens_html)
+            yield f'data: <script>document.getElementById("p-{i}").outerHTML = \'<p id="p-{i}" class="mb-6">{interactive_html}</p>\';</script>\n\n'
+
+        # ステータス表示を削除
+        yield 'data: <script>document.getElementById("tokenize-status")?.remove();</script>\n\n'
 
         # ストリーム終了時に未知の単語をバッチ翻訳
         if self._unknown_words:
