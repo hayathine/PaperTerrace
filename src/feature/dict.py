@@ -1,4 +1,8 @@
-from google.genai import genai
+import genai
+
+"""
+単語をクリックするとその意味を辞書で調べて表示する機能を提供するモジュール
+"""
 
 
 class Translate:
