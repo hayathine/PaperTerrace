@@ -668,16 +668,28 @@ class CloudSQLStorage(StorageInterface):
         raise NotImplementedError("CloudSQLStorage is a stub.")
 
 
+# Singleton instance cache
+_storage_provider_instance: StorageInterface | None = None
+
+
 def get_storage_provider() -> StorageInterface:
     """
-    Factory function to get the configured storage provider.
+    Factory function to get the configured storage provider (singleton).
 
     Set STORAGE_PROVIDER environment variable:
     - "sqlite" (default): Use local SQLite
     - "cloudsql": Use Cloud SQL (requires GCP setup)
     """
+    global _storage_provider_instance
+
+    if _storage_provider_instance is not None:
+        return _storage_provider_instance
+
     provider_type = os.getenv("STORAGE_PROVIDER", "sqlite").lower()
 
     if provider_type == "cloudsql":
-        return CloudSQLStorage()
-    return SQLiteStorage()
+        _storage_provider_instance = CloudSQLStorage()
+    else:
+        _storage_provider_instance = SQLiteStorage()
+
+    return _storage_provider_instance

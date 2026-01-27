@@ -175,16 +175,28 @@ class VertexAIProvider(AIProviderInterface):
         raise NotImplementedError("VertexAIProvider is a stub.")
 
 
+# Singleton instance cache
+_ai_provider_instance: AIProviderInterface | None = None
+
+
 def get_ai_provider() -> AIProviderInterface:
     """
-    Factory function to get the configured AI provider.
+    Factory function to get the configured AI provider (singleton).
 
     Set AI_PROVIDER environment variable:
     - "gemini" (default): Use Gemini API directly
     - "vertex": Use Vertex AI (requires GCP setup)
     """
+    global _ai_provider_instance
+
+    if _ai_provider_instance is not None:
+        return _ai_provider_instance
+
     provider_type = os.getenv("AI_PROVIDER", "gemini").lower()
 
     if provider_type == "vertex":
-        return VertexAIProvider()
-    return GeminiProvider()
+        _ai_provider_instance = VertexAIProvider()
+    else:
+        _ai_provider_instance = GeminiProvider()
+
+    return _ai_provider_instance
