@@ -148,18 +148,26 @@ class EnglishAnalysisService:
 
         # ストリーム終了時に未知の単語をバッチ翻訳
         if self._unknown_words:
-            await self._batch_translate_words(list(self._unknown_words)[:50])  # 最大50単語
+            logger.info(f"Batch translation starting with {len(self._unknown_words)} words")
+            translations = await self._batch_translate_words(
+                list(self._unknown_words)[: int(os.getenv("BATCH_WORD_LIMIT", "50"))]
+            )
+            # 結果を translation_cache に統合
+            self.translation_cache.update(translations)
             self._unknown_words.clear()
 
-    async def _batch_translate_words(self, words: list[str]) -> None:
-        """未知の単語を一括でGeminiで翻訳してキャッシュに保存"""
+    async def _batch_translate_words(self, words: list[str]) -> dict[str, str]:
+        """未知の単語を一括でGeminiで翻訳して辞書として返す"""
+        logger.info(f"Batch translation starting with {len(words)} words")
+        result: dict[str, str] = {}
+
         if not words:
-            return
+            return result
 
         # 既にキャッシュにある単語は除外
         words_to_translate = [w for w in words if w not in self.translation_cache]
         if not words_to_translate:
-            return
+            return result
 
         # バッチプロンプトを作成
         words_list = "\n".join(f"- {w}" for w in words_to_translate)
@@ -180,33 +188,34 @@ class EnglishAnalysisService:
                         word = parts[0].strip().lower().lstrip("- ")
                         translation = parts[1].strip()
                         if word and translation:
-                            self.translation_cache[word] = translation
-            logger.info(f"Batch translated {len(words_to_translate)} words")
+                            result[word] = translation
+            logger.info(f"Batch translation completed with {len(result)} words")
         except Exception as e:
             logger.error(f"Batch translation failed: {e}")
 
-    async def explain_word(self, lemma: str) -> str:
-        loop = asyncio.get_event_loop()
-        lookup_res = await loop.run_in_executor(executor, _lookup_word_full, lemma)
-        if lookup_res.entries:
-            ja = [
-                e.kanji_forms[0].text if e.kanji_forms else e.kana_forms[0].text
-                for e in lookup_res.entries[:3]
-            ]
-            return self._format_bubble(lemma, " / ".join(list(dict.fromkeys(ja))), "Jamdict")
+        return result
 
-        # キャッシュをチェック
-        if lemma in self.translation_cache:
-            return self._format_bubble(lemma, self.translation_cache[lemma], "Gemini (cached)")
+    def get_translation(self, lemma: str) -> dict | None:
+        """キャッシュから翻訳を取得する。Jamdictにある場合はNone、翻訳がある場合はdictを返す"""
+        # word_cache をチェック - Jamdict にある場合は None を返す（Jamdictで処理する）
+        if lemma in self.word_cache:
+            if self.word_cache[lemma]:
+                # Jamdict にある → None を返して別途 Jamdict で処理させる
+                return None
+            else:
+                # Jamdict にない → translation_cache を確認
+                if lemma in self.translation_cache:
+                    return {
+                        "word": lemma,
+                        "translation": self.translation_cache[lemma],
+                        "source": "Gemini (cached)",
+                    }
+        return None
 
-        # キャッシュにない場合は個別に翻訳
-        prompt = f"英単語「{lemma}」の日本語訳を3つ程度簡潔に。"
-        res = self.client.models.generate_content(model=self.model, contents=prompt)
-        translation = res.text.strip()
-        self.translation_cache[lemma] = translation
-        return self._format_bubble(lemma, translation, "Gemini")
+    def get_word_cache(self) -> dict[str, bool]:
+        """word_cache を取得"""
+        return self.word_cache
 
-    def _format_bubble(self, word, definition, source):
-        bg = "bg-blue-50" if source == "Jamdict" else "bg-purple-50"
-        return f'<div class="p-4 rounded-lg {bg} border animate-in"><b>{word}</b>\
-            <p>{definition}</p><small>{source}</small></div>'
+    def get_translation_cache(self) -> dict[str, str]:
+        """translation_cache を取得"""
+        return self.translation_cache

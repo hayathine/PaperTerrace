@@ -72,6 +72,7 @@ class SidebarMemoService:
                 "Memos retrieved",
                 extra={"session_id": session_id, "count": len(memos)},
             )
+
             return memos
         except Exception as e:
             logger.exception(

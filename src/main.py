@@ -223,7 +223,44 @@ async def translate_word(word: str, lang: str = "ja"):
 
 @app.get("/explain/{lemma}")
 async def explain(lemma: str):
-    return await service.explain_word(lemma)
+    """単語の説明を取得（キャッシュ優先）"""
+    # まずキャッシュから翻訳を取得
+    cached = service.get_translation(lemma)
+    if cached:
+        bg = "bg-purple-50"
+        return HTMLResponse(
+            f'<div class="p-4 rounded-lg {bg} border animate-in"><b>{cached["word"]}</b>'
+            f"<p>{cached['translation']}</p>"
+            f'<small class="text-slate-400">{cached["source"]}</small></div>'
+        )
+
+    # キャッシュにない場合は Jamdict を検索
+    from concurrent.futures import ThreadPoolExecutor
+
+    from .logic import _lookup_word_full
+
+    loop = asyncio.get_event_loop()
+    executor = ThreadPoolExecutor(max_workers=2)
+    lookup_res = await loop.run_in_executor(executor, _lookup_word_full, lemma)
+
+    if lookup_res.entries:
+        ja = [
+            e.kanji_forms[0].text if e.kanji_forms else e.kana_forms[0].text
+            for e in lookup_res.entries[:3]
+        ]
+        translation = " / ".join(list(dict.fromkeys(ja)))
+        return HTMLResponse(
+            f'<div class="p-4 rounded-lg bg-blue-50 border animate-in"><b>{lemma}</b>'
+            f"<p>{translation}</p>"
+            f'<small class="text-slate-400">Jamdict</small></div>'
+        )
+
+    # どちらにもない場合
+    return HTMLResponse(
+        f'<div class="p-4 rounded-lg bg-gray-50 border animate-in"><b>{lemma}</b>'
+        f"<p>翻訳が見つかりませんでした</p>"
+        f'<small class="text-slate-400">-</small></div>'
+    )
 
 
 @app.get("/languages")
