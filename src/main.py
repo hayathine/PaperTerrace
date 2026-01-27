@@ -21,6 +21,7 @@ from .feature import (
     SummaryService,
     TranslationService,
 )
+from .logger import logger
 from .logic import EnglishAnalysisService
 from .providers import get_storage_provider
 from .routers import auth_router, explore_router, users_router
@@ -31,6 +32,7 @@ app = FastAPI(
     description="AI-powered paper reading assistant",
     version="1.0.0",
 )
+
 
 # Load environment variables
 load_dotenv()
@@ -234,7 +236,7 @@ async def translate_word(word: str, lang: str = "ja"):
 
 @app.get("/explain/{lemma}")
 async def explain(lemma: str):
-    """単語の説明を取得（キャッシュ優先）"""
+    """単語の説明を取得（キャッシュ → Jamdict → Gemini の順で検索）"""
     # まずキャッシュから翻訳を取得
     cached = service.get_translation(lemma)
     if cached:
@@ -266,12 +268,35 @@ async def explain(lemma: str):
             f'<small class="text-slate-400">Jamdict</small></div>'
         )
 
-    # どちらにもない場合
-    return HTMLResponse(
-        f'<div class="p-4 rounded-lg bg-gray-50 border animate-in"><b>{lemma}</b>'
-        f"<p>翻訳が見つかりませんでした</p>"
-        f'<small class="text-slate-400">-</small></div>'
-    )
+    # Jamdict にもない場合は Gemini で個別翻訳
+    try:
+        import os
+
+        import google.genai as genai
+
+        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+        model = os.getenv("OCR_MODEL") or "gemini-1.5-flash"
+        prompt = f"英単語「{lemma}」の日本語訳を1〜3語で簡潔に。訳のみ出力。"
+
+        res = client.models.generate_content(model=model, contents=prompt)
+        translation = res.text.strip() if res.text else "翻訳できませんでした"
+
+        # キャッシュに保存（次回以降は高速に）
+        service.translation_cache[lemma] = translation
+        service.word_cache[lemma] = False  # Jamdictにはない
+
+        return HTMLResponse(
+            f'<div class="p-4 rounded-lg bg-amber-50 border animate-in"><b>{lemma}</b>'
+            f"<p>{translation}</p>"
+            f'<small class="text-slate-400">Gemini</small></div>'
+        )
+    except Exception as e:
+        logger.error(f"Gemini translation failed for '{lemma}': {e}")
+        return HTMLResponse(
+            f'<div class="p-4 rounded-lg bg-gray-50 border animate-in"><b>{lemma}</b>'
+            f"<p>翻訳に失敗しました</p>"
+            f'<small class="text-slate-400">Error</small></div>'
+        )
 
 
 @app.get("/languages")

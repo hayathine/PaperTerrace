@@ -275,6 +275,7 @@
                   Document Intelligence
                 </h3>
                 <form
+                  id="pdf-upload-form"
                   hx-post="/analyze-pdf"
                   hx-target="#reader-view"
                   hx-encoding="multipart/form-data"
@@ -292,6 +293,7 @@
                       accept="application/pdf"
                       required
                       class="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      onchange="initReader(); htmx.trigger(this.form, 'submit')"
                     />
                     <p
                       class="text-xs text-slate-400 group-hover:text-indigo-600 font-medium"
@@ -299,15 +301,9 @@
                       Drop your PDF here or click to browse
                     </p>
                     <p class="text-[10px] text-slate-300 mt-1">
-                      AI-powered OCR will process automatically
+                      Analysis starts automatically on file selection
                     </p>
                   </div>
-                  <button
-                    type="submit"
-                    class="mt-4 w-full bg-slate-900 text-white text-xs font-bold py-3 rounded-xl hover:bg-black transition-all shadow-lg shadow-slate-200"
-                  >
-                    Start Analysis
-                  </button>
                 </form>
               </div>
 

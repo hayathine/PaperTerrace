@@ -168,9 +168,11 @@ class EnglishAnalysisService:
 
         # ストリーム終了時に未知の単語をバッチ翻訳
         if self._unknown_words:
-            logger.info(f"Batch translation starting with {len(self._unknown_words)} words")
+            logger.info(f"UNKNOWN WORDS count: {len(self._unknown_words)}")
             translations = await self._batch_translate_words(
-                list(self._unknown_words)[: int(os.getenv("BATCH_WORD_LIMIT", "50"))]
+                list(self._unknown_words)
+                if len(self._unknown_words) <= int(os.getenv("BATCH_WORDS_LIMIT", "50"))
+                else list(self._unknown_words)
             )
             # 結果を translation_cache に統合
             self.translation_cache.update(translations)
