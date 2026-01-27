@@ -71,7 +71,7 @@ class GeminiProvider(AIProviderInterface):
                 model=self.model,
                 contents=full_prompt,
             )
-            result = response.text.strip()
+            result = (response.text or "").strip()
             logger.debug(
                 "Gemini generate response",
                 extra={"response_length": len(result)},
@@ -100,7 +100,7 @@ class GeminiProvider(AIProviderInterface):
                     prompt,
                 ],
             )
-            result = response.text.strip()
+            result = (response.text or "").strip()
             logger.debug(
                 "Gemini image response",
                 extra={"response_length": len(result)},
@@ -127,7 +127,7 @@ class GeminiProvider(AIProviderInterface):
                     prompt,
                 ],
             )
-            result = response.text.strip()
+            result = (response.text or "").strip()
             logger.debug(
                 "Gemini PDF response",
                 extra={"response_length": len(result)},

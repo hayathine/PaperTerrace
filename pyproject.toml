@@ -26,6 +26,7 @@ dependencies = [
     "pymupdf>=1.26.7",
     "python-json-logger>=4.0.0",
     "python-multipart>=0.0.21",
+    "redis>=7.1.0",
     "spacy>=3.8.11",
     "tiktoken>=0.12.0",
     "uuid6>=2025.0.1",

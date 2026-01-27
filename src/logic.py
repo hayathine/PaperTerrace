@@ -13,6 +13,7 @@ from jamdict import Jamdict
 
 from src.crud import get_ocr_from_db, save_ocr_to_db
 from src.logger import logger
+from src.providers import RedisService, get_storage_provider
 from src.utils import _get_file_hash
 
 # 共通設定
@@ -94,41 +95,120 @@ class PDFOCRService:
         logger.info("OCR extraction completed and saved to database.")
         return ocr_text
 
+    async def extract_text_streaming(self, file_bytes: bytes, filename: str = "unknown.pdf"):
+        """ページ単位でOCR処理をストリーミングするジェネレータ。
+
+        Yields:
+            tuple: (page_num, total_pages, page_text, is_last)
+        """
+        import fitz  # PyMuPDF
+
+        file_hash = _get_file_hash(file_bytes)
+        cached_ocr = get_ocr_from_db(file_hash)
+        if cached_ocr:
+            logger.info("Returning cached OCR text (streaming mode).")
+            yield (1, 1, cached_ocr, True, file_hash)
+            return
+
+        logger.info(f"--- AI OCR Streaming: {filename} ---")
+
+        try:
+            # PDFをページごとに分割
+            pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
+            total_pages = len(pdf_doc)
+            logger.info(f"[OCR Streaming] Total pages: {total_pages}")
+
+            all_text_parts = []
+
+            for page_num in range(total_pages):
+                page = pdf_doc[page_num]
+                # ページをPDFバイトとして抽出
+                single_page_pdf = fitz.open()
+                single_page_pdf.insert_pdf(pdf_doc, from_page=page_num, to_page=page_num)
+                page_bytes = single_page_pdf.tobytes()
+                single_page_pdf.close()
+
+                logger.info(f"[OCR Streaming] Processing page {page_num + 1}/{total_pages}")
+
+                try:
+                    response = self.client.models.generate_content(
+                        model=self.model,
+                        contents=[
+                            types.Part.from_bytes(data=page_bytes, mime_type="application/pdf"),
+                            "このPDFページのテキストを構造を維持して文字起こししてください。",
+                        ],
+                    )
+                    page_text = (response.text or "").strip()
+                except Exception as e:
+                    logger.error(f"OCR failed for page {page_num + 1}: {e}")
+                    page_text = f"[ページ {page_num + 1} の読み取りに失敗しました: {e}]"
+
+                all_text_parts.append(page_text)
+                is_last = page_num == total_pages - 1
+
+                yield (page_num + 1, total_pages, page_text, is_last, file_hash)
+
+            pdf_doc.close()
+
+            # 全ページ処理完了後にDBに保存
+            full_text = "\n\n---\n\n".join(all_text_parts)
+            save_ocr_to_db(
+                file_hash=file_hash,
+                filename=filename,
+                ocr_text=full_text,
+                model_name=self.model,
+            )
+            logger.info(f"[OCR Streaming] Completed and saved: {filename}")
+
+        except Exception as e:
+            logger.error(f"OCR streaming failed: {e}")
+            yield (0, 0, f"ERROR_API_FAILED: {str(e)}", True, file_hash)
+
 
 class EnglishAnalysisService:
     def __init__(self):
         self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         self.model = os.getenv("OCR_MODEL") or "gemini-1.5-flash"
         self.ocr_service = PDFOCRService(self.model)
+        self.redis = RedisService()
         self.word_cache = {}  # lemma -> bool (jamdict にあるかどうか)
         self.translation_cache = {}  # lemma -> translation (Gemini翻訳キャッシュ)
         self._unknown_words = set()  # Jamdictにない単語を収集
 
-    async def tokenize_stream(self, text: str):
+    async def tokenize_stream(
+        self,
+        text: str,
+        paper_id: str | None = None,
+        target_id: str = "paper-content",
+        id_prefix: str = "p",
+        save_to_db: bool = True,
+    ):
         """2段階ストリーム: まずプレーンテキストを表示、準備完了後に一括置換"""
         paragraphs = re.split(r"\n{2,}", text.replace("\r\n", "\n"))
         loop = asyncio.get_event_loop()
 
         # Phase 1: プレーンテキストを即座に表示
-        paragraph_indices = []
         for i, p_text in enumerate(paragraphs):
             p_text = p_text.replace("\n", " ").strip()
             if not p_text:
                 continue
-            paragraph_indices.append(i)
+
+            unique_id = f"{id_prefix}-{i}"
             # プレーンテキストをまず表示（後で置換するためにIDを付与）
-            yield f'data: <p id="p-{i}" class="mb-6 text-slate-600">{p_text}</p>\n\n'
+            yield f'data: <p id="{unique_id}" class="mb-6 text-slate-600" hx-swap-oob="beforeend:#{target_id}">{p_text}</p>\n\n'
 
         # Phase 1 完了を通知
-        yield 'data: <div id="tokenize-status" class="fixed bottom-4 right-4 bg-indigo-500 text-white px-4 py-2 rounded-lg shadow-lg animate-pulse">📝 単語を分析中...</div>\n\n'
+        # yield 'data: <div id="tokenize-status" ... > ... </div>' # ページごとの通知はうるさいので省略、または呼び出し元で制御
 
         # Phase 2: 全てのインタラクティブHTMLを準備
-        all_replacements: dict[int, str] = {}
+        all_replacements: dict[str, str] = {}
 
         for i, p_text in enumerate(paragraphs):
             p_text = p_text.replace("\n", " ").strip()
             if not p_text:
                 continue
+
+            unique_id = f"{id_prefix}-{i}"
 
             doc = await loop.run_in_executor(executor, nlp, p_text)
             p_tokens_html = []
@@ -142,11 +222,22 @@ class EnglishAnalysisService:
 
                 lemma = token.lemma_.lower()
                 if lemma not in self.word_cache:
-                    self.word_cache[lemma] = await loop.run_in_executor(
-                        executor, _lookup_word, lemma
-                    )
-                    if not self.word_cache[lemma]:
-                        self._unknown_words.add(lemma)
+                    # 1. L1 Cache Check
+                    if lemma in self.translation_cache:
+                        self.word_cache[lemma] = False
+                    else:
+                        # 2. L2 Cache Check (Redis)
+                        cached_trans = self.redis.get(f"trans:{lemma}")
+                        if cached_trans:
+                            self.translation_cache[lemma] = cached_trans
+                            self.word_cache[lemma] = False
+                        else:
+                            # 3. Jamdict Check
+                            self.word_cache[lemma] = await loop.run_in_executor(
+                                executor, _lookup_word, lemma
+                            )
+                            if not self.word_cache[lemma]:
+                                self._unknown_words.add(lemma)
 
                 color = (
                     "border-indigo-200 hover:bg-indigo-100"
@@ -155,19 +246,40 @@ class EnglishAnalysisService:
                 )
                 p_tokens_html.append(
                     f'<span class="cursor-pointer border-b {color} inline'
-                    f'" hx-get="/explain/{lemma}" '
+                    f'" hx-get="/explain/{lemma}" hx-trigger="click" '
                     f'hx-target="#definition-box">{token.text}</span>{whitespace}'
                 )
 
-            all_replacements[i] = "".join(p_tokens_html)
+            all_replacements[unique_id] = "".join(p_tokens_html)
 
         # 全ての準備が完了したら hx-swap-oob で一括置換
-        # HTMXではSSE経由のscriptタグは実行されないため、oob swapを使用
-        for idx, html in all_replacements.items():
-            yield f'data: <p id="p-{idx}" hx-swap-oob="true" class="mb-6">{html}</p>\n\n'
+        for pid, html in all_replacements.items():
+            yield f'data: <p id="{pid}" hx-swap-oob="true" class="mb-6">{html}</p>\n\n'
+
+        # 保存用に完全なHTMLを構築して保存
+        if paper_id and save_to_db:
+            try:
+                # 段落番号順に結合
+                full_html = ""
+                # 元のparagraphsリストと同じ長さでループを回す
+                for i in range(len(paragraphs)):
+                    unique_id = f"{id_prefix}-{i}"
+                    if unique_id in all_replacements:
+                        full_html += (
+                            f'<p id="{unique_id}" class="mb-6">{all_replacements[unique_id]}</p>'
+                        )
+
+                storage = get_storage_provider()
+                storage.update_paper_html(paper_id, full_html)
+                logger.info(f"Updated HTML content for paper: {paper_id}")
+            except Exception as e:
+                logger.error(f"Failed to save content for paper {paper_id}: {e}")
 
         # ストリーム終了時に未知の単語をバッチ翻訳
         if self._unknown_words:
+            # 辞書準備中を表示
+            yield 'data: <div id="definition-box" hx-swap-oob="true" class="min-h-[300px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-3xl animate-pulse"><div class="mb-4 text-indigo-500"><svg class="animate-spin w-8 h-8 mx-auto" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div><p class="text-xs font-bold text-indigo-500">Building Dictionary...</p><p class="text-[10px] text-slate-400 mt-2">Translating unknown words</p></div>\n\n'
+
             logger.info(f"UNKNOWN WORDS count: {len(self._unknown_words)}")
             translations = await self._batch_translate_words(
                 list(self._unknown_words)
@@ -177,6 +289,10 @@ class EnglishAnalysisService:
             # 結果を translation_cache に統合
             self.translation_cache.update(translations)
             self._unknown_words.clear()
+
+        # 辞書完了表示（元に戻す）
+        yield 'data: <div id="definition-box" hx-swap-oob="true" class="min-h-[300px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-slate-100 rounded-3xl"><div class="bg-slate-50 p-4 rounded-2xl mb-4"><svg class="w-8 h-8 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></div><p class="text-xs font-bold text-slate-400 leading-relaxed">Dictionary Ready!<br>Click any word for definition.</p></div>\n\n'
+
         # ステータスを完了表示に変更 (oob swap)
         yield 'data: <div id="tokenize-status" hx-swap-oob="true" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg">✅ 分析完了！単語をクリックで翻訳</div>\n\n'
 
@@ -201,7 +317,11 @@ class EnglishAnalysisService:
 {words_list}"""
 
         try:
-            res = self.client.models.generate_content(model=self.model, contents=prompt)
+            loop = asyncio.get_running_loop()
+            res = await loop.run_in_executor(
+                None,
+                lambda: self.client.models.generate_content(model=self.model, contents=prompt),
+            )
             response_text = res.text.strip()
 
             # レスポンスをパース
@@ -216,6 +336,10 @@ class EnglishAnalysisService:
             logger.info(f"Batch translation completed with {len(result)} words")
         except Exception as e:
             logger.error(f"Batch translation failed: {e}")
+
+        # Redisに保存
+        for lemma, trans in result.items():
+            self.redis.set(f"trans:{lemma}", trans, expire=604800)  # 1週間保存
 
         return result
 
@@ -232,6 +356,16 @@ class EnglishAnalysisService:
                     return {
                         "word": lemma,
                         "translation": self.translation_cache[lemma],
+                        "source": "Gemini (cached)",
+                    }
+
+                # Redis (L2) を確認
+                cached_trans = self.redis.get(f"trans:{lemma}")
+                if cached_trans:
+                    self.translation_cache[lemma] = cached_trans  # L1に入れる
+                    return {
+                        "word": lemma,
+                        "translation": cached_trans,
                         "source": "Gemini (cached)",
                     }
         return None

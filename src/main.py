@@ -3,9 +3,8 @@ import os
 import uuid
 from typing import Optional
 
-import uuid6
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, Request, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -23,7 +22,7 @@ from .feature import (
 )
 from .logger import logger
 from .logic import EnglishAnalysisService
-from .providers import get_storage_provider
+from .providers import RedisService, get_storage_provider
 from .routers import auth_router, explore_router, users_router
 from .utils import _get_file_hash
 
@@ -68,10 +67,10 @@ figure_insight_service = FigureInsightService()
 adversarial_service = AdversarialReviewService()
 sidebar_memo_service = SidebarMemoService()
 storage = get_storage_provider()
+redis_service = RedisService()
 
-# In-memory storage for SSE and sessions
-text_storage: dict[str, str] = {}
-session_contexts: dict[str, str] = {}  # session_id -> paper_text
+# In-memory storage replaced by Redis
+# text_storage and session_contexts are now managed via redis_service
 
 
 # ============================================================================
@@ -116,15 +115,20 @@ async def read_item(request: Request):
 @app.post("/analyze_txt")
 async def analyze_txt(html_text: str = Form(...)):
     task_id = str(uuid.uuid4())
-    text_storage[task_id] = html_text
+    redis_service.set(f"task:{task_id}", {"text": html_text, "paper_id": None}, expire=3600)
     return HTMLResponse(
-        f'<div hx-ext="sse" sse-connect="/stream/{task_id}" sse-swap="message"'
-        ' hx-swap="beforeend"></div>'
+        f'<div id="paper-content" class="fade-in"></div>'
+        f'<div id="sse-container-{task_id}" hx-ext="sse" sse-connect="/stream/{task_id}" '
+        f'sse-swap="message" hx-swap="beforeend"></div>'
     )
 
 
 @app.post("/analyze-pdf")
-async def analyze_pdf(file: UploadFile = File(...), session_id: Optional[str] = Form(None)):
+async def analyze_pdf(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    session_id: Optional[str] = Form(None),
+):
     # ファイル名がない、またはサイズが0の場合はエラーを返す
     if not file.filename or file.size == 0:
 
@@ -139,78 +143,232 @@ async def analyze_pdf(file: UploadFile = File(...), session_id: Optional[str] = 
 
         return StreamingResponse(error_stream(), media_type="text/event-stream")
 
+    import time
+
+    start_time = time.time()
+    logger.info(f"[analyze-pdf] START: {file.filename} ({file.size} bytes)")
+
     content = await file.read()
     file_hash = _get_file_hash(content)
+    logger.info(f"[analyze-pdf] File hash computed: {file_hash[:16]}...")
 
     # Check for cached paper
     cached_paper = storage.get_paper_by_hash(file_hash)
     if cached_paper:
-        raw_text = cached_paper["ocr_text"]
         paper_id = cached_paper["paper_id"]
+        logger.info(f"[analyze-pdf] Cache HIT: paper_id={paper_id}")
+        # HTMLコンテンツがあればそれを使用
+        if cached_paper.get("html_content"):
+            raw_text = "CACHED_HTML:" + cached_paper["html_content"]
+            logger.info(f"[analyze-pdf] Using cached HTML for paper: {paper_id}")
+        else:
+            raw_text = cached_paper["ocr_text"]
+            logger.info(f"[analyze-pdf] Using cached OCR text for paper: {paper_id}")
+
+        # Store context for session
+        if session_id:
+            context_text = raw_text[12:] if raw_text.startswith("CACHED_HTML:") else raw_text
+            redis_service.set(f"session:{session_id}", context_text, expire=86400)
     else:
-        # AI OCR を実行
-        raw_text = await service.ocr_service.extract_text_with_ai(content, file.filename)
+        # OCR未処理：PDFデータをRedisに保存し、streamで処理
+        logger.info(f"[analyze-pdf] Cache MISS: Deferring OCR to stream for {file.filename}")
+        import base64
 
-        # APIエラーが返ってきた場合の処理
-        if raw_text.startswith("ERROR_API_FAILED:"):
-            error_detail = raw_text.replace("ERROR_API_FAILED: ", "")
-
-            async def error_stream():
-                yield (
-                    f"data: <div class='p-6 bg-red-50 border-2 border-red-200 "
-                    f"rounded-2xl text-red-700 animate-fade-in'>"
-                    f"<h3 class='font-bold mb-2'>⚠️ AI解析エラー</h3>"
-                    f"<p class='text-xs opacity-80 mb-4'>APIの呼び出しに失敗しました。</p>"
-                    f"<div class='bg-white/50 p-3 rounded-lg font-mono text-[10px] "
-                    f"break-all'>{error_detail}</div></div>\n\n"
-                )
-
-            return StreamingResponse(error_stream(), media_type="text/event-stream")
-
-        # Save paper to database
-        paper_id = str(uuid6.uuid7())
-        storage.save_paper(
-            paper_id=paper_id,
-            file_hash=file_hash,
-            filename=file.filename,
-            ocr_text=raw_text,
-            html_content="",  # Will be generated during stream
-            target_language="ja",
-        )
-
-    # Store context for session
-    if session_id:
-        session_contexts[session_id] = raw_text
+        pdf_b64 = base64.b64encode(content).decode("utf-8")
+        raw_text = None  # ストリームでOCR処理する
+        paper_id = "pending"  # ストリーム内で設定される
 
     # 正常な場合はIDを発行してストリームへ
     task_id = str(uuid.uuid4())
-    text_storage[task_id] = raw_text
+
+    if raw_text is None:
+        # OCR未処理：PDFデータを保存
+        redis_service.set(
+            f"task:{task_id}",
+            {
+                "pending_ocr": True,
+                "pdf_b64": pdf_b64,
+                "file_hash": file_hash,
+                "filename": file.filename,
+                "session_id": session_id,
+            },
+            expire=3600,
+        )
+    else:
+        # キャッシュヒット：テキストを保存
+        redis_service.set(f"task:{task_id}", {"text": raw_text, "paper_id": paper_id}, expire=3600)
+
+    total_elapsed = time.time() - start_time
+    logger.info(
+        f"[analyze-pdf] Task created: {task_id}, paper_id={paper_id}, total time: {total_elapsed:.2f}s"
+    )
+    logger.info(
+        f"[analyze-pdf] END: Returning SSE container, stream will start at /stream/{task_id}"
+    )
+
+    # コンテナにIDを付与して、後で置換できるようにする
     return HTMLResponse(
-        f'<div hx-ext="sse" sse-connect="/stream/{task_id}" sse-swap="message" '
-        f'sse-close="close" hx-swap="beforeend" data-paper-id="{paper_id}"></div>'
+        f'<div id="paper-content" class="fade-in"></div>'
+        f'<div id="sse-container-{task_id}" hx-ext="sse" sse-connect="/stream/{task_id}" '
+        f'sse-swap="message" hx-swap="beforeend" data-paper-id="{paper_id}"></div>'
     )
 
 
 @app.get("/stream/{task_id}")
 async def stream(task_id: str):
-    text = text_storage.get(task_id, "")
+    import time
 
-    # タスクが存在しない場合は即座に終了イベントを送信
-    if not text:
+    stream_start = time.time()
+    logger.info(f"[stream] START: task_id={task_id}")
 
-        async def empty_stream():
-            # SSEの終了を通知して再接続を防ぐ
+    data = redis_service.get(f"task:{task_id}")
+
+    # タスクが存在しない場合は HTTP 204 No Content を返す
+    if not data:
+        from fastapi import Response
+
+        logger.warning(f"[stream] Task not found: {task_id}")
+        return Response(status_code=204)
+
+    # Redisから取得したデータは辞書型になっているはず
+    text = data.get("text", "")
+    paper_id = data.get("paper_id")
+    logger.info(f"[stream] Task data retrieved: paper_id={paper_id}, text_length={len(text)}")
+
+    # OCR未実行の場合：ストリーム内でOCR処理を行う
+    if data.get("pending_ocr"):
+        import base64
+
+        pdf_b64 = data.get("pdf_b64", "")
+        file_hash = data.get("file_hash", "")
+        filename = data.get("filename", "unknown.pdf")
+        session_id = data.get("session_id")
+        pdf_content = base64.b64decode(pdf_b64)
+
+        async def ocr_generate():
+            import uuid6
+
+            # OCR処理中の表示
+            yield 'event: message\ndata: <div id="paper-content" hx-swap-oob="innerHTML"><div class="flex flex-col items-center justify-center min-h-[400px] text-center"><div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-4"></div><p class="text-slate-500 font-medium">📄 PDFを解析中...</p><p class="text-xs text-slate-400 mt-2">AI OCRで文字認識を実行しています<br>ページごとに順次表示されます</p></div></div>\n\n'
+
+            full_text_fragments = []
+
+            # ページ単位OCRストリーム
+            async for (
+                page_num,
+                total_pages,
+                page_text,
+                is_last,
+                f_hash,
+            ) in service.ocr_service.extract_text_streaming(pdf_content, filename):
+                # APIエラーチェック
+                if page_text.startswith("ERROR_API_FAILED:"):
+                    error_detail = page_text.replace("ERROR_API_FAILED: ", "")
+                    yield (
+                        f"event: message\ndata: <div id='paper-content' hx-swap-oob='innerHTML'>"
+                        f"<div class='p-6 bg-red-50 border-2 border-red-200 rounded-2xl text-red-700'>"
+                        f"<h3 class='font-bold mb-2'>⚠️ AI解析エラー</h3>"
+                        f"<p class='text-xs opacity-80 mb-4'>APIの呼び出しに失敗しました。</p>"
+                        f"<div class='bg-white/50 p-3 rounded-lg font-mono text-[10px] break-all'>{error_detail}</div>"
+                        f"</div></div>\n\n"
+                    )
+                    yield f'event: message\ndata: <div id="sse-container-{task_id}" hx-swap-oob="outerHTML" style="display:none"></div>\n\n'
+                    yield "event: close\ndata: done\n\n"
+                    redis_service.delete(f"task:{task_id}")
+                    return
+
+                full_text_fragments.append(page_text)
+
+                # 初回（1ページ目）はローディング表示をクリア
+                if page_num == 1:
+                    yield 'event: message\ndata: <div id="paper-content" hx-swap-oob="innerHTML"></div>\n\n'
+
+                # ページコンテナ作成
+                page_container_id = f"page-{page_num}"
+                content_id = f"content-{page_container_id}"
+
+                # ページの枠を追加
+                yield f'event: message\ndata: <div id="paper-content" hx-swap="beforeend"><div id="{page_container_id}" class="mb-8 p-4 bg-white shadow-sm rounded-xl min-h-[500px] animate-fade-in"><div class="flex justify-between items-center mb-4 border-b border-slate-100 pb-2"><span class="text-xs text-slate-300 font-bold uppercase">Page {page_num}/{total_pages}</span><span class="text-[10px] text-green-500 bg-green-50 px-2 py-0.5 rounded-full">Ready</span></div><div id="{content_id}"></div></div></div>\n\n'
+
+                # ページ内のテキストをトークン化してストリーム表示
+                page_prefix = f"p-pg{page_num}"
+
+                async for chunk in service.tokenize_stream(
+                    page_text,
+                    paper_id=None,
+                    target_id=content_id,
+                    id_prefix=page_prefix,
+                    save_to_db=False,
+                ):
+                    yield chunk
+                    await asyncio.sleep(0.005)
+
+            # 全ページ完了後、DB保存
+            full_text = "\n\n---\n\n".join(full_text_fragments)
+            paper_id = str(uuid6.uuid7())
+
+            try:
+                storage.save_paper(
+                    paper_id=paper_id,
+                    file_hash=file_hash,
+                    filename=filename,
+                    ocr_text=full_text,
+                    html_content="",
+                    target_language="ja",
+                )
+                logger.info(f"Paper saved during stream: {paper_id}")
+            except Exception as e:
+                logger.error(f"Failed to save paper: {e}")
+
+            # セッションコンテキスト保存
+            if session_id:
+                redis_service.set(f"session:{session_id}", full_text, expire=86400)
+
+            # 完了処理
+            redis_service.delete(f"task:{task_id}")
+            yield f'event: message\ndata: <div id="sse-container-{task_id}" hx-swap-oob="outerHTML" data-paper-id="{paper_id}" style="display:none"></div>\n\n'
             yield "event: close\ndata: done\n\n"
 
-        return StreamingResponse(empty_stream(), media_type="text/event-stream")
+        return StreamingResponse(ocr_generate(), media_type="text/event-stream")
+
+    # キャッシュされたHTMLがある場合の処理
+    if text.startswith("CACHED_HTML:"):
+        html_content = text[12:]
+        logger.info(f"[stream] Serving cached HTML for paper_id={paper_id}")
+
+        async def cached_generate():
+            # キャッシュされたHTMLを表示（paper-contentの中身を置換）
+            yield f'event: message\ndata: <div id="paper-content" hx-swap-oob="innerHTML">{html_content}</div>\n\n'
+
+            # 完了ステータス
+            yield 'event: message\ndata: <div id="tokenize-status" hx-swap-oob="true" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg">✅ 読込完了（キャッシュ）</div>\n\n'
+
+            # SSEコンテナを削除して接続終了
+            yield f'event: message\ndata: <div id="sse-container-{task_id}" hx-swap-oob="outerHTML" data-paper-id="finished" style="display:none"></div>\n\n'
+            yield "event: close\ndata: done\n\n"
+            logger.info(
+                f"[stream] END (cached): task_id={task_id}, elapsed={time.time() - stream_start:.2f}s"
+            )
+
+        redis_service.delete(f"task:{task_id}")
+        return StreamingResponse(cached_generate(), media_type="text/event-stream")
+
+    logger.info(f"[stream] Starting tokenization for paper_id={paper_id}")
 
     async def generate():
-        async for chunk in service.tokenize_stream(text):
+        async for chunk in service.tokenize_stream(text, paper_id):
             yield chunk
             await asyncio.sleep(0.01)
-        if task_id in text_storage:
-            del text_storage[task_id]
-        # ストリーム終了を明示的に通知
+
+        redis_service.delete(f"task:{task_id}")
+        logger.info(
+            f"[stream] END: task_id={task_id}, paper_id={paper_id}, elapsed={time.time() - stream_start:.2f}s"
+        )
+
+        # ストリーム終了時に、SSEコンテナ自体を通常のdivに置換して接続を物理的に切断する
+        yield f'event: message\ndata: <div id="sse-container-{task_id}" hx-swap-oob="outerHTML" data-paper-id="finished" style="display:none"></div>\n\n'
+
+        # 念のためcloseイベントも送る
         yield "event: close\ndata: done\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
@@ -226,7 +384,7 @@ async def translate_word(word: str, lang: str = "ja"):
     result = await translation_service.translate_word(word, lang)
     bg_class = "bg-blue-50" if result["source"] == "cache" else "bg-purple-50"
     return HTMLResponse(
-        f'<div class="p-4 rounded-lg {bg_class} border animate-in">'
+        f'<div class="p-4 rounded-lg {bg_class} border animate-fade-in">'
         f"<b>{result['word']}</b>"
         f"<p>{result['translation']}</p>"
         f"<small class='text-slate-400'>{result['target_lang']}</small>"
@@ -242,7 +400,7 @@ async def explain(lemma: str):
     if cached:
         bg = "bg-purple-50"
         return HTMLResponse(
-            f'<div class="p-4 rounded-lg {bg} border animate-in"><b>{cached["word"]}</b>'
+            f'<div class="p-4 rounded-lg {bg} border animate-fade-in"><b>{cached["word"]}</b>'
             f"<p>{cached['translation']}</p>"
             f'<small class="text-slate-400">{cached["source"]}</small></div>'
         )
@@ -263,7 +421,7 @@ async def explain(lemma: str):
         ]
         translation = " / ".join(list(dict.fromkeys(ja)))
         return HTMLResponse(
-            f'<div class="p-4 rounded-lg bg-blue-50 border animate-in"><b>{lemma}</b>'
+            f'<div class="p-4 rounded-lg bg-blue-50 border animate-fade-in"><b>{lemma}</b>'
             f"<p>{translation}</p>"
             f'<small class="text-slate-400">Jamdict</small></div>'
         )
@@ -286,14 +444,14 @@ async def explain(lemma: str):
         service.word_cache[lemma] = False  # Jamdictにはない
 
         return HTMLResponse(
-            f'<div class="p-4 rounded-lg bg-amber-50 border animate-in"><b>{lemma}</b>'
+            f'<div class="p-4 rounded-lg bg-amber-50 border animate-fade-in"><b>{lemma}</b>'
             f"<p>{translation}</p>"
             f'<small class="text-slate-400">Gemini</small></div>'
         )
     except Exception as e:
         logger.error(f"Gemini translation failed for '{lemma}': {e}")
         return HTMLResponse(
-            f'<div class="p-4 rounded-lg bg-gray-50 border animate-in"><b>{lemma}</b>'
+            f'<div class="p-4 rounded-lg bg-gray-50 border animate-fade-in"><b>{lemma}</b>'
             f"<p>翻訳に失敗しました</p>"
             f'<small class="text-slate-400">Error</small></div>'
         )
@@ -317,7 +475,7 @@ async def set_language(request: LanguageSettingRequest):
 
 @app.post("/chat")
 async def chat(request: ChatRequest):
-    context = session_contexts.get(request.session_id, "")
+    context = redis_service.get(f"session:{request.session_id}") or ""
 
     if request.author_mode:
         response = await chat_service.author_agent_response(request.message, context)
@@ -340,7 +498,7 @@ async def clear_chat(session_id: str = Form(...)):
 
 @app.post("/summarize")
 async def summarize(session_id: str = Form(...), mode: str = Form("full")):
-    context = session_contexts.get(session_id, "")
+    context = redis_service.get(f"session:{session_id}") or ""
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
@@ -362,7 +520,7 @@ async def summarize(session_id: str = Form(...), mode: str = Form("full")):
 
 @app.post("/research-radar")
 async def research_radar(session_id: str = Form(...)):
-    context = session_contexts.get(session_id, "")
+    context = redis_service.get(f"session:{session_id}") or ""
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
@@ -373,7 +531,7 @@ async def research_radar(session_id: str = Form(...)):
 
 @app.post("/analyze-citations")
 async def analyze_citations(session_id: str = Form(...)):
-    context = session_contexts.get(session_id, "")
+    context = redis_service.get(f"session:{session_id}") or ""
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
@@ -388,7 +546,7 @@ async def analyze_citations(session_id: str = Form(...)):
 
 @app.post("/explain-paragraph")
 async def explain_paragraph(paragraph: str = Form(...), session_id: str = Form(...)):
-    context = session_contexts.get(session_id, "")
+    context = redis_service.get(f"session:{session_id}") or ""
     explanation = await paragraph_explain_service.explain(paragraph, context)
     return JSONResponse({"explanation": explanation})
 
@@ -414,7 +572,7 @@ async def analyze_figure(file: UploadFile = File(...), caption: str = Form("")):
 
 @app.post("/analyze-table")
 async def analyze_table(table_text: str = Form(...), session_id: str = Form("")):
-    context = session_contexts.get(session_id, "")
+    context = redis_service.get(f"session:{session_id}") or ""
     analysis = await figure_insight_service.analyze_table_text(table_text, context)
     return JSONResponse({"analysis": analysis})
 
@@ -426,7 +584,7 @@ async def analyze_table(table_text: str = Form(...), session_id: str = Form(""))
 
 @app.post("/critique")
 async def critique(session_id: str = Form(...)):
-    context = session_contexts.get(session_id, "")
+    context = redis_service.get(f"session:{session_id}") or ""
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
@@ -436,7 +594,7 @@ async def critique(session_id: str = Form(...)):
 
 @app.post("/identify-limitations")
 async def identify_limitations(session_id: str = Form(...)):
-    context = session_contexts.get(session_id, "")
+    context = redis_service.get(f"session:{session_id}") or ""
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
@@ -446,7 +604,7 @@ async def identify_limitations(session_id: str = Form(...)):
 
 @app.post("/counterarguments")
 async def counterarguments(claim: str = Form(...), session_id: str = Form("")):
-    context = session_contexts.get(session_id, "")
+    context = redis_service.get(f"session:{session_id}") or ""
     args = await adversarial_service.suggest_counterarguments(claim, context)
     return JSONResponse({"counterarguments": args})
 
