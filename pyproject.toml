@@ -35,17 +35,20 @@ dev = [
     "ty>=0.0.13",
     "ruff>=0.14.14",
     "unidic-lite>=1.0.8",
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.28.0",
 ]
 
 [tool.ruff]
 # 一行の最大文字数
-line-length = 88
+line-length = 100
 
 [tool.ruff.lint]
 # 有効にするルールセット（E: エラー, F: Pyflakes, I: isortなど）
 select = ["E", "F", "I"]
-# 無視するルール
-ignore = []
+# 無視するルール (E501: line too long - prompts can be long)
+ignore = ["E501"]
 
 [tool.uv.sources]
 en-core-web-lg = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" }

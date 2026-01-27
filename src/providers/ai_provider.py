@@ -1,0 +1,144 @@
+"""
+AI Provider abstraction layer.
+Supports Gemini API (current) and Vertex AI (future GCP deployment).
+"""
+
+import os
+from abc import ABC, abstractmethod
+
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+
+from src.logger import logger
+
+load_dotenv()
+
+
+class AIProviderInterface(ABC):
+    """Abstract interface for AI providers."""
+
+    @abstractmethod
+    async def generate(self, prompt: str, context: str = "") -> str:
+        """Generate text response from prompt."""
+        ...
+
+    @abstractmethod
+    async def generate_with_image(
+        self, prompt: str, image_bytes: bytes, mime_type: str = "image/png"
+    ) -> str:
+        """Generate text response from prompt with image input."""
+        ...
+
+    @abstractmethod
+    async def generate_with_pdf(self, prompt: str, pdf_bytes: bytes) -> str:
+        """Generate text response from prompt with PDF input."""
+        ...
+
+
+class GeminiProvider(AIProviderInterface):
+    """Gemini API provider implementation."""
+
+    def __init__(self):
+        api_key = os.getenv("GEMINI_API_KEY")
+        if not api_key:
+            raise ValueError("GEMINI_API_KEY environment variable is required")
+        self.client = genai.Client(api_key=api_key)
+        self.model = os.getenv("OCR_MODEL", "gemini-1.5-flash")
+        logger.info(f"GeminiProvider initialized with model: {self.model}")
+
+    async def generate(self, prompt: str, context: str = "") -> str:
+        """Generate text response from prompt."""
+        try:
+            full_prompt = f"{context}\n\n{prompt}" if context else prompt
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=full_prompt,
+            )
+            return response.text.strip()
+        except Exception as e:
+            logger.error(f"Gemini generation failed: {e}")
+            raise
+
+    async def generate_with_image(
+        self, prompt: str, image_bytes: bytes, mime_type: str = "image/png"
+    ) -> str:
+        """Generate text response from prompt with image input."""
+        try:
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    prompt,
+                ],
+            )
+            return response.text.strip()
+        except Exception as e:
+            logger.error(f"Gemini image generation failed: {e}")
+            raise
+
+    async def generate_with_pdf(self, prompt: str, pdf_bytes: bytes) -> str:
+        """Generate text response from prompt with PDF input."""
+        try:
+            response = self.client.models.generate_content(
+                model=self.model,
+                contents=[
+                    types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+                    prompt,
+                ],
+            )
+            return response.text.strip()
+        except Exception as e:
+            logger.error(f"Gemini PDF generation failed: {e}")
+            raise
+
+
+class VertexAIProvider(AIProviderInterface):
+    """
+    Vertex AI provider implementation (stub for future GCP deployment).
+    
+    To use Vertex AI, set:
+    - AI_PROVIDER=vertex
+    - GCP_PROJECT_ID=your-project-id
+    - GCP_LOCATION=us-central1
+    """
+
+    def __init__(self):
+        self.project_id = os.getenv("GCP_PROJECT_ID")
+        self.location = os.getenv("GCP_LOCATION", "us-central1")
+        self.model = os.getenv("VERTEX_MODEL", "gemini-1.5-flash")
+        logger.info(
+            f"VertexAIProvider initialized (stub) - project: {self.project_id}"
+        )
+
+    async def generate(self, prompt: str, context: str = "") -> str:
+        """Generate text response from prompt."""
+        # TODO: Implement Vertex AI SDK call
+        raise NotImplementedError(
+            "VertexAIProvider is a stub. Set AI_PROVIDER=gemini to use Gemini API."
+        )
+
+    async def generate_with_image(
+        self, prompt: str, image_bytes: bytes, mime_type: str = "image/png"
+    ) -> str:
+        """Generate text response from prompt with image input."""
+        raise NotImplementedError("VertexAIProvider is a stub.")
+
+    async def generate_with_pdf(self, prompt: str, pdf_bytes: bytes) -> str:
+        """Generate text response from prompt with PDF input."""
+        raise NotImplementedError("VertexAIProvider is a stub.")
+
+
+def get_ai_provider() -> AIProviderInterface:
+    """
+    Factory function to get the configured AI provider.
+    
+    Set AI_PROVIDER environment variable:
+    - "gemini" (default): Use Gemini API directly
+    - "vertex": Use Vertex AI (requires GCP setup)
+    """
+    provider_type = os.getenv("AI_PROVIDER", "gemini").lower()
+
+    if provider_type == "vertex":
+        return VertexAIProvider()
+    return GeminiProvider()
