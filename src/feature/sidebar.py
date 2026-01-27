@@ -1,5 +1,5 @@
 """
-sidebarに用語やメモを表示・保存する機能を提供するモジュール
+sidebarに用語やノートを表示・保存する機能を提供するモジュール
 """
 
 import uuid6
@@ -8,21 +8,21 @@ from src.logger import logger
 from src.providers import get_storage_provider
 
 
-class MemoError(Exception):
-    """Memo-specific exception."""
+class NoteError(Exception):
+    """Note-specific exception."""
 
     pass
 
 
-class SidebarMemoService:
-    """Sidebar memo service for storing notes and terms."""
+class SidebarNoteService:
+    """Sidebar note service for storing notes and terms."""
 
     def __init__(self):
         self.storage = get_storage_provider()
 
-    def add_memo(self, session_id: str, term: str, note: str) -> dict:
+    def add_note(self, session_id: str, term: str, note: str) -> dict:
         """
-        Add a memo to the sidebar.
+        Add a note to the sidebar.
 
         Args:
             session_id: The session identifier
@@ -30,124 +30,124 @@ class SidebarMemoService:
             note: The note content
 
         Returns:
-            The created memo with its ID
+            The created note with its ID
         """
         try:
-            memo_id = str(uuid6.uuid7())
-            self.storage.save_memo(memo_id, session_id, term, note)
+            note_id = str(uuid6.uuid7())
+            self.storage.save_note(note_id, session_id, term, note)
             logger.info(
-                "Memo added",
+                "Note added",
                 extra={
-                    "memo_id": memo_id,
+                    "note_id": note_id,
                     "session_id": session_id,
                     "term": term,
                 },
             )
             return {
-                "memo_id": memo_id,
+                "note_id": note_id,
                 "session_id": session_id,
                 "term": term,
                 "note": note,
             }
         except Exception as e:
             logger.exception(
-                "Failed to add memo",
+                "Failed to add note",
                 extra={"session_id": session_id, "error": str(e)},
             )
-            raise MemoError(f"メモの保存に失敗しました: {e}") from e
+            raise NoteError(f"ノートの保存に失敗しました: {e}") from e
 
-    def get_memos(self, session_id: str) -> list[dict]:
+    def get_notes(self, session_id: str) -> list[dict]:
         """
-        Get all memos for a session.
+        Get all notes for a session.
 
         Args:
             session_id: The session identifier
 
         Returns:
-            List of memos
+            List of notes
         """
         try:
-            memos = self.storage.get_memos(session_id)
+            notes = self.storage.get_notes(session_id)
             logger.info(
-                "Memos retrieved",
-                extra={"session_id": session_id, "count": len(memos)},
+                "Notes retrieved",
+                extra={"session_id": session_id, "count": len(notes)},
             )
 
-            return memos
+            return notes
         except Exception as e:
             logger.exception(
-                "Failed to retrieve memos",
+                "Failed to retrieve notes",
                 extra={"session_id": session_id, "error": str(e)},
             )
             return []
 
-    def delete_memo(self, memo_id: str) -> bool:
+    def delete_note(self, note_id: str) -> bool:
         """
-        Delete a memo.
+        Delete a note.
 
         Args:
-            memo_id: The memo identifier
+            note_id: The note identifier
 
         Returns:
             True if deleted, False otherwise
         """
         try:
-            deleted = self.storage.delete_memo(memo_id)
+            deleted = self.storage.delete_note(note_id)
             if deleted:
                 logger.info(
-                    "Memo deleted",
-                    extra={"memo_id": memo_id},
+                    "Note deleted",
+                    extra={"note_id": note_id},
                 )
             else:
                 logger.warning(
-                    "Memo not found for deletion",
-                    extra={"memo_id": memo_id},
+                    "Note not found for deletion",
+                    extra={"note_id": note_id},
                 )
             return deleted
         except Exception as e:
             logger.exception(
-                "Failed to delete memo",
-                extra={"memo_id": memo_id, "error": str(e)},
+                "Failed to delete note",
+                extra={"note_id": note_id, "error": str(e)},
             )
             return False
 
-    def clear_session_memos(self, session_id: str) -> int:
+    def clear_session_notes(self, session_id: str) -> int:
         """
-        Clear all memos for a session.
+        Clear all notes for a session.
 
         Args:
             session_id: The session identifier
 
         Returns:
-            Number of memos deleted
+            Number of notes deleted
         """
-        memos = self.get_memos(session_id)
+        notes = self.get_notes(session_id)
         count = 0
-        for memo in memos:
-            if self.delete_memo(memo["memo_id"]):
+        for note in notes:
+            if self.delete_note(note["note_id"]):
                 count += 1
-        logger.info(f"Cleared {count} memos for session {session_id}")
+        logger.info(f"Cleared {count} notes for session {session_id}")
         return count
 
-    def export_memos(self, session_id: str) -> str:
+    def export_notes(self, session_id: str) -> str:
         """
-        Export memos as formatted text.
+        Export notes as formatted text.
 
         Args:
             session_id: The session identifier
 
         Returns:
-            Formatted memo text
+            Formatted note text
         """
-        memos = self.get_memos(session_id)
-        if not memos:
-            return "メモがありません。"
+        notes = self.get_notes(session_id)
+        if not notes:
+            return "ノートがありません。"
 
-        lines = ["# 保存したメモ\n"]
-        for memo in memos:
-            lines.append(f"## {memo['term']}")
-            lines.append(f"{memo['note']}\n")
-            lines.append(f"_保存日時: {memo.get('created_at', 'N/A')}_\n")
+        lines = ["# 保存したノート\n"]
+        for note in notes:
+            lines.append(f"## {note['term']}")
+            lines.append(f"{note['note']}\n")
+            lines.append(f"_保存日時: {note.get('created_at', 'N/A')}_\n")
             lines.append("---\n")
 
         return "\n".join(lines)

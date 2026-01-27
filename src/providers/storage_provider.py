@@ -73,21 +73,21 @@ class StorageInterface(ABC):
         """Update paper visibility."""
         ...
 
-    # ===== Memo methods =====
+    # ===== Note methods =====
 
     @abstractmethod
-    def save_memo(self, memo_id: str, session_id: str, term: str, note: str) -> str:
-        """Save a memo. Returns memo_id."""
+    def save_note(self, note_id: str, session_id: str, term: str, note: str) -> str:
+        """Save a note. Returns note_id."""
         ...
 
     @abstractmethod
-    def get_memos(self, session_id: str) -> list[dict]:
-        """Get all memos for a session."""
+    def get_notes(self, session_id: str) -> list[dict]:
+        """Get all notes for a session."""
         ...
 
     @abstractmethod
-    def delete_memo(self, memo_id: str) -> bool:
-        """Delete a memo by ID."""
+    def delete_note(self, note_id: str) -> bool:
+        """Delete a note by ID."""
         ...
 
     # ===== User methods =====
@@ -257,10 +257,10 @@ class SQLiteStorage(StorageInterface):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
-            # Memos table
+            # Notes table
             conn.execute("""
-                CREATE TABLE IF NOT EXISTS memos (
-                    memo_id TEXT PRIMARY KEY,
+                CREATE TABLE IF NOT EXISTS notes (
+                    note_id TEXT PRIMARY KEY,
                     session_id TEXT,
                     term TEXT,
                     note TEXT,
@@ -374,39 +374,39 @@ class SQLiteStorage(StorageInterface):
             conn.commit()
             return cursor.rowcount > 0
 
-    # ===== Memo methods =====
+    # ===== Note methods =====
 
-    def save_memo(self, memo_id: str, session_id: str, term: str, note: str) -> str:
-        """Save a memo."""
+    def save_note(self, note_id: str, session_id: str, term: str, note: str) -> str:
+        """Save a note."""
         with self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO memos (memo_id, session_id, term, note, created_at)
+                INSERT INTO notes (note_id, session_id, term, note, created_at)
                 VALUES (?, ?, ?, ?, ?)
                 """,
-                (memo_id, session_id, term, note, datetime.now().isoformat()),
+                (note_id, session_id, term, note, datetime.now().isoformat()),
             )
             conn.commit()
-        logger.info(f"Memo saved: {memo_id}")
-        return memo_id
+        logger.info(f"Note saved: {note_id}")
+        return note_id
 
-    def get_memos(self, session_id: str) -> list[dict]:
-        """Get all memos for a session."""
+    def get_notes(self, session_id: str) -> list[dict]:
+        """Get all notes for a session."""
         with self._get_connection() as conn:
             rows = conn.execute(
-                "SELECT * FROM memos WHERE session_id = ? ORDER BY created_at DESC",
+                "SELECT * FROM notes WHERE session_id = ? ORDER BY created_at DESC",
                 (session_id,),
             ).fetchall()
             return [dict(row) for row in rows]
 
-    def delete_memo(self, memo_id: str) -> bool:
-        """Delete a memo by ID."""
+    def delete_note(self, note_id: str) -> bool:
+        """Delete a note by ID."""
         with self._get_connection() as conn:
-            cursor = conn.execute("DELETE FROM memos WHERE memo_id = ?", (memo_id,))
+            cursor = conn.execute("DELETE FROM notes WHERE note_id = ?", (note_id,))
             conn.commit()
             deleted = cursor.rowcount > 0
             if deleted:
-                logger.info(f"Memo deleted: {memo_id}")
+                logger.info(f"Note deleted: {note_id}")
             return deleted
 
     # ===== User methods =====
@@ -636,13 +636,13 @@ class CloudSQLStorage(StorageInterface):
     def update_paper_visibility(self, paper_id: str, visibility: str) -> bool:
         raise NotImplementedError("CloudSQLStorage is a stub.")
 
-    def save_memo(self, *args: Any, **kwargs: Any) -> str:
+    def save_note(self, *args: Any, **kwargs: Any) -> str:
         raise NotImplementedError("CloudSQLStorage is a stub.")
 
-    def get_memos(self, session_id: str) -> list[dict]:
+    def get_notes(self, session_id: str) -> list[dict]:
         raise NotImplementedError("CloudSQLStorage is a stub.")
 
-    def delete_memo(self, memo_id: str) -> bool:
+    def delete_note(self, note_id: str) -> bool:
         raise NotImplementedError("CloudSQLStorage is a stub.")
 
     def create_user(self, user_data: dict) -> str:

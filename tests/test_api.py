@@ -14,10 +14,21 @@ def client():
     """Create a test client with temporary database."""
     with tempfile.NamedTemporaryFile(suffix=".db", delete=False) as f:
         db_path = f.name
-    os.environ["DB_PATH"] = db_path
-    os.environ["GEMINI_API_KEY"] = "test-key"
+    # Reset storage provider singleton to assume new DB path
+    import src.providers.storage_provider
 
+    src.providers.storage_provider._storage_provider_instance = None
+
+    import src.routers.papers
     from src.main import app
+    from src.routers.note import sidebar_note_service
+
+    # Create new storage connected to temp DB
+    new_storage = src.providers.storage_provider.SQLiteStorage(db_path)
+
+    # Patch services
+    sidebar_note_service.storage = new_storage
+    src.routers.papers.storage = new_storage
 
     with TestClient(app) as client:
         yield client
@@ -52,39 +63,43 @@ def test_papers_list_endpoint(client):
     assert isinstance(data["papers"], list)
 
 
-def test_memo_endpoints(client):
-    """Test memo CRUD operations."""
-    # Create memo
+def test_note_endpoints(client):
+    """Test note CRUD operations."""
+    # Create note
     response = client.post(
-        "/memo",
-        json={"session_id": "test-session", "term": "API", "note": "Application Programming Interface"},
+        "/note",
+        json={
+            "session_id": "test-session",
+            "term": "API",
+            "note": "Application Programming Interface",
+        },
     )
     assert response.status_code == 200
-    memo = response.json()
-    assert memo["term"] == "API"
-    memo_id = memo["memo_id"]
+    note = response.json()
+    assert note["term"] == "API"
+    note_id = note["note_id"]
 
-    # Get memos
-    response = client.get("/memo/test-session")
+    # Get notes
+    response = client.get("/note/test-session")
     assert response.status_code == 200
     data = response.json()
-    assert len(data["memos"]) == 1
+    assert len(data["notes"]) == 1
 
-    # Delete memo
-    response = client.delete(f"/memo/{memo_id}")
+    # Delete note
+    response = client.delete(f"/note/{note_id}")
     assert response.status_code == 200
     assert response.json()["deleted"] is True
 
 
-def test_export_memos_endpoint(client):
-    """Test memo export."""
-    # Create some memos first
+def test_export_notes_endpoint(client):
+    """Test note export."""
+    # Create some notes first
     client.post(
-        "/memo",
+        "/note",
         json={"session_id": "export-test", "term": "Test", "note": "Test note"},
     )
 
-    response = client.post("/memo/export", data={"session_id": "export-test"})
+    response = client.post("/note/export", data={"session_id": "export-test"})
     assert response.status_code == 200
     data = response.json()
     assert "export" in data

@@ -16,7 +16,7 @@ from .routers import (
     auth_router,
     chat_router,
     explore_router,
-    memo_router,
+    note_router,
     papers_router,
     pdf_router,
     translation_router,
@@ -69,8 +69,8 @@ app.include_router(chat_router)
 # Analysis Features
 app.include_router(analysis_router)
 
-# Memos
-app.include_router(memo_router)
+# Notes
+app.include_router(note_router)
 
 # Paper Management
 app.include_router(papers_router)

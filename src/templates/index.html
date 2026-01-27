@@ -437,11 +437,11 @@
               Chat
             </button>
             <button
-              onclick="switchTab('memo')"
-              id="tab-memo"
+              onclick="switchTab('note')"
+              id="tab-note"
               class="flex-1 py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all text-slate-400 hover:text-slate-600"
             >
-              Memo
+              Note
             </button>
           </div>
 
@@ -541,37 +541,37 @@
               </div>
             </div>
 
-            <!-- Memo Tab -->
+            <!-- Note Tab -->
             <div
-              id="content-memo"
+              id="content-note"
               class="hidden flex flex-col h-full animate-fade-in"
             >
               <div
-                id="memo-list"
+                id="note-list"
                 class="flex-1 space-y-3 overflow-y-auto max-h-[350px]"
               >
                 <p class="text-xs text-slate-400 text-center py-8">
-                  メモがありません。<br />単語を選択して「+」をクリックで追加できます。
+                  ノートがありません。<br />単語を選択して「+」をクリックで追加できます。
                 </p>
               </div>
               <div class="mt-4 pb-6 space-y-2">
                 <input
                   type="text"
-                  id="memo-term"
+                  id="note-term"
                   class="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
                   placeholder="用語..."
                 />
                 <textarea
-                  id="memo-note"
+                  id="note-note"
                   rows="2"
                   class="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
-                  placeholder="メモ..."
+                  placeholder="ノート..."
                 ></textarea>
                 <button
-                  onclick="addMemo()"
+                  onclick="addNote()"
                   class="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-xl hover:bg-emerald-700 transition-all"
                 >
-                  + メモを追加
+                  + ノートを追加
                 </button>
               </div>
             </div>
@@ -631,7 +631,7 @@
       }
 
       function switchTab(tab) {
-        const tabs = ["dict", "summary", "chat", "memo"];
+        const tabs = ["dict", "summary", "chat", "note"];
         tabs.forEach((t) => {
           const btn = document.getElementById("tab-" + t);
           const content = document.getElementById("content-" + t);
@@ -805,14 +805,14 @@
         }
       }
 
-      // Memo functionality
-      async function addMemo() {
-        const term = document.getElementById("memo-term").value.trim();
-        const note = document.getElementById("memo-note").value.trim();
+      // Note functionality
+      async function addNote() {
+        const term = document.getElementById("note-term").value.trim();
+        const note = document.getElementById("note-note").value.trim();
         if (!term || !note) return;
 
         try {
-          const response = await fetch("/memo", {
+          const response = await fetch("/note", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -822,28 +822,28 @@
             }),
           });
           await response.json();
-          document.getElementById("memo-term").value = "";
-          document.getElementById("memo-note").value = "";
-          loadMemos();
+          document.getElementById("note-term").value = "";
+          document.getElementById("note-note").value = "";
+          loadNotes();
         } catch (error) {
-          console.error("Failed to add memo:", error);
+          console.error("Failed to add note:", error);
         }
       }
 
-      async function loadMemos() {
+      async function loadNotes() {
         try {
-          const response = await fetch(`/memo/${sessionId}`);
+          const response = await fetch(`/note/${sessionId}`);
           const data = await response.json();
-          const list = document.getElementById("memo-list");
+          const list = document.getElementById("note-list");
 
-          if (data.memos?.length) {
-            list.innerHTML = data.memos
+          if (data.notes?.length) {
+            list.innerHTML = data.notes
               .map(
                 (m) => `
               <div class="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
                 <div class="flex justify-between items-start">
                   <span class="font-bold text-xs text-indigo-600">${m.term}</span>
-                  <button onclick="deleteMemo('${m.memo_id}')" class="text-slate-300 hover:text-red-500 text-xs">×</button>
+                  <button onclick="deleteNote('${m.note_id}')" class="text-slate-300 hover:text-red-500 text-xs">×</button>
                 </div>
                 <p class="text-[10px] text-slate-500 mt-1">${m.note}</p>
               </div>
@@ -851,24 +851,24 @@
               )
               .join("");
           } else {
-            list.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">メモがありません。</p>`;
+            list.innerHTML = `<p class="text-xs text-slate-400 text-center py-8">ノートがありません。</p>`;
           }
         } catch (error) {
-          console.error("Failed to load memos:", error);
+          console.error("Failed to load notes:", error);
         }
       }
 
-      async function deleteMemo(memoId) {
+      async function deleteNote(noteId) {
         try {
-          await fetch(`/memo/${memoId}`, { method: "DELETE" });
-          loadMemos();
+          await fetch(`/note/${noteId}`, { method: "DELETE" });
+          loadNotes();
         } catch (error) {
-          console.error("Failed to delete memo:", error);
+          console.error("Failed to delete note:", error);
         }
       }
 
-      // Initialize memos on load
-      loadMemos();
+      // Initialize notes on load
+      loadNotes();
 
       // User dropdown toggle
       function toggleUserDropdown() {

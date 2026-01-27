@@ -7,7 +7,7 @@ from .chat import ChatService
 from .figure_insight import FigureInsightService
 from .paragraph_explain import ParagraphExplainService
 from .reserch_radear import ResearchRadarService
-from .sidebar import SidebarMemoService
+from .sidebar import SidebarNoteService
 from .summary import SummaryService
 from .translate import TranslationService
 
@@ -17,7 +17,7 @@ __all__ = [
     "FigureInsightService",
     "ParagraphExplainService",
     "ResearchRadarService",
-    "SidebarMemoService",
+    "SidebarNoteService",
     "SummaryService",
     "TranslationService",
 ]
