@@ -9,6 +9,7 @@ dependencies = [
     "chardet>=5.2.0",
     "datetime>=6.0",
     "dotenv>=0.9.9",
+    "email-validator>=2.3.0",
     "en-core-web-lg",
     "fastapi>=0.128.0",
     "firebase-admin>=6.0.0",

@@ -56,7 +56,7 @@ coverage.xml
 .hypothesis/
 .pytest_cache/
 cover/
-
+paperterrace-a12ad-firebase-adminsdk-fbsvc-f315de7587.json
 # Translations
 *.mo
 *.pot

@@ -16,7 +16,7 @@ router = APIRouter(prefix="/explore", tags=["Explore"])
 async def explore_papers(
     page: int = Query(1, ge=1),
     per_page: int = Query(20, ge=1, le=100),
-    sort: str = Query("recent", regex="^(recent|popular|trending)$"),
+    sort: str = Query("recent", pattern="^(recent|popular|trending)$"),
 ):
     """
     Get public papers for exploration.

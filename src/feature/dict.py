@@ -1,4 +1,4 @@
-import genai
+from google import genai
 
 """
 単語をクリックするとその意味を辞書で調べて表示する機能を提供するモジュール
@@ -6,9 +6,9 @@ import genai
 
 
 class Translate:
-    def __init__(self, api_key: str = None, model_name: str = None):
+    def __init__(self, api_key: str | None = None, model_name: str | None = None):
         self.client = genai.Client(api_key=api_key)
-        self.model = model_name
+        self.model = model_name or "gemini-2.0-flash-lite"
 
     def explain_unknown_word(self, word: str) -> str:
         """辞書にない英単語を日本語で解説する"""

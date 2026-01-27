@@ -1,10 +1,13 @@
 import asyncio
+import os
 import uuid
 from typing import Optional
 
 import uuid6
+from dotenv import load_dotenv
 from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
@@ -20,6 +23,7 @@ from .feature import (
 )
 from .logic import EnglishAnalysisService
 from .providers import get_storage_provider
+from .routers import auth_router, explore_router, users_router
 from .utils import _get_file_hash
 
 app = FastAPI(
@@ -28,10 +32,28 @@ app = FastAPI(
     version="1.0.0",
 )
 
+# Load environment variables
+load_dotenv()
+
+# Firebase Config for Frontend
+FIREBASE_CONFIG = {
+    "apiKey": os.getenv("FIREBASE_API_KEY"),
+    "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
+    "projectId": os.getenv("FIREBASE_PROJECT_ID"),
+    "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
+    "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID"),
+    "appId": os.getenv("FIREBASE_APP_ID"),
+    "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID"),
+}
+
 # Templates and static files
 templates = Jinja2Templates(directory="src/templates")
-# Uncomment when static files are needed:
-# app.mount("/static", StaticFiles(directory="src/static"), name="static")
+app.mount("/static", StaticFiles(directory="src/static"), name="static")
+
+# Include routers
+app.include_router(auth_router)
+app.include_router(users_router)
+app.include_router(explore_router)
 
 # Services
 service = EnglishAnalysisService()
@@ -79,7 +101,9 @@ class LanguageSettingRequest(BaseModel):
 
 @app.get("/", response_class=HTMLResponse)
 async def read_item(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return templates.TemplateResponse(
+        "index.html", {"request": request, "firebase_config": FIREBASE_CONFIG}
+    )
 
 
 # ============================================================================
