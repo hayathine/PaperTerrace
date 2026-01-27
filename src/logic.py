@@ -19,7 +19,7 @@ from src.utils import _get_file_hash
 load_dotenv()
 DB_PATH = os.getenv("DB_PATH") or "ocr_reader.db"
 executor = ThreadPoolExecutor(max_workers=4)
-nlp = spacy.load("en_core_web_lg", disable=["ner", "parser", "tok2vec"])
+nlp = spacy.load("en_core_web_lg", disable=["ner", "parser"])  # tok2vec required for lemmatization
 api_key = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 
@@ -172,7 +172,7 @@ class EnglishAnalysisService:
             translations = await self._batch_translate_words(
                 list(self._unknown_words)
                 if len(self._unknown_words) <= int(os.getenv("BATCH_WORDS_LIMIT", "50"))
-                else list(self._unknown_words)
+                else list(self._unknown_words)[: int(os.getenv("BATCH_WORDS_LIMIT", "50"))]
             )
             # 結果を translation_cache に統合
             self.translation_cache.update(translations)
