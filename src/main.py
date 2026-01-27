@@ -185,7 +185,7 @@ async def analyze_pdf(file: UploadFile = File(...), session_id: Optional[str] = 
     text_storage[task_id] = raw_text
     return HTMLResponse(
         f'<div hx-ext="sse" sse-connect="/stream/{task_id}" sse-swap="message" '
-        f'hx-swap="beforeend" data-paper-id="{paper_id}"></div>'
+        f'sse-close="close" hx-swap="beforeend" data-paper-id="{paper_id}"></div>'
     )
 
 
@@ -193,12 +193,23 @@ async def analyze_pdf(file: UploadFile = File(...), session_id: Optional[str] = 
 async def stream(task_id: str):
     text = text_storage.get(task_id, "")
 
+    # タスクが存在しない場合は即座に終了イベントを送信
+    if not text:
+
+        async def empty_stream():
+            # SSEの終了を通知して再接続を防ぐ
+            yield "event: close\ndata: done\n\n"
+
+        return StreamingResponse(empty_stream(), media_type="text/event-stream")
+
     async def generate():
         async for chunk in service.tokenize_stream(text):
             yield chunk
             await asyncio.sleep(0.01)
         if task_id in text_storage:
             del text_storage[task_id]
+        # ストリーム終了を明示的に通知
+        yield "event: close\ndata: done\n\n"
 
     return StreamingResponse(generate(), media_type="text/event-stream")
 

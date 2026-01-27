@@ -105,22 +105,26 @@ class EnglishAnalysisService:
         self._unknown_words = set()  # Jamdictにない単語を収集
 
     async def tokenize_stream(self, text: str):
-        """2段階ストリーム: まずプレーンテキストを表示、次にインタラクティブHTMLに置換"""
+        """2段階ストリーム: まずプレーンテキストを表示、準備完了後に一括置換"""
         paragraphs = re.split(r"\n{2,}", text.replace("\r\n", "\n"))
         loop = asyncio.get_event_loop()
 
         # Phase 1: プレーンテキストを即座に表示
+        paragraph_indices = []
         for i, p_text in enumerate(paragraphs):
             p_text = p_text.replace("\n", " ").strip()
             if not p_text:
                 continue
+            paragraph_indices.append(i)
             # プレーンテキストをまず表示（後で置換するためにIDを付与）
             yield f'data: <p id="p-{i}" class="mb-6 text-slate-600">{p_text}</p>\n\n'
 
         # Phase 1 完了を通知
-        yield 'data: <div id="tokenize-status" class="fixed bottom-4 right-4 bg-indigo-500 text-white px-4 py-2 rounded-lg shadow-lg animate-pulse">📝 分析中...</div>\n\n'
+        yield 'data: <div id="tokenize-status" class="fixed bottom-4 right-4 bg-indigo-500 text-white px-4 py-2 rounded-lg shadow-lg animate-pulse">📝 単語を分析中...</div>\n\n'
 
-        # Phase 2: インタラクティブHTMLに置換
+        # Phase 2: 全てのインタラクティブHTMLを準備
+        all_replacements: dict[int, str] = {}
+
         for i, p_text in enumerate(paragraphs):
             p_text = p_text.replace("\n", " ").strip()
             if not p_text:
@@ -155,12 +159,12 @@ class EnglishAnalysisService:
                     f'hx-target="#definition-box">{token.text}</span>{whitespace}'
                 )
 
-            # outerHTMLで置換するスクリプトを送信
-            interactive_html = "".join(p_tokens_html)
-            yield f'data: <script>document.getElementById("p-{i}").outerHTML = \'<p id="p-{i}" class="mb-6">{interactive_html}</p>\';</script>\n\n'
+            all_replacements[i] = "".join(p_tokens_html)
 
-        # ステータス表示を削除
-        yield 'data: <script>document.getElementById("tokenize-status")?.remove();</script>\n\n'
+        # 全ての準備が完了したら hx-swap-oob で一括置換
+        # HTMXではSSE経由のscriptタグは実行されないため、oob swapを使用
+        for idx, html in all_replacements.items():
+            yield f'data: <p id="p-{idx}" hx-swap-oob="true" class="mb-6">{html}</p>\n\n'
 
         # ストリーム終了時に未知の単語をバッチ翻訳
         if self._unknown_words:
@@ -171,6 +175,8 @@ class EnglishAnalysisService:
             # 結果を translation_cache に統合
             self.translation_cache.update(translations)
             self._unknown_words.clear()
+        # ステータスを完了表示に変更 (oob swap)
+        yield 'data: <div id="tokenize-status" hx-swap-oob="true" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg">✅ 分析完了！単語をクリックで翻訳</div>\n\n'
 
     async def _batch_translate_words(self, words: list[str]) -> dict[str, str]:
         """未知の単語を一括でGeminiで翻訳して辞書として返す"""
