@@ -10,6 +10,7 @@ from .explore import router as explore_router
 from .note import router as note_router
 from .papers import router as papers_router
 from .pdf import router as pdf_router
+from .stamps import router as stamps_router
 from .translation import router as translation_router
 from .users import router as users_router
 
@@ -23,4 +24,5 @@ __all__ = [
     "analysis_router",
     "note_router",
     "papers_router",
+    "stamps_router",
 ]

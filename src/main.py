@@ -19,6 +19,7 @@ from .routers import (
     note_router,
     papers_router,
     pdf_router,
+    stamps_router,
     translation_router,
     users_router,
 )
@@ -71,6 +72,9 @@ app.include_router(analysis_router)
 
 # Notes
 app.include_router(note_router)
+
+# Stamps
+app.include_router(stamps_router)
 
 # Paper Management
 app.include_router(papers_router)

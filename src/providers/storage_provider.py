@@ -90,6 +90,53 @@ class StorageInterface(ABC):
         """Delete a note by ID."""
         ...
 
+    # ===== Stamp methods =====
+
+    @abstractmethod
+    def add_paper_stamp(
+        self,
+        paper_id: str,
+        stamp_type: str,
+        user_id: str | None = None,
+        page_number: int | None = None,
+        x: float | None = None,
+        y: float | None = None,
+    ) -> str:
+        """Add a stamp to a paper with optional position."""
+        ...
+
+    @abstractmethod
+    def get_paper_stamps(self, paper_id: str) -> list[dict]:
+        """Get stamps for a paper."""
+        ...
+
+    @abstractmethod
+    def delete_paper_stamp(self, stamp_id: str) -> bool:
+        """Delete a stamp from a paper."""
+        ...
+
+    @abstractmethod
+    def add_note_stamp(
+        self,
+        note_id: str,
+        stamp_type: str,
+        user_id: str | None = None,
+        x: float | None = None,
+        y: float | None = None,
+    ) -> str:
+        """Add a stamp to a note with optional position."""
+        ...
+
+    @abstractmethod
+    def get_note_stamps(self, note_id: str) -> list[dict]:
+        """Get stamps for a note."""
+        ...
+
+    @abstractmethod
+    def delete_note_stamp(self, stamp_id: str) -> bool:
+        """Delete a stamp from a note."""
+        ...
+
     # ===== User methods =====
 
     @abstractmethod
@@ -199,6 +246,44 @@ class SQLiteStorage(StorageInterface):
 
             conn.commit()
 
+            # Migrations for stamps (adding coordinates if missing)
+            # This is separate because we iterate over tables
+            for table, columns in [
+                (
+                    "paper_stamps",
+                    [
+                        ("page_number", "INTEGER"),
+                        ("x", "REAL"),
+                        ("y", "REAL"),
+                    ],
+                ),
+                (
+                    "note_stamps",
+                    [
+                        ("x", "REAL"),
+                        ("y", "REAL"),
+                    ],
+                ),
+            ]:
+                # Check if table exists first
+                cursor = conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table,)
+                )
+                if not cursor.fetchone():
+                    continue
+
+                cursor = conn.execute(f"PRAGMA table_info({table})")
+                existing_cols = {row[1] for row in cursor.fetchall()}
+
+                for col_name, col_type in columns:
+                    if col_name not in existing_cols:
+                        try:
+                            conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
+                            logger.info(f"Added column '{col_name}' to {table}")
+                        except sqlite3.OperationalError:
+                            pass
+            conn.commit()
+
     def init_tables(self) -> None:
         """Initialize required database tables."""
         with self._get_connection() as conn:
@@ -265,6 +350,33 @@ class SQLiteStorage(StorageInterface):
                     term TEXT,
                     note TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            # Paper Stamps table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS paper_stamps (
+                    id TEXT PRIMARY KEY,
+                    paper_id TEXT,
+                    user_id TEXT,
+                    stamp_type TEXT,
+                    page_number INTEGER,
+                    x REAL,
+                    y REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(paper_id) REFERENCES papers(paper_id) ON DELETE CASCADE
+                )
+            """)
+            # Note Stamps table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS note_stamps (
+                    id TEXT PRIMARY KEY,
+                    note_id TEXT,
+                    user_id TEXT,
+                    stamp_type TEXT,
+                    x REAL,
+                    y REAL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(note_id) REFERENCES notes(note_id) ON DELETE CASCADE
                 )
             """)
             conn.commit()
@@ -408,6 +520,106 @@ class SQLiteStorage(StorageInterface):
             if deleted:
                 logger.info(f"Note deleted: {note_id}")
             return deleted
+
+    # ===== Stamp methods =====
+
+    def add_paper_stamp(
+        self,
+        paper_id: str,
+        stamp_type: str,
+        user_id: str | None = None,
+        page_number: int | None = None,
+        x: float | None = None,
+        y: float | None = None,
+    ) -> str:
+        """Add a stamp to a paper."""
+        import uuid6
+
+        stamp_id = str(uuid6.uuid7())
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO paper_stamps (id, paper_id, user_id, stamp_type, page_number, x, y, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    stamp_id,
+                    paper_id,
+                    user_id,
+                    stamp_type,
+                    page_number,
+                    x,
+                    y,
+                    datetime.now().isoformat(),
+                ),
+            )
+            conn.commit()
+        logger.info(f"Paper stamp added: {stamp_id} to paper {paper_id}")
+        return stamp_id
+
+    def get_paper_stamps(self, paper_id: str) -> list[dict]:
+        """Get stamps for a paper."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM paper_stamps WHERE paper_id = ? ORDER BY created_at DESC",
+                (paper_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def delete_paper_stamp(self, stamp_id: str) -> bool:
+        """Delete a stamp from a paper."""
+        with self._get_connection() as conn:
+            cursor = conn.execute("DELETE FROM paper_stamps WHERE id = ?", (stamp_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def add_note_stamp(
+        self,
+        note_id: str,
+        stamp_type: str,
+        user_id: str | None = None,
+        x: float | None = None,
+        y: float | None = None,
+    ) -> str:
+        """Add a stamp to a note."""
+        import uuid6
+
+        stamp_id = str(uuid6.uuid7())
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO note_stamps (id, note_id, user_id, stamp_type, x, y, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    stamp_id,
+                    note_id,
+                    user_id,
+                    stamp_type,
+                    x,
+                    y,
+                    datetime.now().isoformat(),
+                ),
+            )
+            conn.commit()
+        logger.info(f"Note stamp added: {stamp_id} to note {note_id}")
+        return stamp_id
+
+    def get_note_stamps(self, note_id: str) -> list[dict]:
+        """Get stamps for a note."""
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM note_stamps WHERE note_id = ? ORDER BY created_at DESC",
+                (note_id,),
+            ).fetchall()
+            return [dict(row) for row in rows]
+
+    def delete_note_stamp(self, stamp_id: str) -> bool:
+        """Delete a stamp from a note."""
+        with self._get_connection() as conn:
+            cursor = conn.execute("DELETE FROM note_stamps WHERE id = ?", (stamp_id,))
+            conn.commit()
+            return cursor.rowcount > 0
 
     # ===== User methods =====
 
@@ -643,6 +855,41 @@ class CloudSQLStorage(StorageInterface):
         raise NotImplementedError("CloudSQLStorage is a stub.")
 
     def delete_note(self, note_id: str) -> bool:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    # ===== Stamp methods =====
+
+    def add_paper_stamp(
+        self,
+        paper_id: str,
+        stamp_type: str,
+        user_id: str | None = None,
+        page_number: int | None = None,
+        x: float | None = None,
+        y: float | None = None,
+    ) -> str:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def get_paper_stamps(self, paper_id: str) -> list[dict]:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def delete_paper_stamp(self, stamp_id: str) -> bool:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def add_note_stamp(
+        self,
+        note_id: str,
+        stamp_type: str,
+        user_id: str | None = None,
+        x: float | None = None,
+        y: float | None = None,
+    ) -> str:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def get_note_stamps(self, note_id: str) -> list[dict]:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def delete_note_stamp(self, stamp_id: str) -> bool:
         raise NotImplementedError("CloudSQLStorage is a stub.")
 
     def create_user(self, user_data: dict) -> str:
