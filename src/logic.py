@@ -226,12 +226,12 @@ class EnglishAnalysisService:
                                 self._unknown_words.add(lemma)
 
                 color = (
-                    "border-indigo-200 hover:bg-indigo-100"
+                    "border-transparent hover:border-indigo-300 hover:bg-indigo-50"
                     if self.word_cache.get(lemma, False)
-                    else "border-purple-200 hover:bg-purple-100"
+                    else "border-transparent hover:border-purple-300 hover:bg-purple-50"
                 )
                 p_tokens_html.append(
-                    f'<span class="cursor-pointer border-b {color} inline'
+                    f'<span class="cursor-pointer border-b transition-colors {color}'
                     f'" hx-get="/explain/{lemma}" hx-trigger="click" '
                     f'hx-target="#definition-box" hx-swap="afterbegin">{token.text}</span>{whitespace}'
                 )
@@ -240,7 +240,7 @@ class EnglishAnalysisService:
             all_html_parts[unique_id] = html_content
 
             # 即座にクリック可能なHTMLを表示
-            yield f'event: message\ndata: <p id="{unique_id}" class="mb-6" hx-swap-oob="beforeend:#{target_id}">{html_content}</p>\n\n'
+            yield f'event: message\ndata: <p id="{unique_id}" class="mb-6 text-base leading-relaxed text-slate-700" hx-swap-oob="beforeend:#{target_id}">{html_content}</p>\n\n'
 
         # 保存用に完全なHTMLを構築して保存
         if paper_id and save_to_db:

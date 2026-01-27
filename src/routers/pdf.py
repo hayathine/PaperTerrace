@@ -197,7 +197,7 @@ async def stream(task_id: str):
                 content_id = f"content-{page_container_id}"
 
                 # ページの枠を #paper-content に追記（正しい OOB スワップ）
-                yield f'event: message\ndata: <div id="{page_container_id}" hx-swap-oob="beforeend:#paper-content" class="mb-8 p-4 bg-white shadow-sm rounded-xl min-h-[500px] animate-fade-in"><div class="flex justify-between items-center mb-4 border-b border-slate-100 pb-2"><span class="text-xs text-slate-300 font-bold uppercase">Page {page_num}/{total_pages}</span><span class="text-[10px] text-green-500 bg-green-50 px-2 py-0.5 rounded-full">Ready</span></div><div id="{content_id}"></div></div>\n\n'
+                yield f'event: message\ndata: <div id="{page_container_id}" hx-swap-oob="beforeend:#paper-content" class="mb-10 p-6 md:p-8 bg-white shadow-sm rounded-2xl animate-fade-in"><div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-3"><span class="text-xs text-slate-300 font-bold uppercase tracking-wide">Page {page_num}/{total_pages}</span><span class="text-[10px] text-green-500 bg-green-50 px-2 py-0.5 rounded-full font-medium">Ready</span></div><div id="{content_id}" class="max-w-prose"></div></div>\n\n'
 
                 # ページ内のテキストを即座にトークン化してクリック可能なHTMLをストリーム表示
                 page_prefix = f"p-pg{page_num}"
