@@ -233,7 +233,7 @@ class EnglishAnalysisService:
                 p_tokens_html.append(
                     f'<span class="cursor-pointer border-b {color} inline'
                     f'" hx-get="/explain/{lemma}" hx-trigger="click" '
-                    f'hx-target="#definition-box">{token.text}</span>{whitespace}'
+                    f'hx-target="#definition-box" hx-swap="afterbegin">{token.text}</span>{whitespace}'
                 )
 
             html_content = "".join(p_tokens_html)

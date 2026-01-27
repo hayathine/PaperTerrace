@@ -44,14 +44,38 @@ async def translate_word(word: str, lang: str = "ja"):
 @router.get("/explain/{lemma}")
 async def explain(lemma: str):
     """単語の説明を取得（キャッシュ → Jamdict → Gemini の順で検索）"""
+
+    def make_card(
+        word: str, translation: str, source: str, bg_class: str, border_class: str
+    ) -> str:
+        """辞書カードHTMLを生成"""
+        source_colors = {
+            "Cache": "bg-purple-100 text-purple-600",
+            "Jamdict": "bg-blue-100 text-blue-600",
+            "Gemini": "bg-amber-100 text-amber-600",
+            "Error": "bg-gray-100 text-gray-600",
+        }
+        source_style = source_colors.get(source, "bg-gray-100 text-gray-600")
+        return f"""<div class="dict-card p-4 {bg_class} border {border_class} rounded-xl shadow-sm animate-fade-in">
+            <div class="flex items-start justify-between gap-2 mb-2">
+                <span class="text-sm font-bold text-slate-700">{word}</span>
+                <span class="text-[9px] font-medium px-2 py-0.5 rounded-full {source_style}">{source}</span>
+            </div>
+            <p class="text-sm text-slate-600 leading-relaxed">{translation}</p>
+        </div>
+        <script>document.getElementById('dict-empty-state')?.remove();</script>"""
+
     # まずキャッシュから翻訳を取得
     cached = service.get_translation(lemma)
     if cached:
-        bg = "bg-purple-50"
         return HTMLResponse(
-            f'<div class="p-4 rounded-lg {bg} border animate-fade-in"><b>{cached["word"]}</b>'
-            f"<p>{cached['translation']}</p>"
-            f'<small class="text-slate-400">{cached["source"]}</small></div>'
+            make_card(
+                cached["word"],
+                cached["translation"],
+                "Cache",
+                "bg-purple-50/80",
+                "border-purple-100",
+            )
         )
 
     # キャッシュにない場合は Jamdict を検索
@@ -66,9 +90,7 @@ async def explain(lemma: str):
         ]
         translation = " / ".join(list(dict.fromkeys(ja)))
         return HTMLResponse(
-            f'<div class="p-4 rounded-lg bg-blue-50 border animate-fade-in"><b>{lemma}</b>'
-            f"<p>{translation}</p>"
-            f'<small class="text-slate-400">Jamdict</small></div>'
+            make_card(lemma, translation, "Jamdict", "bg-blue-50/80", "border-blue-100")
         )
 
     # Jamdict にもない場合は Gemini で個別翻訳
@@ -85,16 +107,12 @@ async def explain(lemma: str):
         service.word_cache[lemma] = False  # Jamdictにはない
 
         return HTMLResponse(
-            f'<div class="p-4 rounded-lg bg-amber-50 border animate-fade-in"><b>{lemma}</b>'
-            f"<p>{translation}</p>"
-            f'<small class="text-slate-400">Gemini</small></div>'
+            make_card(lemma, translation, "Gemini", "bg-amber-50/80", "border-amber-100")
         )
     except Exception as e:
         logger.error(f"Gemini translation failed for '{lemma}': {e}")
         return HTMLResponse(
-            f'<div class="p-4 rounded-lg bg-gray-50 border animate-fade-in"><b>{lemma}</b>'
-            f"<p>翻訳に失敗しました</p>"
-            f'<small class="text-slate-400">Error</small></div>'
+            make_card(lemma, "翻訳に失敗しました", "Error", "bg-gray-50/80", "border-gray-200")
         )
 
 
