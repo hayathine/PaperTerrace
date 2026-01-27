@@ -169,6 +169,8 @@ async def stream(task_id: str):
                 page_text,
                 is_last,
                 f_hash,
+                page_image_url,
+                layout_data,
             ) in service.ocr_service.extract_text_streaming(pdf_content, filename):
                 # APIエラーチェック
                 if page_text.startswith("ERROR_API_FAILED:"):
@@ -196,21 +198,59 @@ async def stream(task_id: str):
                 page_container_id = f"page-{page_num}"
                 content_id = f"content-{page_container_id}"
 
-                # ページの枠を #paper-content に追記（正しい OOB スワップ）
-                yield f'event: message\ndata: <div id="{page_container_id}" hx-swap-oob="beforeend:#paper-content" class="mb-10 p-6 md:p-8 bg-white shadow-sm rounded-2xl animate-fade-in"><div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-3"><span class="text-xs text-slate-300 font-bold uppercase tracking-wide">Page {page_num}/{total_pages}</span><span class="text-[10px] text-green-500 bg-green-50 px-2 py-0.5 rounded-full font-medium">Ready</span></div><div id="{content_id}" class="max-w-prose"></div></div>\n\n'
+                # レイアウトデータがある場合は「PDFそのまま表示モード」
+                if layout_data and page_image_url:
+                    img_w = layout_data["width"]
+                    img_h = layout_data["height"]
+                    words_html = []
 
-                # ページ内のテキストを即座にトークン化してクリック可能なHTMLをストリーム表示
-                page_prefix = f"p-pg{page_num}"
+                    for w in layout_data["words"]:
+                        bbox = w["bbox"]
+                        # パーセント計算
+                        left = (bbox[0] / img_w) * 100
+                        top = (bbox[1] / img_h) * 100
+                        width = ((bbox[2] - bbox[0]) / img_w) * 100
+                        height = ((bbox[3] - bbox[1]) / img_h) * 100
+                        word_text = w["word"]
 
-                async for chunk in service.tokenize_stream(
-                    page_text,
-                    paper_id=None,
-                    target_id=content_id,
-                    id_prefix=page_prefix,
-                    save_to_db=False,
-                ):
-                    yield chunk
-                    await asyncio.sleep(0.005)
+                        # 透明なクリック領域を作成
+                        words_html.append(
+                            f'<a class="absolute cursor-pointer hover:bg-yellow-300/30 transition-colors rounded-sm group"'
+                            f' style="left:{left}%; top:{top}%; width:{width}%; height:{height}%;"'
+                            f' hx-get="/explain/{word_text}"'
+                            f' hx-trigger="click"'
+                            f' hx-target="#definition-box"'
+                            f' hx-swap="afterbegin">'
+                            f"</a>"
+                        )
+
+                    full_words_html = "".join(words_html)
+
+                    # コンテナ出力
+                    yield f'event: message\ndata: <div id="{page_container_id}" hx-swap-oob="beforeend:#paper-content" class="mb-10 bg-white shadow-sm rounded-2xl animate-fade-in overflow-hidden max-w-4xl mx-auto"><div class="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50"><span class="text-xs text-slate-400 font-bold uppercase tracking-wide">Page {page_num}/{total_pages}</span><span class="text-[10px] text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full font-medium">Interactive PDF</span></div><div class="relative w-full"><img src="{page_image_url}" alt="Page {page_num}" class="w-full h-auto block select-none" loading="lazy"><div class="absolute inset-0 w-full h-full">{full_words_html}</div></div></div>\n\n'
+
+                # レイアウトデータがない場合（OCRフォールバック）は既存の表示モード
+                else:
+                    # ページの枠を #paper-content に追記（2カラムレイアウト：画像 + テキスト）
+                    if page_image_url:
+                        # 画像がある場合（URLパス）：2カラムレイアウト
+                        yield f'event: message\ndata: <div id="{page_container_id}" hx-swap-oob="beforeend:#paper-content" class="mb-10 bg-white shadow-sm rounded-2xl animate-fade-in overflow-hidden"><div class="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50"><span class="text-xs text-slate-400 font-bold uppercase tracking-wide">Page {page_num}/{total_pages}</span><span class="text-[10px] text-green-500 bg-green-50 px-2 py-0.5 rounded-full font-medium">Ready</span></div><div class="grid grid-cols-1 lg:grid-cols-2 gap-0"><div class="p-4 bg-slate-50 border-r border-slate-100 flex items-start justify-center"><img src="{page_image_url}" alt="Page {page_num}" class="max-w-full h-auto rounded-lg shadow-sm border border-slate-200" loading="lazy"></div><div id="{content_id}" class="p-6 overflow-y-auto max-h-[800px]"></div></div></div>\n\n'
+                    else:
+                        # 画像がない場合（キャッシュ）：テキストのみ
+                        yield f'event: message\ndata: <div id="{page_container_id}" hx-swap-oob="beforeend:#paper-content" class="mb-10 p-6 md:p-8 bg-white shadow-sm rounded-2xl animate-fade-in"><div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-3"><span class="text-xs text-slate-300 font-bold uppercase tracking-wide">Page {page_num}/{total_pages}</span><span class="text-[10px] text-green-500 bg-green-50 px-2 py-0.5 rounded-full font-medium">Cached</span></div><div id="{content_id}" class="max-w-prose"></div></div>\n\n'
+
+                    # ページ内のテキストを即座にトークン化してクリック可能なHTMLをストリーム表示
+                    page_prefix = f"p-pg{page_num}"
+
+                    async for chunk in service.tokenize_stream(
+                        page_text,
+                        paper_id=None,
+                        target_id=content_id,
+                        id_prefix=page_prefix,
+                        save_to_db=False,
+                    ):
+                        yield chunk
+                        await asyncio.sleep(0.005)
 
             # 全ページ完了後、DB保存
             full_text = "\n\n---\n\n".join(full_text_fragments)

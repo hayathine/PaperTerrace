@@ -99,21 +99,36 @@ class PDFOCRService:
         """ページ単位でOCR処理をストリーミングするジェネレータ。
 
         Yields:
-            tuple: (page_num, total_pages, page_text, is_last)
+            tuple: (page_num, total_pages, page_text, is_last, file_hash, page_image, layout_data)
+                   layout_data: list of {"word": str, "bbox": [x0, y0, x1, y1]} or None
         """
+        import base64
+
         import fitz  # PyMuPDF
+
+        from .providers.image_storage import get_page_images, save_page_image
 
         file_hash = _get_file_hash(file_bytes)
         cached_ocr = get_ocr_from_db(file_hash)
+
         if cached_ocr:
             logger.info("Returning cached OCR text (streaming mode).")
-            yield (1, 1, cached_ocr, True, file_hash)
+            cached_images = get_page_images(file_hash)
+            # キャッシュ時はレイアウト情報なし（再解析が必要だが今回は省略）
+            yield (
+                1,
+                1,
+                cached_ocr,
+                True,
+                file_hash,
+                cached_images if cached_images else None,
+                None,
+            )
             return
 
         logger.info(f"--- AI OCR Streaming: {filename} ---")
 
         try:
-            # PDFをページごとに分割
             pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
             total_pages = len(pdf_doc)
             logger.info(f"[OCR Streaming] Total pages: {total_pages}")
@@ -122,31 +137,83 @@ class PDFOCRService:
 
             for page_num in range(total_pages):
                 page = pdf_doc[page_num]
-                # ページをPDFバイトとして抽出
-                single_page_pdf = fitz.open()
-                single_page_pdf.insert_pdf(pdf_doc, from_page=page_num, to_page=page_num)
-                page_bytes = single_page_pdf.tobytes()
-                single_page_pdf.close()
 
-                logger.info(f"[OCR Streaming] Processing page {page_num + 1}/{total_pages}")
+                # ページ画像の生成 (2.0倍ズーム = 144 DPI 相当)
+                # レイアウト座標との整合性を取るため、画像のスケールを基準にする
+                zoom = 2.0
+                mat = fitz.Matrix(zoom, zoom)
+                pix = page.get_pixmap(matrix=mat)
+                img_bytes = pix.tobytes("png")
+                page_image_b64 = base64.b64encode(img_bytes).decode("utf-8")
+                image_url = save_page_image(file_hash, page_num + 1, page_image_b64)
 
-                try:
-                    response = self.client.models.generate_content(
-                        model=self.model,
-                        contents=[
-                            types.Part.from_bytes(data=page_bytes, mime_type="application/pdf"),
-                            "このPDFページのテキストを構造を維持して文字起こししてください。",
-                        ],
-                    )
-                    page_text = (response.text or "").strip()
-                except Exception as e:
-                    logger.error(f"OCR failed for page {page_num + 1}: {e}")
-                    page_text = f"[ページ {page_num + 1} の読み取りに失敗しました: {e}]"
+                # レイアウト情報の抽出 (PyMuPDF)
+                # get_text("words") returns: (x0, y0, x1, y1, "word", block_no, line_no, word_no)
+                words = page.get_text("words")
+                layout_data = []
+                page_text_extracted = ""
+
+                # 画像の幅と高さを取得（表示時の比率計算用）
+                img_width = pix.width
+                img_height = pix.height
+
+                if words:
+                    # 座標を画像サイズ（zoom倍）に合わせて変換
+                    word_list = []
+                    for w in words:
+                        word_list.append(
+                            {
+                                "word": w[4],
+                                # bbox: [left, top, right, bottom]
+                                "bbox": [w[0] * zoom, w[1] * zoom, w[2] * zoom, w[3] * zoom],
+                            }
+                        )
+                        page_text_extracted += w[4] + " "
+
+                    layout_data = {
+                        "width": img_width,
+                        "height": img_height,
+                        "words": word_list,
+                    }
+
+                    page_text = page_text_extracted.strip()
+                    logger.info(f"[Layout] Extracted {len(words)} words from page {page_num + 1}")
+
+                else:
+                    # テキストがない場合はGeminiでOCR (座標なし)
+                    logger.info(f"[OCR] No text found on page {page_num + 1}, using Gemini")
+                    single_page_pdf = fitz.open()
+                    single_page_pdf.insert_pdf(pdf_doc, from_page=page_num, to_page=page_num)
+                    page_bytes = single_page_pdf.tobytes()
+                    single_page_pdf.close()
+
+                    try:
+                        response = self.client.models.generate_content(
+                            model=self.model,
+                            contents=[
+                                types.Part.from_bytes(data=page_bytes, mime_type="application/pdf"),
+                                "このPDFページのテキストを構造を維持して文字起こししてください。",
+                            ],
+                        )
+                        page_text = (response.text or "").strip()
+                    except Exception as e:
+                        logger.error(f"OCR failed for page {page_num + 1}: {e}")
+                        page_text = ""
+
+                    layout_data = None  # OCRの場合は座標なし
 
                 all_text_parts.append(page_text)
                 is_last = page_num == total_pages - 1
 
-                yield (page_num + 1, total_pages, page_text, is_last, file_hash)
+                yield (
+                    page_num + 1,
+                    total_pages,
+                    page_text,
+                    is_last,
+                    file_hash,
+                    image_url,
+                    layout_data,  # List[dict] including image dimensions could be useful
+                )
 
             pdf_doc.close()
 
