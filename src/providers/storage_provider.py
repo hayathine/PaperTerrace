@@ -26,6 +26,8 @@ class StorageInterface(ABC):
         """Initialize required database tables."""
         ...
 
+    # ===== Paper methods =====
+
     @abstractmethod
     def save_paper(
         self,
@@ -35,6 +37,8 @@ class StorageInterface(ABC):
         ocr_text: str,
         html_content: str,
         target_language: str,
+        owner_id: str | None = None,
+        visibility: str = "private",
     ) -> str:
         """Save a paper to storage. Returns paper_id."""
         ...
@@ -60,6 +64,13 @@ class StorageInterface(ABC):
         ...
 
     @abstractmethod
+    def update_paper_visibility(self, paper_id: str, visibility: str) -> bool:
+        """Update paper visibility."""
+        ...
+
+    # ===== Memo methods =====
+
+    @abstractmethod
     def save_memo(self, memo_id: str, session_id: str, term: str, note: str) -> str:
         """Save a memo. Returns memo_id."""
         ...
@@ -72,6 +83,68 @@ class StorageInterface(ABC):
     @abstractmethod
     def delete_memo(self, memo_id: str) -> bool:
         """Delete a memo by ID."""
+        ...
+
+    # ===== User methods =====
+
+    @abstractmethod
+    def create_user(self, user_data: dict) -> str:
+        """Create a new user. Returns user_id."""
+        ...
+
+    @abstractmethod
+    def get_user(self, user_id: str) -> dict | None:
+        """Get a user by ID."""
+        ...
+
+    @abstractmethod
+    def update_user(self, user_id: str, data: dict) -> bool:
+        """Update user data."""
+        ...
+
+    @abstractmethod
+    def delete_user(self, user_id: str) -> bool:
+        """Delete a user."""
+        ...
+
+    @abstractmethod
+    def get_user_stats(self, user_id: str) -> dict:
+        """Get user statistics."""
+        ...
+
+    # ===== Social paper methods =====
+
+    @abstractmethod
+    def get_user_papers(
+        self, user_id: str, page: int = 1, per_page: int = 20
+    ) -> tuple[list[dict], int]:
+        """Get all papers for a user."""
+        ...
+
+    @abstractmethod
+    def get_user_public_papers(
+        self, user_id: str, page: int = 1, per_page: int = 20
+    ) -> tuple[list[dict], int]:
+        """Get public papers for a user."""
+        ...
+
+    @abstractmethod
+    def get_public_papers(
+        self, page: int = 1, per_page: int = 20, sort: str = "recent"
+    ) -> tuple[list[dict], int]:
+        """Get all public papers for explore page."""
+        ...
+
+    @abstractmethod
+    def search_public_papers(
+        self, query: str, page: int = 1, per_page: int = 20
+    ) -> tuple[list[dict], int]:
+        """Search public papers."""
+        ...
+
+    @abstractmethod
+    def get_popular_tags(self, limit: int = 20) -> list[dict]:
+        """Get popular tags."""
         ...
 
 
@@ -92,7 +165,22 @@ class SQLiteStorage(StorageInterface):
     def init_tables(self) -> None:
         """Initialize required database tables."""
         with self._get_connection() as conn:
-            # Papers table
+            # Users table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS users (
+                    id TEXT PRIMARY KEY,
+                    email TEXT UNIQUE NOT NULL,
+                    display_name TEXT,
+                    affiliation TEXT,
+                    bio TEXT,
+                    research_fields TEXT,
+                    profile_image_url TEXT,
+                    is_public INTEGER DEFAULT 1,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            # Papers table (extended)
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS papers (
                     paper_id TEXT PRIMARY KEY,
@@ -101,7 +189,25 @@ class SQLiteStorage(StorageInterface):
                     ocr_text TEXT,
                     html_content TEXT,
                     target_language TEXT DEFAULT 'ja',
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    owner_id TEXT,
+                    visibility TEXT DEFAULT 'private',
+                    title TEXT,
+                    authors TEXT,
+                    abstract TEXT,
+                    tags TEXT,
+                    view_count INTEGER DEFAULT 0,
+                    like_count INTEGER DEFAULT 0,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            # Paper likes table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS paper_likes (
+                    user_id TEXT,
+                    paper_id TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    PRIMARY KEY (user_id, paper_id)
                 )
             """)
             # OCR cache table (existing)
@@ -126,6 +232,8 @@ class SQLiteStorage(StorageInterface):
             """)
             conn.commit()
 
+    # ===== Paper methods =====
+
     def save_paper(
         self,
         paper_id: str,
@@ -134,14 +242,18 @@ class SQLiteStorage(StorageInterface):
         ocr_text: str,
         html_content: str,
         target_language: str = "ja",
+        owner_id: str | None = None,
+        visibility: str = "private",
     ) -> str:
         """Save a paper to storage."""
+        now = datetime.now().isoformat()
         with self._get_connection() as conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO papers 
-                (paper_id, file_hash, filename, ocr_text, html_content, target_language, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                (paper_id, file_hash, filename, ocr_text, html_content, target_language, 
+                 owner_id, visibility, title, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     paper_id,
@@ -150,7 +262,11 @@ class SQLiteStorage(StorageInterface):
                     ocr_text,
                     html_content,
                     target_language,
-                    datetime.now().isoformat(),
+                    owner_id,
+                    visibility,
+                    filename,  # Use filename as default title
+                    now,
+                    now,
                 ),
             )
             conn.commit()
@@ -160,20 +276,36 @@ class SQLiteStorage(StorageInterface):
     def get_paper(self, paper_id: str) -> dict | None:
         """Get a paper by ID."""
         with self._get_connection() as conn:
-            row = conn.execute("SELECT * FROM papers WHERE paper_id = ?", (paper_id,)).fetchone()
-            return dict(row) if row else None
+            row = conn.execute(
+                "SELECT * FROM papers WHERE paper_id = ?", (paper_id,)
+            ).fetchone()
+            if row:
+                data = dict(row)
+                # Parse tags JSON
+                if data.get("tags"):
+                    import json
+
+                    try:
+                        data["tags"] = json.loads(data["tags"])
+                    except json.JSONDecodeError:
+                        data["tags"] = []
+                return data
+            return None
 
     def get_paper_by_hash(self, file_hash: str) -> dict | None:
         """Get a paper by file hash."""
         with self._get_connection() as conn:
-            row = conn.execute("SELECT * FROM papers WHERE file_hash = ?", (file_hash,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM papers WHERE file_hash = ?", (file_hash,)
+            ).fetchone()
             return dict(row) if row else None
 
     def list_papers(self, limit: int = 50) -> list[dict]:
         """List recent papers."""
         with self._get_connection() as conn:
             rows = conn.execute(
-                "SELECT paper_id, filename, target_language, created_at FROM papers ORDER BY created_at DESC LIMIT ?",
+                """SELECT paper_id, filename, target_language, owner_id, visibility, created_at 
+                   FROM papers ORDER BY created_at DESC LIMIT ?""",
                 (limit,),
             ).fetchall()
             return [dict(row) for row in rows]
@@ -187,6 +319,18 @@ class SQLiteStorage(StorageInterface):
             if deleted:
                 logger.info(f"Paper deleted: {paper_id}")
             return deleted
+
+    def update_paper_visibility(self, paper_id: str, visibility: str) -> bool:
+        """Update paper visibility."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE papers SET visibility = ?, updated_at = ? WHERE paper_id = ?",
+                (visibility, datetime.now().isoformat(), paper_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    # ===== Memo methods =====
 
     def save_memo(self, memo_id: str, session_id: str, term: str, note: str) -> str:
         """Save a memo."""
@@ -221,6 +365,199 @@ class SQLiteStorage(StorageInterface):
                 logger.info(f"Memo deleted: {memo_id}")
             return deleted
 
+    # ===== User methods =====
+
+    def create_user(self, user_data: dict) -> str:
+        """Create a new user."""
+        import json
+
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO users (id, email, display_name, affiliation, bio, 
+                                   research_fields, profile_image_url, is_public, 
+                                   created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    user_data["id"],
+                    user_data["email"],
+                    user_data.get("display_name"),
+                    user_data.get("affiliation"),
+                    user_data.get("bio"),
+                    json.dumps(user_data.get("research_fields", [])),
+                    user_data.get("profile_image_url"),
+                    1 if user_data.get("is_public", True) else 0,
+                    user_data.get("created_at", datetime.now()).isoformat(),
+                    user_data.get("updated_at", datetime.now()).isoformat(),
+                ),
+            )
+            conn.commit()
+        logger.info(f"User created: {user_data['id']}")
+        return user_data["id"]
+
+    def get_user(self, user_id: str) -> dict | None:
+        """Get a user by ID."""
+        import json
+
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            if row:
+                data = dict(row)
+                data["is_public"] = bool(data.get("is_public", 1))
+                if data.get("research_fields"):
+                    try:
+                        data["research_fields"] = json.loads(data["research_fields"])
+                    except json.JSONDecodeError:
+                        data["research_fields"] = []
+                else:
+                    data["research_fields"] = []
+                return data
+            return None
+
+    def update_user(self, user_id: str, data: dict) -> bool:
+        """Update user data."""
+        import json
+
+        fields = []
+        values = []
+        for key, value in data.items():
+            if key in ["id", "created_at"]:
+                continue
+            if key == "research_fields" and isinstance(value, list):
+                value = json.dumps(value)
+            if key == "is_public":
+                value = 1 if value else 0
+            fields.append(f"{key} = ?")
+            values.append(value)
+
+        if not fields:
+            return False
+
+        values.append(user_id)
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                f"UPDATE users SET {', '.join(fields)} WHERE id = ?", values
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def delete_user(self, user_id: str) -> bool:
+        """Delete a user."""
+        with self._get_connection() as conn:
+            cursor = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def get_user_stats(self, user_id: str) -> dict:
+        """Get user statistics."""
+        with self._get_connection() as conn:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM papers WHERE owner_id = ?", (user_id,)
+            ).fetchone()[0]
+            public = conn.execute(
+                "SELECT COUNT(*) FROM papers WHERE owner_id = ? AND visibility = 'public'",
+                (user_id,),
+            ).fetchone()[0]
+            views = conn.execute(
+                "SELECT COALESCE(SUM(view_count), 0) FROM papers WHERE owner_id = ?",
+                (user_id,),
+            ).fetchone()[0]
+            likes = conn.execute(
+                "SELECT COALESCE(SUM(like_count), 0) FROM papers WHERE owner_id = ?",
+                (user_id,),
+            ).fetchone()[0]
+            return {
+                "paper_count": total,
+                "public_paper_count": public,
+                "total_views": views,
+                "total_likes": likes,
+            }
+
+    # ===== Social paper methods =====
+
+    def get_user_papers(
+        self, user_id: str, page: int = 1, per_page: int = 20
+    ) -> tuple[list[dict], int]:
+        """Get all papers for a user."""
+        offset = (page - 1) * per_page
+        with self._get_connection() as conn:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM papers WHERE owner_id = ?", (user_id,)
+            ).fetchone()[0]
+            rows = conn.execute(
+                """SELECT * FROM papers WHERE owner_id = ? 
+                   ORDER BY created_at DESC LIMIT ? OFFSET ?""",
+                (user_id, per_page, offset),
+            ).fetchall()
+            return [dict(row) for row in rows], total
+
+    def get_user_public_papers(
+        self, user_id: str, page: int = 1, per_page: int = 20
+    ) -> tuple[list[dict], int]:
+        """Get public papers for a user."""
+        offset = (page - 1) * per_page
+        with self._get_connection() as conn:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM papers WHERE owner_id = ? AND visibility = 'public'",
+                (user_id,),
+            ).fetchone()[0]
+            rows = conn.execute(
+                """SELECT * FROM papers WHERE owner_id = ? AND visibility = 'public'
+                   ORDER BY created_at DESC LIMIT ? OFFSET ?""",
+                (user_id, per_page, offset),
+            ).fetchall()
+            return [dict(row) for row in rows], total
+
+    def get_public_papers(
+        self, page: int = 1, per_page: int = 20, sort: str = "recent"
+    ) -> tuple[list[dict], int]:
+        """Get all public papers for explore page."""
+        offset = (page - 1) * per_page
+        order_by = "created_at DESC"
+        if sort == "popular":
+            order_by = "view_count DESC"
+        elif sort == "trending":
+            order_by = "like_count DESC"
+
+        with self._get_connection() as conn:
+            total = conn.execute(
+                "SELECT COUNT(*) FROM papers WHERE visibility = 'public'"
+            ).fetchone()[0]
+            rows = conn.execute(
+                f"""SELECT * FROM papers WHERE visibility = 'public'
+                   ORDER BY {order_by} LIMIT ? OFFSET ?""",
+                (per_page, offset),
+            ).fetchall()
+            return [dict(row) for row in rows], total
+
+    def search_public_papers(
+        self, query: str, page: int = 1, per_page: int = 20
+    ) -> tuple[list[dict], int]:
+        """Search public papers."""
+        offset = (page - 1) * per_page
+        search_pattern = f"%{query}%"
+        with self._get_connection() as conn:
+            total = conn.execute(
+                """SELECT COUNT(*) FROM papers 
+                   WHERE visibility = 'public' 
+                   AND (title LIKE ? OR authors LIKE ? OR abstract LIKE ? OR filename LIKE ?)""",
+                (search_pattern, search_pattern, search_pattern, search_pattern),
+            ).fetchone()[0]
+            rows = conn.execute(
+                """SELECT * FROM papers 
+                   WHERE visibility = 'public' 
+                   AND (title LIKE ? OR authors LIKE ? OR abstract LIKE ? OR filename LIKE ?)
+                   ORDER BY created_at DESC LIMIT ? OFFSET ?""",
+                (search_pattern, search_pattern, search_pattern, search_pattern, per_page, offset),
+            ).fetchall()
+            return [dict(row) for row in rows], total
+
+    def get_popular_tags(self, limit: int = 20) -> list[dict]:
+        """Get popular tags."""
+        # For now, return empty list - implement when tags are properly used
+        return []
+
 
 class CloudSQLStorage(StorageInterface):
     """
@@ -254,6 +591,9 @@ class CloudSQLStorage(StorageInterface):
     def delete_paper(self, paper_id: str) -> bool:
         raise NotImplementedError("CloudSQLStorage is a stub.")
 
+    def update_paper_visibility(self, paper_id: str, visibility: str) -> bool:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
     def save_memo(self, *args: Any, **kwargs: Any) -> str:
         raise NotImplementedError("CloudSQLStorage is a stub.")
 
@@ -261,6 +601,44 @@ class CloudSQLStorage(StorageInterface):
         raise NotImplementedError("CloudSQLStorage is a stub.")
 
     def delete_memo(self, memo_id: str) -> bool:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def create_user(self, user_data: dict) -> str:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def get_user(self, user_id: str) -> dict | None:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def update_user(self, user_id: str, data: dict) -> bool:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def delete_user(self, user_id: str) -> bool:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def get_user_stats(self, user_id: str) -> dict:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def get_user_papers(
+        self, user_id: str, page: int = 1, per_page: int = 20
+    ) -> tuple[list[dict], int]:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def get_user_public_papers(
+        self, user_id: str, page: int = 1, per_page: int = 20
+    ) -> tuple[list[dict], int]:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def get_public_papers(
+        self, page: int = 1, per_page: int = 20, sort: str = "recent"
+    ) -> tuple[list[dict], int]:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def search_public_papers(
+        self, query: str, page: int = 1, per_page: int = 20
+    ) -> tuple[list[dict], int]:
+        raise NotImplementedError("CloudSQLStorage is a stub.")
+
+    def get_popular_tags(self, limit: int = 20) -> list[dict]:
         raise NotImplementedError("CloudSQLStorage is a stub.")
 
 
@@ -277,3 +655,4 @@ def get_storage_provider() -> StorageInterface:
     if provider_type == "cloudsql":
         return CloudSQLStorage()
     return SQLiteStorage()
+
