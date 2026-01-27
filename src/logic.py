@@ -182,32 +182,11 @@ class EnglishAnalysisService:
         target_id: str = "paper-content",
         id_prefix: str = "p",
         save_to_db: bool = True,
-        render_text: bool = True,
-        perform_analysis: bool = True,
     ):
-        """2段階ストリーム: まずプレーンテキストを表示、準備完了後に一括置換"""
+        """1パス方式: 段落ごとに即座にトークン化してクリック可能なHTMLを表示"""
         paragraphs = re.split(r"\n{2,}", text.replace("\r\n", "\n"))
         loop = asyncio.get_event_loop()
-
-        # Phase 1: プレーンテキストを即座に表示
-        if render_text:
-            for i, p_text in enumerate(paragraphs):
-                p_text = p_text.replace("\n", " ").strip()
-                if not p_text:
-                    continue
-
-                unique_id = f"{id_prefix}-{i}"
-                # プレーンテキストをまず表示（後で置換するためにIDを付与）
-                yield f'data: <p id="{unique_id}" class="mb-6 text-slate-600" hx-swap-oob="beforeend:#{target_id}">{p_text}</p>\n\n'
-
-        if not perform_analysis:
-            return
-
-        # Phase 1 完了を通知
-        # yield 'data: <div id="tokenize-status" ... > ... </div>' # ページごとの通知はうるさいので省略、または呼び出し元で制御
-
-        # Phase 2: 全てのインタラクティブHTMLを準備
-        all_replacements: dict[str, str] = {}
+        all_html_parts: dict[str, str] = {}
 
         for i, p_text in enumerate(paragraphs):
             p_text = p_text.replace("\n", " ").strip()
@@ -216,6 +195,7 @@ class EnglishAnalysisService:
 
             unique_id = f"{id_prefix}-{i}"
 
+            # トークン化
             doc = await loop.run_in_executor(executor, nlp, p_text)
             p_tokens_html = []
 
@@ -247,7 +227,7 @@ class EnglishAnalysisService:
 
                 color = (
                     "border-indigo-200 hover:bg-indigo-100"
-                    if self.word_cache[lemma]
+                    if self.word_cache.get(lemma, False)
                     else "border-purple-200 hover:bg-purple-100"
                 )
                 p_tokens_html.append(
@@ -256,23 +236,21 @@ class EnglishAnalysisService:
                     f'hx-target="#definition-box">{token.text}</span>{whitespace}'
                 )
 
-            all_replacements[unique_id] = "".join(p_tokens_html)
+            html_content = "".join(p_tokens_html)
+            all_html_parts[unique_id] = html_content
 
-        # 全ての準備が完了したら hx-swap-oob で一括置換
-        for pid, html in all_replacements.items():
-            yield f'data: <p id="{pid}" hx-swap-oob="true" class="mb-6">{html}</p>\n\n'
+            # 即座にクリック可能なHTMLを表示
+            yield f'event: message\ndata: <p id="{unique_id}" class="mb-6" hx-swap-oob="beforeend:#{target_id}">{html_content}</p>\n\n'
 
         # 保存用に完全なHTMLを構築して保存
         if paper_id and save_to_db:
             try:
-                # 段落番号順に結合
                 full_html = ""
-                # 元のparagraphsリストと同じ長さでループを回す
                 for i in range(len(paragraphs)):
                     unique_id = f"{id_prefix}-{i}"
-                    if unique_id in all_replacements:
+                    if unique_id in all_html_parts:
                         full_html += (
-                            f'<p id="{unique_id}" class="mb-6">{all_replacements[unique_id]}</p>'
+                            f'<p id="{unique_id}" class="mb-6">{all_html_parts[unique_id]}</p>'
                         )
 
                 storage = get_storage_provider()
@@ -284,7 +262,7 @@ class EnglishAnalysisService:
         # ストリーム終了時に未知の単語をバッチ翻訳
         if self._unknown_words:
             # 辞書準備中を表示
-            yield 'data: <div id="definition-box" hx-swap-oob="true" class="min-h-[300px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-3xl animate-pulse"><div class="mb-4 text-indigo-500"><svg class="animate-spin w-8 h-8 mx-auto" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div><p class="text-xs font-bold text-indigo-500">Building Dictionary...</p><p class="text-[10px] text-slate-400 mt-2">Translating unknown words</p></div>\n\n'
+            yield 'event: message\ndata: <div id="definition-box" hx-swap-oob="true" class="min-h-[300px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-3xl animate-pulse"><div class="mb-4 text-indigo-500"><svg class="animate-spin w-8 h-8 mx-auto" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div><p class="text-xs font-bold text-indigo-500">Building Dictionary...</p><p class="text-[10px] text-slate-400 mt-2">Translating unknown words</p></div>\n\n'
 
             logger.info(f"UNKNOWN WORDS count: {len(self._unknown_words)}")
             translations = await self._batch_translate_words(
@@ -297,10 +275,10 @@ class EnglishAnalysisService:
             self._unknown_words.clear()
 
         # 辞書完了表示（元に戻す）
-        yield 'data: <div id="definition-box" hx-swap-oob="true" class="min-h-[300px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-slate-100 rounded-3xl"><div class="bg-slate-50 p-4 rounded-2xl mb-4"><svg class="w-8 h-8 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></div><p class="text-xs font-bold text-slate-400 leading-relaxed">Dictionary Ready!<br>Click any word for definition.</p></div>\n\n'
+        yield 'event: message\ndata: <div id="definition-box" hx-swap-oob="true" class="min-h-[300px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-slate-100 rounded-3xl"><div class="bg-slate-50 p-4 rounded-2xl mb-4"><svg class="w-8 h-8 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></div><p class="text-xs font-bold text-slate-400 leading-relaxed">Dictionary Ready!<br>Click any word for definition.</p></div>\n\n'
 
         # ステータスを完了表示に変更 (oob swap)
-        yield 'data: <div id="tokenize-status" hx-swap-oob="true" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg">✅ 分析完了！単語をクリックで翻訳</div>\n\n'
+        yield 'event: message\ndata: <div id="tokenize-status" hx-swap-oob="true" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg">✅ 分析完了！単語をクリックで翻訳</div>\n\n'
 
     async def _batch_translate_words(self, words: list[str]) -> dict[str, str]:
         """未知の単語を一括でGeminiで翻訳して辞書として返す"""

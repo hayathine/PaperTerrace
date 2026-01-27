@@ -199,30 +199,8 @@ async def stream(task_id: str):
                 # ページの枠を #paper-content に追記（正しい OOB スワップ）
                 yield f'event: message\ndata: <div id="{page_container_id}" hx-swap-oob="beforeend:#paper-content" class="mb-8 p-4 bg-white shadow-sm rounded-xl min-h-[500px] animate-fade-in"><div class="flex justify-between items-center mb-4 border-b border-slate-100 pb-2"><span class="text-xs text-slate-300 font-bold uppercase">Page {page_num}/{total_pages}</span><span class="text-[10px] text-green-500 bg-green-50 px-2 py-0.5 rounded-full">Ready</span></div><div id="{content_id}"></div></div>\n\n'
 
-                # ページ内のテキストをトークン化してストリーム表示
+                # ページ内のテキストを即座にトークン化してクリック可能なHTMLをストリーム表示
                 page_prefix = f"p-pg{page_num}"
-
-                # Pass 1: Render plain text only (perform_analysis=False)
-                async for chunk in service.tokenize_stream(
-                    page_text,
-                    paper_id=None,
-                    target_id=content_id,
-                    id_prefix=page_prefix,
-                    save_to_db=False,
-                    render_text=True,
-                    perform_analysis=False,
-                ):
-                    yield chunk
-                    await asyncio.sleep(0.005)
-
-            # Pass 2: Analyze & Translate
-            yield 'event: message\ndata: <div id="tokenize-status" hx-swap-oob="true" class="fixed bottom-4 right-4 bg-indigo-500 text-white px-4 py-2 rounded-lg shadow-lg animate-pulse">✨ 全ページ解析・翻訳中...</div>\n\n'
-
-            for i, page_text in enumerate(full_text_fragments):
-                page_num = i + 1
-                page_prefix = f"p-pg{page_num}"
-                page_container_id = f"page-{page_num}"
-                content_id = f"content-{page_container_id}"
 
                 async for chunk in service.tokenize_stream(
                     page_text,
@@ -230,8 +208,6 @@ async def stream(task_id: str):
                     target_id=content_id,
                     id_prefix=page_prefix,
                     save_to_db=False,
-                    render_text=False,  # すでに表示済みなのでPhase 1はスキップ
-                    perform_analysis=True,  # 解析実行
                 ):
                     yield chunk
                     await asyncio.sleep(0.005)
