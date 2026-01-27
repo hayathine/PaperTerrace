@@ -92,7 +92,7 @@ class PDFOCRService:
             ocr_text=ocr_text,
             model_name=self.model,
         )
-        logger.info("OCR extraction completed and saved to database.")
+        logger.info("OCR extraction completed  .")
         return ocr_text
 
     async def extract_text_streaming(self, file_bytes: bytes, filename: str = "unknown.pdf"):
@@ -182,20 +182,26 @@ class EnglishAnalysisService:
         target_id: str = "paper-content",
         id_prefix: str = "p",
         save_to_db: bool = True,
+        render_text: bool = True,
+        perform_analysis: bool = True,
     ):
         """2段階ストリーム: まずプレーンテキストを表示、準備完了後に一括置換"""
         paragraphs = re.split(r"\n{2,}", text.replace("\r\n", "\n"))
         loop = asyncio.get_event_loop()
 
         # Phase 1: プレーンテキストを即座に表示
-        for i, p_text in enumerate(paragraphs):
-            p_text = p_text.replace("\n", " ").strip()
-            if not p_text:
-                continue
+        if render_text:
+            for i, p_text in enumerate(paragraphs):
+                p_text = p_text.replace("\n", " ").strip()
+                if not p_text:
+                    continue
 
-            unique_id = f"{id_prefix}-{i}"
-            # プレーンテキストをまず表示（後で置換するためにIDを付与）
-            yield f'data: <p id="{unique_id}" class="mb-6 text-slate-600" hx-swap-oob="beforeend:#{target_id}">{p_text}</p>\n\n'
+                unique_id = f"{id_prefix}-{i}"
+                # プレーンテキストをまず表示（後で置換するためにIDを付与）
+                yield f'data: <p id="{unique_id}" class="mb-6 text-slate-600" hx-swap-oob="beforeend:#{target_id}">{p_text}</p>\n\n'
+
+        if not perform_analysis:
+            return
 
         # Phase 1 完了を通知
         # yield 'data: <div id="tokenize-status" ... > ... </div>' # ページごとの通知はうるさいので省略、または呼び出し元で制御
@@ -343,8 +349,16 @@ class EnglishAnalysisService:
 
         return result
 
-    def get_translation(self, lemma: str) -> dict | None:
-        """キャッシュから翻訳を取得する。Jamdictにある場合はNone、翻訳がある場合はdictを返す"""
+    def get_translation(self, lemma: str, context: str | None = None) -> dict | None:
+        """キャッシュから翻訳を取得する。キャッシュにない場合はcontextがあればGeminiで推測する。
+
+        Args:
+            lemma: 検索する単語
+            context: 論文のテキスト（文脈から意味を推測するために使用）
+
+        Returns:
+            翻訳情報を含む辞書、またはNone（Jamdictで処理すべき場合）
+        """
         # word_cache をチェック - Jamdict にある場合は None を返す（Jamdictで処理する）
         if lemma in self.word_cache:
             if self.word_cache[lemma]:
@@ -368,7 +382,89 @@ class EnglishAnalysisService:
                         "translation": cached_trans,
                         "source": "Gemini (cached)",
                     }
+
+                # キャッシュにない場合、contextがあればGeminiで推測
+                if context:
+                    return self._translate_with_context(lemma, context)
+
+        # word_cache にない場合（初回ルックアップ）
+        # context があれば、Jamdictチェックをスキップして直接Geminiで推測
+        if context:
+            # まずキャッシュを確認
+            if lemma in self.translation_cache:
+                return {
+                    "word": lemma,
+                    "translation": self.translation_cache[lemma],
+                    "source": "Gemini (cached)",
+                }
+            cached_trans = self.redis.get(f"trans:{lemma}")
+            if cached_trans:
+                self.translation_cache[lemma] = cached_trans
+                return {
+                    "word": lemma,
+                    "translation": cached_trans,
+                    "source": "Gemini (cached)",
+                }
+            # キャッシュにもなければGeminiで推測
+            return self._translate_with_context(lemma, context)
+
         return None
+
+    def _translate_with_context(self, word: str, context: str) -> dict | None:
+        """Gemini APIを使って論文の文脈から単語の意味を推測する。
+
+        Args:
+            word: 翻訳する単語
+            context: 論文のテキスト（文脈）
+
+        Returns:
+            翻訳情報を含む辞書
+        """
+        # 文脈が長すぎる場合は切り詰める（トークン節約）
+        max_context_length = 2000
+        if len(context) > max_context_length:
+            # 単語を含む周辺のテキストを抽出
+            word_pos = context.lower().find(word.lower())
+            if word_pos != -1:
+                start = max(0, word_pos - max_context_length // 2)
+                end = min(len(context), word_pos + max_context_length // 2)
+                context = context[start:end]
+            else:
+                context = context[:max_context_length]
+
+        prompt = f"""以下の学術論文の文脈で使われている単語「{word}」の意味を、この文脈に最も適した日本語訳で1〜3語で簡潔に答えてください。
+
+【論文の文脈】
+{context}
+
+【対象単語】
+{word}
+
+【回答形式】
+日本語訳のみを出力してください（説明不要）。"""
+
+        try:
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+            )
+            translation = (response.text or "").strip()
+
+            # キャッシュに保存
+            self.translation_cache[word] = translation
+            self.redis.set(f"trans:{word}", translation, expire=604800)  # 1週間
+            self.word_cache[word] = False  # Jamdictにはない
+
+            logger.info(f"Context-aware translation: {word} -> {translation}")
+
+            return {
+                "word": word,
+                "translation": translation,
+                "source": "Gemini (context)",
+            }
+        except Exception as e:
+            logger.error(f"Context translation failed for '{word}': {e}")
+            return None
 
     def get_word_cache(self) -> dict[str, bool]:
         """word_cache を取得"""
