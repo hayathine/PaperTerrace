@@ -7,7 +7,13 @@ function App() {
     const [uploadFile, setUploadFile] = useState<File | null>(null)
 
     // Sidebar State
-    const [sessionId] = useState(`session-${Math.random().toString(36).substring(2, 11)}`)
+    const [sessionId] = useState(() => {
+        const saved = localStorage.getItem('paper_terrace_session');
+        if (saved) return saved;
+        const newId = `session-${Math.random().toString(36).substring(2, 11)}`;
+        localStorage.setItem('paper_terrace_session', newId);
+        return newId;
+    })
     const [activeTab, setActiveTab] = useState('chat')
     const [selectedWord, setSelectedWord] = useState<string | undefined>(undefined)
 

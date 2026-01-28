@@ -44,6 +44,7 @@ async def analyze_pdf_json(
 
     content = await file.read()
     file_hash = _get_file_hash(content)
+    logger.info(f"[analyze-pdf-json] session_id={session_id}, file_hash={file_hash}")
 
     # Detect PDF language
     detected_lang = await service.ocr_service.detect_language_from_pdf(content)
@@ -207,9 +208,11 @@ async def stream(task_id: str):
                     logger.error(f"Failed to save paper: {e}")
 
                 # セッションコンテキスト保存 (Summary等のために必要)
-                if session_id:
-                    redis_service.set(f"session:{session_id}", full_text, expire=86400)
-                    logger.info(f"Saved session context for: {session_id}")
+                s_id = session_id or new_paper_id
+                res = redis_service.set(f"session:{s_id}", full_text, expire=86400)
+                logger.info(
+                    f"Saved session context for: {s_id} (result: {res}, length: {len(full_text)})"
+                )
 
                 yield f"data: {json.dumps({'type': 'done', 'paper_id': new_paper_id})}\n\n"
 
@@ -244,9 +247,14 @@ async def stream(task_id: str):
                         yield f"data: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
 
                 # キャッシュ時もセッションコンテキストを保存（Summary等のため）
-                if session_id and paper_data and paper_data.get("ocr_text"):
-                    redis_service.set(f"session:{session_id}", paper_data["ocr_text"], expire=86400)
-                    logger.info(f"Restored session context for cached paper: {session_id}")
+                s_id = session_id or paper_id
+                if s_id and paper_data and paper_data.get("ocr_text"):
+                    res = redis_service.set(f"session:{s_id}", paper_data["ocr_text"], expire=86400)
+                    logger.info(f"Restored session context for: {s_id} (result: {res})")
+                else:
+                    logger.warning(
+                        f"Failed to restore session context: session_id={session_id}, paper_data={paper_data is not None}"
+                    )
 
                 yield f"data: {json.dumps({'type': 'done', 'paper_id': paper_id, 'cached': True})}\n\n"
 

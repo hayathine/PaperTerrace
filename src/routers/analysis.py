@@ -16,6 +16,7 @@ from ..features import (
     ResearchRadarService,
     SummaryService,
 )
+from ..logger import logger
 from ..providers import RedisService
 
 router = APIRouter(tags=["Analysis"])
@@ -39,8 +40,11 @@ redis_service = RedisService()
 @router.post("/summarize")
 async def summarize(session_id: str = Form(...), mode: str = Form("full"), lang: str = Form("ja")):
     context = redis_service.get(f"session:{session_id}") or ""
+    logger.info(f"[summarize] session_id={session_id}, context_len={len(context)}")
     if not context:
-        return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
+        return JSONResponse(
+            {"error": f"論文が読み込まれていません (session_id: {session_id})"}, status_code=400
+        )
 
     if mode == "sections":
         sections = await summary_service.summarize_sections(context, target_lang=lang)
