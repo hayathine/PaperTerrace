@@ -107,7 +107,7 @@ class GeminiProvider(AIProviderInterface):
 
             config = types.GenerateContentConfig(**config_params) if config_params else None
 
-            response = self.client.models.generate_content(
+            response = await self.client.aio.models.generate_content(
                 model=target_model,
                 contents=full_prompt,
                 config=config,
@@ -122,7 +122,7 @@ class GeminiProvider(AIProviderInterface):
                         return response.parsed
 
                     # Fallback to manual parsing if .parsed is not what we expect
-                    return response_model.model_validate_json(response.text)
+                    return response_model.model_validate_json(response.text or "")
                 except Exception as parse_err:
                     logger.error(f"Failed to parse structured output: {parse_err}")
                     # If it's wrapped in markdown, try to strip
@@ -176,7 +176,7 @@ class GeminiProvider(AIProviderInterface):
 
             config = types.GenerateContentConfig(**config_params) if config_params else None
 
-            response = self.client.models.generate_content(
+            response = await self.client.aio.models.generate_content(
                 model=target_model,
                 contents=[
                     types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
@@ -222,7 +222,7 @@ class GeminiProvider(AIProviderInterface):
                 "Gemini PDF request",
                 extra={"pdf_size": len(pdf_bytes), "model": target_model},
             )
-            response = self.client.models.generate_content(
+            response = await self.client.aio.models.generate_content(
                 model=target_model,
                 contents=[
                     types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
@@ -287,11 +287,8 @@ class VertexAIProvider(AIProviderInterface):
         target_model = model or self.model
         try:
             # Construct content parts
-            parts = [types.Part.from_text(text=prompt)]
-            if context:
-                parts = [types.Part.from_text(text=f"{context}\n\n{prompt}")]
-
-            contents = [types.Content(role="user", parts=parts)]
+            # Simplified content construction to fix type errors and match GeminiProvider style
+            contents = f"{context}\n\n{prompt}" if context else prompt
 
             # Configure tools
             tools = None
@@ -316,18 +313,11 @@ class VertexAIProvider(AIProviderInterface):
                 extra={"model": target_model, "structured": response_model is not None},
             )
 
-            import asyncio
-
-            loop = asyncio.get_running_loop()
-
-            def _call_vertex():
-                return self.client.models.generate_content(
-                    model=target_model,
-                    contents=contents,
-                    config=config,
-                )
-
-            response = await loop.run_in_executor(None, _call_vertex)
+            response = await self.client.aio.models.generate_content(
+                model=target_model,
+                contents=contents,
+                config=config,
+            )
 
             if response_model:
                 try:
@@ -362,13 +352,8 @@ class VertexAIProvider(AIProviderInterface):
         target_model = model or self.model
         try:
             contents = [
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                        types.Part.from_text(text=prompt),
-                    ],
-                )
+                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                prompt,
             ]
 
             config_params = {"temperature": 0.2, "max_output_tokens": 8192}
@@ -378,18 +363,11 @@ class VertexAIProvider(AIProviderInterface):
 
             config = types.GenerateContentConfig(**config_params)
 
-            import asyncio
-
-            loop = asyncio.get_running_loop()
-
-            def _call_vertex():
-                return self.client.models.generate_content(
-                    model=target_model,
-                    contents=contents,
-                    config=config,
-                )
-
-            response = await loop.run_in_executor(None, _call_vertex)
+            response = await self.client.aio.models.generate_content(
+                model=target_model,
+                contents=contents,
+                config=config,
+            )
 
             if response_model:
                 try:
@@ -420,29 +398,17 @@ class VertexAIProvider(AIProviderInterface):
         target_model = model or self.model
         try:
             contents = [
-                types.Content(
-                    role="user",
-                    parts=[
-                        types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
-                        types.Part.from_text(text=prompt),
-                    ],
-                )
+                types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+                prompt,
             ]
 
             config = types.GenerateContentConfig(temperature=0.2, max_output_tokens=8192)
 
-            import asyncio
-
-            loop = asyncio.get_running_loop()
-
-            def _call_vertex():
-                return self.client.models.generate_content(
-                    model=target_model,
-                    contents=contents,
-                    config=config,
-                )
-
-            response = await loop.run_in_executor(None, _call_vertex)
+            response = await self.client.aio.models.generate_content(
+                model=target_model,
+                contents=contents,
+                config=config,
+            )
             return (response.text or "").strip()
 
         except Exception as e:
