@@ -14,7 +14,12 @@ from jamdict import Jamdict
 from src.crud import get_ocr_from_db, save_ocr_to_db
 from src.logger import logger
 from src.providers import RedisService, get_storage_provider
-from src.utils import _get_file_hash
+from src.utils import (
+    _get_file_hash,
+    clean_text_for_tokenization,
+    log_gemini_token_usage,
+    truncate_context,
+)
 
 # 共通設定
 load_dotenv()
@@ -83,10 +88,7 @@ class PDFOCRService:
                 ],
             )
             # ログ: トークン使用量 (OCR)
-            if response.usage_metadata:
-                logger.info(
-                    f"Gemini Token Usage (OCR): input={response.usage_metadata.prompt_token_count}, output={response.usage_metadata.candidates_token_count}"
-                )
+            log_gemini_token_usage(response, "OCR")
             ocr_text = response.text.strip()
         except Exception as e:
             logger.error(f"OCR extraction failed: {e}")
@@ -201,10 +203,7 @@ class PDFOCRService:
                             ],
                         )
                         # ログ: トークン使用量 (OCR Page)
-                        if response.usage_metadata:
-                            logger.info(
-                                f"Gemini Token Usage (OCR Page {page_num + 1}): input={response.usage_metadata.prompt_token_count}, output={response.usage_metadata.candidates_token_count}"
-                            )
+                        log_gemini_token_usage(response, f"OCR Page {page_num + 1}")
                         page_text = (response.text or "").strip()
                     except Exception as e:
                         logger.error(f"OCR failed for page {page_num + 1}: {e}")
@@ -266,7 +265,7 @@ class EnglishAnalysisService:
         all_html_parts: dict[str, str] = {}
 
         for i, p_text in enumerate(paragraphs):
-            p_text = p_text.replace("\n", " ").strip()
+            p_text = clean_text_for_tokenization(p_text)
             if not p_text:
                 continue
 
@@ -380,14 +379,11 @@ class EnglishAnalysisService:
         try:
             loop = asyncio.get_running_loop()
             res = await loop.run_in_executor(
-                None,
+                None,  # Use default executor for blocking calls
                 lambda: self.client.models.generate_content(model=self.model, contents=prompt),
             )
             # ログ: トークン使用量 (Batch Translation)
-            if res.usage_metadata:
-                logger.info(
-                    f"Gemini Token Usage (BatchTrans): input={res.usage_metadata.prompt_token_count}, output={res.usage_metadata.candidates_token_count}"
-                )
+            log_gemini_token_usage(res, "BatchTrans")
             response_text = res.text.strip()
 
             # レスポンスをパース
@@ -482,15 +478,7 @@ class EnglishAnalysisService:
         """
         # 文脈が長すぎる場合は切り詰める（トークン節約）
         max_context_length = int(os.getenv("MAX_CONTEXT_LENGTH", "800"))
-        if len(context) > max_context_length:
-            # 単語を含む周辺のテキストを抽出
-            word_pos = context.lower().find(word.lower())
-            if word_pos != -1:
-                start = max(0, word_pos - max_context_length // 2)
-                end = min(len(context), word_pos + max_context_length // 2)
-                context = context[start:end]
-            else:
-                context = context[:max_context_length]
+        context = truncate_context(context, word, max_context_length)
 
         prompt = f"""以下の学術論文の文脈で使われている単語「{word}」の意味を、この文脈に最も適した日本語訳で1〜3語で簡潔に答えてください。
 
@@ -509,10 +497,7 @@ class EnglishAnalysisService:
                 contents=prompt,
             )
             # ログ: トークン使用量 (Context Translation)
-            if response.usage_metadata:
-                logger.info(
-                    f"Gemini Token Usage (ContextTrans): input={response.usage_metadata.prompt_token_count}, output={response.usage_metadata.candidates_token_count}"
-                )
+            log_gemini_token_usage(response, "ContextTrans")
             translation = (response.text or "").strip()
 
             # キャッシュに保存
