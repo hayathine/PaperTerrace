@@ -13,8 +13,8 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 from src.auth import OptionalUser
 
 from ..logger import logger
-from ..logic import EnglishAnalysisService
 from ..providers import RedisService, get_storage_provider
+from ..services.analysis_service import EnglishAnalysisService
 from ..utils import _get_file_hash
 
 router = APIRouter(tags=["PDF Analysis"])
