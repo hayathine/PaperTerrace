@@ -1,0 +1,50 @@
+<div
+  id="content-chat"
+  class="hidden flex flex-col h-full animate-fade-in"
+>
+  <div
+    id="chat-messages"
+    class="flex-1 space-y-4 overflow-y-auto max-h-[400px]"
+  >
+    <div
+      class="bg-slate-100 p-4 rounded-2xl rounded-tl-none text-[11px] text-slate-600 leading-relaxed"
+    >
+      この論文の内容に基づいて質問してください。著者の視点で回答する「Author
+      Mode」も利用できます。
+    </div>
+  </div>
+  <div class="mt-4 pb-6">
+    <div class="flex items-center mb-2">
+      <input
+        type="checkbox"
+        id="author-mode"
+        class="w-3 h-3 mr-2"
+      />
+      <label for="author-mode" class="text-[10px] text-slate-500"
+        >Author Mode（著者として回答）</label
+      >
+    </div>
+    <div class="relative">
+      <input
+        type="text"
+        id="chat-input"
+        class="w-full bg-white border border-slate-200 rounded-2xl p-4 pr-12 text-xs shadow-sm focus:ring-2 focus:ring-indigo-500 outline-none"
+        placeholder="Ask about this paper..."
+        onkeypress="if(event.key==='Enter')sendChat()"
+      />
+      <button
+        onclick="sendChat()"
+        class="absolute right-3 top-2.5 p-1.5 bg-indigo-600 text-white rounded-xl shadow-md hover:bg-indigo-700"
+      >
+        <svg
+          class="w-4 h-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path d="M14 5l7 7m0 0l-7 7m7-7H3"></path>
+        </svg>
+      </button>
+    </div>
+  </div>
+</div>

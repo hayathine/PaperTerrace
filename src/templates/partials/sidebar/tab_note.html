@@ -1,0 +1,33 @@
+<div
+  id="content-note"
+  class="hidden flex flex-col h-full animate-fade-in"
+>
+  <div
+    id="note-list"
+    class="flex-1 space-y-3 overflow-y-auto max-h-[350px]"
+  >
+    <p class="text-xs text-slate-400 text-center py-8">
+      ノートがありません。<br />単語を選択して「+」をクリックで追加できます。
+    </p>
+  </div>
+  <div class="mt-4 pb-6 space-y-2">
+    <input
+      type="text"
+      id="note-term"
+      class="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
+      placeholder="用語..."
+    />
+    <textarea
+      id="note-note"
+      rows="2"
+      class="w-full bg-white border border-slate-200 rounded-xl p-3 text-xs focus:ring-2 focus:ring-indigo-500 outline-none resize-none"
+      placeholder="ノート..."
+    ></textarea>
+    <button
+      onclick="addNote()"
+      class="w-full bg-emerald-600 text-white text-xs font-bold py-2.5 rounded-xl hover:bg-emerald-700 transition-all"
+    >
+      + ノートを追加
+    </button>
+  </div>
+</div>
