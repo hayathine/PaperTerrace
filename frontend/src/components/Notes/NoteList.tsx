@@ -1,0 +1,93 @@
+import React, { useEffect, useState, useCallback } from 'react';
+import { Note } from './types';
+import NoteItem from './NoteItem';
+import AddNoteForm from './AddNoteForm';
+
+interface NoteListProps {
+    sessionId: string;
+}
+
+const NoteList: React.FC<NoteListProps> = ({ sessionId }) => {
+    const [notes, setNotes] = useState<Note[]>([]);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchNotes = useCallback(async () => {
+        setLoading(true);
+        try {
+            const res = await fetch(`/note/${sessionId}`);
+            if (res.ok) {
+                const data = await res.json();
+                setNotes(data.notes || []);
+            } else {
+                setError('Failed to load notes');
+            }
+        } catch (e) {
+            setError(String(e));
+        } finally {
+            setLoading(false);
+        }
+    }, [sessionId]);
+
+    useEffect(() => {
+        if (sessionId) {
+            fetchNotes();
+        }
+    }, [sessionId, fetchNotes]);
+
+    const handleAddNote = async (term: string, noteContent: string) => {
+        try {
+            const res = await fetch('/note', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    term,
+                    note: noteContent
+                })
+            });
+            if (res.ok) {
+                // Refresh list
+                fetchNotes();
+            }
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    const handleDeleteNote = async (id: string) => {
+        try {
+            await fetch(`/note/${id}`, { method: 'DELETE' });
+            setNotes(prev => prev.filter(n => n.note_id !== id));
+        } catch (e) {
+            console.error(e);
+        }
+    };
+
+    return (
+        <div className="flex flex-col h-full p-4 overflow-hidden">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">My Notes</h3>
+
+            {error && <div className="text-xs text-red-500 mb-2">{error}</div>}
+            <AddNoteForm onAdd={handleAddNote} />
+
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+                {loading && notes.length === 0 && (
+                    <div className="text-center py-8 text-slate-400 text-xs">Loading notes...</div>
+                )}
+
+                {!loading && notes.length === 0 && (
+                    <div className="text-center py-8 text-slate-300 text-xs border-2 border-dashed border-slate-100 rounded-xl">
+                        No notes yet. <br /> Add one above!
+                    </div>
+                )}
+
+                {notes.map(note => (
+                    <NoteItem key={note.note_id} note={note} onDelete={handleDeleteNote} />
+                ))}
+            </div>
+        </div>
+    );
+};
+
+export default NoteList;
