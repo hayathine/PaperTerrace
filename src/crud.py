@@ -1,16 +1,8 @@
-import os
-import sqlite3
-
-DB_PATH = os.getenv("DB_PATH", "ocr_reader.db")
+from src.providers import get_storage_provider
 
 
 def get_ocr_from_db(file_hash: str) -> str | None:
-    with sqlite3.connect(DB_PATH) as conn:
-        row = conn.execute(
-            "SELECT ocr_text FROM ocr_reader WHERE file_hash = ?", (file_hash,)
-        ).fetchone()
-        if row:
-            return row[0]
+    return get_storage_provider().get_ocr_cache(file_hash)
 
 
 def save_ocr_to_db(
@@ -19,8 +11,4 @@ def save_ocr_to_db(
     ocr_text: str,
     model_name: str = "unknown",
 ) -> None:
-    with sqlite3.connect(DB_PATH) as conn:
-        conn.execute(
-            "INSERT INTO ocr_reader (file_hash, filename, ocr_text, model_name, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
-            (file_hash, filename, ocr_text, model_name),
-        )
+    get_storage_provider().save_ocr_cache(file_hash, ocr_text, filename, model_name)

@@ -7,7 +7,6 @@ import os
 import sqlite3
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import Any
 
 from dotenv import load_dotenv
 
@@ -197,6 +196,16 @@ class StorageInterface(ABC):
     @abstractmethod
     def get_popular_tags(self, limit: int = 20) -> list[dict]:
         """Get popular tags."""
+        ...
+
+    @abstractmethod
+    def get_ocr_cache(self, file_hash: str) -> str | None:
+        """Get cached OCR text."""
+        ...
+
+    @abstractmethod
+    def save_ocr_cache(self, file_hash: str, ocr_text: str, filename: str, model_name: str) -> None:
+        """Save OCR text to cache."""
         ...
 
 
@@ -812,123 +821,24 @@ class SQLiteStorage(StorageInterface):
         # For now, return empty list - implement when tags are properly used
         return []
 
+    def get_ocr_cache(self, file_hash: str) -> str | None:
+        """Get cached OCR text."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT ocr_text FROM ocr_reader WHERE file_hash = ?", (file_hash,)
+            ).fetchone()
+            if row:
+                return row[0]
+            return None
 
-class CloudSQLStorage(StorageInterface):
-    """
-    Cloud SQL storage implementation (stub for future GCP deployment).
-
-    To use Cloud SQL, set:
-    - STORAGE_PROVIDER=cloudsql
-    - CLOUDSQL_CONNECTION_NAME=project:region:instance
-    - DB_USER, DB_PASSWORD, DB_NAME
-    """
-
-    def __init__(self):
-        self.connection_name = os.getenv("CLOUDSQL_CONNECTION_NAME")
-        logger.info(f"CloudSQLStorage initialized (stub) - connection: {self.connection_name}")
-
-    def init_tables(self) -> None:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def save_paper(self, *args: Any, **kwargs: Any) -> str:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def get_paper(self, paper_id: str) -> dict | None:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def get_paper_by_hash(self, file_hash: str) -> dict | None:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def list_papers(self, limit: int = 50) -> list[dict]:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def delete_paper(self, paper_id: str) -> bool:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def update_paper_visibility(self, paper_id: str, visibility: str) -> bool:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def save_note(self, *args: Any, **kwargs: Any) -> str:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def get_notes(self, session_id: str) -> list[dict]:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def delete_note(self, note_id: str) -> bool:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    # ===== Stamp methods =====
-
-    def add_paper_stamp(
-        self,
-        paper_id: str,
-        stamp_type: str,
-        user_id: str | None = None,
-        page_number: int | None = None,
-        x: float | None = None,
-        y: float | None = None,
-    ) -> str:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def get_paper_stamps(self, paper_id: str) -> list[dict]:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def delete_paper_stamp(self, stamp_id: str) -> bool:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def add_note_stamp(
-        self,
-        note_id: str,
-        stamp_type: str,
-        user_id: str | None = None,
-        x: float | None = None,
-        y: float | None = None,
-    ) -> str:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def get_note_stamps(self, note_id: str) -> list[dict]:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def delete_note_stamp(self, stamp_id: str) -> bool:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def create_user(self, user_data: dict) -> str:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def get_user(self, user_id: str) -> dict | None:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def update_user(self, user_id: str, data: dict) -> bool:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def delete_user(self, user_id: str) -> bool:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def get_user_stats(self, user_id: str) -> dict:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def get_user_papers(
-        self, user_id: str, page: int = 1, per_page: int = 20
-    ) -> tuple[list[dict], int]:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def get_user_public_papers(
-        self, user_id: str, page: int = 1, per_page: int = 20
-    ) -> tuple[list[dict], int]:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def get_public_papers(
-        self, page: int = 1, per_page: int = 20, sort: str = "recent"
-    ) -> tuple[list[dict], int]:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def search_public_papers(
-        self, query: str, page: int = 1, per_page: int = 20
-    ) -> tuple[list[dict], int]:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
-
-    def get_popular_tags(self, limit: int = 20) -> list[dict]:
-        raise NotImplementedError("CloudSQLStorage is a stub.")
+    def save_ocr_cache(self, file_hash: str, ocr_text: str, filename: str, model_name: str) -> None:
+        """Save OCR text to cache."""
+        with self._get_connection() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO ocr_reader (file_hash, filename, ocr_text, model_name, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
+                (file_hash, filename, ocr_text, model_name),
+            )
+            conn.commit()
 
 
 # Singleton instance cache
@@ -951,7 +861,15 @@ def get_storage_provider() -> StorageInterface:
     provider_type = os.getenv("STORAGE_PROVIDER", "sqlite").lower()
 
     if provider_type == "cloudsql":
-        _storage_provider_instance = CloudSQLStorage()
+        try:
+            from .cloud_sql_storage import CloudSQLStorage
+
+            _storage_provider_instance = CloudSQLStorage()
+        except ImportError as e:
+            logger.error(f"Failed to import CloudSQLStorage: {e}")
+            raise RuntimeError(
+                "CloudSQLStorage requires 'psycopg2' and 'cloud_sql_storage.py'"
+            ) from e
     else:
         _storage_provider_instance = SQLiteStorage()
 

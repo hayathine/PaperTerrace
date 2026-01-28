@@ -1,7 +1,6 @@
 import asyncio
 import os
 import re
-import sqlite3
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -23,7 +22,6 @@ from src.utils import (
 
 # 共通設定
 load_dotenv()
-DB_PATH = os.getenv("DB_PATH") or "ocr_reader.db"
 executor = ThreadPoolExecutor(max_workers=4)
 nlp = spacy.load("en_core_web_lg", disable=["ner", "parser"])  # tok2vec required for lemmatization
 api_key = os.getenv("GEMINI_API_KEY")
@@ -57,19 +55,6 @@ class PDFOCRService:
     def __init__(self, model):
         self.client = client
         self.model = model
-        self._init_db()
-
-    def _init_db(self):
-        with sqlite3.connect(DB_PATH) as conn:
-            conn.execute("""
-                CREATE TABLE IF NOT EXISTS ocr_reader (
-                    file_hash TEXT PRIMARY KEY,
-                    filename TEXT,
-                    ocr_text TEXT,
-                    model_name TEXT,
-                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-                )
-            """)
 
     async def extract_text_with_ai(self, file_bytes: bytes, filename: str = "unknown.pdf") -> str:
         file_hash = _get_file_hash(file_bytes)

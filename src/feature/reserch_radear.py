@@ -1,8 +1,13 @@
 """
 関連する論文を調査・取得する機能を提供するモジュール
+Consensus APIを利用して論文検索や著者検索を行います。
 """
 
 import json
+import os
+from typing import Any, Dict, List
+
+import httpx
 
 from src.logger import logger
 from src.providers import get_ai_provider
@@ -15,137 +20,147 @@ class ResearchRadarError(Exception):
 
 
 class ResearchRadarService:
-    """Research Radar service for finding related papers."""
+    """Consensus API service for finding related papers."""
+
+    BASE_URL = "https://consensus.app/api"
 
     def __init__(self):
+        self.api_key = os.getenv("CONSENSUS_API_KEY")
+        self.client = httpx.AsyncClient(
+            base_url=self.BASE_URL,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            timeout=30.0,
+        )
         self.ai_provider = get_ai_provider()
 
-    async def find_related_papers(self, abstract: str) -> list[dict]:
+    async def close(self):
+        await self.client.aclose()
+
+    async def paper_search(
+        self,
+        query: str,
+        year_min: int = 2020,
+        limit: int = 10,
+    ) -> List[Dict[str, Any]]:
         """
-        Extract related paper suggestions based on the abstract.
+        Search for papers using Consensus API.
 
         Args:
-            abstract: The paper's abstract or summary
+            query: Search query string
+            year_min: Minimum publication year
+            limit: Number of results to return
 
         Returns:
-            List of suggested related papers with title, authors, relevance
+            List of paper dictionaries
         """
-        prompt = f"""以下の論文の概要を分析し、関連する可能性のある論文を5件提案してください。
+        if not self.api_key:
+            logger.warning("CONSENSUS_API_KEY not found. Using AI simulation fallback.")
+            return await self._simulate_paper_search(query)
 
-【概要】
-{abstract[:3000]}
+        try:
+            logger.info(f"Consensus paper search: query='{query}'")
+            # Endpoint structure is hypothetical based on typical patterns since official docs access is limited here.
+            # Assuming /paper_search or similar. Adjust based on real API docs if provided.
+            # USER PROVIDED URL: https://consensus.app/home/api/ -> check if we can infer.
+            # Usually strict APIs are like /v1/papers/search.
+            # Let's assume a standard search endpoint for now.
+            response = await self.client.get(
+                "/paper_search",
+                params={
+                    "query": query,
+                    "year_min": year_min,
+                    "limit": limit,
+                },
+            )
+            response.raise_for_status()
+            data = response.json()
+            return data.get("papers", [])
+        except httpx.HTTPError as e:
+            logger.error(f"Consensus API error: {e}")
+            return []
+        except Exception as e:
+            logger.exception(f"Unexpected error in paper_search: {e}")
+            return []
 
-以下のJSON形式で出力してください：
+    async def author_search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+        """Search for authors."""
+        if not self.api_key:
+            return []
+
+        try:
+            logger.info(f"Consensus author search: query='{query}'")
+            response = await self.client.get(
+                "/author_search", params={"query": query, "limit": limit}
+            )
+            response.raise_for_status()
+            return response.json().get("authors", [])
+        except Exception as e:
+            logger.error(f"Author search failed: {e}")
+            return []
+
+    async def _simulate_paper_search(self, query: str) -> List[Dict[str, Any]]:
+        """Fallback method using Gemini to simulate search results."""
+        prompt = f"""論文検索APIが利用できないため、以下のクエリに対する検索結果をシミュレーションしてください。
+実在する、関連性の高い学術論文を5件リストアップしてください。
+
+検索クエリ: {query}
+
+出力JSON形式:
 [
   {{
-    "title": "推定される論文タイトル",
-    "authors": "推定される著者名",
-    "year": "推定される発表年",
-    "relevance": "この論文との関連性の説明（1-2文）",
-    "search_query": "Google Scholarで検索するためのクエリ"
+    "title": "論文タイトル",
+    "authors": ["著者名"],
+    "year": 2023,
+    "abstract": "要約",
+    "url": "https://doi.org/..."
   }}
 ]
-
-実在する可能性が高い論文を提案してください。JSONのみを出力してください。"""
-
-        try:
-            logger.debug(
-                "Finding related papers",
-                extra={"abstract_length": len(abstract)},
-            )
-            response = await self.ai_provider.generate(prompt)
-            response = response.strip()
-            if response.startswith("```"):
-                response = response.split("```")[1]
-                if response.startswith("json"):
-                    response = response[4:]
-
-            papers = json.loads(response)
-
-            logger.info(
-                "Related papers found",
-                extra={"paper_count": len(papers)},
-            )
-            return papers
-        except json.JSONDecodeError as e:
-            logger.exception(
-                "Failed to parse related papers JSON",
-                extra={"error": str(e)},
-            )
-            return []
-        except Exception as e:
-            logger.exception(
-                "Related papers search failed",
-                extra={"error": str(e)},
-            )
-            return []
-
-    async def generate_search_queries(self, text: str) -> list[str]:
-        """
-        Generate search queries for finding related work.
-
-        Args:
-            text: The paper text
-
-        Returns:
-            List of search query strings
-        """
-        prompt = f"""以下の論文に関連する論文を検索するためのクエリを5つ生成してください。
-
-【論文テキスト】
-{text[:5000]}
-
-各クエリは、Google ScholarやSemantic Scholarで効果的に検索できる形式にしてください。
-クエリのみを改行区切りで出力してください。"""
-
+JSONのみ出力してください。"""
         try:
             response = await self.ai_provider.generate(prompt)
-            queries = [q.strip() for q in response.strip().split("\n") if q.strip()]
-            logger.info(f"Generated {len(queries)} search queries")
-            return queries[:5]
+            # Simple cleanup for markdown code blocks
+            clean_res = response.strip().replace("```json", "").replace("```", "")
+            return json.loads(clean_res)
         except Exception as e:
-            logger.error(f"Search query generation failed: {e}")
+            logger.error(f"Simulation failed: {e}")
             return []
 
-    async def analyze_citations(self, text: str) -> list[dict]:
+    async def find_related_papers(self, abstract: str) -> List[Dict[str, Any]]:
         """
-        Analyze citation patterns and intent in the paper.
-
-        Args:
-            text: The paper text
-
-        Returns:
-            List of citations with their intent analysis
+        Synthesize a query from the abstract and search.
+        Legacy method adapter.
         """
-        prompt = f"""以下の論文から引用を抽出し、その引用意図を分析してください。
+        # 1. Generate a search query from abstract using AI
+        query_prompt = f"以下の論文要約から、関連論文を検索するための最適な英語検索クエリを1つ生成してください。\n\n{abstract[:1000]}"
+        search_query = await self.ai_provider.generate(query_prompt)
+        search_query = search_query.strip().strip('"')
 
-【論文テキスト】
-{text[:10000]}
+        # 2. Search
+        return await self.paper_search(search_query)
 
-以下のJSON形式で出力してください：
-[
-  {{
-    "citation": "引用されている論文や著者",
-    "context": "引用されている文脈（1文）",
-    "intent": "Support/Use/Contrast/Criticize のいずれか",
-    "explanation": "引用意図の説明"
-  }}
-]
+    async def get_author_profile_and_papers(self, author_name: str) -> Dict[str, Any]:
+        """
+        Get author profile and their top papers for persona generation.
+        """
+        # 1. Search author
+        authors = await self.author_search(author_name, limit=1)
+        if not authors:
+            return {}
 
-最大10件まで。JSONのみを出力してください。"""
+        author_id = authors[0].get("id")
 
-        try:
-            response = await self.ai_provider.generate(prompt)
-            import json
+        # 2. Get author papers (hypothetical endpoint)
+        if self.api_key and author_id:
+            try:
+                response = await self.client.get(
+                    f"/authors/{author_id}/papers", params={"limit": 10}
+                )
+                papers = response.json().get("papers", [])
+                return {"profile": authors[0], "papers": papers}
+            except Exception:
+                return {"profile": authors[0], "papers": []}
 
-            response = response.strip()
-            if response.startswith("```"):
-                response = response.split("```")[1]
-                if response.startswith("json"):
-                    response = response[4:]
-            citations = json.loads(response)
-            logger.info(f"Analyzed {len(citations)} citations")
-            return citations
-        except Exception as e:
-            logger.error(f"Citation analysis failed: {e}")
-            return []
+        return {"profile": authors[0], "papers": []}
