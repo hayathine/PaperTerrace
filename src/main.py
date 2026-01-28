@@ -7,7 +7,8 @@ import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
@@ -32,6 +33,15 @@ app = FastAPI(
     title="PaperTerrace",
     description="AI-powered paper reading assistant",
     version="1.0.0",
+)
+
+# CORS configuration for React development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Firebase Config for Frontend
@@ -85,8 +95,52 @@ app.include_router(papers_router)
 # ============================================================================
 
 
-@app.get("/", response_class=HTMLResponse)
-async def read_item(request: Request):
+# Serve React assets
+# Determine dist directory (Docker vs Local)
+dist_dir = "src/static/dist"
+if not os.path.exists(dist_dir) and os.path.exists("frontend/dist"):
+    dist_dir = "frontend/dist"
+
+if os.path.exists(dist_dir):
+    # Mount assets folder if it exists
+    assets_dir = os.path.join(dist_dir, "assets")
+    if os.path.exists(assets_dir):
+        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+
+
+# ... routers ...
+
+# ============================================================================
+# Main Page & API
+# ============================================================================
+
+
+@app.get("/api/health")
+async def health_check():
+    return {"status": "ok"}
+
+
+@app.get("/api/config")
+async def get_config():
+    """Returns configuration for the frontend."""
+    return JSONResponse(content={"firebase_config": FIREBASE_CONFIG})
+
+
+@app.get("/{full_path:path}", response_class=HTMLResponse)
+async def serve_react_app(request: Request, full_path: str):
+    # Allow other defined routes (like /papers, /chat) to handle their requests by returning None here?
+    # No, FastAPI routing doesn't work that way. This is a catch-all.
+    # But since it's defined LAST (after routers), it only catches what routers didn't catch.
+    # However, include_router adds routes.
+    # So if I put this at the very end, it catches 404s.
+
+    # Check if index.html exists
+    index_file = os.path.join(dist_dir, "index.html")
+    if os.path.exists(index_file):
+        return FileResponse(index_file)
+
+    # Fallback to old template if React build not found (or for intentionally unhandled routes?)
+    # For now, just render index.html (old one) if React not found.
     return templates.TemplateResponse(
         "index.html", {"request": request, "firebase_config": FIREBASE_CONFIG}
     )

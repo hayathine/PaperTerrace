@@ -2,7 +2,7 @@
 set -e
 
 # Configuration
-PROJECT_ID="paperterracegen-lang-client-0800253336"
+PROJECT_ID="gen-lang-client-0800253336"
 REGION="asia-northeast1"
 REPO_NAME="paperterrace"
 IMAGE_NAME="app"

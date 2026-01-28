@@ -1,4 +1,11 @@
 # Production Dockerfile for PaperTerrace
+FROM node:18-slim AS frontend-builder
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci
+COPY frontend ./
+RUN npm run build
+
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
@@ -38,6 +45,9 @@ COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 # Copy application code
 COPY src/ ./src/
 
+# Copy frontend build artifacts
+COPY --from=frontend-builder /app/frontend/dist ./src/static/dist
+
 # Set environment variables
 ENV PATH="/app/.venv/bin:$PATH"
 ENV PYTHONPATH="/app"
@@ -48,7 +58,7 @@ EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8000/ || exit 1
+    CMD curl -f http://localhost:8000/api/health || exit 1
 
 # Run application
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -15,7 +15,7 @@ terraform {
   }
 
   backend "gcs" {
-    bucket = "paperterrace-terraform-state"
+    bucket = "gen-lang-client-0800253336-terraform-state"
     prefix = "terraform/state"
   }
 }
@@ -72,6 +72,7 @@ module "secrets" {
 
   project_id     = var.project_id
   gemini_api_key = var.gemini_api_key
+  db_password    = var.db_password
 
   depends_on = [google_project_service.apis]
 }

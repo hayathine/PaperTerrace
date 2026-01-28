@@ -24,11 +24,15 @@ resource "google_artifact_registry_repository" "main" {
   }
 }
 
+data "google_project" "project" {
+  project_id = var.project_id
+}
+
 # IAM for Cloud Build to push images
 resource "google_artifact_registry_repository_iam_member" "cloud_build" {
   project    = var.project_id
   location   = var.region
   repository = google_artifact_registry_repository.main.name
   role       = "roles/artifactregistry.writer"
-  member     = "serviceAccount:${var.project_id}@cloudbuild.gserviceaccount.com"
+  member     = "serviceAccount:${data.google_project.project.number}@cloudbuild.gserviceaccount.com"
 }
