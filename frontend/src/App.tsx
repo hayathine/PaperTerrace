@@ -5,7 +5,7 @@ import { useAuth } from './contexts/AuthContext'
 import Login from './components/Auth/Login'
 
 function App() {
-    const { user, logout } = useAuth()
+    const { user, isGuest, loginAsGuest, logout } = useAuth()
     const [config, setConfig] = useState<any>(null)
     const [uploadFile, setUploadFile] = useState<File | null>(null)
 
@@ -40,8 +40,8 @@ function App() {
         setActiveTab('dict')
     }
 
-    if (!user) {
-        return <Login />
+    if (!user && !isGuest) {
+        return <Login onGuestAccess={loginAsGuest} />
     }
 
     return (
@@ -55,13 +55,24 @@ function App() {
                 </div>
 
                 <div className="mt-auto mb-4">
-                    <div className="flex items-center gap-2 mb-4 p-2 bg-gray-800 rounded">
-                        {user.photoURL && <img src={user.photoURL} alt="User" className="w-8 h-8 rounded-full" />}
-                        <div className="overflow-hidden">
-                            <p className="text-sm font-medium truncate">{user.displayName}</p>
-                            <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                    {user && (
+                        <div className="flex items-center gap-2 mb-4 p-2 bg-gray-800 rounded">
+                            {user.photoURL ? <img src={user.photoURL} alt="User" className="w-8 h-8 rounded-full" /> : <div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold">{user.displayName?.[0] || 'U'}</div>}
+                            <div className="overflow-hidden">
+                                <p className="text-sm font-medium truncate">{user.displayName || 'User'}</p>
+                                <p className="text-xs text-gray-400 truncate">{user.email || ''}</p>
+                            </div>
                         </div>
-                    </div>
+                    )}
+                    {!user && isGuest && (
+                        <div className="flex items-center gap-2 mb-4 p-2 bg-gray-800 rounded">
+                            <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-xs font-bold">G</div>
+                            <div className="overflow-hidden">
+                                <p className="text-sm font-medium truncate">Guest User</p>
+                                <p className="text-xs text-gray-400 truncate">Limited Access</p>
+                            </div>
+                        </div>
+                    )}
                     <button
                         onClick={logout}
                         className="w-full py-2 px-4 bg-red-600 hover:bg-red-700 rounded text-sm transition-colors"

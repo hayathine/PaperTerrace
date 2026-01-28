@@ -6,8 +6,11 @@ interface AuthContextType {
     user: User | null;
     loading: boolean;
     signInWithGoogle: () => Promise<void>;
+    signInWithGithub: () => Promise<void>;
+    loginAsGuest: () => void;
     logout: () => Promise<void>;
     token: string | null;
+    isGuest: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -22,6 +25,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [token, setToken] = useState<string | null>(null);
+    const [isGuest, setIsGuest] = useState(false);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -29,6 +33,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 try {
                     const idToken = await currentUser.getIdToken();
                     setToken(idToken);
+                    setIsGuest(false);
 
                     // Sync with backend - ensure user exists in DB
                     // We don't block the UI update on this, but we log errors
@@ -46,21 +51,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
             } else {
                 setToken(null);
+                // Guest mode might persist via local state if not explicitly logged out
             }
             setUser(currentUser);
+            if (!isGuest) setLoading(false); // Only set loading false if not waiting for guest check? Actually onAuthStateChanged fires initially
             setLoading(false);
         });
 
         return () => unsubscribe();
-    }, []);
+    }, [isGuest]); // Re-run if isGuest changes? No, only once.
 
     const signInWithGoogle = async () => {
         try {
             await signInWithPopup(auth, googleProvider);
+            setIsGuest(false);
         } catch (error) {
             console.error("Error signing in with Google", error);
             throw error;
         }
+    };
+
+    const signInWithGithub = async () => {
+        try {
+            // Need to import githubProvider from firebase
+            const { githubProvider } = await import('../lib/firebase');
+            await signInWithPopup(auth, githubProvider);
+            setIsGuest(false);
+        } catch (error) {
+            console.error("Error signing in with Github", error);
+            throw error;
+        }
+    };
+
+    const loginAsGuest = () => {
+        setIsGuest(true);
+        // We can create a mock user or just rely on isGuest flag
+        // For simple logic, we just set isGuest true and let the app render
     };
 
     const logout = async () => {
@@ -68,6 +94,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await firebaseSignOut(auth);
             setUser(null);
             setToken(null);
+            setIsGuest(false);
         } catch (error) {
             console.error("Error signing out", error);
             throw error;
@@ -75,7 +102,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, signInWithGoogle, logout, token }}>
+        <AuthContext.Provider value={{ user, loading, signInWithGoogle, signInWithGithub, loginAsGuest, logout, token, isGuest }}>
             {!loading && children}
         </AuthContext.Provider>
     );

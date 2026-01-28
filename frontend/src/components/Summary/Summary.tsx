@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { SummaryResponse, CritiqueResponse, RadarResponse } from './types';
+import { CritiqueResponse, RadarResponse } from './types';
 
 interface SummaryProps {
     sessionId: string;

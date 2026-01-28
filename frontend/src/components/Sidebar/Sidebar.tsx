@@ -89,7 +89,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
                 )}
                 {activeTab === 'figure' && (
                     <div className="absolute inset-0">
-                        <FigureInsight sessionId={sessionId} />
+                        <FigureInsight />
                     </div>
                 )}
                 {activeTab === 'chat' && (

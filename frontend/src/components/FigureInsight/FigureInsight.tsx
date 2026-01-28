@@ -1,10 +1,8 @@
 import React, { useState } from 'react';
 
-interface FigureInsightProps {
-    sessionId: string;
-}
 
-const FigureInsight: React.FC<FigureInsightProps> = ({ sessionId }) => {
+
+const FigureInsight: React.FC = () => {
     const [file, setFile] = useState<File | null>(null);
     const [caption, setCaption] = useState('');
     const [analysis, setAnalysis] = useState<string | null>(null);
