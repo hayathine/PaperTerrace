@@ -20,7 +20,7 @@ def lookup_word(lemma: str) -> bool:
     return len(res.entries) > 0
 
 
-def lookup_word_full(lemma: str):
+def _lookup_word_full(lemma: str):
     """Thread-safe full word lookup for explain."""
     jam = _get_jam()
     return jam.lookup(lemma)

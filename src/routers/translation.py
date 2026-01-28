@@ -11,7 +11,9 @@ from pydantic import BaseModel
 
 from ..features import TranslationService
 from ..logger import logger
-from ..logic import EnglishAnalysisService, _lookup_word_full, executor
+from ..logic import executor
+from ..services.analysis_service import EnglishAnalysisService
+from ..services.jamdict_service import _lookup_word_full
 
 router = APIRouter(tags=["Translation"])
 
