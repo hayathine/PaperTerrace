@@ -77,20 +77,33 @@ class StorageInterface(ABC):
 
     @abstractmethod
     def save_note(
-        self, note_id: str, session_id: str, term: str, note: str, image_url: str | None = None
+        self,
+        note_id: str,
+        session_id: str,
+        term: str,
+        note: str,
+        image_url: str | None = None,
+        user_id: str | None = None,
     ) -> str:
         """Save a note. Returns note_id."""
         ...
 
     @abstractmethod
-    def get_notes(self, session_id: str) -> list[dict]:
-        """Get all notes for a session."""
+    def get_notes(self, session_id: str, user_id: str | None = None) -> list[dict]:
+        """Get all notes for a session or user."""
         ...
 
     @abstractmethod
     def delete_note(self, note_id: str) -> bool:
         """Delete a note by ID."""
         ...
+
+    # ... (skipping stamp methods for brevity in this replacement block if possible, but replace_file_content replaces contiguous blocks) ...
+    # Wait, I can't skip methods in the middle of a block. I should do it in chunks or be careful.
+    # The Abstract methods are lines 76-94.
+
+    # Let's do SQLiteStorage updates separately or together.
+    # I'll update StorageInterface first.
 
     # ===== Stamp methods =====
 
@@ -280,6 +293,7 @@ class SQLiteStorage(StorageInterface):
                     "notes",
                     [
                         ("image_url", "TEXT"),
+                        ("user_id", "TEXT"),
                     ],
                 ),
             ]:
@@ -296,10 +310,12 @@ class SQLiteStorage(StorageInterface):
                 for col_name, col_type in columns:
                     if col_name not in existing_cols:
                         try:
+                            # Use empty string default for non-null constraint issues if any,
+                            # but here we allow nulls so it's fine.
                             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
                             logger.info(f"Added column '{col_name}' to {table}")
-                        except sqlite3.OperationalError:
-                            pass
+                        except sqlite3.OperationalError as e:
+                            logger.warning(f"Failed to add column {col_name} to {table}: {e}")
             conn.commit()
 
     def init_tables(self) -> None:
@@ -369,6 +385,7 @@ class SQLiteStorage(StorageInterface):
                     term TEXT,
                     note TEXT,
                     image_url TEXT,
+                    user_id TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -511,28 +528,54 @@ class SQLiteStorage(StorageInterface):
     # ===== Note methods =====
 
     def save_note(
-        self, note_id: str, session_id: str, term: str, note: str, image_url: str | None = None
+        self,
+        note_id: str,
+        session_id: str,
+        term: str,
+        note: str,
+        image_url: str | None = None,
+        user_id: str | None = None,
     ) -> str:
         """Save a note."""
         with self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO notes (note_id, session_id, term, note, image_url, created_at)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT INTO notes (note_id, session_id, term, note, image_url, user_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
                 """,
-                (note_id, session_id, term, note, image_url, datetime.now().isoformat()),
+                (
+                    note_id,
+                    session_id,
+                    term,
+                    note,
+                    image_url,
+                    user_id,
+                    datetime.now().isoformat(),
+                ),
             )
             conn.commit()
-        logger.info(f"Note saved: {note_id}")
+        logger.info(f"Note saved: {note_id} (user: {user_id})")
         return note_id
 
-    def get_notes(self, session_id: str) -> list[dict]:
-        """Get all notes for a session."""
+    def get_notes(self, session_id: str, user_id: str | None = None) -> list[dict]:
+        """Get all notes for a session or user."""
         with self._get_connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM notes WHERE session_id = ? ORDER BY created_at DESC",
-                (session_id,),
-            ).fetchall()
+            if user_id:
+                # Get notes for user OR session (to keep guest notes if linked?)
+                # For now let's just get user notes + session notes for that user context
+                # Or just user notes if logged in.
+                # Actually, if user is logged in, we probably only care about their notes,
+                # but if they just logged in and had session notes, we might want both or merged.
+                # Simplest: user_id takes precedence, but maybe include session_id too?
+                # "session_id" is usually current browser session.
+                # If we want to show all user's notes, we query by user_id.
+                query = "SELECT * FROM notes WHERE user_id = ? OR session_id = ? ORDER BY created_at DESC"
+                params = (user_id, session_id)
+            else:
+                query = "SELECT * FROM notes WHERE session_id = ? ORDER BY created_at DESC"
+                params = (session_id,)
+
+            rows = conn.execute(query, params).fetchall()
             return [dict(row) for row in rows]
 
     def delete_note(self, note_id: str) -> bool:

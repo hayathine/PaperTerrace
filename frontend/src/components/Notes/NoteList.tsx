@@ -2,12 +2,14 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { Note } from './types';
 import NoteItem from './NoteItem';
 import AddNoteForm from './AddNoteForm';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface NoteListProps {
     sessionId: string;
 }
 
 const NoteList: React.FC<NoteListProps> = ({ sessionId }) => {
+    const { token } = useAuth();
     const [notes, setNotes] = useState<Note[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -15,7 +17,10 @@ const NoteList: React.FC<NoteListProps> = ({ sessionId }) => {
     const fetchNotes = useCallback(async () => {
         setLoading(true);
         try {
-            const res = await fetch(`/note/${sessionId}`);
+            const headers: HeadersInit = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch(`/note/${sessionId}`, { headers });
             if (res.ok) {
                 const data = await res.json();
                 setNotes(data.notes || []);
@@ -27,7 +32,7 @@ const NoteList: React.FC<NoteListProps> = ({ sessionId }) => {
         } finally {
             setLoading(false);
         }
-    }, [sessionId]);
+    }, [sessionId, token]);
 
     useEffect(() => {
         if (sessionId) {
@@ -37,9 +42,12 @@ const NoteList: React.FC<NoteListProps> = ({ sessionId }) => {
 
     const handleAddNote = async (term: string, noteContent: string) => {
         try {
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const res = await fetch('/note', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     session_id: sessionId,
                     term,
@@ -57,7 +65,10 @@ const NoteList: React.FC<NoteListProps> = ({ sessionId }) => {
 
     const handleDeleteNote = async (id: string) => {
         try {
-            await fetch(`/note/${id}`, { method: 'DELETE' });
+            const headers: HeadersInit = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            await fetch(`/note/${id}`, { method: 'DELETE', headers });
             setNotes(prev => prev.filter(n => n.note_id !== id));
         } catch (e) {
             console.error(e);

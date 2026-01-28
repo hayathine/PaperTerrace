@@ -10,6 +10,8 @@ from typing import Optional
 from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
+from src.auth import OptionalUser
+
 from ..logger import logger
 from ..logic import EnglishAnalysisService
 from ..providers import RedisService, get_storage_provider
@@ -29,6 +31,7 @@ async def analyze_pdf_json(
     file: UploadFile = File(...),
     session_id: Optional[str] = Form(None),
     lang: str = Form("ja"),
+    user: OptionalUser = None,
 ):
     """
     JSON version of analyze-pdf for React frontend.
@@ -41,6 +44,11 @@ async def analyze_pdf_json(
 
     start_time = time.time()
     logger.info(f"[analyze-pdf-json] START: {file.filename} ({file.size} bytes)")
+
+    # Capture user_id
+    user_id = user.uid if user else None
+    if user_id:
+        logger.info(f"[analyze-pdf-json] Authenticated user: {user_id}")
 
     content = await file.read()
     file_hash = _get_file_hash(content)
@@ -62,6 +70,10 @@ async def analyze_pdf_json(
     if cached_paper:
         from ..providers.image_storage import get_page_images
 
+        # If cached, we might want to update owner if it was anonymous before?
+        # But generally we just return existing paper.
+        # If the user is owner, good. If not, do we duplicate?
+        # For now, let's keep it simple: reuse existing paper.
         paper_id = cached_paper["paper_id"]
         cached_images = get_page_images(file_hash)
         if not cached_images:
@@ -89,6 +101,7 @@ async def analyze_pdf_json(
         "session_id": session_id,
         "filename": file.filename,
         "file_hash": file_hash,
+        "user_id": user_id,  # Store user_id for stream processing
     }
 
     if raw_text is None:
@@ -133,6 +146,7 @@ async def stream(task_id: str):
     paper_id = data.get("paper_id")
     lang = data.get("lang", "ja")
     session_id = data.get("session_id")
+    user_id = data.get("user_id")  # Retrieve user_id
 
     # --- JSON STREAMING HANDLER ---
     if is_json:
@@ -203,6 +217,7 @@ async def stream(task_id: str):
                         html_content="",
                         target_language="ja",
                         layout_json=json.dumps(all_layout_data),
+                        owner_id=user_id,  # Pass owner_id
                     )
                 except Exception as e:
                     logger.error(f"Failed to save paper: {e}")

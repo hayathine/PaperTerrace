@@ -3,6 +3,7 @@ import ChatWindow from '../Chat/ChatWindow';
 import NoteList from '../Notes/NoteList';
 import Dictionary from '../Dictionary/Dictionary';
 import Summary from '../Summary/Summary';
+import FigureInsight from '../FigureInsight/FigureInsight';
 
 interface SidebarProps {
     sessionId: string;
@@ -36,6 +37,15 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
                     Summary
                 </button>
                 <button
+                    onClick={() => onTabChange('figure')}
+                    className={`flex-1 min-w-[50px] py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${activeTab === 'figure'
+                        ? 'bg-white text-indigo-600 shadow-sm border border-slate-100'
+                        : 'text-slate-400 hover:text-slate-600'
+                        }`}
+                >
+                    Figure
+                </button>
+                <button
                     onClick={() => onTabChange('chat')}
                     className={`flex-1 min-w-[50px] py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${activeTab === 'chat'
                         ? 'bg-white text-indigo-600 shadow-sm border border-slate-100'
@@ -65,6 +75,11 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
                 {activeTab === 'summary' && (
                     <div className="absolute inset-0">
                         <Summary sessionId={sessionId} />
+                    </div>
+                )}
+                {activeTab === 'figure' && (
+                    <div className="absolute inset-0">
+                        <FigureInsight sessionId={sessionId} />
                     </div>
                 )}
                 {activeTab === 'chat' && (

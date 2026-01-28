@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { DictionaryEntry } from './types';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface DictionaryProps {
     term?: string;
@@ -7,6 +8,7 @@ interface DictionaryProps {
 }
 
 const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId }) => {
+    const { token } = useAuth();
     const [entry, setEntry] = useState<DictionaryEntry | null>(null);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -20,7 +22,12 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId }) => {
             setEntry(null);
             try {
                 // Use the configured proxy /explain
-                const res = await fetch(`/explain/${encodeURIComponent(term)}`);
+                // For explain, maybe also send auth? But it's public reading usually.
+                // Let's add it if available, why not, for potential personalization.
+                const headers: HeadersInit = {};
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+
+                const res = await fetch(`/explain/${encodeURIComponent(term)}`, { headers });
                 if (res.ok) {
                     const data = await res.json();
                     setEntry(data);
@@ -36,14 +43,17 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId }) => {
         };
 
         fetchDefinition();
-    }, [term]);
+    }, [term, token]);
 
     const handleSaveToNote = async () => {
         if (!entry || !term) return;
         try {
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             await fetch('/note', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     session_id: sessionId,
                     term: entry.word,

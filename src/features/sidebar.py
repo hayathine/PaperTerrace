@@ -20,7 +20,14 @@ class SidebarNoteService:
     def __init__(self):
         self.storage = get_storage_provider()
 
-    def add_note(self, session_id: str, term: str, note: str, image_url: str | None = None) -> dict:
+    def add_note(
+        self,
+        session_id: str,
+        term: str,
+        note: str,
+        image_url: str | None = None,
+        user_id: str | None = None,
+    ) -> dict:
         """
         Add a note to the sidebar.
 
@@ -29,19 +36,21 @@ class SidebarNoteService:
             term: The term or keyword
             note: The note content
             image_url: Optional image URL
+            user_id: Optional user identifier (if logged in)
 
         Returns:
             The created note with its ID
         """
         try:
             note_id = str(uuid6.uuid7())
-            self.storage.save_note(note_id, session_id, term, note, image_url)
+            self.storage.save_note(note_id, session_id, term, note, image_url, user_id)
             logger.info(
                 "Note added",
                 extra={
                     "note_id": note_id,
                     "session_id": session_id,
                     "term": term,
+                    "user_id": user_id,
                 },
             )
             return {
@@ -50,6 +59,7 @@ class SidebarNoteService:
                 "term": term,
                 "note": note,
                 "image_url": image_url,
+                "user_id": user_id,
             }
         except Exception as e:
             logger.exception(
@@ -58,21 +68,22 @@ class SidebarNoteService:
             )
             raise NoteError(f"ノートの保存に失敗しました: {e}") from e
 
-    def get_notes(self, session_id: str) -> list[dict]:
+    def get_notes(self, session_id: str, user_id: str | None = None) -> list[dict]:
         """
-        Get all notes for a session.
+        Get all notes for a session or user.
 
         Args:
             session_id: The session identifier
+            user_id: Optional user identifier
 
         Returns:
             List of notes
         """
         try:
-            notes = self.storage.get_notes(session_id)
+            notes = self.storage.get_notes(session_id, user_id)
             logger.info(
                 "Notes retrieved",
-                extra={"session_id": session_id, "count": len(notes)},
+                extra={"session_id": session_id, "user_id": user_id, "count": len(notes)},
             )
 
             return notes

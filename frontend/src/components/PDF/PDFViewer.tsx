@@ -3,6 +3,7 @@ import { PageData } from './types';
 import PDFPage from './PDFPage';
 import StampPalette from '../Stamps/StampPalette';
 import { Stamp, StampType } from '../Stamps/types';
+import { useAuth } from '../../contexts/AuthContext';
 
 interface PDFViewerProps {
     taskId?: string;
@@ -13,6 +14,7 @@ interface PDFViewerProps {
 }
 
 const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionId }) => {
+    const { token } = useAuth();
     const [pages, setPages] = useState<PageData[]>([]);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle');
     const [errorMsg, setErrorMsg] = useState<string>('');
@@ -44,7 +46,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionI
 
     const fetchStamps = async (id: string) => {
         try {
-            const res = await fetch(`/stamps/paper/${id}`);
+            const headers: HeadersInit = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch(`/stamps/paper/${id}`, { headers });
             if (res.ok) {
                 const data = await res.json();
                 setStamps(data.stamps);
@@ -69,8 +74,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionI
         }
 
         try {
+            const headers: HeadersInit = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const response = await fetch('/analyze-pdf-json', {
                 method: 'POST',
+                headers, // FormData sets Content-Type boundary automatically, but we add Auth
                 body: formData,
             });
 
@@ -140,9 +149,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionI
         setStamps(prev => [...prev, newStamp]);
 
         try {
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
             const res = await fetch(`/stamps/paper/${paperId}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers,
                 body: JSON.stringify({
                     stamp_type: selectedStamp,
                     x,

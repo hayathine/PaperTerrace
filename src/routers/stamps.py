@@ -7,6 +7,8 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from src.auth import OptionalUser
+
 from ..providers import get_storage_provider
 
 router = APIRouter(tags=["Stamps"])
@@ -24,12 +26,14 @@ class StampRequest(BaseModel):
 
 
 @router.post("/stamps/paper/{paper_id}")
-async def add_paper_stamp(paper_id: str, request: StampRequest):
+async def add_paper_stamp(paper_id: str, request: StampRequest, user: OptionalUser):
     """Add a stamp to a paper."""
+    user_id = user.uid if user else None
+
     stamp_id = storage.add_paper_stamp(
         paper_id,
         request.stamp_type,
-        request.user_id,
+        user_id,
         page_number=request.page_number,
         x=request.x,
         y=request.y,
@@ -41,6 +45,7 @@ async def add_paper_stamp(paper_id: str, request: StampRequest):
             "page_number": request.page_number,
             "x": request.x,
             "y": request.y,
+            "user_id": user_id,
         }
     )
 
