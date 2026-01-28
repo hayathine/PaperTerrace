@@ -59,16 +59,26 @@ async def analyze_pdf_json(
     pdf_b64 = None
 
     if cached_paper:
+        from ..providers.image_storage import get_page_images
+
         paper_id = cached_paper["paper_id"]
-        logger.info(f"[analyze-pdf-json] Cache HIT: paper_id={paper_id}")
-        if cached_paper.get("html_content"):
-            raw_text = "CACHED_HTML:" + cached_paper["html_content"]
+        cached_images = get_page_images(file_hash)
+        if not cached_images:
+            logger.info(
+                f"[analyze-pdf-json] Cache HIT ({paper_id}) but images missing. Regenerating."
+            )
+            pdf_b64 = base64.b64encode(content).decode("utf-8")
+            raw_text = None
         else:
-            raw_text = cached_paper["ocr_text"]
+            logger.info(f"[analyze-pdf-json] Cache HIT: paper_id={paper_id}")
+            if cached_paper.get("html_content"):
+                raw_text = "CACHED_HTML:" + cached_paper["html_content"]
+            else:
+                raw_text = cached_paper["ocr_text"]
     else:
         logger.info("[analyze-pdf-json] Cache MISS: Deferring OCR to stream")
         pdf_b64 = base64.b64encode(content).decode("utf-8")
-        # raw_text remains None
+        raw_text = None
 
     task_id = str(uuid.uuid4())
 
@@ -194,14 +204,20 @@ async def stream(task_id: str):
 
             else:
                 # Cached content
-                # For JSON mode, if cached, we might need to recreate pages from cached HTML?
-                # OR we just say "It's cached" and providing the text.
-                # But looking at PDF.js interactive mode, we need IMAGES.
-                # If we only have TEXT cached, we can't show the "Interactive PDF" view unless we stored the images/layout too.
-                # The current caching implementation seems to store `html_content` OR `ocr_text`.
-                # If we don't have layout data cached, we CANNOT recreate the interactive view.
-                # Use current limited logic: if cached, just return done with paper_id.
-                # The frontend might just support "text view" for cached items if images aren't available.
+                from ..providers.image_storage import get_page_images
+
+                f_hash = data.get("file_hash")
+                if f_hash:
+                    cached_images = get_page_images(f_hash)
+                    for i, img_url in enumerate(cached_images):
+                        page_payload = {
+                            "page_num": i + 1,
+                            "image_url": img_url,
+                            "width": 0,
+                            "height": 0,
+                            "words": [],
+                        }
+                        yield f"data: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
 
                 yield f"data: {json.dumps({'type': 'done', 'paper_id': paper_id, 'cached': True})}\n\n"
 

@@ -136,19 +136,23 @@ Text Sample:
         cached_ocr = get_ocr_from_db(file_hash)
 
         if cached_ocr:
-            logger.info("Returning cached OCR text (streaming mode).")
             cached_images = get_page_images(file_hash)
-            # キャッシュ時はレイアウト情報なし（再解析が必要だが今回は省略）
-            yield (
-                1,
-                1,
-                cached_ocr,
-                True,
-                file_hash,
-                cached_images if cached_images else None,
-                None,
-            )
-            return
+            if cached_images:
+                logger.info("Returning cached OCR text and images.")
+                total_pages = len(cached_images)
+                for i, img_url in enumerate(cached_images):
+                    yield (
+                        i + 1,
+                        total_pages,
+                        cached_ocr if i == 0 else "",
+                        i == total_pages - 1,
+                        file_hash,
+                        img_url,
+                        None,
+                    )
+                return
+            else:
+                logger.info("Cached OCR text found but images missing. Regenerating images.")
 
         logger.info(f"--- AI OCR Streaming: {filename} ---")
 
