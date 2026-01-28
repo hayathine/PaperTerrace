@@ -21,17 +21,22 @@ class SummaryService:
     def __init__(self):
         self.ai_provider = get_ai_provider()
 
-    async def summarize_full(self, text: str) -> str:
+    async def summarize_full(self, text: str, target_lang: str = "ja") -> str:
         """
         Generate a comprehensive summary of the entire paper.
 
         Args:
             text: The full paper text
+            target_lang: The language to summarize in
 
         Returns:
-            A structured summary in Japanese
+            A structured summary in the target language
         """
-        prompt = f"""以下の論文を日本語で要約してください。
+        from .translate import SUPPORTED_LANGUAGES
+
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
+        prompt = f"""以下の論文を{lang_name}で要約してください。
 
 【論文テキスト】
 {text[:15000]}
@@ -77,17 +82,22 @@ class SummaryService:
             )
             return f"要約の生成に失敗しました: {str(e)}"
 
-    async def summarize_sections(self, text: str) -> list[dict]:
+    async def summarize_sections(self, text: str, target_lang: str = "ja") -> list[dict]:
         """
         Generate section-by-section summaries.
 
         Args:
             text: The full paper text
+            target_lang: The language to summarize in
 
         Returns:
             List of section summaries with title and content
         """
-        prompt = f"""以下の論文を、セクションごとに要約してください。
+        from .translate import SUPPORTED_LANGUAGES
+
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
+        prompt = f"""以下の論文を、{lang_name}でセクションごとに要約してください。
 
 【論文テキスト】
 {text[:15000]}
@@ -139,17 +149,23 @@ JSONのみを出力してください。"""
             )
             return [{"section": "Error", "summary": f"要約生成に失敗: {e}"}]
 
-    async def summarize_abstract(self, text: str) -> str:
+    async def summarize_abstract(self, text: str, target_lang: str = "ja") -> str:
         """
         Generate a one-paragraph abstract-style summary.
 
         Args:
             text: The paper text
+            target_lang: The language to summarize in
 
         Returns:
-            A concise abstract in Japanese
+            A concise abstract in the target language
         """
-        prompt = f"""以下の論文の要旨を、100-150字程度の日本語で作成してください。
+        from .translate import SUPPORTED_LANGUAGES
+
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
+        prompt = f"""以下の論文の要旨を、{lang_name}で作成してください。
+（長さの目安: 100-200文字程度、またはそれと同等の長さ）
 
 {text[:10000]}
 

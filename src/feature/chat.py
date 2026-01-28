@@ -20,7 +20,9 @@ class ChatService:
         self.ai_provider = get_ai_provider()
         self.history: list[dict] = []
 
-    async def chat(self, user_message: str, document_context: str = "") -> str:
+    async def chat(
+        self, user_message: str, document_context: str = "", target_lang: str = "ja"
+    ) -> str:
         """
         Generate a chat response based on user message and document context.
 
@@ -42,8 +44,12 @@ class ChatService:
             [f"{msg['role']}: {msg['content']}" for msg in current_conversation]
         )  # This will be passed as context to the AI provider
 
+        from .translate import SUPPORTED_LANGUAGES
+
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
         prompt = f"""あなたは学術論文を読む研究者を支援するAIアシスタントです。
-以下の論文の内容を踏まえて、ユーザーの質問に日本語で回答してください。
+以下の論文の内容を踏まえて、ユーザーの質問に{lang_name}で回答してください。
 
 【論文コンテキスト】
 {document_context[:8000] if document_context else "論文が読み込まれていません。"}
@@ -88,7 +94,9 @@ class ChatService:
             )
             return f"エラーが発生しました: {str(e)}"
 
-    async def author_agent_response(self, question: str, paper_text: str) -> str:
+    async def author_agent_response(
+        self, question: str, paper_text: str, target_lang: str = "ja"
+    ) -> str:
         """
         Simulate the author's perspective to answer questions.
 
@@ -99,7 +107,11 @@ class ChatService:
         Returns:
             Response simulating the author's viewpoint
         """
-        prompt = f"""あなたはこの論文の著者です。読者からの質問に、著者の視点で回答してください。
+        from .translate import SUPPORTED_LANGUAGES
+
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
+        prompt = f"""あなたはこの論文の著者です。読者からの質問に、著者の視点で回答してください。回答は{lang_name}で行ってください。
 
 【論文内容】
 {paper_text[:10000]}
@@ -108,7 +120,7 @@ class ChatService:
 {question}
 
 著者として、研究の背景、動機、方法論の選択理由などを含めて回答してください。
-「私たちは...」「本研究では...」のような一人称で回答してください。"""
+一人称（私は、私たちのチームは、など）を使用して回答してください。"""
 
         try:
             logger.debug(

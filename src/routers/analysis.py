@@ -33,19 +33,19 @@ redis_service = RedisService()
 
 
 @router.post("/summarize")
-async def summarize(session_id: str = Form(...), mode: str = Form("full")):
+async def summarize(session_id: str = Form(...), mode: str = Form("full"), lang: str = Form("ja")):
     context = redis_service.get(f"session:{session_id}") or ""
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
     if mode == "sections":
-        sections = await summary_service.summarize_sections(context)
+        sections = await summary_service.summarize_sections(context, target_lang=lang)
         return JSONResponse({"sections": sections})
     elif mode == "abstract":
-        abstract = await summary_service.summarize_abstract(context)
+        abstract = await summary_service.summarize_abstract(context, target_lang=lang)
         return JSONResponse({"abstract": abstract})
     else:
-        summary = await summary_service.summarize_full(context)
+        summary = await summary_service.summarize_full(context, target_lang=lang)
         return JSONResponse({"summary": summary})
 
 
@@ -55,7 +55,7 @@ async def summarize(session_id: str = Form(...), mode: str = Form("full")):
 
 
 @router.post("/research-radar")
-async def research_radar(session_id: str = Form(...)):
+async def research_radar(session_id: str = Form(...), lang: str = Form("ja")):
     context = redis_service.get(f"session:{session_id}") or ""
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
@@ -119,7 +119,7 @@ async def analyze_table(table_text: str = Form(...), session_id: str = Form(""))
 
 
 @router.post("/critique")
-async def critique(session_id: str = Form(...)):
+async def critique(session_id: str = Form(...), lang: str = Form("ja")):
     context = redis_service.get(f"session:{session_id}") or ""
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)

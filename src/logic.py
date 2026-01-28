@@ -258,6 +258,7 @@ class EnglishAnalysisService:
         target_id: str = "paper-content",
         id_prefix: str = "p",
         save_to_db: bool = True,
+        lang: str = "ja",
     ):
         """1パス方式: 段落ごとに即座にトークン化してクリック可能なHTMLを表示"""
         paragraphs = re.split(r"\n{2,}", text.replace("\r\n", "\n"))
@@ -308,7 +309,7 @@ class EnglishAnalysisService:
                 )
                 p_tokens_html.append(
                     f'<span class="cursor-pointer border-b transition-colors {color}'
-                    f'" hx-get="/explain/{lemma}" hx-trigger="click" '
+                    f'" hx-get="/explain/{lemma}?lang={lang}" hx-trigger="click" '
                     f'hx-target="#definition-box" hx-swap="afterbegin">{token.text}</span>{whitespace}'
                 )
 
@@ -344,7 +345,8 @@ class EnglishAnalysisService:
             translations = await self._batch_translate_words(
                 list(self._unknown_words)
                 if len(self._unknown_words) <= int(os.getenv("BATCH_WORDS_LIMIT", "50"))
-                else list(self._unknown_words)[: int(os.getenv("BATCH_WORDS_LIMIT", "50"))]
+                else list(self._unknown_words)[: int(os.getenv("BATCH_WORDS_LIMIT", "50"))],
+                lang=lang,
             )
             # 結果を translation_cache に統合
             self.translation_cache.update(translations)
@@ -356,9 +358,13 @@ class EnglishAnalysisService:
         # ステータスを完了表示に変更 (oob swap)
         yield 'event: message\ndata: <div id="tokenize-status" hx-swap-oob="true" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg">✅ 分析完了！単語をクリックで翻訳</div>\n\n'
 
-    async def _batch_translate_words(self, words: list[str]) -> dict[str, str]:
+    async def _batch_translate_words(self, words: list[str], lang: str = "ja") -> dict[str, str]:
         """未知の単語を一括でGeminiで翻訳して辞書として返す"""
-        logger.info(f"Batch translation starting with {len(words)} words")
+        from .feature.translate import SUPPORTED_LANGUAGES
+
+        lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
+
+        logger.info(f"Batch translation starting with {len(words)} words for {lang}")
         result: dict[str, str] = {}
 
         if not words:
@@ -371,7 +377,7 @@ class EnglishAnalysisService:
 
         # バッチプロンプトを作成
         words_list = "\n".join(f"- {w}" for w in words_to_translate)
-        prompt = f"""以下の英単語それぞれの日本語訳を1〜2語で簡潔に答えてください。
+        prompt = f"""以下の英単語それぞれの{lang_name}訳を1〜2語で簡潔に答えてください。
 フォーマット: 単語: 訳
 
 {words_list}"""
@@ -401,16 +407,19 @@ class EnglishAnalysisService:
 
         # Redisに保存
         for lemma, trans in result.items():
-            self.redis.set(f"trans:{lemma}", trans, expire=604800)  # 1週間保存
+            self.redis.set(f"trans:{lang}:{lemma}", trans, expire=604800)  # 1週間保存
 
         return result
 
-    def get_translation(self, lemma: str, context: str | None = None) -> dict | None:
+    def get_translation(
+        self, lemma: str, context: str | None = None, lang: str = "ja"
+    ) -> dict | None:
         """キャッシュから翻訳を取得する。キャッシュにない場合はcontextがあればGeminiで推測する。
 
         Args:
             lemma: 検索する単語
             context: 論文のテキスト（文脈から意味を推測するために使用）
+            lang: ターゲット言語
 
         Returns:
             翻訳情報を含む辞書、またはNone（Jamdictで処理すべき場合）
@@ -430,18 +439,18 @@ class EnglishAnalysisService:
                     }
 
                 # Redis (L2) を確認
-                cached_trans = self.redis.get(f"trans:{lemma}")
+                cached_trans = self.redis.get(f"trans:{lang}:{lemma}")
                 if cached_trans:
                     self.translation_cache[lemma] = cached_trans  # L1に入れる
                     return {
                         "word": lemma,
                         "translation": cached_trans,
-                        "source": "Gemini (cached)",
+                        "source": f"Gemini ({lang} cached)",
                     }
 
                 # キャッシュにない場合、contextがあればGeminiで推測
                 if context:
-                    return self._translate_with_context(lemma, context)
+                    return self._translate_with_context(lemma, context, lang=lang)
 
         # word_cache にない場合（初回ルックアップ）
         # context があれば、Jamdictチェックをスキップして直接Geminiで推測
@@ -453,25 +462,26 @@ class EnglishAnalysisService:
                     "translation": self.translation_cache[lemma],
                     "source": "Gemini (cached)",
                 }
-            cached_trans = self.redis.get(f"trans:{lemma}")
+            cached_trans = self.redis.get(f"trans:{lang}:{lemma}")
             if cached_trans:
                 self.translation_cache[lemma] = cached_trans
                 return {
                     "word": lemma,
                     "translation": cached_trans,
-                    "source": "Gemini (cached)",
+                    "source": f"Gemini ({lang} cached)",
                 }
             # キャッシュにもなければGeminiで推測
-            return self._translate_with_context(lemma, context)
+            return self._translate_with_context(lemma, context, lang=lang)
 
         return None
 
-    def _translate_with_context(self, word: str, context: str) -> dict | None:
+    def _translate_with_context(self, word: str, context: str, lang: str = "ja") -> dict | None:
         """Gemini APIを使って論文の文脈から単語の意味を推測する。
 
         Args:
             word: 翻訳する単語
             context: 論文のテキスト（文脈）
+            lang: ターゲット言語
 
         Returns:
             翻訳情報を含む辞書
@@ -480,7 +490,11 @@ class EnglishAnalysisService:
         max_context_length = int(os.getenv("MAX_CONTEXT_LENGTH", "800"))
         context = truncate_context(context, word, max_context_length)
 
-        prompt = f"""以下の学術論文の文脈で使われている単語「{word}」の意味を、この文脈に最も適した日本語訳で1〜3語で簡潔に答えてください。
+        from .feature.translate import SUPPORTED_LANGUAGES
+
+        lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
+
+        prompt = f"""以下の学術論文の文脈で使われている単語「{word}」の意味を、この文脈に最も適した{lang_name}訳で1〜3語で簡潔に答えてください。
 
 【論文の文脈】
 {context}
@@ -489,7 +503,7 @@ class EnglishAnalysisService:
 {word}
 
 【回答形式】
-日本語訳のみを出力してください（説明不要）。"""
+{lang_name}訳のみを出力してください（説明不要）。"""
 
         try:
             response = client.models.generate_content(
@@ -502,7 +516,7 @@ class EnglishAnalysisService:
 
             # キャッシュに保存
             self.translation_cache[word] = translation
-            self.redis.set(f"trans:{word}", translation, expire=604800)  # 1週間
+            self.redis.set(f"trans:{lang}:{word}", translation, expire=604800)  # 1週間
             self.word_cache[word] = False  # Jamdictにはない
 
             logger.info(f"Context-aware translation: {word} -> {translation}")

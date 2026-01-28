@@ -24,9 +24,11 @@ redis_service = RedisService()
 
 
 @router.post("/analyze_txt")
-async def analyze_txt(html_text: str = Form(...)):
+async def analyze_txt(html_text: str = Form(...), lang: str = Form("ja")):
     task_id = str(uuid.uuid4())
-    redis_service.set(f"task:{task_id}", {"text": html_text, "paper_id": None}, expire=3600)
+    redis_service.set(
+        f"task:{task_id}", {"text": html_text, "paper_id": None, "lang": lang}, expire=3600
+    )
     return HTMLResponse(
         f'<div id="paper-content" class="fade-in"></div>'
         f'<div id="sse-container-{task_id}" hx-ext="sse" sse-connect="/stream/{task_id}" '
@@ -39,6 +41,7 @@ async def analyze_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     session_id: Optional[str] = Form(None),
+    lang: str = Form("ja"),
 ):
     # ファイル名がない、またはサイズが0の場合はエラーを返す
     if not file.filename or file.size == 0:
@@ -102,12 +105,15 @@ async def analyze_pdf(
                 "file_hash": file_hash,
                 "filename": file.filename,
                 "session_id": session_id,
+                "lang": lang,
             },
             expire=3600,
         )
     else:
         # キャッシュヒット：テキストを保存
-        redis_service.set(f"task:{task_id}", {"text": raw_text, "paper_id": paper_id}, expire=3600)
+        redis_service.set(
+            f"task:{task_id}", {"text": raw_text, "paper_id": paper_id, "lang": lang}, expire=3600
+        )
 
     total_elapsed = time.time() - start_time
     logger.info(
@@ -142,7 +148,10 @@ async def stream(task_id: str):
     # Redisから取得したデータは辞書型になっているはず
     text = data.get("text", "")
     paper_id = data.get("paper_id")
-    logger.info(f"[stream] Task data retrieved: paper_id={paper_id}, text_length={len(text)}")
+    lang = data.get("lang", "ja")
+    logger.info(
+        f"[stream] Task data retrieved: paper_id={paper_id}, text_length={len(text)}, lang={lang}"
+    )
 
     # OCR未実行の場合：ストリーム内でOCR処理を行う
     if data.get("pending_ocr"):
@@ -217,7 +226,7 @@ async def stream(task_id: str):
                         words_html.append(
                             f'<a class="absolute cursor-pointer hover:bg-yellow-300/30 transition-colors rounded-sm group"'
                             f' style="left:{left}%; top:{top}%; width:{width}%; height:{height}%;"'
-                            f' hx-get="/explain/{word_text}"'
+                            f' hx-get="/explain/{word_text}?lang={lang}"'
                             f' hx-trigger="click"'
                             f' hx-target="#definition-box"'
                             f' hx-swap="afterbegin">'
@@ -248,6 +257,7 @@ async def stream(task_id: str):
                         target_id=content_id,
                         id_prefix=page_prefix,
                         save_to_db=False,
+                        lang=lang,
                     ):
                         yield chunk
                         await asyncio.sleep(0.005)
@@ -316,7 +326,7 @@ async def stream(task_id: str):
     logger.info(f"[stream] Starting tokenization for paper_id={paper_id}")
 
     async def generate():
-        async for chunk in service.tokenize_stream(text, paper_id):
+        async for chunk in service.tokenize_stream(text, paper_id, lang=lang):
             yield chunk
             await asyncio.sleep(0.01)
 

@@ -41,7 +41,7 @@ async def translate_word(word: str, lang: str = "ja"):
 
 
 @router.get("/explain/{lemma}")
-async def explain(lemma: str):
+async def explain(lemma: str, lang: str = "ja"):
     """単語の説明を取得（キャッシュ → Jamdict → Gemini の順で検索）"""
 
     def make_card(
@@ -65,7 +65,7 @@ async def explain(lemma: str):
         <script>document.getElementById('dict-empty-state')?.remove();</script>"""
 
     # まずキャッシュから翻訳を取得
-    cached = service.get_translation(lemma)
+    cached = service.get_translation(lemma, lang=lang)
     if cached:
         return HTMLResponse(
             make_card(
@@ -77,26 +77,31 @@ async def explain(lemma: str):
             )
         )
 
-    # キャッシュにない場合は Jamdict を検索
-    loop = asyncio.get_event_loop()
-    # executor は src.logic からインポートしたものを使用（スレッド/DB接続の再利用のため）
-    lookup_res = await loop.run_in_executor(executor, _lookup_word_full, lemma)
+    # キャッシュにない場合は Jamdict を検索 (日本語の場合のみ)
+    if lang == "ja":
+        loop = asyncio.get_event_loop()
+        # executor は src.logic からインポートしたものを使用（スレッド/DB接続の再利用のため）
+        lookup_res = await loop.run_in_executor(executor, _lookup_word_full, lemma)
 
-    if lookup_res.entries:
-        ja = [
-            e.kanji_forms[0].text if e.kanji_forms else e.kana_forms[0].text
-            for e in lookup_res.entries[:3]
-        ]
-        translation = " / ".join(list(dict.fromkeys(ja)))
-        return HTMLResponse(
-            make_card(lemma, translation, "Jamdict", "bg-blue-50/80", "border-blue-100")
-        )
+        if lookup_res.entries:
+            ja = [
+                e.kanji_forms[0].text if e.kanji_forms else e.kana_forms[0].text
+                for e in lookup_res.entries[:3]
+            ]
+            translation = " / ".join(list(dict.fromkeys(ja)))
+            return HTMLResponse(
+                make_card(lemma, translation, "Jamdict", "bg-blue-50/80", "border-blue-100")
+            )
 
-    # Jamdict にもない場合は Gemini で個別翻訳
+    # Jamdict にもない（または日本語以外）場合は Gemini で個別翻訳
     try:
+        from ..feature.translate import SUPPORTED_LANGUAGES
+
+        lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
+
         client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
         model = os.getenv("OCR_MODEL") or "gemini-1.5-flash"
-        prompt = f"英単語「{lemma}」の日本語訳を1〜3語で簡潔に。訳のみ出力。"
+        prompt = f"英単語「{lemma}」の{lang_name}訳を1〜3語で簡潔に。訳のみ出力。"
 
         res = client.models.generate_content(model=model, contents=prompt)
         # ログ出力: トークン数

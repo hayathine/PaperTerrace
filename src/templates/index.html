@@ -8,8 +8,11 @@
     <script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/sse.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Firebase Config from Backend -->
+    <script id="firebase-config" type="application/json">
+      {{ firebase_config | tojson | safe }}
+    </script>
     <script>
-      window.firebaseConfig = {{ firebase_config | tojson | safe }};
+      window.firebaseConfig = JSON.parse(document.getElementById('firebase-config').textContent);
     </script>
     <!-- Firebase Auth -->
     <script type="module" src="/static/js/auth.js"></script>
@@ -152,6 +155,9 @@
             <option value="en">🇺🇸 English</option>
             <option value="zh">🇨🇳 中文</option>
             <option value="ko">🇰🇷 한국어</option>
+            <option value="es">🇪🇸 Español</option>
+            <option value="fr">🇫🇷 Français</option>
+            <option value="de">🇩🇪 Deutsch</option>
           </select>
           <!-- Loading Spinner -->
           <div
@@ -285,6 +291,7 @@
                   class="group"
                 >
                   <input type="hidden" name="session_id" id="session-id" />
+                  <input type="hidden" name="lang" class="current-lang-input" value="ja" />
                   <input type="hidden" id="current-paper-id" />
                   <div
                     class="relative h-32 border-2 border-dashed border-slate-200 rounded-2xl flex flex-col items-center justify-center transition-all group-hover:border-indigo-400 group-hover:bg-indigo-50/30"
@@ -333,6 +340,7 @@
                   onsubmit="initReader()"
                   class="space-y-3"
                 >
+                  <input type="hidden" name="lang" class="current-lang-input" value="ja" />
                   <textarea
                     name="html_text"
                     rows="3"
@@ -620,10 +628,27 @@
     </div>
 
     <script>
-      // Session management
+      // Session & Language management
       const sessionId = crypto.randomUUID();
       document.getElementById("session-id").value = sessionId;
-      let currentLanguage = "ja";
+      
+      // Browser language detection
+      const getBrowserLang = () => {
+        const lang = navigator.language.split('-')[0];
+        const supported = ['ja', 'en', 'zh', 'ko', 'es', 'fr', 'de'];
+        return supported.includes(lang) ? lang : 'ja';
+      };
+
+      let currentLanguage = localStorage.getItem('user-language') || getBrowserLang();
+      
+      // Initialize language selector and hidden inputs
+      function initLanguage() {
+        document.getElementById('language-selector').value = currentLanguage;
+        document.querySelectorAll('.current-lang-input').forEach(input => {
+          input.value = currentLanguage;
+        });
+      }
+      initLanguage();
 
       function initReader() {
         const container = document.getElementById("reader-view");
@@ -658,6 +683,10 @@
 
       function setLanguage(lang) {
         currentLanguage = lang;
+        localStorage.setItem('user-language', lang);
+        document.querySelectorAll('.current-lang-input').forEach(input => {
+          input.value = lang;
+        });
         fetch("/settings/language", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -690,6 +719,7 @@
               message: message,
               session_id: sessionId,
               author_mode: authorMode,
+              lang: currentLanguage,
             }),
           });
           const data = await response.json();
@@ -718,6 +748,7 @@
           const formData = new FormData();
           formData.append("session_id", sessionId);
           formData.append("mode", "full");
+          formData.append("lang", currentLanguage);
 
           const response = await fetch("/summarize", {
             method: "POST",
@@ -747,6 +778,7 @@
         try {
           const formData = new FormData();
           formData.append("session_id", sessionId);
+          formData.append("lang", currentLanguage);
 
           const response = await fetch("/critique", {
             method: "POST",
@@ -783,6 +815,7 @@
         try {
           const formData = new FormData();
           formData.append("session_id", sessionId);
+          formData.append("lang", currentLanguage);
 
           const response = await fetch("/research-radar", {
             method: "POST",
