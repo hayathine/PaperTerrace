@@ -6,6 +6,8 @@ resource "google_cloud_run_v2_service" "main" {
   project  = var.project_id
 
   template {
+    service_account = var.service_account_email
+
     containers {
       image = var.image_url
 

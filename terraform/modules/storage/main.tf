@@ -44,13 +44,9 @@ resource "google_storage_bucket" "papers" {
   }
 }
 
-data "google_project" "project" {
-  project_id = var.project_id
-}
-
 # IAM for Cloud Run service account to access bucket
 resource "google_storage_bucket_iam_member" "cloud_run" {
   bucket = google_storage_bucket.papers.name
   role   = "roles/storage.objectAdmin"
-  member = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+  member = "serviceAccount:${var.service_account_email}"
 }

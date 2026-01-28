@@ -15,3 +15,8 @@ variable "db_password" {
   sensitive   = true
   default     = ""
 }
+
+variable "service_account_email" {
+  description = "Service Account Email to grant access to"
+  type        = string
+}

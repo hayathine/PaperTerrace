@@ -52,3 +52,8 @@ variable "db_user" {
   description = "Database user"
   type        = string
 }
+
+variable "service_account_email" {
+  description = "Service Account Email to run the service as"
+  type        = string
+}

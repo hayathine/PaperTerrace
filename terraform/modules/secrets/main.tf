@@ -38,21 +38,17 @@ resource "google_secret_manager_secret_version" "db_password" {
   secret_data = var.db_password
 }
 
-data "google_project" "project" {
-  project_id = var.project_id
-}
-
 # IAM for Cloud Run to access secrets
 resource "google_secret_manager_secret_iam_member" "gemini_api_key_accessor" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.gemini_api_key.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+  member    = "serviceAccount:${var.service_account_email}"
 }
 
 resource "google_secret_manager_secret_iam_member" "db_password_accessor" {
   project   = var.project_id
   secret_id = google_secret_manager_secret.db_password.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${data.google_project.project.number}-compute@developer.gserviceaccount.com"
+  member    = "serviceAccount:${var.service_account_email}"
 }

@@ -40,10 +40,20 @@ resource "google_project_service" "apis" {
     "cloudbuild.googleapis.com",
     "vpcaccess.googleapis.com",
     "servicenetworking.googleapis.com",
+    "iam.googleapis.com", # Added IAM API
   ])
 
   service            = each.value
   disable_on_destroy = false
+}
+
+# IAM Module (New)
+module "iam" {
+  source = "./modules/iam"
+
+  project_id = var.project_id
+  
+  depends_on = [google_project_service.apis]
 }
 
 # Networking
@@ -73,8 +83,11 @@ module "secrets" {
   project_id     = var.project_id
   gemini_api_key = var.gemini_api_key
   db_password    = var.db_password
+  
+  # Pass service account email
+  service_account_email = module.iam.service_account_email
 
-  depends_on = [google_project_service.apis]
+  depends_on = [google_project_service.apis, module.iam]
 }
 
 # Cloud SQL
@@ -100,7 +113,10 @@ module "storage" {
   project_id = var.project_id
   region     = var.region
 
-  depends_on = [google_project_service.apis]
+  # Pass service account email
+  service_account_email = module.iam.service_account_email
+
+  depends_on = [google_project_service.apis, module.iam]
 }
 
 # Cloud Run
@@ -119,11 +135,15 @@ module "cloud_run" {
   db_name                  = module.cloud_sql.database_name
   db_user                  = module.cloud_sql.database_user
 
+  # Pass service account email
+  service_account_email = module.iam.service_account_email
+
   depends_on = [
     google_project_service.apis,
     module.cloud_sql,
     module.secrets,
     module.storage,
     module.networking,
+    module.iam,
   ]
 }
