@@ -1,17 +1,37 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { PageData } from './types';
+import StampOverlay from '../Stamps/StampOverlay';
+import { Stamp } from '../Stamps/types';
 
 interface PDFPageProps {
     page: PageData;
     scale?: number;
     onWordClick?: (word: string) => void;
+    // Stamp props
+    stamps?: Stamp[];
+    isStampMode?: boolean;
+    onAddStamp?: (page: number, x: number, y: number) => void;
 }
 
-const PDFPage: React.FC<PDFPageProps> = ({ page, onWordClick }) => {
-    const { width, height, words, image_url } = page;
+const PDFPage: React.FC<PDFPageProps> = ({
+    page,
+    onWordClick,
+    stamps = [],
+    isStampMode = false,
+    onAddStamp
+}) => {
+    const { width, height, words, image_url, page_num } = page;
 
-    // Calculate percentages for responsive overlay
-    // bbox is assumed to be [x1, y1, x2, y2] relative to width/height
+    // Filter stamps for this page
+    const pageStamps = useMemo(() => {
+        return stamps.filter(s => s.page_number === page_num || !s.page_number);
+    }, [stamps, page_num]);
+
+    const handleAddStamp = (x: number, y: number) => {
+        if (onAddStamp) {
+            onAddStamp(page_num, x, y);
+        }
+    };
 
     return (
         <div className="relative mb-8 shadow-md rounded-lg overflow-hidden bg-white transition-transform mx-auto" style={{ maxWidth: '100%' }}>
@@ -31,8 +51,15 @@ const PDFPage: React.FC<PDFPageProps> = ({ page, onWordClick }) => {
                     loading="lazy"
                 />
 
+                {/* Stamp Overlay */}
+                <StampOverlay
+                    stamps={pageStamps}
+                    isStampMode={isStampMode}
+                    onAddStamp={handleAddStamp}
+                />
+
                 {/* Word Overlays */}
-                <div className="absolute inset-0 w-full h-full">
+                <div className="absolute inset-0 w-full h-full z-10">
                     {words.map((w, idx) => {
                         const [x1, y1, x2, y2] = w.bbox;
                         const w_width = x2 - x1;
@@ -46,14 +73,14 @@ const PDFPage: React.FC<PDFPageProps> = ({ page, onWordClick }) => {
                         return (
                             <div
                                 key={`${idx}`}
-                                className="absolute cursor-pointer hover:bg-yellow-300/30 rounded-sm group z-10"
+                                className={`absolute rounded-sm group ${!isStampMode ? 'cursor-pointer hover:bg-yellow-300/30' : 'pointer-events-none'}`}
                                 style={{
                                     left: `${left}%`,
                                     top: `${top}%`,
                                     width: `${styleW}%`,
                                     height: `${styleH}%`,
                                 }}
-                                onClick={() => onWordClick && onWordClick(w.word)}
+                                onClick={() => !isStampMode && onWordClick && onWordClick(w.word)}
                                 title={w.word}
                             />
                         );

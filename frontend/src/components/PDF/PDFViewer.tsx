@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { PageData } from './types';
 import PDFPage from './PDFPage';
+import StampPalette from '../Stamps/StampPalette';
+import { Stamp, StampType } from '../Stamps/types';
 
 interface PDFViewerProps {
     taskId?: string; // If resuming a task
@@ -13,6 +15,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile }) => {
     const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle');
     const [errorMsg, setErrorMsg] = useState<string>('');
     const eventSourceRef = useRef<EventSource | null>(null);
+    const [paperId, setPaperId] = useState<string | null>(null);
+
+    // Stamp State
+    const [stamps, setStamps] = useState<Stamp[]>([]);
+    const [isStampMode, setIsStampMode] = useState(false);
+    const [selectedStamp, setSelectedStamp] = useState<StampType>('👍');
 
     useEffect(() => {
         if (uploadFile) {
@@ -25,19 +33,38 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile }) => {
         };
     }, [uploadFile]);
 
+    // Fetch stamps when paperId is available
+    useEffect(() => {
+        if (paperId) {
+            fetchStamps(paperId);
+        }
+    }, [paperId]);
+
+    const fetchStamps = async (id: string) => {
+        try {
+            const res = await fetch(`/stamps/paper/${id}`);
+            if (res.ok) {
+                const data = await res.json();
+                setStamps(data.stamps);
+            }
+        } catch (e) {
+            console.error('Failed to fetch stamps', e);
+        }
+    };
+
     const startAnalysis = async (file: File) => {
         setStatus('uploading');
         setPages([]);
+        setPaperId(null);
+        setStamps([]);
 
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('lang', 'ja'); // TODO: Make configurable
-        formData.append('mode', 'json'); // Flag for JSON response
+        formData.append('lang', 'ja');
+        formData.append('mode', 'json');
 
         try {
-            // Step 1: Upload and get SSE URL
-            // Ensure backend supports returning JSON metadata for the stream URL
-            const response = await fetch('/analyze-pdf-json', { // New endpoint or modified existing
+            const response = await fetch('/analyze-pdf-json', {
                 method: 'POST',
                 body: formData,
             });
@@ -47,7 +74,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile }) => {
             const data = await response.json();
             const { stream_url } = data;
 
-            // Step 2: Connect to SSE
             setStatus('processing');
             const es = new EventSource(stream_url);
             eventSourceRef.current = es;
@@ -60,6 +86,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile }) => {
                         setPages(prev => [...prev, eventData.data]);
                     } else if (eventData.type === 'done') {
                         setStatus('done');
+                        if (eventData.paper_id) {
+                            setPaperId(eventData.paper_id);
+                        }
                         es.close();
                     } else if (eventData.type === 'error') {
                         setStatus('error');
@@ -67,14 +96,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile }) => {
                         es.close();
                     }
                 } catch (e) {
-                    // Ignore non-JSON messages (keepalive etc)
+                    // Ignore
                 }
             };
 
             es.onerror = (err) => {
                 console.error('SSE Error', err);
                 es.close();
-                // Don't set error on completion (sometimes triggers error on close)
             };
 
         } catch (err: any) {
@@ -85,13 +113,64 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile }) => {
 
     const handleWordClick = (word: string) => {
         console.log('Word clicked:', word);
-        // Dispatch custom event or callback for Dictionary lookup
+        // Dispatch custom event
         const event = new CustomEvent('lookup-word', { detail: word });
         window.dispatchEvent(event);
     };
 
+    const handleAddStamp = async (page: number, x: number, y: number) => {
+        if (!paperId) {
+            alert('Paper ID not found. Please wait for analysis to complete.');
+            return;
+        }
+
+        const newStamp: Stamp = {
+            id: 'temp-' + Date.now(),
+            type: selectedStamp,
+            x,
+            y,
+            page_number: page,
+        };
+
+        // Optimistic update
+        setStamps(prev => [...prev, newStamp]);
+
+        try {
+            const res = await fetch(`/stamps/paper/${paperId}`, { // Backend URL checked? 
+                // Router says: @router.post("/stamps/paper/{paper_id}")
+                // It is mounted under main app? 
+                // In main.py: app.include_router(stamps.router)
+                // So it is /stamps/paper/... NOT /api/stamps...
+                // Wait, in fetchStamps I used /api/stamps...
+                // Checking router setup in main.py...
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    stamp_type: selectedStamp,
+                    x,
+                    y,
+                    page_number: page
+                })
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                // Update ID from backend
+                setStamps(prev => prev.map(s => s.id === newStamp.id ? { ...s, id: data.stamp_id } : s));
+            } else {
+                console.error('Failed to save stamp');
+                // Rollback?
+                setStamps(prev => prev.filter(s => s.id !== newStamp.id));
+            }
+
+        } catch (e) {
+            console.error('Error saving stamp', e);
+            setStamps(prev => prev.filter(s => s.id !== newStamp.id));
+        }
+    };
+
     return (
-        <div className="w-full max-w-4xl mx-auto p-4">
+        <div className="w-full max-w-4xl mx-auto p-4 relative min-h-full pb-20">
             {status === 'idle' && !uploadFile && (
                 <div className="text-center p-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
                     Waiting for PDF...
@@ -110,9 +189,16 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile }) => {
                 </div>
             )}
 
-            <div className="space-y-6">
+            <div className={`space-y-6 ${isStampMode ? 'cursor-crosshair' : ''}`}>
                 {pages.map((page) => (
-                    <PDFPage key={page.page_num} page={page} onWordClick={handleWordClick} />
+                    <PDFPage
+                        key={page.page_num}
+                        page={page}
+                        onWordClick={handleWordClick}
+                        stamps={stamps}
+                        isStampMode={isStampMode}
+                        onAddStamp={handleAddStamp}
+                    />
                 ))}
             </div>
 
@@ -120,6 +206,16 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile }) => {
                 <div className="flex justify-center py-4">
                     <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
                 </div>
+            )}
+
+            {/* Stamp Palette (Only show if we have pages/paperId) */}
+            {paperId && (
+                <StampPalette
+                    isStampMode={isStampMode}
+                    onToggleMode={() => setIsStampMode(!isStampMode)}
+                    selectedStamp={selectedStamp}
+                    onSelectStamp={setSelectedStamp}
+                />
             )}
         </div>
     );

@@ -20,6 +20,18 @@ export default defineConfig({
             '/api': {
                 target: 'http://127.0.0.1:8000',
                 changeOrigin: true,
+            },
+            '/stamps': {
+                target: 'http://127.0.0.1:8000',
+                changeOrigin: true,
+            },
+            '/analyze-pdf-json': {
+                target: 'http://127.0.0.1:8000',
+                changeOrigin: true,
+            },
+            '/stream': {
+                target: 'http://127.0.0.1:8000',
+                changeOrigin: true,
             }
         }
     }
