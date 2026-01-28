@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from ..features import (
     AdversarialReviewService,
+    CiteIntentService,
     ClaimVerificationService,
     FigureInsightService,
     ParagraphExplainService,
@@ -25,6 +26,7 @@ research_radar_service = ResearchRadarService()
 paragraph_explain_service = ParagraphExplainService()
 figure_insight_service = FigureInsightService()
 adversarial_service = AdversarialReviewService()
+cite_intent_service = CiteIntentService()
 claim_service = ClaimVerificationService()
 redis_service = RedisService()
 
@@ -158,3 +160,14 @@ async def counterarguments(claim: str = Form(...), session_id: str = Form("")):
 async def verify_claims(paragraph: str = Form(...), lang: str = Form("ja")):
     report = await claim_service.verify_paragraph(paragraph, lang=lang)
     return JSONResponse({"report": report})
+
+
+# ============================================================================
+# Cite Intent
+# ============================================================================
+
+
+@router.post("/cite-intent")
+async def analyze_cite_intent(paragraph: str = Form(...), lang: str = Form("ja")):
+    intents = await cite_intent_service.analyze_paragraph_citations(paragraph, lang=lang)
+    return JSONResponse({"citations": intents})
