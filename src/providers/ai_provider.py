@@ -66,8 +66,8 @@ class GeminiProvider(AIProviderInterface):
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable is required")
-        self.client = genai.Client(api_key=api_key)
-        self.model = os.getenv("OCR_MODEL", "gemini-1.5-flash")
+        self.client = genai.Client(api_key=api_key, vertexai=False)
+        self.model = os.getenv("MODEL_OCR", "gemini-2.0-flash")
         logger.info(f"GeminiProvider initialized with model: {self.model}")
 
     async def generate(
