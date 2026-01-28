@@ -36,15 +36,12 @@ async def translate_word(word: str, lang: str = "ja"):
 @router.get("/explain/{word}")
 async def explain(word: str, lang: str = "ja"):
     """Word explanation (Lemmatize -> Cache -> Jamdict -> Gemini)"""
-    from ..logic import nlp
-
-    # 0. Lemmatize the word using spaCy
+    # 0. Assume input word is already lemmatized by frontend
+    lemma = word.lower()
+    original_word = word  # Input is typically lemma from frontend
     loop = asyncio.get_event_loop()
-    doc = await loop.run_in_executor(executor, nlp, word)
-    lemma = doc[0].lemma_.lower() if doc else word.lower()
-    original_word = word  # Keep original for display
 
-    logger.info(f"[explain] word='{word}' -> lemma='{lemma}'")
+    # logger.info(f"[explain] word='{word}' -> lemma='{lemma}'")
 
     # 1. Cache Check
     cached = await service.get_translation(lemma, lang=lang)
