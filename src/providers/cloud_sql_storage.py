@@ -32,6 +32,29 @@ class CloudSQLStorage(StorageInterface):
         self.instance_connection_name = os.getenv("CLOUDSQL_CONNECTION_NAME")
 
         logger.info(f"CloudSQLStorage initialized - host: {self.host}, db: {self.db_name}")
+        self.init_tables()
+        self._migrate_tables()
+
+    def _migrate_tables(self) -> None:
+        """Add missing columns to existing tables."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                # Check notes table for image_url
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='notes' AND column_name='image_url'"
+                )
+                if not cur.fetchone():
+                    logger.info("Migrating: Adding image_url to notes table")
+                    cur.execute("ALTER TABLE notes ADD COLUMN image_url TEXT")
+
+                # Check notes table for user_id
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='notes' AND column_name='user_id'"
+                )
+                if not cur.fetchone():
+                    logger.info("Migrating: Adding user_id to notes table")
+                    cur.execute("ALTER TABLE notes ADD COLUMN user_id TEXT")
+            conn.commit()
 
     def _get_connection(self):
         try:
@@ -281,6 +304,12 @@ class CloudSQLStorage(StorageInterface):
                     """
                     INSERT INTO notes (note_id, session_id, term, note, image_url, user_id, created_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    ON CONFLICT (note_id) DO UPDATE SET
+                        term = EXCLUDED.term,
+                        note = EXCLUDED.note,
+                        image_url = EXCLUDED.image_url,
+                        user_id = EXCLUDED.user_id,
+                        created_at = EXCLUDED.created_at
                     """,
                     (note_id, session_id, term, note, image_url, user_id, datetime.now()),
                 )
