@@ -122,13 +122,15 @@ Terraformの状態（state）をチーム間で共有し、安全に管理する
 
 ```bash
 # ステートバケットを作成（リージョン: asia-northeast1 = 東京）
-gsutil mb -p paperterrace -l asia-northeast1 gs://paperterrace-terraform-state
+gcloud storage buckets create gs://paperterrace-terraform-state \
+  --project=paperterrace \
+  --location=asia-northeast1
 
 # バージョニングを有効化（誤って上書きした場合の復旧用）
-gsutil versioning set on gs://paperterrace-terraform-state
+gcloud storage buckets update gs://paperterrace-terraform-state --versioning
 
 # 確認
-gsutil ls -la gs://paperterrace-terraform-state
+gcloud storage ls --long gs://paperterrace-terraform-state
 ```
 
 **💡 なぜステートバケットが必要？**
