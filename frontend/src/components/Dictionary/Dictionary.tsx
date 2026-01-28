@@ -9,28 +9,37 @@ interface DictionaryProps {
 
 const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId }) => {
     const { token } = useAuth();
-    const [entry, setEntry] = useState<DictionaryEntry | null>(null);
+    // Maintain a list of entries instead of a single one
+    const [entries, setEntries] = useState<DictionaryEntry[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         if (!term) return;
 
+        // Ignore if the very last (top) entry is already this term
+        if (entries.length > 0 && entries[0].word === term) {
+            return;
+        }
+
         const fetchDefinition = async () => {
             setLoading(true);
             setError(null);
-            setEntry(null);
+
             try {
-                // Use the configured proxy /explain
-                // For explain, maybe also send auth? But it's public reading usually.
-                // Let's add it if available, why not, for potential personalization.
                 const headers: HeadersInit = {};
                 if (token) headers['Authorization'] = `Bearer ${token}`;
 
                 const res = await fetch(`/explain/${encodeURIComponent(term)}`, { headers });
                 if (res.ok) {
-                    const data = await res.json();
-                    setEntry(data);
+                    const data: DictionaryEntry = await res.json();
+
+                    setEntries(prev => {
+                        // Remove existing entry for this word if it exists anywhere in the list
+                        // so we can move it to the top (or add it fresh)
+                        const filtered = prev.filter(e => e.word !== data.word);
+                        return [data, ...filtered];
+                    });
                 } else {
                     const errorText = await res.text();
                     setError(`Definition not found: ${res.status} ${errorText}`);
@@ -43,10 +52,10 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId }) => {
         };
 
         fetchDefinition();
-    }, [term, token]);
+    }, [term, token]); // Removed entries dependency to avoid loop, check inside setter or logic
 
-    const handleSaveToNote = async () => {
-        if (!entry || !term) return;
+    const handleSaveToNote = async (entry: DictionaryEntry) => {
+        if (!entry) return;
         try {
             const headers: HeadersInit = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -60,13 +69,13 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId }) => {
                     note: entry.translation
                 })
             });
-            alert('Saved to notes!'); // Simple feedback for now
+            alert('Saved to notes!');
         } catch (e) {
             console.error(e);
         }
     };
 
-    if (!term) {
+    if (entries.length === 0 && !loading && !error) {
         return (
             <div className="flex flex-col items-center justify-center h-full p-8 text-slate-300">
                 <div className="bg-slate-50 p-4 rounded-xl mb-4">
@@ -82,47 +91,54 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId }) => {
 
     return (
         <div className="p-4 h-full overflow-y-auto">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Definition</h3>
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
+                Dictionary {entries.length > 0 && `(${entries.length})`}
+            </h3>
 
             {loading && (
-                <div className="animate-pulse space-y-3">
+                <div className="animate-pulse space-y-3 mb-4">
                     <div className="h-4 bg-slate-100 rounded w-1/3"></div>
                     <div className="h-20 bg-slate-100 rounded w-full"></div>
                 </div>
             )}
 
-            {error && <div className="text-xs text-red-400 bg-red-50 p-3 rounded-lg border border-red-100">{error}</div>}
+            {error && <div className="text-xs text-red-400 bg-red-50 p-3 rounded-lg border border-red-100 mb-4">{error}</div>}
 
-            {entry && (
-                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm animate-fade-in group">
-                    <div className="flex justify-between items-start mb-3">
-                        <h2 className="text-lg font-bold text-slate-800">{entry.word}</h2>
-                        <div className="flex items-center gap-2">
-                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide
-                                ${entry.source === 'Cache' ? 'bg-purple-100 text-purple-600' :
-                                    entry.source === 'Jamdict' ? 'bg-blue-100 text-blue-600' :
-                                        entry.source === 'Gemini' ? 'bg-amber-100 text-amber-600' : 'bg-gray-100'
-                                }`}>
-                                {entry.source}
-                            </span>
-                        </div>
-                    </div>
-
-                    <p className="text-sm text-slate-600 leading-relaxed font-medium mb-4">
-                        {entry.translation}
-                    </p>
-
-                    <button
-                        onClick={handleSaveToNote}
-                        className="w-full py-2 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 group-hover:border-indigo-100 border border-transparent"
+            <div className="space-y-4">
+                {entries.map((entry, index) => (
+                    <div
+                        key={`${entry.word}-${index}`}
+                        className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm animate-fade-in group transition-all hover:shadow-md"
                     >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                        </svg>
-                        Save to Notes
-                    </button>
-                </div>
-            )}
+                        <div className="flex justify-between items-start mb-3">
+                            <h2 className="text-lg font-bold text-slate-800">{entry.word}</h2>
+                            <div className="flex items-center gap-2">
+                                <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide
+                                    ${entry.source === 'Cache' ? 'bg-purple-100 text-purple-600' :
+                                        entry.source === 'Jamdict' ? 'bg-blue-100 text-blue-600' :
+                                            entry.source === 'Gemini' ? 'bg-amber-100 text-amber-600' : 'bg-gray-100'
+                                    }`}>
+                                    {entry.source}
+                                </span>
+                            </div>
+                        </div>
+
+                        <p className="text-sm text-slate-600 leading-relaxed font-medium mb-4">
+                            {entry.translation}
+                        </p>
+
+                        <button
+                            onClick={() => handleSaveToNote(entry)}
+                            className="w-full py-2 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 group-hover:border-indigo-100 border border-transparent"
+                        >
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Save to Notes
+                        </button>
+                    </div>
+                ))}
+            </div>
         </div>
     );
 };
