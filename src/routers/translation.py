@@ -4,9 +4,7 @@ Handles word translation, explanation, and language settings.
 """
 
 import asyncio
-import os
 
-import google.genai as genai
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
@@ -65,7 +63,7 @@ async def explain(lemma: str, lang: str = "ja"):
         <script>document.getElementById('dict-empty-state')?.remove();</script>"""
 
     # まずキャッシュから翻訳を取得
-    cached = service.get_translation(lemma, lang=lang)
+    cached = await service.get_translation(lemma, lang=lang)
     if cached:
         return HTMLResponse(
             make_card(
@@ -95,21 +93,18 @@ async def explain(lemma: str, lang: str = "ja"):
 
     # Jamdict にもない（または日本語以外）場合は Gemini で個別翻訳
     try:
+        import os
+
         from ..feature.translate import SUPPORTED_LANGUAGES
+        from ..providers import get_ai_provider
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
-        client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        model = os.getenv("OCR_MODEL") or "gemini-1.5-flash"
+        provider = get_ai_provider()
         prompt = f"英単語「{lemma}」の{lang_name}訳を1〜3語で簡潔に。訳のみ出力。"
+        translate_model = os.getenv("MODEL_TRANSLATE", "gemini-1.5-flash")
 
-        res = client.models.generate_content(model=model, contents=prompt)
-        # ログ出力: トークン数
-        if res.usage_metadata:
-            logger.info(
-                f"Gemini Token Usage (Simple): input={res.usage_metadata.prompt_token_count}, output={res.usage_metadata.candidates_token_count}"
-            )
-        translation = res.text.strip() if res.text else "翻訳できませんでした"
+        translation = await provider.generate(prompt, model=translate_model)
 
         # キャッシュに保存（次回以降は高速に）
         service.translation_cache[lemma] = translation

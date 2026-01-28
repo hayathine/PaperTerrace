@@ -6,17 +6,14 @@ from concurrent.futures import ThreadPoolExecutor
 
 import spacy
 from dotenv import load_dotenv
-from google import genai
-from google.genai import types
 from jamdict import Jamdict
 
 from src.crud import get_ocr_from_db, save_ocr_to_db
 from src.logger import logger
-from src.providers import RedisService, get_storage_provider
+from src.providers import RedisService, get_ai_provider, get_storage_provider
 from src.utils import (
     _get_file_hash,
     clean_text_for_tokenization,
-    log_gemini_token_usage,
     truncate_context,
 )
 
@@ -24,8 +21,7 @@ from src.utils import (
 load_dotenv()
 executor = ThreadPoolExecutor(max_workers=4)
 nlp = spacy.load("en_core_web_lg", disable=["ner", "parser"])  # tok2vec required for lemmatization
-api_key = os.getenv("GEMINI_API_KEY")
-client = genai.Client(api_key=api_key)
+
 
 # Thread-local storage for Jamdict instances
 _thread_local = threading.local()
@@ -53,7 +49,7 @@ def _lookup_word_full(lemma: str):
 
 class PDFOCRService:
     def __init__(self, model):
-        self.client = client
+        self.ai_provider = get_ai_provider()
         self.model = model
 
     async def extract_text_with_ai(self, file_bytes: bytes, filename: str = "unknown.pdf") -> str:
@@ -65,16 +61,10 @@ class PDFOCRService:
 
         logger.info(f"--- AI OCR Processing: {filename} ---")
         try:
-            response = self.client.models.generate_content(
-                model=self.model,
-                contents=[
-                    types.Part.from_bytes(data=file_bytes, mime_type="application/pdf"),
-                    "このPDFのテキストを構造を維持して文字起こししてください。",
-                ],
+            prompt = "このPDFのテキストを構造を維持して文字起こししてください。"
+            ocr_text = await self.ai_provider.generate_with_pdf(
+                prompt, file_bytes, model=self.model
             )
-            # ログ: トークン使用量 (OCR)
-            log_gemini_token_usage(response, "OCR")
-            ocr_text = response.text.strip()
         except Exception as e:
             logger.error(f"OCR extraction failed: {e}")
             return f"ERROR_API_FAILED: {str(e)}"
@@ -84,7 +74,7 @@ class PDFOCRService:
             ocr_text=ocr_text,
             model_name=self.model,
         )
-        logger.info("OCR extraction completed  .")
+        logger.info("OCR extraction completed.")
         return ocr_text
 
     async def extract_text_streaming(self, file_bytes: bytes, filename: str = "unknown.pdf"):
@@ -180,16 +170,10 @@ class PDFOCRService:
                     single_page_pdf.close()
 
                     try:
-                        response = self.client.models.generate_content(
-                            model=self.model,
-                            contents=[
-                                types.Part.from_bytes(data=page_bytes, mime_type="application/pdf"),
-                                "このPDFページのテキストを構造を維持して文字起こししてください。",
-                            ],
+                        prompt = "このPDFページのテキストを構造を維持して文字起こししてください。"
+                        page_text = await self.ai_provider.generate_with_pdf(
+                            prompt, page_bytes, model=self.model
                         )
-                        # ログ: トークン使用量 (OCR Page)
-                        log_gemini_token_usage(response, f"OCR Page {page_num + 1}")
-                        page_text = (response.text or "").strip()
                     except Exception as e:
                         logger.error(f"OCR failed for page {page_num + 1}: {e}")
                         page_text = ""
@@ -228,8 +212,9 @@ class PDFOCRService:
 
 class EnglishAnalysisService:
     def __init__(self):
-        self.client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-        self.model = os.getenv("OCR_MODEL") or "gemini-1.5-flash"
+        self.ai_provider = get_ai_provider()
+        self.model = os.getenv("OCR_MODEL", "gemini-1.5-flash")
+        self.translate_model = os.getenv("MODEL_TRANSLATE", "gemini-1.5-flash")
         self.ocr_service = PDFOCRService(self.model)
         self.redis = RedisService()
         self.word_cache = {}  # lemma -> bool (jamdict にあるかどうか)
@@ -368,14 +353,8 @@ class EnglishAnalysisService:
 {words_list}"""
 
         try:
-            loop = asyncio.get_running_loop()
-            res = await loop.run_in_executor(
-                None,  # Use default executor for blocking calls
-                lambda: self.client.models.generate_content(model=self.model, contents=prompt),
-            )
-            # ログ: トークン使用量 (Batch Translation)
-            log_gemini_token_usage(res, "BatchTrans")
-            response_text = res.text.strip()
+            # Simple wrapper around async generate
+            response_text = await self.ai_provider.generate(prompt, model=self.translate_model)
 
             # レスポンスをパース
             for line in response_text.split("\n"):
@@ -396,7 +375,7 @@ class EnglishAnalysisService:
 
         return result
 
-    def get_translation(
+    async def get_translation(
         self, lemma: str, context: str | None = None, lang: str = "ja"
     ) -> dict | None:
         """キャッシュから翻訳を取得する。キャッシュにない場合はcontextがあればGeminiで推測する。
@@ -435,7 +414,7 @@ class EnglishAnalysisService:
 
                 # キャッシュにない場合、contextがあればGeminiで推測
                 if context:
-                    return self._translate_with_context(lemma, context, lang=lang)
+                    return await self._translate_with_context(lemma, context, lang=lang)
 
         # word_cache にない場合（初回ルックアップ）
         # context があれば、Jamdictチェックをスキップして直接Geminiで推測
@@ -456,11 +435,13 @@ class EnglishAnalysisService:
                     "source": f"Gemini ({lang} cached)",
                 }
             # キャッシュにもなければGeminiで推測
-            return self._translate_with_context(lemma, context, lang=lang)
+            return await self._translate_with_context(lemma, context, lang=lang)
 
         return None
 
-    def _translate_with_context(self, word: str, context: str, lang: str = "ja") -> dict | None:
+    async def _translate_with_context(
+        self, word: str, context: str, lang: str = "ja"
+    ) -> dict | None:
         """Gemini APIを使って論文の文脈から単語の意味を推測する。
 
         Args:
@@ -491,13 +472,8 @@ class EnglishAnalysisService:
 {lang_name}訳のみを出力してください（説明不要）。"""
 
         try:
-            response = client.models.generate_content(
-                model=self.model,
-                contents=prompt,
-            )
-            # ログ: トークン使用量 (Context Translation)
-            log_gemini_token_usage(response, "ContextTrans")
-            translation = (response.text or "").strip()
+            translation = await self.ai_provider.generate(prompt, model=self.translate_model)
+            translation = translation.strip()
 
             # キャッシュに保存
             self.translation_cache[word] = translation

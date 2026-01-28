@@ -4,6 +4,7 @@
 """
 
 import json
+import os
 
 from src.logger import logger
 from src.providers import get_ai_provider
@@ -20,6 +21,7 @@ class SummaryService:
 
     def __init__(self):
         self.ai_provider = get_ai_provider()
+        self.model = os.getenv("MODEL_SUMMARY", "gemini-2.0-flash")
 
     async def summarize_full(self, text: str, target_lang: str = "ja") -> str:
         """
@@ -61,7 +63,7 @@ class SummaryService:
                 "Generating full summary",
                 extra={"text_length": len(text)},
             )
-            summary = await self.ai_provider.generate(prompt)
+            summary = await self.ai_provider.generate(prompt, model=self.model)
             summary = summary.strip()
 
             if not summary:
@@ -115,7 +117,7 @@ JSONのみを出力してください。"""
                 "Generating section summary",
                 extra={"text_length": len(text)},
             )
-            response = await self.ai_provider.generate(prompt)
+            response = await self.ai_provider.generate(prompt, model=self.model)
             # Parse JSON response
             response = response.strip()
             if response.startswith("```"):
@@ -172,7 +174,7 @@ JSONのみを出力してください。"""
 簡潔で学術的な文体で書いてください。"""
 
         try:
-            abstract = await self.ai_provider.generate(prompt)
+            abstract = await self.ai_provider.generate(prompt, model=self.model)
             logger.info("Abstract summary generated")
             return abstract
         except Exception as e:

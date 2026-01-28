@@ -3,6 +3,8 @@ AIチャットアシスタント機能を提供するモジュール
 論文の内容に基づいて質問に回答する
 """
 
+import os
+
 from src.logger import logger
 from src.providers import get_ai_provider
 
@@ -18,6 +20,7 @@ class ChatService:
 
     def __init__(self):
         self.ai_provider = get_ai_provider()
+        self.model = os.getenv("MODEL_CHAT", "gemini-2.0-flash")
         self.history: list[dict] = []
 
     async def chat(
@@ -64,7 +67,9 @@ class ChatService:
                 "Processing chat request",
                 extra={"message_length": len(user_message), "history_size": len(self.history)},
             )
-            response = await self.ai_provider.generate(prompt, context=history_str)
+            response = await self.ai_provider.generate(
+                prompt, context=history_str, model=self.model
+            )
             response = response.strip()
 
             if not response:
@@ -127,7 +132,7 @@ class ChatService:
                 "Generating author agent response",
                 extra={"question_length": len(question), "paper_length": len(paper_text)},
             )
-            response = await self.ai_provider.generate(prompt)
+            response = await self.ai_provider.generate(prompt, model=self.model)
             response = response.strip()
 
             if not response:
