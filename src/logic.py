@@ -208,23 +208,62 @@ Text Sample:
                     logger.info(f"[Layout] Extracted {len(words)} words from page {page_num + 1}")
 
                 else:
-                    # テキストがない場合はGeminiでOCR (座標なし)
-                    logger.info(f"[OCR] No text found on page {page_num + 1}, using Gemini")
-                    single_page_pdf = fitz.open()
-                    single_page_pdf.insert_pdf(pdf_doc, from_page=page_num, to_page=page_num)
-                    page_bytes = single_page_pdf.tobytes()
-                    single_page_pdf.close()
+                    # テキストがない場合はまずVision API (Document OCR) を試行 (座標取得のため)
+                    logger.info(
+                        f"[OCR] No text found on page {page_num + 1}, trying Cloud Vision API"
+                    )
+                    layout_data = None
+                    page_text = ""
 
                     try:
-                        prompt = "Transcribe the text from this PDF page preserving the structure as much as possible."
-                        page_text = await self.ai_provider.generate_with_pdf(
-                            prompt, page_bytes, model=self.model
-                        )
-                    except Exception as e:
-                        logger.error(f"OCR failed for page {page_num + 1}: {e}")
-                        page_text = ""
+                        # Lazy import or initialization to avoid overhead if not used
+                        from .providers.vision_ocr import VisionOCRService
 
-                    layout_data = None  # OCRの場合は座標なし
+                        vision_service = VisionOCRService()
+
+                        if vision_service.is_available():
+                            # Pixmapのバイトデータ (PNG) をそのまま送信
+                            page_text, v_layout = await vision_service.detect_text_with_layout(
+                                img_bytes
+                            )
+
+                            if v_layout and v_layout["words"]:
+                                logger.info(
+                                    f"[Vision OCR] Success: {len(v_layout['words'])} words detected"
+                                )
+                                # Vision APIのwidth/heightが入っているが、一応pixのサイズで上書きまたは確認してもよい
+                                # ここではpix (生成元) のサイズを正とする
+                                v_layout["width"] = img_width
+                                v_layout["height"] = img_height
+                                layout_data = v_layout
+                            else:
+                                logger.warning(
+                                    f"[Vision OCR] No text detected or failed. Text length: {len(page_text)}"
+                                )
+                        else:
+                            logger.warning("[Vision OCR] Client not available (cred missing?)")
+
+                    except Exception as e:
+                        logger.error(f"[Vision OCR] Failed: {e}")
+
+                    # Vision APIで失敗した場合、または設定されていない場合はGeminiにフォールバック (座標なし)
+                    if not page_text:
+                        logger.info(f"[OCR] Falling back to Gemini for page {page_num + 1}")
+                        single_page_pdf = fitz.open()
+                        single_page_pdf.insert_pdf(pdf_doc, from_page=page_num, to_page=page_num)
+                        page_bytes = single_page_pdf.tobytes()
+                        single_page_pdf.close()
+
+                        try:
+                            prompt = "Transcribe the text from this PDF page preserving the structure as much as possible."
+                            page_text = await self.ai_provider.generate_with_pdf(
+                                prompt, page_bytes, model=self.model
+                            )
+                        except Exception as e:
+                            logger.error(f"Gemini OCR failed for page {page_num + 1}: {e}")
+                            page_text = ""
+
+                        layout_data = None  # Geminiの場合は座標なし
 
                 all_text_parts.append(page_text)
                 is_last = page_num == total_pages - 1
@@ -236,7 +275,7 @@ Text Sample:
                     is_last,
                     file_hash,
                     image_url,
-                    layout_data,  # List[dict] including image dimensions could be useful
+                    layout_data,
                 )
 
             pdf_doc.close()
@@ -253,7 +292,7 @@ Text Sample:
 
         except Exception as e:
             logger.error(f"OCR streaming failed: {e}")
-            yield (0, 0, f"ERROR_API_FAILED: {str(e)}", True, file_hash)
+            yield (0, 0, f"ERROR_API_FAILED: {str(e)}", True, file_hash, None, None)
 
 
 class EnglishAnalysisService:
