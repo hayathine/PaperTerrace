@@ -36,3 +36,19 @@ tasks:
     desc: "Run local server"
     cmds:
       - gcloud beta run services logs tail paperterrace
+
+  get_iam:
+    desc: "Get IAM policy"
+    cmds:
+      - gcloud run services get-iam-policy paperterrace
+
+  add_all_users:
+    desc: "Add auth"
+    cmds:
+      - gcloud run services add-iam-policy-binding paperterrace --member="allUsers" --role="roles/run.invoker"
+
+
+  remove_all_users:
+    desc: "Remove IAM policy"
+    cmds:
+      - gcloud run services remove-iam-policy-binding paperterrace --member="allUsers" --role="roles/run.invoker"
