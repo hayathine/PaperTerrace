@@ -8,7 +8,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
-from fastapi.responses import HTMLResponse, Response, StreamingResponse
+from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from ..logger import logger
 from ..logic import EnglishAnalysisService
@@ -23,122 +23,89 @@ storage = get_storage_provider()
 redis_service = RedisService()
 
 
-@router.post("/analyze_txt")
-async def analyze_txt(html_text: str = Form(...), lang: str = Form("ja")):
-    task_id = str(uuid.uuid4())
-    redis_service.set(
-        f"task:{task_id}", {"text": html_text, "paper_id": None, "lang": lang}, expire=3600
-    )
-    return HTMLResponse(
-        f'<div id="paper-content" class="fade-in"></div>'
-        f'<div id="sse-container-{task_id}" hx-ext="sse" sse-connect="/stream/{task_id}" '
-        f'sse-swap="message" hx-swap="beforeend"></div>'
-    )
-
-
-@router.post("/analyze-pdf")
-async def analyze_pdf(
+@router.post("/analyze-pdf-json")
+async def analyze_pdf_json(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     session_id: Optional[str] = Form(None),
     lang: str = Form("ja"),
 ):
-    # ファイル名がない、またはサイズが0の場合はエラーを返す
+    """
+    JSON version of analyze-pdf for React frontend.
+    Returns { "task_id": "...", "stream_url": "/stream/..." }
+    """
     if not file.filename or file.size == 0:
-
-        async def error_stream():
-            yield (
-                "data: <div class='p-6 bg-amber-50 border-2 border-amber-200 "
-                "rounded-2xl text-amber-700 animate-fade-in'>"
-                "<h3 class='font-bold mb-2'>⚠️ ファイルが未選択です</h3>"
-                "<p class='text-xs opacity-80'>解析するPDFファイルをアップロードしてください。</p>"
-                "</div>\n\n"
-            )
-
-        return StreamingResponse(error_stream(), media_type="text/event-stream")
+        return JSONResponse({"error": "No file provided"}, status_code=400)
 
     import time
 
     start_time = time.time()
-    logger.info(f"[analyze-pdf] START: {file.filename} ({file.size} bytes)")
+    logger.info(f"[analyze-pdf-json] START: {file.filename} ({file.size} bytes)")
 
     content = await file.read()
     file_hash = _get_file_hash(content)
-    logger.info(f"[analyze-pdf] File hash computed: {file_hash[:16]}...")
 
     # Detect PDF language
     detected_lang = await service.ocr_service.detect_language_from_pdf(content)
     if detected_lang:
-        logger.info(f"[analyze-pdf] Auto-detected language override: {lang} -> {detected_lang}")
         lang = detected_lang
 
     # Check for cached paper
     cached_paper = storage.get_paper_by_hash(file_hash)
+    raw_text = None
+    paper_id = "pending"
+    import base64
+
+    pdf_b64 = None
+
     if cached_paper:
         paper_id = cached_paper["paper_id"]
-        logger.info(f"[analyze-pdf] Cache HIT: paper_id={paper_id}")
-        # HTMLコンテンツがあればそれを使用
+        logger.info(f"[analyze-pdf-json] Cache HIT: paper_id={paper_id}")
         if cached_paper.get("html_content"):
             raw_text = "CACHED_HTML:" + cached_paper["html_content"]
-            logger.info(f"[analyze-pdf] Using cached HTML for paper: {paper_id}")
         else:
             raw_text = cached_paper["ocr_text"]
-            logger.info(f"[analyze-pdf] Using cached OCR text for paper: {paper_id}")
-
-        # Store context for session
-        if session_id:
-            context_text = raw_text[12:] if raw_text.startswith("CACHED_HTML:") else raw_text
-            redis_service.set(f"session:{session_id}", context_text, expire=86400)
     else:
-        # OCR未処理：PDFデータをRedisに保存し、streamで処理
-        logger.info(f"[analyze-pdf] Cache MISS: Deferring OCR to stream for {file.filename}")
-        import base64
-
+        logger.info("[analyze-pdf-json] Cache MISS: Deferring OCR to stream")
         pdf_b64 = base64.b64encode(content).decode("utf-8")
-        raw_text = None  # ストリームでOCR処理する
-        paper_id = "pending"  # ストリーム内で設定される
+        # raw_text remains None
 
-    # 正常な場合はIDを発行してストリームへ
     task_id = str(uuid.uuid4())
 
+    task_data = {
+        "format": "json",  # Flag for JSON streaming
+        "lang": lang,
+        "session_id": session_id,
+        "filename": file.filename,
+        "file_hash": file_hash,
+    }
+
     if raw_text is None:
-        # OCR未処理：PDFデータを保存
-        redis_service.set(
-            f"task:{task_id}",
+        task_data.update(
             {
                 "pending_ocr": True,
                 "pdf_b64": pdf_b64,
-                "file_hash": file_hash,
-                "filename": file.filename,
-                "session_id": session_id,
-                "lang": lang,
-            },
-            expire=3600,
+            }
         )
     else:
-        # キャッシュヒット：テキストを保存
-        redis_service.set(
-            f"task:{task_id}", {"text": raw_text, "paper_id": paper_id, "lang": lang}, expire=3600
+        task_data.update(
+            {
+                "text": raw_text,
+                "paper_id": paper_id,
+            }
         )
 
-    total_elapsed = time.time() - start_time
-    logger.info(
-        f"[analyze-pdf] Task created: {task_id}, paper_id={paper_id}, total time: {total_elapsed:.2f}s"
-    )
-    logger.info(
-        f"[analyze-pdf] END: Returning SSE container, stream will start at /stream/{task_id}"
-    )
+    redis_service.set(f"task:{task_id}", task_data, expire=3600)
 
-    # コンテナにIDを付与して、後で置換できるようにする
-    return HTMLResponse(
-        f'<div id="paper-content" class="fade-in"></div>'
-        f'<div id="sse-container-{task_id}" hx-ext="sse" sse-connect="/stream/{task_id}" '
-        f'sse-swap="message" hx-swap="beforeend" data-paper-id="{paper_id}"></div>'
-    )
+    total_elapsed = time.time() - start_time
+    logger.info(f"[analyze-pdf-json] Task created: {task_id}, elapsed: {total_elapsed:.2f}s")
+
+    return JSONResponse({"task_id": task_id, "stream_url": f"/stream/{task_id}"})
 
 
 @router.get("/stream/{task_id}")
 async def stream(task_id: str):
+    import json
     import time
 
     stream_start = time.time()
@@ -146,15 +113,103 @@ async def stream(task_id: str):
 
     data = redis_service.get(f"task:{task_id}")
 
-    # タスクが存在しない場合は HTTP 204 No Content を返す
+    # Task not found
     if not data:
-        logger.warning(f"[stream] Task not found: {task_id}")
         return Response(status_code=204)
 
-    # Redisから取得したデータは辞書型になっているはず
+    is_json = data.get("format") == "json"
     text = data.get("text", "")
     paper_id = data.get("paper_id")
     lang = data.get("lang", "ja")
+
+    # --- JSON STREAMING HANDLER ---
+    if is_json:
+
+        async def json_generate():
+            if data.get("pending_ocr"):
+                import base64
+
+                import uuid6
+
+                pdf_b64 = data.get("pdf_b64", "")
+                filename = data.get("filename", "unknown.pdf")
+                file_hash = data.get("file_hash", "")
+                pdf_content = base64.b64decode(pdf_b64)
+
+                full_text_fragments = []
+
+                async for (
+                    page_num,
+                    total_pages,
+                    page_text,
+                    is_last,
+                    f_hash,
+                    page_image_url,
+                    layout_data,
+                ) in service.ocr_service.extract_text_streaming(pdf_content, filename):
+                    if page_text.startswith("ERROR_API_FAILED:"):
+                        error_msg = page_text.replace("ERROR_API_FAILED: ", "")
+                        yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                        yield "event: close\ndata: done\n\n"
+                        return
+
+                    full_text_fragments.append(page_text)
+
+                    # Prepare Page Data
+                    page_payload = {
+                        "page_num": page_num,
+                        "image_url": page_image_url,
+                        "width": 0,
+                        "height": 0,
+                        "words": [],
+                    }
+
+                    if layout_data:
+                        page_payload["width"] = layout_data["width"]
+                        page_payload["height"] = layout_data["height"]
+                        # Convert words to frontend format if needed, or pass as is
+                        # Backend layout_data['words'] has {bbox, word}
+                        page_payload["words"] = layout_data["words"]
+
+                    yield f"data: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
+
+                # End of OCR
+                full_text = "\n\n---\n\n".join(full_text_fragments)
+                new_paper_id = str(uuid6.uuid7())
+
+                # Save to DB (Background or here)
+                try:
+                    storage.save_paper(
+                        paper_id=new_paper_id,
+                        file_hash=file_hash,
+                        filename=filename,
+                        ocr_text=full_text,
+                        html_content="",
+                        target_language="ja",
+                    )
+                except Exception as e:
+                    logger.error(f"Failed to save paper: {e}")
+
+                yield f"data: {json.dumps({'type': 'done', 'paper_id': new_paper_id})}\n\n"
+
+            else:
+                # Cached content
+                # For JSON mode, if cached, we might need to recreate pages from cached HTML?
+                # OR we just say "It's cached" and providing the text.
+                # But looking at PDF.js interactive mode, we need IMAGES.
+                # If we only have TEXT cached, we can't show the "Interactive PDF" view unless we stored the images/layout too.
+                # The current caching implementation seems to store `html_content` OR `ocr_text`.
+                # If we don't have layout data cached, we CANNOT recreate the interactive view.
+                # Use current limited logic: if cached, just return done with paper_id.
+                # The frontend might just support "text view" for cached items if images aren't available.
+
+                yield f"data: {json.dumps({'type': 'done', 'paper_id': paper_id, 'cached': True})}\n\n"
+
+            redis_service.delete(f"task:{task_id}")
+
+        return StreamingResponse(json_generate(), media_type="text/event-stream")
+
+    # --- LEGACY HTML STREAMING HANDLER (Original Code) ---
     logger.info(
         f"[stream] Task data retrieved: paper_id={paper_id}, text_length={len(text)}, lang={lang}"
     )
