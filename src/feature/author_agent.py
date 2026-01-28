@@ -25,7 +25,7 @@ class AuthorAgentService:
         # 1. Consensus APIを使って著者の情報を検索
         author_data = await self.research_service.get_author_profile_and_papers(author_name)
 
-        profile = author_data.get("profile", {})
+        _ = author_data.get("profile", {})
         papers = author_data.get("papers", [])
 
         # 論文リストがなければ、シミュレーション用に空リストで進める

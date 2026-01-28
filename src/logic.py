@@ -286,8 +286,25 @@ class EnglishAnalysisService:
             html_content = "".join(p_tokens_html)
             all_html_parts[unique_id] = html_content
 
+            # Wrapper with explain button
+            explain_btn = (
+                '<div class="absolute -right-12 top-0 hidden group-hover:flex flex-col gap-1 items-start z-10 pl-2">'
+                '<button onclick="explainParagraph(this)" title="Explain Paragraph" '
+                'class="p-2 bg-white text-indigo-600 rounded-full shadow-lg border border-indigo-100 hover:bg-indigo-50 hover:scale-110 transition-all">'
+                '<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">'
+                '<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />'
+                "</svg></button></div>"
+            )
+
+            wrapped_html = (
+                f'<div class="group relative paragraph-container mb-6 pr-4" hx-swap-oob="beforeend:#{target_id}">'
+                f"{explain_btn}"
+                f'<p id="{unique_id}" class="text-base leading-relaxed text-slate-700 text-justify">{html_content}</p>'
+                f"</div>"
+            )
+
             # 即座にクリック可能なHTMLを表示
-            yield f'event: message\ndata: <p id="{unique_id}" class="mb-6 text-base leading-relaxed text-slate-700" hx-swap-oob="beforeend:#{target_id}">{html_content}</p>\n\n'
+            yield f"event: message\ndata: {wrapped_html}\n\n"
 
         # 保存用に完全なHTMLを構築して保存
         if paper_id and save_to_db:

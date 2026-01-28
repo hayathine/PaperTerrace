@@ -386,6 +386,70 @@
     dropdown.classList.toggle('active');
   }
 
+  // Paragraph Explanation functionality
+  async function explainParagraph(btn) {
+    const container = btn.closest('.paragraph-container');
+    const pTag = container.querySelector('p');
+    // textContentで生のテキストを取得（HTMLタグ除去）
+    const text = pTag.textContent.trim();
+    if (!text) return;
+
+    switchTab('dict');
+    const outputBox = document.getElementById("definition-box");
+    const emptyState = document.getElementById('dict-empty-state');
+    if (emptyState) emptyState.remove();
+
+    // 一時的なローディングカードを追加
+    const loadingId = "loading-" + Date.now();
+    const loadingHtml = `
+      <div id="${loadingId}" class="p-4 bg-indigo-50 border border-indigo-100 rounded-xl shadow-sm animate-pulse">
+        <div class="flex items-center gap-2 mb-2">
+            <svg class="w-4 h-4 text-indigo-400 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <span class="text-xs font-bold text-indigo-500">Analyzing Paragraph...</span>
+        </div>
+        <p class="text-[10px] text-indigo-300 line-clamp-2">${text}</p>
+      </div>`;
+    outputBox.insertAdjacentHTML('afterbegin', loadingHtml);
+
+    try {
+      const formData = new FormData();
+      formData.append("paragraph", text);
+      formData.append("session_id", sessionId);
+
+      const response = await fetch("/explain-paragraph", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+      
+      // ローディング削除
+      document.getElementById(loadingId)?.remove();
+
+      if (data.explanation) {
+        const resultHtml = `
+          <div class="dict-card p-4 bg-white border border-slate-100 rounded-xl shadow-sm animate-fade-in group hover:shadow-md transition-all">
+            <div class="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-slate-50">
+                <div class="flex items-center gap-2">
+                    <span class="p-1 bg-indigo-100 text-indigo-600 rounded-md"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg></span>
+                    <span class="text-xs font-bold text-slate-700">Paragraph Insight</span>
+                </div>
+                <button onclick="this.closest('.dict-card').remove()" class="text-slate-300 hover:text-slate-500">×</button>
+            </div>
+            <div class="prose prose-sm prose-slate max-w-none text-xs leading-relaxed">
+                ${data.explanation.replace(/\*\*(.*?)\*\*/g, '<strong class="text-indigo-600">$1</strong>').replace(/\n/g, '<br>')}
+            </div>
+          </div>
+        `;
+        outputBox.insertAdjacentHTML('afterbegin', resultHtml);
+      } else {
+         // エラー表示など
+      }
+    } catch (error) {
+      document.getElementById(loadingId)?.remove();
+      console.error("Paragraph explanation failed:", error);
+    }
+  }
+
   // Close dropdown when clicking outside
   document.addEventListener('click', (e) => {
     const userMenu = document.getElementById('user-menu');

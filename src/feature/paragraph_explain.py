@@ -2,6 +2,8 @@
 パラグラフ単位で詳細な説明を生成する機能を提供するモジュール
 """
 
+import os
+
 from src.logger import logger
 from src.providers import get_ai_provider
 
@@ -17,6 +19,7 @@ class ParagraphExplainService:
 
     def __init__(self):
         self.ai_provider = get_ai_provider()
+        self.model = os.getenv("MODEL_PARAGRAPH", "gemini-2.0-flash")
 
     async def explain(self, paragraph: str, full_context: str = "") -> str:
         """
@@ -55,7 +58,7 @@ class ParagraphExplainService:
                 "Generating paragraph explanation",
                 extra={"paragraph_length": len(paragraph)},
             )
-            explanation = await self.ai_provider.generate(prompt)
+            explanation = await self.ai_provider.generate(prompt, model=self.model)
             explanation = explanation.strip()
 
             if not explanation:
@@ -108,7 +111,7 @@ class ParagraphExplainService:
 最大10件まで。JSONのみを出力してください。"""
 
         try:
-            response = await self.ai_provider.generate(prompt)
+            response = await self.ai_provider.generate(prompt, model=self.model)
             import json
 
             response = response.strip()
