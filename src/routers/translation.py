@@ -9,7 +9,7 @@ from fastapi import APIRouter
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
-from ..feature import TranslationService
+from ..features import TranslationService
 from ..logger import logger
 from ..logic import EnglishAnalysisService, _lookup_word_full, executor
 
@@ -53,10 +53,19 @@ async def explain(lemma: str, lang: str = "ja"):
             "Error": "bg-gray-100 text-gray-600",
         }
         source_style = source_colors.get(source, "bg-gray-100 text-gray-600")
-        return f"""<div class="dict-card p-4 {bg_class} border {border_class} rounded-xl shadow-sm animate-fade-in">
+        # 脱出処理を追加（シングルクォートなど）
+        safe_word = word.replace("'", "\\'")
+        safe_trans = translation.replace("'", "\\'").replace("\n", " ")
+
+        return f"""<div class="dict-card p-4 {bg_class} border {border_class} rounded-xl shadow-sm animate-fade-in group hover:shadow-md transition-all">
             <div class="flex items-start justify-between gap-2 mb-2">
                 <span class="text-sm font-bold text-slate-700">{word}</span>
-                <span class="text-[9px] font-medium px-2 py-0.5 rounded-full {source_style}">{source}</span>
+                <div class="flex items-center gap-1.5">
+                    <button onclick="saveWordToNote('{safe_word}', '{safe_trans}')" title="Save to Note" class="p-1 text-slate-400 hover:text-indigo-600 hover:bg-white rounded transition-all opacity-0 group-hover:opacity-100">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                    </button>
+                    <span class="text-[9px] font-medium px-2 py-0.5 rounded-full {source_style}">{source}</span>
+                </div>
             </div>
             <p class="text-sm text-slate-600 leading-relaxed">{translation}</p>
         </div>
@@ -95,7 +104,7 @@ async def explain(lemma: str, lang: str = "ja"):
     try:
         import os
 
-        from ..feature.translate import SUPPORTED_LANGUAGES
+        from ..features.translate import SUPPORTED_LANGUAGES
         from ..providers import get_ai_provider
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)

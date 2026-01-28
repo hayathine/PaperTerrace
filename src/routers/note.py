@@ -7,7 +7,7 @@ from fastapi import APIRouter, Form
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from ..feature import SidebarNoteService
+from ..features import SidebarNoteService
 
 router = APIRouter(tags=["Notes"])
 
