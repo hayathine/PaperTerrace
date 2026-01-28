@@ -1,13 +1,26 @@
-"""
-Claim Verification Agent Module.
-Autonomous agent that verifies claims made in papers against external evidence from the web.
-"""
-
-import json
 import os
+from typing import List
+
+from pydantic import BaseModel, Field
 
 from src.logger import logger
 from src.providers import get_ai_provider
+
+
+class ClaimVerificationResponse(BaseModel):
+    """結果報告のための構造化データモデル"""
+
+    status: str = Field(..., description="warning | verified | neutral")
+    summary: str = Field(
+        ..., description="Short summary of the verification result (max 100 chars)."
+    )
+    details: str = Field(
+        ...,
+        description="Detailed report citing sources found during search. Mention if reproducible or accepted, or highlight doubts.",
+    )
+    sources: List[str] = Field(
+        default_factory=list, description="List of URL or source names found"
+    )
 
 
 class ClaimVerificationService:
@@ -20,13 +33,6 @@ class ClaimVerificationService:
     async def verify_paragraph(self, paragraph: str, lang: str = "ja") -> dict:
         """
         Verify claims in a paragraph using Web Search.
-
-        Args:
-            paragraph: The text to verify.
-            lang: Target language for the report.
-
-        Returns:
-            Dictionary with 'status' (verified/warning/info) and 'report'.
         """
         from .translate import SUPPORTED_LANGUAGES
 
@@ -45,33 +51,19 @@ Your task is to critically verify the claims made in the following text by cross
    - Contradictory papers (Google Scholar).
    - Consensus in the community.
 3. Report your findings in {lang_name}.
-
-[Output Format]
-Return a JSON object with the following structure:
-{{
-  "status": "warning" | "verified" | "neutral",
-  "summary": "Short summary of the verification result (max 100 chars).",
-  "details": "Detailed report citing sources found during search. If reproducible or accepted, mention that. If there are doubts, highlight them clearly.",
-  "sources": ["List of URL or source names found (optional)"]
-}}
-
-Only output valid JSON.
 """
         try:
             logger.info(f"Verifying paragraph claims with model: {self.model}")
 
-            # Call AI with search enabled
-            response = await self.ai_provider.generate(prompt, model=self.model, enable_search=True)
+            # Call AI with search enabled and structured output
+            data: ClaimVerificationResponse = await self.ai_provider.generate(
+                prompt,
+                model=self.model,
+                enable_search=True,
+                response_model=ClaimVerificationResponse,
+            )
 
-            # Parse JSON
-            response = response.strip()
-            if response.startswith("```"):
-                response = response.split("```")[1]
-                if response.startswith("json"):
-                    response = response[4:]
-
-            data = json.loads(response)
-            return data
+            return data.model_dump()
 
         except Exception as e:
             logger.error(f"Claim verification failed: {e}")

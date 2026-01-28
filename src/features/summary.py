@@ -1,13 +1,32 @@
-"""
-スマート要約機能を提供するモジュール
-論文全体、セクション別、アブストラクト形式の要約を生成
-"""
-
-import json
 import os
+from typing import List
+
+from pydantic import BaseModel, Field
 
 from src.logger import logger
 from src.providers import get_ai_provider
+
+
+class FullSummaryResponse(BaseModel):
+    """論文全体の要約結果モデル"""
+
+    overview: str = Field(..., description="1-2 sentences summarizing the main theme")
+    key_contributions: List[str] = Field(..., description="3-5 bullet points of contributions")
+    methodology: str = Field(..., description="Concise explanation of methods used")
+    conclusion: str = Field(..., description="Key findings and implications")
+
+
+class SectionSummary(BaseModel):
+    """セクション別の要約モデル"""
+
+    section: str = Field(..., description="Section title")
+    summary: str = Field(..., description="2-3 sentences summary")
+
+
+class SectionSummariesResponse(BaseModel):
+    """セクション別要約のリストモデル"""
+
+    sections: List[SectionSummary]
 
 
 class SummaryError(Exception):
@@ -63,20 +82,25 @@ Format the summary as follows in {lang_name}:
                 "Generating full summary",
                 extra={"text_length": len(text)},
             )
-            summary = await self.ai_provider.generate(prompt, model=self.model)
-            summary = summary.strip()
+            analysis: FullSummaryResponse = await self.ai_provider.generate(
+                prompt, model=self.model, response_model=FullSummaryResponse
+            )
 
-            if not summary:
-                logger.warning("Empty summary result")
-                raise SummaryError("Empty summary result")
+            # 整形された文字列として返す（後方互換性のため）
+            result_lines = [
+                f"## Overview\n{analysis.overview}",
+                "\n## Key Contributions",
+                *[f"- {item}" for item in analysis.key_contributions],
+                f"\n## Methodology\n{analysis.methodology}",
+                f"\n## Conclusion\n{analysis.conclusion}",
+            ]
+            formatted_text = "\n".join(result_lines)
 
             logger.info(
                 "Full summary generated",
-                extra={"input_length": len(text), "output_length": len(summary)},
+                extra={"input_length": len(text), "output_length": len(formatted_text)},
             )
-            return summary
-        except SummaryError:
-            raise
+            return formatted_text
         except Exception as e:
             logger.exception(
                 "Full summary generation failed",
@@ -118,33 +142,15 @@ Output ONLY valid JSON.
                 "Generating section summary",
                 extra={"text_length": len(text)},
             )
-            response = await self.ai_provider.generate(prompt, model=self.model)
-            # Parse JSON response
-            response = response.strip()
-            if response.startswith("```"):
-                response = response.split("```")[1]
-                if response.startswith("json"):
-                    response = response[4:]
-
-            sections = json.loads(response)
-
-            if not sections:
-                logger.warning("Empty section summary result")
-                raise SummaryError("No sections found")
+            response: SectionSummariesResponse = await self.ai_provider.generate(
+                prompt, model=self.model, response_model=SectionSummariesResponse
+            )
 
             logger.info(
                 "Section summary generated",
-                extra={"section_count": len(sections)},
+                extra={"section_count": len(response.sections)},
             )
-            return sections
-        except json.JSONDecodeError as e:
-            logger.exception(
-                "Failed to parse section summary JSON",
-                extra={"error": str(e)},
-            )
-            return [{"section": "Error", "summary": "セクション要約の解析に失敗しました"}]
-        except SummaryError:
-            raise
+            return [s.model_dump() for s in response.sections]
         except Exception as e:
             logger.exception(
                 "Section summary failed",

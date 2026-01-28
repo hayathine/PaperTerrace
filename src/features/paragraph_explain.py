@@ -3,9 +3,35 @@
 """
 
 import os
+from typing import List
+
+from pydantic import BaseModel, Field
 
 from src.logger import logger
 from src.providers import get_ai_provider
+
+
+class ParagraphExplanationResponse(BaseModel):
+    """段落の解説結果モデル"""
+
+    main_claim: str = Field(..., description="The core argument or content")
+    background_knowledge: str = Field(..., description="Prerequisites or technical terms")
+    logic_flow: str = Field(..., description="How the argument or logic is developed")
+    key_points: List[str] = Field(..., description="Important implications or notes")
+
+
+class TermExplanation(BaseModel):
+    """専門用語の解説モデル"""
+
+    term: str = Field(..., description="Technical term")
+    explanation: str = Field(..., description="Concise explanation")
+    importance: str = Field(..., description="high/medium/low")
+
+
+class TerminologyResponse(BaseModel):
+    """用語解説のリストモデル"""
+
+    terms: List[TermExplanation] = Field(..., max_length=10)
 
 
 class ParagraphExplainError(Exception):
@@ -65,20 +91,25 @@ Ensure the output is in {lang_name}.
                 "Generating paragraph explanation",
                 extra={"paragraph_length": len(paragraph)},
             )
-            explanation = await self.ai_provider.generate(prompt, model=self.model)
-            explanation = explanation.strip()
+            analysis: ParagraphExplanationResponse = await self.ai_provider.generate(
+                prompt, model=self.model, response_model=ParagraphExplanationResponse
+            )
 
-            if not explanation:
-                logger.warning("Empty paragraph explanation result")
-                raise ParagraphExplainError("Empty explanation result")
+            # 整形された文字列として返す（後方互換性のため）
+            result_lines = [
+                f"### Main Claim\n{analysis.main_claim}",
+                f"\n### Background Knowledge\n{analysis.background_knowledge}",
+                f"\n### Logic Flow\n{analysis.logic_flow}",
+                "\n### Key Points",
+                *[f"- {item}" for item in analysis.key_points],
+            ]
+            formatted_text = "\n".join(result_lines)
 
             logger.info(
                 "Paragraph explanation generated",
-                extra={"input_length": len(paragraph), "output_length": len(explanation)},
+                extra={"input_length": len(paragraph), "output_length": len(formatted_text)},
             )
-            return explanation
-        except ParagraphExplainError:
-            raise
+            return formatted_text
         except Exception as e:
             logger.exception(
                 "Paragraph explanation failed",
@@ -125,17 +156,11 @@ Limit to at most 10 terms. Output JSON only.
 """
 
         try:
-            response = await self.ai_provider.generate(prompt, model=self.model)
-            import json
-
-            response = response.strip()
-            if response.startswith("```"):
-                response = response.split("```")[1]
-                if response.startswith("json"):
-                    response = response[4:]
-            terms_explained = json.loads(response)
-            logger.info(f"Explained {len(terms_explained)} terms")
-            return terms_explained
+            response: TerminologyResponse = await self.ai_provider.generate(
+                prompt, model=self.model, response_model=TerminologyResponse
+            )
+            logger.info(f"Explained {len(response.terms)} terms")
+            return [t.model_dump() for t in response.terms]
         except Exception as e:
             logger.error(f"Terminology explanation failed: {e}")
             return []

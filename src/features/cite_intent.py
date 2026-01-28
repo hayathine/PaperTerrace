@@ -1,14 +1,27 @@
-"""
-引用理由の可視化 (Citation Intent Visualization)
-論文中の引用がどのような意図（支持、利用、比較、批判など）で行われているかを分析します。
-"""
-
-import json
 import os
 from typing import Any, Dict, List
 
+from pydantic import BaseModel, Field
+
 from src.logger import logger
 from src.providers import get_ai_provider
+
+
+class CitationIntent(BaseModel):
+    """段落内の個別の引用の分析結果"""
+
+    citation: str = Field(..., description="The citation string as it appears in the text")
+    intent: str = Field(
+        ...,
+        description="Support | Use | Contrast | Criticize | Neutral",
+    )
+    reason: str = Field(..., description="1-sentence reason for classification in target language")
+
+
+class CitationAnalysisResponse(BaseModel):
+    """引用意図分析の全体レスポンス"""
+
+    citations: List[CitationIntent]
 
 
 class CiteIntentService:
@@ -62,13 +75,6 @@ class CiteIntentService:
     ) -> List[Dict[str, Any]]:
         """
         段落内の引用を特定し、その意図を分類して詳細情報を付与する。
-
-        Args:
-            paragraph: 分析対象の段落テキスト
-            lang: 出力言語 (デフォルト: 日本語)
-
-        Returns:
-            各引用の分析結果リスト
         """
         from .translate import SUPPORTED_LANGUAGES
 
@@ -90,34 +96,19 @@ class CiteIntentService:
 1. Identify the citation strings (e.g., [1], Author et al. (2020), etc.) from the text.
 2. Select the most appropriate category from the 5 categories above.
 3. Write a brief reason for the classification in {lang_name}.
-
-[Output Format]
-Output ONLY a JSON list of objects with the following structure:
-[
-  {{
-    "citation": "the citation string as it appears in the text",
-    "intent": "Support | Use | Contrast | Criticize | Neutral",
-    "reason": "1-sentence reason for classification in {lang_name}"
-  }}
-]
 """
         try:
             logger.info(f"Analyzing citation intent for paragraph with model: {self.model}")
-            response = await self.ai_provider.generate(prompt, model=self.model)
 
-            # Markdownコードブロックの除去
-            clean_res = response.strip()
-            if clean_res.startswith("```"):
-                clean_res = clean_res.split("```")[1]
-                if clean_res.startswith("json"):
-                    clean_res = clean_res[4:]
-
-            results = json.loads(clean_res)
+            # 使用するモデルを指定して構造化出力を依頼
+            analysis: CitationAnalysisResponse = await self.ai_provider.generate(
+                prompt, model=self.model, response_model=CitationAnalysisResponse
+            )
 
             # メタデータのマージ
             enriched_results = []
-            for item in results:
-                intent = item.get("intent", "Neutral")
+            for item in analysis.citations:
+                intent = item.intent
                 # 不適切なインテント名が返ってきた場合のガード
                 if intent not in self.INTENT_MAP:
                     intent = "Neutral"
@@ -125,23 +116,20 @@ Output ONLY a JSON list of objects with the following structure:
                 meta = self.INTENT_MAP[intent]
                 enriched_results.append(
                     {
-                        "citation": item.get("citation"),
+                        "citation": item.citation,
                         "intent": intent,
                         "label": meta["label"],
                         "icon": meta["icon"],
                         "color": meta["color"],
                         "bg": meta["bg"],
                         "border": meta["border"],
-                        "reason": item.get("reason"),
+                        "reason": item.reason,
                     }
                 )
 
             logger.info(f"Successfully analyzed {len(enriched_results)} citations.")
             return enriched_results
 
-        except json.JSONDecodeError as e:
-            logger.error(f"Failed to parse citation intent JSON: {e}")
-            return []
         except Exception as e:
             logger.exception(f"Unexpected error in citation intent analysis: {e}")
             return []

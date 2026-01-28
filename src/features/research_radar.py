@@ -3,14 +3,30 @@
 Consensus APIを利用して論文検索や著者検索を行います。
 """
 
-import json
 import os
 from typing import Any, Dict, List
 
 import httpx
+from pydantic import BaseModel, Field
 
 from src.logger import logger
 from src.providers import get_ai_provider
+
+
+class SimulatedPaper(BaseModel):
+    title: str
+    authors: List[str]
+    year: int
+    abstract: str
+    url: str
+
+
+class SimulatedSearchResponse(BaseModel):
+    papers: List[SimulatedPaper]
+
+
+class SearchQueriesResponse(BaseModel):
+    queries: List[str] = Field(..., description="3-5 search queries")
 
 
 class ResearchRadarError(Exception):
@@ -107,24 +123,12 @@ class ResearchRadarService:
 List 5 real, highly relevant academic papers.
 
 Search Query: {query}
-
-Output JSON Format:
-[
-  {{
-    "title": "Paper Title",
-    "authors": ["Author Name"],
-    "year": 2023,
-    "abstract": "Short abstract",
-    "url": "https://doi.org/..."
-  }}
-]
-Output ONLY valid JSON.
 """
         try:
-            response = await self.ai_provider.generate(prompt)
-            # Simple cleanup for markdown code blocks
-            clean_res = response.strip().replace("```json", "").replace("```", "")
-            return json.loads(clean_res)
+            response: SimulatedSearchResponse = await self.ai_provider.generate(
+                prompt, response_model=SimulatedSearchResponse
+            )
+            return [p.model_dump() for p in response.papers]
         except Exception as e:
             logger.error(f"Simulation failed: {e}")
             return []
@@ -172,15 +176,12 @@ Output ONLY valid JSON.
         prompt = f"""Based on the following paper context, generate 3-5 search queries to find related research papers.
 Context:
 {context[:2000]}
-
-Output as a JSON list of strings.
 """
         try:
-            response = await self.ai_provider.generate(prompt)
-            clean_res = response.strip().replace("```json", "").replace("```", "")
-            if clean_res.startswith("["):
-                return json.loads(clean_res)
-            return []
+            response: SearchQueriesResponse = await self.ai_provider.generate(
+                prompt, response_model=SearchQueriesResponse
+            )
+            return response.queries
         except Exception as e:
             logger.error(f"Query generation failed: {e}")
             return []
