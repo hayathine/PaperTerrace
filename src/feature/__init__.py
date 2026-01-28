@@ -4,6 +4,7 @@ Feature package containing all AI-powered analysis services.
 
 from .adversarial import AdversarialReviewService
 from .chat import ChatService
+from .claim_agent import ClaimVerificationService
 from .figure_insight import FigureInsightService
 from .paragraph_explain import ParagraphExplainService
 from .reserch_radear import ResearchRadarService
@@ -14,6 +15,7 @@ from .translate import TranslationService
 __all__ = [
     "AdversarialReviewService",
     "ChatService",
+    "ClaimVerificationService",
     "FigureInsightService",
     "ParagraphExplainService",
     "ResearchRadarService",

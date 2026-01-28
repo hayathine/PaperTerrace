@@ -451,6 +451,70 @@
     }
   }
 
+  // Claim Verification functionality
+  async function verifyClaims(btn) {
+    const container = btn.closest('.paragraph-container');
+    const pTag = container.querySelector('p');
+    const text = pTag.textContent.trim();
+    if (!text) return;
+
+    // Loading state
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+    btn.disabled = true;
+
+    // Clear previous reports
+    container.querySelectorAll('.claim-report').forEach(el => el.remove());
+
+    try {
+      const formData = new FormData();
+      formData.append("paragraph", text);
+      formData.append("lang", currentLanguage);
+      // session_id is optional for claim verification but good practice
+      formData.append("session_id", sessionId);
+
+      const response = await fetch("/verify-claims", {
+        method: "POST",
+        body: formData,
+      });
+      const data = await response.json();
+      const report = data.report;
+      
+      let colorClass = "bg-slate-50 border-slate-200 text-slate-700";
+      let icon = "🧐";
+      
+      if (report.status === "warning") {
+          colorClass = "bg-red-50 border-red-200 text-red-800";
+          icon = "⚠️";
+      } else if (report.status === "verified") {
+          colorClass = "bg-emerald-50 border-emerald-200 text-emerald-800";
+          icon = "✅";
+      }
+
+      const html = `
+        <div class="claim-report mt-4 p-4 rounded-xl border ${colorClass} text-xs animate-fade-in relative shadow-sm">
+            <button onclick="this.parentElement.remove()" class="absolute top-2 right-2 opacity-50 hover:opacity-100 p-1">×</button>
+            <div class="font-bold mb-2 flex items-center gap-2 border-b border-black/5 pb-2">
+                <span class="text-sm">${icon}</span>
+                <span class="uppercase tracking-wider text-[10px]">Evidence Check: ${report.status}</span>
+            </div>
+            <p class="font-bold mb-1">${report.summary}</p>
+            <div class="opacity-90 leading-relaxed whitespace-pre-wrap">${report.details}</div>
+            ${ report.sources && report.sources.length ? 
+               `<div class="mt-3 pt-2 border-t border-black/5 opacity-70 text-[10px] break-all"><strong>Sources:</strong> ${report.sources.join(", ")}</div>` : '' }
+        </div>
+      `;
+      
+      pTag.insertAdjacentHTML('afterend', html);
+
+    } catch (error) {
+      console.error("Claim verification failed:", error);
+      alert("Verification failed. Please try again.");
+    } finally {
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+    }
+  }
   // Close dropdown when clicking outside
   document.addEventListener('click', (e) => {
     const userMenu = document.getElementById('user-menu');

@@ -31,7 +31,9 @@ class AIProviderInterface(ABC):
     """Abstract interface for AI providers."""
 
     @abstractmethod
-    async def generate(self, prompt: str, context: str = "", model: str | None = None) -> str:
+    async def generate(
+        self, prompt: str, context: str = "", model: str | None = None, enable_search: bool = False
+    ) -> str:
         """Generate text response from prompt."""
         ...
 
@@ -65,18 +67,31 @@ class GeminiProvider(AIProviderInterface):
         self.model = os.getenv("OCR_MODEL", "gemini-1.5-flash")
         logger.info(f"GeminiProvider initialized with model: {self.model}")
 
-    async def generate(self, prompt: str, context: str = "", model: str | None = None) -> str:
+    async def generate(
+        self, prompt: str, context: str = "", model: str | None = None, enable_search: bool = False
+    ) -> str:
         """Generate text response from prompt."""
         target_model = model or self.model
         try:
             full_prompt = f"{context}\n\n{prompt}" if context else prompt
             logger.debug(
                 "Gemini generate request",
-                extra={"prompt_length": len(full_prompt), "model": target_model},
+                extra={
+                    "prompt_length": len(full_prompt),
+                    "model": target_model,
+                    "search": enable_search,
+                },
             )
+
+            # Configure tools
+            tools = None
+            if enable_search:
+                tools = [types.Tool(google_search=types.GoogleSearch())]
+
             response = self.client.models.generate_content(
                 model=target_model,
                 contents=full_prompt,
+                config=types.GenerateContentConfig(tools=tools) if tools else None,
             )
             result = (response.text or "").strip()
             logger.debug(
@@ -192,24 +207,29 @@ class VertexAIProvider(AIProviderInterface):
             f"VertexAIProvider initialized: project={self.project_id}, location={self.location}, model={self.model}"
         )
 
-    async def generate(self, prompt: str, context: str = "", model: str | None = None) -> str:
+    async def generate(
+        self, prompt: str, context: str = "", model: str | None = None, enable_search: bool = False
+    ) -> str:
         """Generate text response from prompt."""
         target_model = model or self.model
         try:
             # Construct content parts
             parts = [types.Part.from_text(text=prompt)]
             if context:
-                # Prepend context as a separate part or combined text?
-                # Combined is usually safer for pure text models, but parts are fine too.
-                # Let's combine for simplicity unless context is huge.
                 parts = [types.Part.from_text(text=f"{context}\n\n{prompt}")]
 
             contents = [types.Content(role="user", parts=parts)]
 
+            # Configure tools
+            tools = None
+            if enable_search:
+                tools = [types.Tool(google_search=types.GoogleSearch())]
+
             config = types.GenerateContentConfig(
-                temperature=0.2,  # Low temp for factual tasks
+                temperature=0.2,
                 top_k=40,
                 max_output_tokens=8192,
+                tools=tools if tools else None,
             )
 
             logger.debug(

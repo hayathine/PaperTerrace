@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 
 from ..feature import (
     AdversarialReviewService,
+    ClaimVerificationService,
     FigureInsightService,
     ParagraphExplainService,
     ResearchRadarService,
@@ -24,6 +25,7 @@ research_radar_service = ResearchRadarService()
 paragraph_explain_service = ParagraphExplainService()
 figure_insight_service = FigureInsightService()
 adversarial_service = AdversarialReviewService()
+claim_service = ClaimVerificationService()
 redis_service = RedisService()
 
 
@@ -145,3 +147,14 @@ async def counterarguments(claim: str = Form(...), session_id: str = Form("")):
     context = redis_service.get(f"session:{session_id}") or ""
     args = await adversarial_service.suggest_counterarguments(claim, context)
     return JSONResponse({"counterarguments": args})
+
+
+# ============================================================================
+# Claim Verification
+# ============================================================================
+
+
+@router.post("/verify-claims")
+async def verify_claims(paragraph: str = Form(...), lang: str = Form("ja")):
+    report = await claim_service.verify_paragraph(paragraph, lang=lang)
+    return JSONResponse({"report": report})
