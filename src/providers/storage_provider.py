@@ -36,6 +36,7 @@ class StorageInterface(ABC):
         ocr_text: str,
         html_content: str,
         target_language: str,
+        layout_json: str | None = None,
         owner_id: str | None = None,
         visibility: str = "private",
     ) -> str:
@@ -243,6 +244,7 @@ class SQLiteStorage(StorageInterface):
                 ("tags", "TEXT"),
                 ("view_count", "INTEGER DEFAULT 0"),
                 ("like_count", "INTEGER DEFAULT 0"),
+                ("layout_json", "TEXT"),
                 ("updated_at", "TIMESTAMP"),
             ]
 
@@ -335,6 +337,7 @@ class SQLiteStorage(StorageInterface):
                     tags TEXT,
                     view_count INTEGER DEFAULT 0,
                     like_count INTEGER DEFAULT 0,
+                    layout_json TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -408,6 +411,7 @@ class SQLiteStorage(StorageInterface):
         ocr_text: str,
         html_content: str,
         target_language: str = "ja",
+        layout_json: str | None = None,
         owner_id: str | None = None,
         visibility: str = "private",
     ) -> str:
@@ -418,8 +422,8 @@ class SQLiteStorage(StorageInterface):
                 """
                 INSERT OR REPLACE INTO papers 
                 (paper_id, file_hash, filename, ocr_text, html_content, target_language, 
-                 owner_id, visibility, title, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 layout_json, owner_id, visibility, title, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     paper_id,
@@ -428,6 +432,7 @@ class SQLiteStorage(StorageInterface):
                     ocr_text,
                     html_content,
                     target_language,
+                    layout_json,
                     owner_id,
                     visibility,
                     filename,  # Use filename as default title

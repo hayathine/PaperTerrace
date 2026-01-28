@@ -86,6 +86,7 @@ class CloudSQLStorage(StorageInterface):
                         tags TEXT,
                         view_count INTEGER DEFAULT 0,
                         like_count INTEGER DEFAULT 0,
+                        layout_json TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -156,6 +157,7 @@ class CloudSQLStorage(StorageInterface):
         ocr_text: str,
         html_content: str,
         target_language: str = "ja",
+        layout_json: str | None = None,
         owner_id: str | None = None,
         visibility: str = "private",
     ) -> str:
@@ -166,14 +168,15 @@ class CloudSQLStorage(StorageInterface):
                     """
                     INSERT INTO papers 
                     (paper_id, file_hash, filename, ocr_text, html_content, target_language, 
-                     owner_id, visibility, title, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     layout_json, owner_id, visibility, title, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (paper_id) DO UPDATE SET
                     file_hash = EXCLUDED.file_hash,
                     filename = EXCLUDED.filename,
                     ocr_text = EXCLUDED.ocr_text,
                     html_content = EXCLUDED.html_content,
                     target_language = EXCLUDED.target_language,
+                    layout_json = EXCLUDED.layout_json,
                     owner_id = EXCLUDED.owner_id,
                     visibility = EXCLUDED.visibility,
                     title = EXCLUDED.title,
@@ -186,6 +189,7 @@ class CloudSQLStorage(StorageInterface):
                         ocr_text,
                         html_content,
                         target_language,
+                        layout_json,
                         owner_id,
                         visibility,
                         filename,

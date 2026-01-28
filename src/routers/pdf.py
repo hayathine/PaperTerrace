@@ -147,6 +147,7 @@ async def stream(task_id: str):
                 pdf_content = base64.b64decode(pdf_b64)
 
                 full_text_fragments = []
+                all_layout_data = []
 
                 async for (
                     page_num,
@@ -180,6 +181,9 @@ async def stream(task_id: str):
                         # Convert words to frontend format if needed, or pass as is
                         # Backend layout_data['words'] has {bbox, word}
                         page_payload["words"] = layout_data["words"]
+                        all_layout_data.append(layout_data)
+                    else:
+                        all_layout_data.append(None)
 
                     yield f"data: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
 
@@ -196,6 +200,7 @@ async def stream(task_id: str):
                         ocr_text=full_text,
                         html_content="",
                         target_language="ja",
+                        layout_json=json.dumps(all_layout_data),
                     )
                 except Exception as e:
                     logger.error(f"Failed to save paper: {e}")
@@ -205,6 +210,14 @@ async def stream(task_id: str):
             else:
                 # Cached content
                 from ..providers.image_storage import get_page_images
+
+                paper_data = storage.get_paper(paper_id)
+                layout_list = []
+                if paper_data and paper_data.get("layout_json"):
+                    try:
+                        layout_list = json.loads(paper_data["layout_json"])
+                    except Exception as e:
+                        logger.error(f"Failed to parse layout_json: {e}")
 
                 f_hash = data.get("file_hash")
                 if f_hash:
@@ -217,6 +230,11 @@ async def stream(task_id: str):
                             "height": 0,
                             "words": [],
                         }
+                        if len(layout_list) > i and layout_list[i]:
+                            page_payload["width"] = layout_list[i].get("width", 0)
+                            page_payload["height"] = layout_list[i].get("height", 0)
+                            page_payload["words"] = layout_list[i].get("words", [])
+
                         yield f"data: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
 
                 yield f"data: {json.dumps({'type': 'done', 'paper_id': paper_id, 'cached': True})}\n\n"

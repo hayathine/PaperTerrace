@@ -21,3 +21,8 @@ tasks:
     desc: "Run local server"
     cmds:
       - uv run uvicorn src.main:app --reload
+
+  build:
+    desc: "Build frontend"
+    cmds:
+      - cd frontend && npm run dev
