@@ -31,20 +31,33 @@ async def translate_word(word: str, lang: str = "ja"):
     return JSONResponse(result)
 
 
-@router.get("/explain/{lemma}")
-async def explain(lemma: str, lang: str = "ja"):
-    """Word explanation (Cache -> Jamdict -> Gemini)"""
+@router.get("/explain/{word}")
+async def explain(word: str, lang: str = "ja"):
+    """Word explanation (Lemmatize -> Cache -> Jamdict -> Gemini)"""
+    from ..logic import nlp
+
+    # 0. Lemmatize the word using spaCy
+    loop = asyncio.get_event_loop()
+    doc = await loop.run_in_executor(executor, nlp, word)
+    lemma = doc[0].lemma_.lower() if doc else word.lower()
+    original_word = word  # Keep original for display
+
+    logger.info(f"[explain] word='{word}' -> lemma='{lemma}'")
 
     # 1. Cache Check
     cached = await service.get_translation(lemma, lang=lang)
     if cached:
         return JSONResponse(
-            {"word": cached["word"], "translation": cached["translation"], "source": "Cache"}
+            {
+                "word": original_word,
+                "lemma": lemma,
+                "translation": cached["translation"],
+                "source": "Cache",
+            }
         )
 
     # 2. Jamdict (Japanese only)
     if lang == "ja":
-        loop = asyncio.get_event_loop()
         lookup_res = await loop.run_in_executor(executor, _lookup_word_full, lemma)
 
         if lookup_res.entries:
@@ -53,7 +66,14 @@ async def explain(lemma: str, lang: str = "ja"):
                 for e in lookup_res.entries[:3]
             ]
             translation = " / ".join(list(dict.fromkeys(ja)))
-            return JSONResponse({"word": lemma, "translation": translation, "source": "Jamdict"})
+            return JSONResponse(
+                {
+                    "word": original_word,
+                    "lemma": lemma,
+                    "translation": translation,
+                    "source": "Jamdict",
+                }
+            )
 
     # 3. Gemini Fallback
     try:
@@ -65,17 +85,26 @@ async def explain(lemma: str, lang: str = "ja"):
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
         provider = get_ai_provider()
         prompt = f"英単語「{lemma}」の{lang_name}訳を1〜3語で簡潔に。訳のみ出力。"
-        translate_model = os.getenv("MODEL_TRANSLATE", "gemini-1.5-flash")
+        translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.0-flash-lite")
 
         translation = await provider.generate(prompt, model=translate_model)
 
         service.translation_cache[lemma] = translation
         service.word_cache[lemma] = False
 
-        return JSONResponse({"word": lemma, "translation": translation, "source": "Gemini"})
+        return JSONResponse(
+            {"word": original_word, "lemma": lemma, "translation": translation, "source": "Gemini"}
+        )
     except Exception as e:
         logger.error(f"Gemini translation failed: {e}")
-        return JSONResponse({"word": lemma, "translation": "Translation failed", "source": "Error"})
+        return JSONResponse(
+            {
+                "word": original_word,
+                "lemma": lemma,
+                "translation": "Translation failed",
+                "source": "Error",
+            }
+        )
 
 
 @router.get("/languages")
