@@ -4,6 +4,7 @@ Handles stamp functionality for Papers and Notes.
 """
 
 from fastapi import APIRouter, HTTPException
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -54,7 +55,7 @@ async def add_paper_stamp(paper_id: str, request: StampRequest, user: OptionalUs
 async def get_paper_stamps(paper_id: str):
     """Get all stamps for a paper."""
     stamps = storage.get_paper_stamps(paper_id)
-    return JSONResponse({"stamps": stamps})
+    return JSONResponse({"stamps": jsonable_encoder(stamps)})
 
 
 @router.delete("/stamps/paper/{stamp_id}")
@@ -90,7 +91,7 @@ async def add_note_stamp(note_id: str, request: StampRequest):
 async def get_note_stamps(note_id: str):
     """Get all stamps for a note."""
     stamps = storage.get_note_stamps(note_id)
-    return JSONResponse({"stamps": stamps})
+    return JSONResponse({"stamps": jsonable_encoder(stamps)})
 
 
 @router.delete("/stamps/note/{stamp_id}")

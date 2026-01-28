@@ -4,6 +4,7 @@ Handles paper management (list, get, delete).
 """
 
 from fastapi import APIRouter
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
 from ..providers import get_storage_provider
@@ -17,7 +18,7 @@ storage = get_storage_provider()
 @router.get("/papers")
 async def list_papers(limit: int = 50):
     papers = storage.list_papers(limit)
-    return JSONResponse({"papers": papers})
+    return JSONResponse({"papers": jsonable_encoder(papers)})
 
 
 @router.get("/papers/{paper_id}")
@@ -25,7 +26,7 @@ async def get_paper(paper_id: str):
     paper = storage.get_paper(paper_id)
     if not paper:
         return JSONResponse({"error": "Paper not found"}, status_code=404)
-    return JSONResponse(paper)
+    return JSONResponse(jsonable_encoder(paper))
 
 
 @router.delete("/papers/{paper_id}")

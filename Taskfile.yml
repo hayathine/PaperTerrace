@@ -27,7 +27,12 @@ tasks:
     cmds:
       - cd frontend && npm run dev
 
-  log:
+  read:
     desc: "Run local server"
     cmds:
-      - gcloud run services logs read paperterrace
+      - gcloud run services logs read paperterrace --limit=1000
+  
+  tail:
+    desc: "Run local server"
+    cmds:
+      - gcloud beta run services logs tail paperterrace

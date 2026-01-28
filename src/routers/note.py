@@ -4,6 +4,7 @@ Handles sidebar note functionality.
 """
 
 from fastapi import APIRouter, Form
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -28,7 +29,7 @@ class NoteRequest(BaseModel):
 async def get_notes(session_id: str, user: OptionalUser):
     user_id = user.uid if user else None
     notes = sidebar_note_service.get_notes(session_id, user_id=user_id)
-    return JSONResponse({"notes": notes})
+    return JSONResponse({"notes": jsonable_encoder(notes)})
 
 
 @router.post("/note")
@@ -37,7 +38,7 @@ async def add_note(request: NoteRequest, user: OptionalUser):
     note = sidebar_note_service.add_note(
         request.session_id, request.term, request.note, request.image_url, user_id=user_id
     )
-    return JSONResponse(note)
+    return JSONResponse(jsonable_encoder(note))
 
 
 @router.delete("/note/{note_id}")
