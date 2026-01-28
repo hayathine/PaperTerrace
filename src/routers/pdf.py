@@ -275,6 +275,8 @@ async def stream(task_id: str):
 
             # 完了処理
             redis_service.delete(f"task:{task_id}")
+            # フロントエンドにpaper_idを通知
+            yield f'event: message\ndata: <input type="hidden" id="current-paper-id" value="{paper_id}" hx-swap-oob="true" />\n\n'
             # data-paper-id 更新が画面消失のトリガーになっている可能性があるため削除
             yield f'event: message\ndata: <div id="sse-container-{task_id}" hx-swap-oob="outerHTML" style="display:none"></div>\n\n'
             yield "event: close\ndata: done\n\n"
@@ -298,6 +300,8 @@ async def stream(task_id: str):
 
             # 完了ステータス
             yield 'event: message\ndata: <div id="tokenize-status" hx-swap-oob="true" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg">✅ 読込完了（キャッシュ）</div>\n\n'
+            # フロントエンドにpaper_idを通知
+            yield f'event: message\ndata: <input type="hidden" id="current-paper-id" value="{paper_id}" hx-swap-oob="true" />\n\n'
 
             # SSEコンテナを削除して接続終了
             yield f'event: message\ndata: <div id="sse-container-{task_id}" hx-swap-oob="outerHTML" data-paper-id="finished" style="display:none"></div>\n\n'
@@ -320,6 +324,8 @@ async def stream(task_id: str):
         logger.info(
             f"[stream] END: task_id={task_id}, paper_id={paper_id}, elapsed={time.time() - stream_start:.2f}s"
         )
+        # フロントエンドにpaper_idを通知
+        yield f'event: message\ndata: <input type="hidden" id="current-paper-id" value="{paper_id}" hx-swap-oob="true" />\n\n'
 
         # ストリーム終了時に、SSEコンテナ自体を通常のdivに置換して接続を物理的に切断する
         yield f'event: message\ndata: <div id="sse-container-{task_id}" hx-swap-oob="outerHTML" data-paper-id="finished" style="display:none"></div>\n\n'

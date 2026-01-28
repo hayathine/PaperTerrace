@@ -99,6 +99,11 @@ async def explain(lemma: str):
         prompt = f"英単語「{lemma}」の日本語訳を1〜3語で簡潔に。訳のみ出力。"
 
         res = client.models.generate_content(model=model, contents=prompt)
+        # ログ出力: トークン数
+        if res.usage_metadata:
+            logger.info(
+                f"Gemini Token Usage (Simple): input={res.usage_metadata.prompt_token_count}, output={res.usage_metadata.candidates_token_count}"
+            )
         translation = res.text.strip() if res.text else "翻訳できませんでした"
 
         # キャッシュに保存（次回以降は高速に）

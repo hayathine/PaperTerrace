@@ -82,6 +82,11 @@ class PDFOCRService:
                     "このPDFのテキストを構造を維持して文字起こししてください。",
                 ],
             )
+            # ログ: トークン使用量 (OCR)
+            if response.usage_metadata:
+                logger.info(
+                    f"Gemini Token Usage (OCR): input={response.usage_metadata.prompt_token_count}, output={response.usage_metadata.candidates_token_count}"
+                )
             ocr_text = response.text.strip()
         except Exception as e:
             logger.error(f"OCR extraction failed: {e}")
@@ -195,6 +200,11 @@ class PDFOCRService:
                                 "このPDFページのテキストを構造を維持して文字起こししてください。",
                             ],
                         )
+                        # ログ: トークン使用量 (OCR Page)
+                        if response.usage_metadata:
+                            logger.info(
+                                f"Gemini Token Usage (OCR Page {page_num + 1}): input={response.usage_metadata.prompt_token_count}, output={response.usage_metadata.candidates_token_count}"
+                            )
                         page_text = (response.text or "").strip()
                     except Exception as e:
                         logger.error(f"OCR failed for page {page_num + 1}: {e}")
@@ -373,6 +383,11 @@ class EnglishAnalysisService:
                 None,
                 lambda: self.client.models.generate_content(model=self.model, contents=prompt),
             )
+            # ログ: トークン使用量 (Batch Translation)
+            if res.usage_metadata:
+                logger.info(
+                    f"Gemini Token Usage (BatchTrans): input={res.usage_metadata.prompt_token_count}, output={res.usage_metadata.candidates_token_count}"
+                )
             response_text = res.text.strip()
 
             # レスポンスをパース
@@ -466,7 +481,7 @@ class EnglishAnalysisService:
             翻訳情報を含む辞書
         """
         # 文脈が長すぎる場合は切り詰める（トークン節約）
-        max_context_length = 2000
+        max_context_length = int(os.getenv("MAX_CONTEXT_LENGTH", "800"))
         if len(context) > max_context_length:
             # 単語を含む周辺のテキストを抽出
             word_pos = context.lower().find(word.lower())
@@ -490,9 +505,14 @@ class EnglishAnalysisService:
 
         try:
             response = client.models.generate_content(
-                model="gemini-2.0-flash",
+                model=self.model,
                 contents=prompt,
             )
+            # ログ: トークン使用量 (Context Translation)
+            if response.usage_metadata:
+                logger.info(
+                    f"Gemini Token Usage (ContextTrans): input={response.usage_metadata.prompt_token_count}, output={response.usage_metadata.candidates_token_count}"
+                )
             translation = (response.text or "").strip()
 
             # キャッシュに保存
