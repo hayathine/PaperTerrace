@@ -350,11 +350,12 @@
         list.innerHTML = data.notes
           .map(
             (m) => `
-          <div class="bg-white p-3 rounded-xl border border-slate-100 shadow-sm">
+          <div class="bg-white p-3 rounded-xl border border-slate-100 shadow-sm overflow-hidden group">
             <div class="flex justify-between items-start">
               <span class="font-bold text-xs text-indigo-600">${m.term}</span>
               <button onclick="deleteNote('${m.note_id}')" class="text-slate-300 hover:text-red-500 text-xs">×</button>
             </div>
+            ${m.image_url ? `<div class="mt-2 rounded-lg overflow-hidden border border-slate-50"><img src="${m.image_url}" class="w-full h-auto object-cover max-h-40" loading="lazy"></div>` : ''}
             <p class="text-[10px] text-slate-500 mt-1">${m.note}</p>
           </div>
         `
@@ -377,7 +378,7 @@
     }
   }
 
-  async function saveWordToNote(term, note) {
+  async function saveWordToNote(term, note, imageUrl = null) {
     try {
       const response = await fetch("/note", {
         method: "POST",
@@ -386,6 +387,7 @@
           session_id: sessionId,
           term: term,
           note: note,
+          image_url: imageUrl
         }),
       });
       await response.json();

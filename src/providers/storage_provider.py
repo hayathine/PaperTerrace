@@ -75,7 +75,9 @@ class StorageInterface(ABC):
     # ===== Note methods =====
 
     @abstractmethod
-    def save_note(self, note_id: str, session_id: str, term: str, note: str) -> str:
+    def save_note(
+        self, note_id: str, session_id: str, term: str, note: str, image_url: str | None = None
+    ) -> str:
         """Save a note. Returns note_id."""
         ...
 
@@ -255,8 +257,7 @@ class SQLiteStorage(StorageInterface):
 
             conn.commit()
 
-            # Migrations for stamps (adding coordinates if missing)
-            # This is separate because we iterate over tables
+            # Migrations for stamps and notes
             for table, columns in [
                 (
                     "paper_stamps",
@@ -271,6 +272,12 @@ class SQLiteStorage(StorageInterface):
                     [
                         ("x", "REAL"),
                         ("y", "REAL"),
+                    ],
+                ),
+                (
+                    "notes",
+                    [
+                        ("image_url", "TEXT"),
                     ],
                 ),
             ]:
@@ -358,6 +365,7 @@ class SQLiteStorage(StorageInterface):
                     session_id TEXT,
                     term TEXT,
                     note TEXT,
+                    image_url TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -497,15 +505,17 @@ class SQLiteStorage(StorageInterface):
 
     # ===== Note methods =====
 
-    def save_note(self, note_id: str, session_id: str, term: str, note: str) -> str:
+    def save_note(
+        self, note_id: str, session_id: str, term: str, note: str, image_url: str | None = None
+    ) -> str:
         """Save a note."""
         with self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO notes (note_id, session_id, term, note, created_at)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO notes (note_id, session_id, term, note, image_url, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
                 """,
-                (note_id, session_id, term, note, datetime.now().isoformat()),
+                (note_id, session_id, term, note, image_url, datetime.now().isoformat()),
             )
             conn.commit()
         logger.info(f"Note saved: {note_id}")

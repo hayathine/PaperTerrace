@@ -20,7 +20,7 @@ class SidebarNoteService:
     def __init__(self):
         self.storage = get_storage_provider()
 
-    def add_note(self, session_id: str, term: str, note: str) -> dict:
+    def add_note(self, session_id: str, term: str, note: str, image_url: str | None = None) -> dict:
         """
         Add a note to the sidebar.
 
@@ -28,13 +28,14 @@ class SidebarNoteService:
             session_id: The session identifier
             term: The term or keyword
             note: The note content
+            image_url: Optional image URL
 
         Returns:
             The created note with its ID
         """
         try:
             note_id = str(uuid6.uuid7())
-            self.storage.save_note(note_id, session_id, term, note)
+            self.storage.save_note(note_id, session_id, term, note, image_url)
             logger.info(
                 "Note added",
                 extra={
@@ -48,6 +49,7 @@ class SidebarNoteService:
                 "session_id": session_id,
                 "term": term,
                 "note": note,
+                "image_url": image_url,
             }
         except Exception as e:
             logger.exception(

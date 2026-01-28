@@ -19,6 +19,7 @@ class NoteRequest(BaseModel):
     session_id: str
     term: str
     note: str
+    image_url: str | None = None
 
 
 @router.get("/note/{session_id}")
@@ -29,7 +30,9 @@ async def get_notes(session_id: str):
 
 @router.post("/note")
 async def add_note(request: NoteRequest):
-    note = sidebar_note_service.add_note(request.session_id, request.term, request.note)
+    note = sidebar_note_service.add_note(
+        request.session_id, request.term, request.note, request.image_url
+    )
     return JSONResponse(note)
 
 
