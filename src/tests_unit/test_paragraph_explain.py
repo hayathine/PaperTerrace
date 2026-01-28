@@ -2,13 +2,13 @@ import os
 import unittest
 from unittest.mock import AsyncMock, patch
 
-from src.feature.paragraph_explain import ParagraphExplainService
+from src.features.paragraph_explain import ParagraphExplainService
 
 
 class TestParagraphExplainService(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):
         # AIProvider のモック
-        self.mock_provider_patcher = patch("src.feature.paragraph_explain.get_ai_provider")
+        self.mock_provider_patcher = patch("src.features.paragraph_explain.get_ai_provider")
         self.mock_get_provider = self.mock_provider_patcher.start()
         self.mock_provider = AsyncMock()
         self.mock_get_provider.return_value = self.mock_provider

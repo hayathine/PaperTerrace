@@ -7,7 +7,7 @@ figure/table analysis, and adversarial review.
 from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 
-from ..feature import (
+from ..features import (
     AdversarialReviewService,
     ClaimVerificationService,
     FigureInsightService,

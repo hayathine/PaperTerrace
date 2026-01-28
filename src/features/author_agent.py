@@ -6,7 +6,7 @@ allowing the user to 'chat' with the author.
 
 from typing import Dict, List
 
-from src.feature.reserch_radear import ResearchRadarService
+from src.features.research_radar import ResearchRadarService
 from src.logger import logger
 from src.providers import get_ai_provider
 

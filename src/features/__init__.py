@@ -7,7 +7,7 @@ from .chat import ChatService
 from .claim_agent import ClaimVerificationService
 from .figure_insight import FigureInsightService
 from .paragraph_explain import ParagraphExplainService
-from .reserch_radear import ResearchRadarService
+from .research_radar import ResearchRadarService
 from .sidebar import SidebarNoteService
 from .summary import SummaryService
 from .translate import TranslationService
