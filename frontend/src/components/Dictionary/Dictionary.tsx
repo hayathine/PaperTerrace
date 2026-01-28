@@ -5,9 +5,10 @@ import { useAuth } from '../../contexts/AuthContext';
 interface DictionaryProps {
     term?: string;
     sessionId: string;
+    context?: string;
 }
 
-const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId }) => {
+const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context }) => {
     const { token } = useAuth();
     // Maintain a list of entries instead of a single one
     const [entries, setEntries] = useState<DictionaryEntry[]>([]);
@@ -75,6 +76,40 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId }) => {
         }
     };
 
+    const handleRethink = async () => {
+        if (!term || !context) {
+            alert("No context available for this word.");
+            return;
+        }
+        setLoading(true);
+        try {
+            const headers: HeadersInit = { 'Content-Type': 'application/json' };
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            const res = await fetch('/explain/context', {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({
+                    word: term,
+                    context: context.substring(0, 500), // Limit context length just in case
+                    lang: 'ja'
+                })
+            });
+
+            if (res.ok) {
+                const data: DictionaryEntry = await res.json();
+                setEntries(prev => [data, ...prev]);
+            } else {
+                alert("Failed to rethink with context.");
+            }
+        } catch (e) {
+            console.error(e);
+            alert("Error Rethinking.");
+        } finally {
+            setLoading(false);
+        }
+    };
+
     if (entries.length === 0 && !loading && !error) {
         return (
             <div className="flex flex-col items-center justify-center h-full p-8 text-slate-300">
@@ -99,6 +134,23 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId }) => {
                 <div className="animate-pulse space-y-3 mb-4">
                     <div className="h-4 bg-slate-100 rounded w-1/3"></div>
                     <div className="h-20 bg-slate-100 rounded w-full"></div>
+                </div>
+            )}
+
+            {!loading && context && term && (
+                <div className="mb-4">
+                    <button
+                        onClick={handleRethink}
+                        className="w-full py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
+                    >
+                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                        </svg>
+                        Ask AI with Context
+                    </button>
+                    <p className="text-[9px] text-slate-400 mt-1 px-1 truncate">
+                        Context: {context.substring(0, 40)}...
+                    </p>
                 </div>
             )}
 

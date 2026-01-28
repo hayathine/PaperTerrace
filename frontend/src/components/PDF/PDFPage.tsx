@@ -6,7 +6,7 @@ import { Stamp } from '../Stamps/types';
 interface PDFPageProps {
     page: PageData;
     scale?: number;
-    onWordClick?: (word: string) => void;
+    onWordClick?: (word: string, context?: string) => void;
     // Stamp props
     stamps?: Stamp[];
     isStampMode?: boolean;
@@ -80,7 +80,14 @@ const PDFPage: React.FC<PDFPageProps> = ({
                                     width: `${styleW}%`,
                                     height: `${styleH}%`,
                                 }}
-                                onClick={() => !isStampMode && onWordClick && onWordClick(w.word)}
+                                onClick={() => {
+                                    if (!isStampMode && onWordClick) {
+                                        const start = Math.max(0, idx - 50);
+                                        const end = Math.min(words.length, idx + 50);
+                                        const context = words.slice(start, end).map(w => w.word).join(' ');
+                                        onWordClick(w.word, context);
+                                    }
+                                }}
                                 title={w.word}
                             />
                         );

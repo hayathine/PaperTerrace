@@ -19,6 +19,7 @@ function App() {
     })
     const [activeTab, setActiveTab] = useState('chat')
     const [selectedWord, setSelectedWord] = useState<string | undefined>(undefined)
+    const [selectedContext, setSelectedContext] = useState<string | undefined>(undefined)
 
     useEffect(() => {
         if (user) {
@@ -35,8 +36,9 @@ function App() {
         }
     }
 
-    const handleWordClick = (word: string) => {
+    const handleWordClick = (word: string, context?: string) => {
         setSelectedWord(word)
+        setSelectedContext(context)
         setActiveTab('dict')
     }
 
@@ -131,6 +133,7 @@ function App() {
                             activeTab={activeTab}
                             onTabChange={setActiveTab}
                             selectedWord={selectedWord}
+                            context={selectedContext}
                         />
                     </div>
                 </div>

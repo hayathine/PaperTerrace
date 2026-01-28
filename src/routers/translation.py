@@ -118,3 +118,50 @@ async def get_languages():
 async def set_language(request: LanguageSettingRequest):
     # Store language preference (could be in session or database)
     return JSONResponse({"status": "ok", "language": request.language})
+
+
+class ExplainContextRequest(BaseModel):
+    word: str
+    context: str
+    lang: str = "ja"
+
+
+@router.post("/explain/context")
+async def explain_with_context(req: ExplainContextRequest):
+    """Explain word with context using Gemini"""
+    import os
+
+    from ..features.translate import SUPPORTED_LANGUAGES
+    from ..providers import get_ai_provider
+
+    lang_name = SUPPORTED_LANGUAGES.get(req.lang, req.lang)
+    provider = get_ai_provider()
+    prompt = f"""
+以下の文脈において、単語「{req.word}」はどういう意味で使われていますか？
+文脈を考慮して、{lang_name}で簡潔に説明してください。
+
+文脈:
+{req.context}
+"""
+    translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.0-flash-lite")
+
+    try:
+        explanation = await provider.generate(prompt, model=translate_model)
+        return JSONResponse(
+            {
+                "word": req.word,
+                "lemma": req.word,
+                "translation": explanation,
+                "source": "Gemini (Context)",
+            }
+        )
+    except Exception as e:
+        logger.error(f"Gemini context explanation failed: {e}")
+        return JSONResponse(
+            {
+                "word": req.word,
+                "lemma": req.word,
+                "translation": "Explanation failed",
+                "source": "Error",
+            }
+        )

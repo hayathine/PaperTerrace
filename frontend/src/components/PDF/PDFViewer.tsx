@@ -10,7 +10,7 @@ interface PDFViewerProps {
     initialData?: PageData[];
     uploadFile?: File | null;
     sessionId?: string;
-    onWordClick?: (word: string) => void;
+    onWordClick?: (word: string, context?: string) => void;
 }
 
 const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionId }) => {
@@ -125,9 +125,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionI
         }
     };
 
-    const handleWordClick = (word: string) => {
+    const handleWordClick = (word: string, context?: string) => {
         if (onWordClick) {
-            onWordClick(word);
+            onWordClick(word, context);
         }
     };
 

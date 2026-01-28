@@ -11,9 +11,10 @@ interface SidebarProps {
     activeTab: string;
     onTabChange: (tab: string) => void;
     selectedWord?: string;
+    context?: string;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord }) => {
+const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord, context }) => {
 
     return (
         <div className="flex flex-col h-full bg-white border-l border-gray-200 shadow-xl overflow-hidden font-sans">
@@ -79,7 +80,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
             <div className="flex-1 overflow-hidden relative">
                 {activeTab === 'dict' && (
                     <div className="absolute inset-0">
-                        <Dictionary sessionId={sessionId} term={selectedWord} />
+                        <Dictionary sessionId={sessionId} term={selectedWord} context={context} />
                     </div>
                 )}
                 {activeTab === 'summary' && (
