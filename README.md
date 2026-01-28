@@ -67,6 +67,21 @@ uv sync
 GEMINI_API_KEY=あなたのGemini_APIキー
 OCR_MODEL=gemini-1.5-flash
 DB_PATH=ocr_reader.db
+
+# 機能別AIモデル設定 (任意: 設定しない場合はデフォルトが使用されます)
+# MODEL_CHAT=gemini-2.0-flash
+# MODEL_SUMMARY=gemini-2.0-flash
+# MODEL_DICT=gemini-2.0-flash-lite
+# MODEL_TRANSLATE=gemini-1.5-flash
+# MODEL_PARAGRAPH=gemini-2.0-flash
+
+# AIプロバイダ設定 (Gemini or Vertex AI)
+AI_PROVIDER=gemini
+# Vertex AIを使用する場合:
+# AI_PROVIDER=vertex
+# GCP_PROJECT_ID=your-project-id
+# GCP_LOCATION=us-central1
+# VERTEX_MODEL=gemini-2.0-flash-lite-001
 ```
 
 ### 4. 辞書データの準備
