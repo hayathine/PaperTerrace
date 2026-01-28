@@ -39,7 +39,7 @@ MANIFEST
 *.spec
 src/static/paper_images
 docs/
-
+deploy.sh
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt

@@ -28,22 +28,6 @@ from .routers import (
 # Load environment variables
 load_dotenv()
 
-# Create FastAPI app
-app = FastAPI(
-    title="PaperTerrace",
-    description="AI-powered paper reading assistant",
-    version="1.0.0",
-)
-
-# CORS configuration for React development
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 # Firebase Config for Frontend
 FIREBASE_CONFIG = {
     "apiKey": os.getenv("FIREBASE_API_KEY"),
@@ -55,9 +39,68 @@ FIREBASE_CONFIG = {
     "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID"),
 }
 
+import contextlib
+
+
+@contextlib.asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Lifespan event handler for FastAPI.
+    Handles startup and shutdown events.
+    """
+    from src.logger import logger
+    from src.providers import get_storage_provider
+
+    logger.info("Starting up...")
+    try:
+        storage = get_storage_provider()
+        if hasattr(storage, "init_tables"):
+            storage.init_tables()
+            logger.info("Database tables initialized")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+
+    yield
+
+    logger.info("Shutting down...")
+
+
+# Create FastAPI app with lifespan
+app = FastAPI(
+    title="PaperTerrace",
+    description="AI-powered paper reading assistant",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
 # Templates and static files
 templates = Jinja2Templates(directory="src/templates")
 app.mount("/static", StaticFiles(directory="src/static"), name="static")
+
+# CORS configuration for React development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.post("/api/debug/init-db")
+async def init_db_manual():
+    """Manual trigger for database initialization."""
+    from src.providers import get_storage_provider
+
+    try:
+        storage = get_storage_provider()
+        if hasattr(storage, "init_tables"):
+            storage.init_tables()
+            return {"status": "ok", "message": "Tables initialized"}
+        return {"status": "skipped", "message": "Storage provider does not support init_tables"}
+    except Exception as e:
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+
 
 # ============================================================================
 # Include all routers

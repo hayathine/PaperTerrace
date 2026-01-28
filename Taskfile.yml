@@ -26,3 +26,8 @@ tasks:
     desc: "Build frontend"
     cmds:
       - cd frontend && npm run dev
+
+  log:
+    desc: "Run local server"
+    cmds:
+      - gcloud run services logs read paperterrace
