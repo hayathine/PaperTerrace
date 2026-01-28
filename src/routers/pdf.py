@@ -131,6 +131,7 @@ async def stream(task_id: str):
     text = data.get("text", "")
     paper_id = data.get("paper_id")
     lang = data.get("lang", "ja")
+    session_id = data.get("session_id")
 
     # --- JSON STREAMING HANDLER ---
     if is_json:
@@ -205,6 +206,11 @@ async def stream(task_id: str):
                 except Exception as e:
                     logger.error(f"Failed to save paper: {e}")
 
+                # セッションコンテキスト保存 (Summary等のために必要)
+                if session_id:
+                    redis_service.set(f"session:{session_id}", full_text, expire=86400)
+                    logger.info(f"Saved session context for: {session_id}")
+
                 yield f"data: {json.dumps({'type': 'done', 'paper_id': new_paper_id})}\n\n"
 
             else:
@@ -236,6 +242,11 @@ async def stream(task_id: str):
                             page_payload["words"] = layout_list[i].get("words", [])
 
                         yield f"data: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
+
+                # キャッシュ時もセッションコンテキストを保存（Summary等のため）
+                if session_id and paper_data and paper_data.get("ocr_text"):
+                    redis_service.set(f"session:{session_id}", paper_data["ocr_text"], expire=86400)
+                    logger.info(f"Restored session context for cached paper: {session_id}")
 
                 yield f"data: {json.dumps({'type': 'done', 'paper_id': paper_id, 'cached': True})}\n\n"
 
