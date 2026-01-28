@@ -55,13 +55,15 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context }) => 
         fetchDefinition();
     }, [term, token]); // Removed entries dependency to avoid loop, check inside setter or logic
 
+    const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
+
     const handleSaveToNote = async (entry: DictionaryEntry) => {
         if (!entry) return;
         try {
             const headers: HeadersInit = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
-            await fetch('/note', {
+            const res = await fetch('/note', {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
@@ -70,7 +72,19 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context }) => 
                     note: entry.translation
                 })
             });
-            alert('Saved to notes!');
+
+            if (res.ok) {
+                const key = entry.word;
+                setSavedItems(prev => new Set(prev).add(key));
+                // Fade out "Saved" status after 2 seconds
+                setTimeout(() => {
+                    setSavedItems(prev => {
+                        const next = new Set(prev);
+                        next.delete(key);
+                        return next;
+                    });
+                }, 2000);
+            }
         } catch (e) {
             console.error(e);
         }
@@ -181,12 +195,26 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context }) => 
 
                         <button
                             onClick={() => handleSaveToNote(entry)}
-                            className="w-full py-2 bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 text-xs font-bold rounded-lg transition-colors flex items-center justify-center gap-2 group-hover:border-indigo-100 border border-transparent"
+                            className={`w-full py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 border ${savedItems.has(entry.word)
+                                ? 'bg-green-50 text-green-600 border-green-200 cursor-default'
+                                : 'bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 border-transparent group-hover:border-indigo-100'
+                                }`}
                         >
-                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                            </svg>
-                            Save to Notes
+                            {savedItems.has(entry.word) ? (
+                                <>
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                    </svg>
+                                    Saved
+                                </>
+                            ) : (
+                                <>
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                    </svg>
+                                    Save to Notes
+                                </>
+                            )}
                         </button>
                     </div>
                 ))}

@@ -542,6 +542,12 @@ class SQLiteStorage(StorageInterface):
                 """
                 INSERT INTO notes (note_id, session_id, term, note, image_url, user_id, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(note_id) DO UPDATE SET
+                    term=excluded.term,
+                    note=excluded.note,
+                    image_url=excluded.image_url,
+                    user_id=excluded.user_id,
+                    created_at=excluded.created_at
                 """,
                 (
                     note_id,
