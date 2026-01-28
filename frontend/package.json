@@ -28,6 +28,7 @@
   "description": "",
   "dependencies": {
     "@types/uuid": "^11.0.0",
+    "firebase": "^12.8.0",
     "uuid": "^13.0.0"
   }
 }
