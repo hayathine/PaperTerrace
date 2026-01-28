@@ -103,22 +103,23 @@ class ResearchRadarService:
 
     async def _simulate_paper_search(self, query: str) -> List[Dict[str, Any]]:
         """Fallback method using Gemini to simulate search results."""
-        prompt = f"""論文検索APIが利用できないため、以下のクエリに対する検索結果をシミュレーションしてください。
-実在する、関連性の高い学術論文を5件リストアップしてください。
+        prompt = f"""Since the paper search API is unavailable, simulate a search result for the following query.
+List 5 real, highly relevant academic papers.
 
-検索クエリ: {query}
+Search Query: {query}
 
-出力JSON形式:
+Output JSON Format:
 [
   {{
-    "title": "論文タイトル",
-    "authors": ["著者名"],
+    "title": "Paper Title",
+    "authors": ["Author Name"],
     "year": 2023,
-    "abstract": "要約",
+    "abstract": "Short abstract",
     "url": "https://doi.org/..."
   }}
 ]
-JSONのみ出力してください。"""
+Output ONLY valid JSON.
+"""
         try:
             response = await self.ai_provider.generate(prompt)
             # Simple cleanup for markdown code blocks
@@ -134,7 +135,8 @@ JSONのみ出力してください。"""
         Legacy method adapter.
         """
         # 1. Generate a search query from abstract using AI
-        query_prompt = f"以下の論文要約から、関連論文を検索するための最適な英語検索クエリを1つ生成してください。\n\n{abstract[:1000]}"
+        # 1. Generate a search query from abstract using AI
+        query_prompt = f"Generate a single optimal English search query to find related papers based on the following abstract.\n\n{abstract[:1000]}"
         search_query = await self.ai_provider.generate(query_prompt)
         search_query = search_query.strip().strip('"')
 

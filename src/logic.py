@@ -78,8 +78,8 @@ class PDFOCRService:
             if len(doc) > 0:
                 text = doc[0].get_text()[:1000]
                 if text.strip():
-                    prompt = f"""以下のテキストの主要な言語を判定し、ISO 639-1コード（'en', 'ja', 'fr'など）のみを返してください。
-テキストの例:
+                    prompt = f"""Identify the primary language of the following text and return ONLY the ISO 639-1 code (e.g., 'en', 'ja', 'fr').
+Text Sample:
 {text}
 """
                     detected = await self.ai_provider.generate(prompt, model=self.model)
@@ -212,7 +212,7 @@ class PDFOCRService:
                     single_page_pdf.close()
 
                     try:
-                        prompt = "このPDFページのテキストを構造を維持して文字起こししてください。"
+                        prompt = "Transcribe the text from this PDF page preserving the structure as much as possible."
                         page_text = await self.ai_provider.generate_with_pdf(
                             prompt, page_bytes, model=self.model
                         )
@@ -397,7 +397,7 @@ class EnglishAnalysisService:
 
     async def _batch_translate_words(self, words: list[str], lang: str = "ja") -> dict[str, str]:
         """未知の単語を一括でGeminiで翻訳して辞書として返す"""
-        from .feature.translate import SUPPORTED_LANGUAGES
+        from .features.translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
@@ -412,11 +412,13 @@ class EnglishAnalysisService:
         if not words_to_translate:
             return result
 
-        # バッチプロンプトを作成
+        # Create batch prompt in English
         words_list = "\n".join(f"- {w}" for w in words_to_translate)
-        prompt = f"""以下の英単語それぞれの{lang_name}訳を1〜2語で簡潔に答えてください。
-フォーマット: 単語: 訳
+        prompt = f"""Provide concise translations for the following English words in {lang_name}.
+Output format per line: "Word: Translation"
+Keep it very brief (1-2 words).
 
+Words:
 {words_list}"""
 
         try:
@@ -523,20 +525,22 @@ class EnglishAnalysisService:
         max_context_length = int(os.getenv("MAX_CONTEXT_LENGTH", "800"))
         context = truncate_context(context, word, max_context_length)
 
-        from .feature.translate import SUPPORTED_LANGUAGES
+        from .features.translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
-        prompt = f"""以下の学術論文の文脈で使われている単語「{word}」の意味を、この文脈に最も適した{lang_name}訳で1〜3語で簡潔に答えてください。
+        prompt = f"""Evaluate the meaning of the word "{word}" within the academic context below, and provide the most appropriate translation in {lang_name}.
+Keep it concise (1-3 words). Output ONLY the translation.
 
-【論文の文脈】
+[Academic Context]
 {context}
 
-【対象単語】
+[Target Word]
 {word}
 
-【回答形式】
-{lang_name}訳のみを出力してください（説明不要）。"""
+[Output]
+Translation only in {lang_name}.
+"""
 
         try:
             translation = await self.ai_provider.generate(prompt, model=self.translate_model)

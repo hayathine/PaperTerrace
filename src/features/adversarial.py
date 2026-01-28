@@ -24,40 +24,45 @@ class AdversarialReviewService:
     def __init__(self):
         self.ai_provider = get_ai_provider()
 
-    async def critique(self, text: str) -> dict:
+    async def critique(self, text: str, target_lang: str = "ja") -> dict:
         """
         Analyze the paper from a critical perspective.
 
         Args:
             text: The paper text
+            target_lang: Output language
 
         Returns:
             Dictionary with critical analysis categories
         """
-        prompt = f"""あなたは厳格なレビュアーです。以下の論文を批判的な視点から分析し、
-潜在的な問題点を指摘してください。
+        from .translate import SUPPORTED_LANGUAGES
 
-【論文テキスト】
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
+        prompt = f"""You are a rigorous reviewer. Analyze the following paper from a critical perspective and identify potential issues.
+
+[Paper Text]
 {text[:12000]}
 
-以下のJSON形式で出力してください：
+Please output in the following JSON format in {lang_name}:
 {{
   "hidden_assumptions": [
-    {{"assumption": "隠れた前提", "risk": "それが問題となる理由", "severity": "high/medium/low"}}
+    {{"assumption": "Hidden assumption", "risk": "Why it is a problem", "severity": "high/medium/low"}}
   ],
   "unverified_conditions": [
-    {{"condition": "未検証の条件", "impact": "検証されていない場合の影響", "severity": "high/medium/low"}}
+    {{"condition": "Unverified condition", "impact": "Impact if not verified", "severity": "high/medium/low"}}
   ],
   "reproducibility_risks": [
-    {{"risk": "再現性のリスク", "detail": "詳細な説明", "severity": "high/medium/low"}}
+    {{"risk": "Reproducibility risk", "detail": "Detailed explanation", "severity": "high/medium/low"}}
   ],
   "methodology_concerns": [
-    {{"concern": "方法論上の懸念", "suggestion": "改善提案", "severity": "high/medium/low"}}
+    {{"concern": "Methodological concern", "suggestion": "Suggestion for improvement", "severity": "high/medium/low"}}
   ],
-  "overall_assessment": "全体的な評価（2-3文）"
+  "overall_assessment": "Overall assessment (2-3 sentences)"
 }}
 
-建設的な批判を心がけてください。JSONのみを出力してください。"""
+Be constructive but critical. Output ONLY valid JSON.
+"""
 
         try:
             logger.debug(
@@ -112,32 +117,38 @@ class AdversarialReviewService:
                 "overall_assessment": "分析に失敗しました",
             }
 
-    async def identify_limitations(self, text: str) -> list[dict]:
+    async def identify_limitations(self, text: str, target_lang: str = "ja") -> list[dict]:
         """
         Identify limitations not explicitly stated by authors.
 
         Args:
             text: The paper text
+            target_lang: Output language
 
         Returns:
             List of identified limitations
         """
-        prompt = f"""以下の論文から、著者が明示的に述べていない可能性のある限界を特定してください。
+        from .translate import SUPPORTED_LANGUAGES
 
-【論文テキスト】
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
+        prompt = f"""Identify limitations in the following paper that may not be explicitly stated by the authors.
+
+[Paper Text]
 {text[:10000]}
 
-以下のJSON形式で出力してください：
+Output in the following JSON format in {lang_name}:
 [
   {{
-    "limitation": "限界の説明",
-    "evidence": "そう判断した根拠",
-    "impact": "研究結果への影響",
+    "limitation": "Explanation of limitation",
+    "evidence": "Basis for this judgment",
+    "impact": "Impact on research results",
     "severity": "high/medium/low"
   }}
 ]
 
-最大5件まで。JSONのみを出力してください。"""
+Max 5 items. Output ONLY valid JSON.
+"""
 
         try:
             logger.debug(
@@ -171,27 +182,35 @@ class AdversarialReviewService:
             )
             return []
 
-    async def suggest_counterarguments(self, claim: str, context: str = "") -> list[str]:
+    async def suggest_counterarguments(
+        self, claim: str, context: str = "", target_lang: str = "ja"
+    ) -> list[str]:
         """
         Generate potential counterarguments to a specific claim.
 
         Args:
             claim: The claim to counter
             context: Additional context
+            target_lang: Output language
 
         Returns:
             List of counterarguments
         """
-        context_hint = f"\n【コンテキスト】\n{context[:3000]}" if context else ""
+        from .translate import SUPPORTED_LANGUAGES
 
-        prompt = f"""以下の主張に対する反論を3つ生成してください。
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
+        context_hint = f"\n[Context]\n{context[:3000]}" if context else ""
+
+        prompt = f"""Generate 3 potential counterarguments to the following claim in {lang_name}.
 {context_hint}
 
-【主張】
+[Claim]
 {claim}
 
-建設的で学術的な反論を、それぞれ2-3文で述べてください。
-番号付きリストで出力してください。"""
+Provide constructive and academic counterarguments, 2-3 sentences each.
+Output as a numbered list.
+"""
 
         try:
             response = await self.ai_provider.generate(prompt)

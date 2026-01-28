@@ -12,10 +12,16 @@ class Translate:
         self.ai_provider = get_ai_provider()
         self.model = model_name or os.getenv("MODEL_DICT", "gemini-2.0-flash-lite")
 
-    async def explain_unknown_word(self, word: str) -> str:
-        """辞書にない英単語を日本語で解説する"""
-        prompt = f"英単語「{word}」の日本語訳と、その意味を15文字程度で簡潔に説明してください。"
+    async def explain_unknown_word(self, word: str, lang: str = "ja") -> str:
+        """Explain an unknown word in the target language."""
+        from .translate import SUPPORTED_LANGUAGES
+
+        lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
+
+        prompt = f"""Provide the translation of the English word "{word}" in {lang_name} and a concise explanation (approx. 15 characters or 3-5 words).
+Format: [Translation] Explanation
+"""
         try:
             return await self.ai_provider.generate(prompt, model=self.model)
         except Exception:
-            return "意味を取得できませんでした"
+            return "Failed to retrieve meaning."

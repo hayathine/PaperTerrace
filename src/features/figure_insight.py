@@ -19,7 +19,11 @@ class FigureInsightService:
         self.ai_provider = get_ai_provider()
 
     async def analyze_figure(
-        self, image_bytes: bytes, caption: str = "", mime_type: str = "image/png"
+        self,
+        image_bytes: bytes,
+        caption: str = "",
+        mime_type: str = "image/png",
+        target_lang: str = "ja",
     ) -> str:
         """
         Analyze a figure image and generate insights.
@@ -28,22 +32,29 @@ class FigureInsightService:
             image_bytes: The image data
             caption: Optional figure caption
             mime_type: Image MIME type
+            target_lang: Output language
 
         Returns:
-            Analysis and insights in Japanese
+            Analysis and insights in target language
         """
-        caption_hint = f"\n【キャプション】\n{caption}" if caption else ""
+        from .translate import SUPPORTED_LANGUAGES
 
-        prompt = f"""この図（グラフ・表・図解）を分析し、以下の点について日本語で解説してください。
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
+        caption_hint = f"\n[Caption]\n{caption}" if caption else ""
+
+        prompt = f"""Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.
 {caption_hint}
 
-1. **図の種類と概要**: 何を表している図か
-2. **主な発見**: 図から読み取れる主要な傾向やパターン
-3. **データの解釈**: 数値やトレンドの意味
-4. **含意**: この図が論文の主張をどのようにサポートしているか
-5. **注目点**: 特に注目すべき点や異常値
+1. **Type & Overview**: What this figure represents.
+2. **Key Findings**: Main trends or patterns observed.
+3. **Interpretation**: Meaning of the numbers or trends.
+4. **Implications**: How this supports the paper's claims.
+5. **Highlights**: Notable points or anomalies.
 
-視覚的な情報を言語化して、図を見なくても内容が理解できるように説明してください。"""
+Verbalize visual information so it can be understood without seeing the figure.
+Output in {lang_name}.
+"""
 
         try:
             logger.debug(
@@ -71,30 +82,40 @@ class FigureInsightService:
             )
             return f"図の分析に失敗しました: {e}"
 
-    async def analyze_table_text(self, table_text: str, context: str = "") -> str:
+    async def analyze_table_text(
+        self, table_text: str, context: str = "", target_lang: str = "ja"
+    ) -> str:
         """
         Analyze a table in text format.
 
         Args:
             table_text: The table content as text
             context: Surrounding text for context
+            target_lang: Output language
 
         Returns:
-            Analysis in Japanese
+            Analysis in target language
         """
-        context_hint = f"\n【コンテキスト】\n{context[:1000]}" if context else ""
+        from .translate import SUPPORTED_LANGUAGES
 
-        prompt = f"""以下の表を分析し、日本語で解説してください。
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
+        context_hint = f"\n[Context]\n{context[:1000]}" if context else ""
+
+        prompt = f"""Analyze the following table and explain it in {lang_name}.
 {context_hint}
 
-【表の内容】
+[Table Content]
 {table_text}
 
-以下の点について説明してください：
-1. 表が示している内容の概要
-2. 主要な数値やトレンド
-3. 注目すべき比較や差異
-4. この表から得られる結論"""
+Please explain:
+1. Overview of what the table shows.
+2. Key numbers and trends.
+3. Notable comparisons or differences.
+4. Conclusions drawn from this table.
+
+Output in {lang_name}.
+"""
 
         try:
             analysis = await self.ai_provider.generate(prompt)
@@ -104,30 +125,40 @@ class FigureInsightService:
             logger.error(f"Table analysis failed: {e}")
             return f"表の分析に失敗しました: {str(e)}"
 
-    async def compare_figures(self, description1: str, description2: str) -> str:
+    async def compare_figures(
+        self, description1: str, description2: str, target_lang: str = "ja"
+    ) -> str:
         """
         Compare two figures based on their descriptions.
 
         Args:
             description1: Description of first figure
             description2: Description of second figure
+            target_lang: Output language
 
         Returns:
-            Comparison analysis in Japanese
+            Comparison analysis in target language
         """
-        prompt = f"""以下の2つの図を比較し、その関係性や違いを分析してください。
+        from .translate import SUPPORTED_LANGUAGES
 
-【図1】
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
+        prompt = f"""Compare the following two figures and analyze their relationship or differences in {lang_name}.
+
+[Figure 1]
 {description1}
 
-【図2】
+[Figure 2]
 {description2}
 
-比較ポイント：
-1. 共通点
-2. 相違点
-3. 補完関係
-4. 矛盾があれば指摘"""
+Comparison Points:
+1. Similarities
+2. Differences
+3. Complementary relationship
+4. Contradictions (if any)
+
+Output in {lang_name}.
+"""
 
         try:
             comparison = await self.ai_provider.generate(prompt)

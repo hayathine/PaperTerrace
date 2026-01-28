@@ -51,16 +51,17 @@ class ChatService:
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = f"""あなたは学術論文を読む研究者を支援するAIアシスタントです。
-以下の論文の内容を踏まえて、ユーザーの質問に{lang_name}で回答してください。
+        prompt = f"""You are an AI assistant helping a researcher read this academic paper.
+Based on the paper context below, answer the user's question in {lang_name}.
 
-【論文コンテキスト】
-{document_context[:8000] if document_context else "論文が読み込まれていません。"}
+[Paper Context]
+{document_context[:8000] if document_context else "No paper loaded."}
 
-【会話履歴】
+[Chat History]
 {history_text}
 
-分かりやすく、簡潔に回答してください。"""
+Please provide a clear and concise answer in {lang_name}.
+"""
 
         try:
             logger.debug(
@@ -116,16 +117,18 @@ class ChatService:
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = f"""あなたはこの論文の著者です。読者からの質問に、著者の視点で回答してください。回答は{lang_name}で行ってください。
+        prompt = f"""You are the author of this paper. Answer the reader's question from the author's perspective in {lang_name}.
 
-【論文内容】
+[Paper Content]
 {paper_text[:10000]}
 
-【読者からの質問】
+[Reader's Question]
 {question}
 
-著者として、研究の背景、動機、方法論の選択理由などを含めて回答してください。
-一人称（私は、私たちのチームは、など）を使用して回答してください。"""
+Answer as if you are the author (using "I", "we", "our team").
+Explain the background, motivation, and methodology rationale where appropriate.
+Ensure the response is in {lang_name}.
+"""
 
         try:
             logger.debug(

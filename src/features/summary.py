@@ -38,24 +38,24 @@ class SummaryService:
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = f"""以下の論文を{lang_name}で要約してください。
+        prompt = f"""Summarize the following paper in {lang_name}.
 
-【論文テキスト】
+[Paper Text]
 {text[:15000]}
 
-以下の形式で要約してください：
+Format the summary as follows in {lang_name}:
 
-## 概要
-（1-2文で論文の主題を説明）
+## Overview
+(1-2 sentences summarizing the main theme)
 
-## 主な貢献
-（箇条書きで3-5点）
+## Key Contributions
+(3-5 bullet points)
 
-## 手法
-（簡潔に研究手法を説明）
+## Methodology
+(Concise explanation of methods used)
 
-## 結論
-（主要な発見と含意）
+## Conclusion
+(Key findings and implications)
 """
 
         try:
@@ -99,18 +99,19 @@ class SummaryService:
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = f"""以下の論文を、{lang_name}でセクションごとに要約してください。
+        prompt = f"""Summarize the following paper section by section in {lang_name}.
 
-【論文テキスト】
+[Paper Text]
 {text[:15000]}
 
-各セクションについて、以下のJSON形式で出力してください：
+For each section, output the result in the following JSON format:
 [
-  {{"section": "セクション名", "summary": "要約（2-3文）"}},
+  {{"section": "Section Title", "summary": "Summary (2-3 sentences) in {lang_name}"}},
   ...
 ]
 
-JSONのみを出力してください。"""
+Output ONLY valid JSON.
+"""
 
         try:
             logger.debug(
@@ -166,12 +167,13 @@ JSONのみを出力してください。"""
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = f"""以下の論文の要旨を、{lang_name}で作成してください。
-（長さの目安: 100-200文字程度、またはそれと同等の長さ）
+        prompt = f"""Create an abstract of the following paper in {lang_name}.
+(Length: approx. 100-200 words or equivalent characters)
 
 {text[:10000]}
 
-簡潔で学術的な文体で書いてください。"""
+Write in a concise, academic style in {lang_name}.
+"""
 
         try:
             abstract = await self.ai_provider.generate(prompt, model=self.model)
