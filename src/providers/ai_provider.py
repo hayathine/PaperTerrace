@@ -98,7 +98,7 @@ class GeminiProvider(AIProviderInterface):
                 tools = [types.Tool(google_search=types.GoogleSearch())]
 
             # Configure generation config
-            config_params = {}
+            config_params: dict[str, Any] = {}
             if tools:
                 config_params["tools"] = tools
             if response_model:
@@ -169,7 +169,7 @@ class GeminiProvider(AIProviderInterface):
             )
 
             # Configure generation config
-            config_params = {}
+            config_params: dict[str, Any] = {}
             if response_model:
                 config_params["response_mime_type"] = "application/json"
                 config_params["response_schema"] = response_model
@@ -295,7 +295,7 @@ class VertexAIProvider(AIProviderInterface):
             if enable_search:
                 tools = [types.Tool(google_search=types.GoogleSearch())]
 
-            config_params = {
+            config_params: dict[str, Any] = {
                 "temperature": 0.2,
                 "top_k": 40,
                 "max_output_tokens": 8192,
@@ -356,7 +356,7 @@ class VertexAIProvider(AIProviderInterface):
                 prompt,
             ]
 
-            config_params = {"temperature": 0.2, "max_output_tokens": 8192}
+            config_params: dict[str, Any] = {"temperature": 0.2, "max_output_tokens": 8192}
             if response_model:
                 config_params["response_mime_type"] = "application/json"
                 config_params["response_schema"] = response_model

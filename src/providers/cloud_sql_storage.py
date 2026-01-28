@@ -117,6 +117,8 @@ class CloudSQLStorage(StorageInterface):
                         session_id TEXT,
                         term TEXT,
                         note TEXT,
+                        image_url TEXT,
+                        user_id TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
@@ -271,26 +273,33 @@ class CloudSQLStorage(StorageInterface):
         term: str,
         note: str,
         image_url: str | None = None,
+        user_id: str | None = None,
     ) -> str:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO notes (note_id, session_id, term, note, image_url, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO notes (note_id, session_id, term, note, image_url, user_id, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (note_id, session_id, term, note, image_url, datetime.now()),
+                    (note_id, session_id, term, note, image_url, user_id, datetime.now()),
                 )
             conn.commit()
         return note_id
 
-    def get_notes(self, session_id: str) -> list[dict]:
+    def get_notes(self, session_id: str, user_id: str | None = None) -> list[dict]:
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute(
-                    "SELECT * FROM notes WHERE session_id = %s ORDER BY created_at DESC",
-                    (session_id,),
-                )
+                if user_id:
+                    cur.execute(
+                        "SELECT * FROM notes WHERE user_id = %s OR session_id = %s ORDER BY created_at DESC",
+                        (user_id, session_id),
+                    )
+                else:
+                    cur.execute(
+                        "SELECT * FROM notes WHERE session_id = %s ORDER BY created_at DESC",
+                        (session_id,),
+                    )
                 rows = cur.fetchall()
                 return [dict(row) for row in rows]
 
