@@ -224,6 +224,16 @@ class StorageInterface(ABC):
         """Save OCR text to cache."""
         ...
 
+    @abstractmethod
+    def save_session_context(self, session_id: str, paper_id: str) -> None:
+        """Save session to paper mapping."""
+        ...
+
+    @abstractmethod
+    def get_session_paper_id(self, session_id: str) -> str | None:
+        """Get paper ID for a session."""
+        ...
+
 
 class SQLiteStorage(StorageInterface):
     """SQLite storage implementation."""
@@ -259,7 +269,19 @@ class SQLiteStorage(StorageInterface):
                 ("like_count", "INTEGER DEFAULT 0"),
                 ("layout_json", "TEXT"),
                 ("updated_at", "TIMESTAMP"),
+                ("updated_at", "TIMESTAMP"),
             ]
+
+            # Session table migration
+            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='app_sessions'")
+            if not cursor.fetchone():
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS app_sessions (
+                        session_id TEXT PRIMARY KEY,
+                        paper_id TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
 
             for column_name, column_type in migrations:
                 if column_name not in existing_columns:
@@ -414,6 +436,16 @@ class SQLiteStorage(StorageInterface):
                     y REAL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(note_id) REFERENCES notes(note_id) ON DELETE CASCADE
+                )
+            """)
+                )
+            """)
+            # App Sessions table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS app_sessions (
+                    session_id TEXT PRIMARY KEY,
+                    paper_id TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
             conn.commit()
@@ -798,6 +830,25 @@ class SQLiteStorage(StorageInterface):
                 "paper_count": total,
                 "public_paper_count": public,
                 "total_views": views,
+                "total_likes": likes,
+            }
+
+    def save_session_context(self, session_id: str, paper_id: str) -> None:
+        """Save session to paper mapping."""
+        with self._get_connection() as conn:
+            conn.execute(
+                "INSERT OR REPLACE INTO app_sessions (session_id, paper_id, created_at) VALUES (?, ?, ?)",
+                (session_id, paper_id, datetime.now().isoformat()),
+            )
+            conn.commit()
+
+    def get_session_paper_id(self, session_id: str) -> str | None:
+        """Get paper ID for a session."""
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT paper_id FROM app_sessions WHERE session_id = ?", (session_id,)
+            ).fetchone()
+            return row[0] if row else None
                 "total_likes": likes,
             }
 

@@ -17,7 +17,7 @@ from ..features import (
     SummaryService,
 )
 from ..logger import logger
-from ..providers import RedisService
+from ..providers import RedisService, get_storage_provider
 
 router = APIRouter(tags=["Analysis"])
 
@@ -30,6 +30,29 @@ adversarial_service = AdversarialReviewService()
 cite_intent_service = CiteIntentService()
 claim_service = ClaimVerificationService()
 redis_service = RedisService()
+storage = get_storage_provider()
+
+
+def _get_context(session_id: str) -> str | None:
+    """Get paper context from Redis or DB fallback."""
+    # 1. Try Redis
+    context = redis_service.get(f"session:{session_id}")
+    if context:
+        return context
+
+    # 2. Try DB persistence (Session mapping)
+    paper_id = storage.get_session_paper_id(session_id) or session_id
+
+    # 3. Get Paper
+    paper = storage.get_paper(paper_id)
+    if paper and paper.get("ocr_text"):
+        context = paper["ocr_text"]
+        # Restore cache
+        redis_service.set(f"session:{session_id}", context, expire=3600)
+        logger.info(f"Restored context from DB for session {session_id} -> paper {paper_id}")
+        return context
+
+    return None
 
 
 # ============================================================================
@@ -39,12 +62,13 @@ redis_service = RedisService()
 
 @router.post("/summarize")
 async def summarize(session_id: str = Form(...), mode: str = Form("full"), lang: str = Form("ja")):
-    context = redis_service.get(f"session:{session_id}") or ""
-    logger.info(f"[summarize] session_id={session_id}, context_len={len(context)}")
+    context = _get_context(session_id)
     if not context:
+        logger.warning(f"[summarize] Context not found for session {session_id}")
         return JSONResponse(
             {"error": f"論文が読み込まれていません (session_id: {session_id})"}, status_code=400
         )
+    logger.info(f"[summarize] session_id={session_id}, context_len={len(context)}")
 
     if mode == "sections":
         sections = await summary_service.summarize_sections(context, target_lang=lang)
@@ -64,7 +88,7 @@ async def summarize(session_id: str = Form(...), mode: str = Form("full"), lang:
 
 @router.post("/research-radar")
 async def research_radar(session_id: str = Form(...), lang: str = Form("ja")):
-    context = redis_service.get(f"session:{session_id}") or ""
+    context = _get_context(session_id)
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
@@ -75,7 +99,7 @@ async def research_radar(session_id: str = Form(...), lang: str = Form("ja")):
 
 @router.post("/analyze-citations")
 async def analyze_citations(session_id: str = Form(...)):
-    context = redis_service.get(f"session:{session_id}") or ""
+    context = _get_context(session_id)
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
@@ -92,8 +116,8 @@ async def analyze_citations(session_id: str = Form(...)):
 async def explain_paragraph(
     paragraph: str = Form(...), session_id: str = Form(...), lang: str = Form("ja")
 ):
-    context = redis_service.get(f"session:{session_id}") or ""
-    explanation = await paragraph_explain_service.explain(paragraph, context, lang=lang)
+    context = _get_context(session_id)
+    explanation = await paragraph_explain_service.explain(paragraph, context or "", lang=lang)
     return JSONResponse({"explanation": explanation})
 
 
@@ -118,7 +142,7 @@ async def analyze_figure(file: UploadFile = File(...), caption: str = Form("")):
 
 @router.post("/analyze-table")
 async def analyze_table(table_text: str = Form(...), session_id: str = Form("")):
-    context = redis_service.get(f"session:{session_id}") or ""
+    context = _get_context(session_id) or ""
     analysis = await figure_insight_service.analyze_table_text(table_text, context)
     return JSONResponse({"analysis": analysis})
 
@@ -130,7 +154,7 @@ async def analyze_table(table_text: str = Form(...), session_id: str = Form(""))
 
 @router.post("/critique")
 async def critique(session_id: str = Form(...), lang: str = Form("ja")):
-    context = redis_service.get(f"session:{session_id}") or ""
+    context = _get_context(session_id)
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
@@ -140,7 +164,7 @@ async def critique(session_id: str = Form(...), lang: str = Form("ja")):
 
 @router.post("/identify-limitations")
 async def identify_limitations(session_id: str = Form(...)):
-    context = redis_service.get(f"session:{session_id}") or ""
+    context = _get_context(session_id)
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
@@ -150,7 +174,7 @@ async def identify_limitations(session_id: str = Form(...)):
 
 @router.post("/counterarguments")
 async def counterarguments(claim: str = Form(...), session_id: str = Form("")):
-    context = redis_service.get(f"session:{session_id}") or ""
+    context = _get_context(session_id) or ""
     args = await adversarial_service.suggest_counterarguments(claim, context)
     return JSONResponse({"counterarguments": args})
 

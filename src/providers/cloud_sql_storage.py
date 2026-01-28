@@ -170,6 +170,14 @@ class CloudSQLStorage(StorageInterface):
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
+                # App Sessions
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS app_sessions (
+                        session_id TEXT PRIMARY KEY,
+                        paper_id TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
             conn.commit()
 
     # ===== Paper methods =====
@@ -526,6 +534,32 @@ class CloudSQLStorage(StorageInterface):
                     "total_views": views,
                     "total_likes": likes,
                 }
+
+    def save_session_context(self, session_id: str, paper_id: str) -> None:
+        """Save session to paper mapping."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO app_sessions (session_id, paper_id, created_at) 
+                    VALUES (%s, %s, %s)
+                    ON CONFLICT (session_id) DO UPDATE SET
+                    paper_id = EXCLUDED.paper_id,
+                    created_at = EXCLUDED.created_at
+                    """,
+                    (session_id, paper_id, datetime.now()),
+                )
+            conn.commit()
+
+    def get_session_paper_id(self, session_id: str) -> str | None:
+        """Get paper ID for a session."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT paper_id FROM app_sessions WHERE session_id = %s", (session_id,)
+                )
+                row = cur.fetchone()
+                return row[0] if row else None
 
     def get_user_papers(
         self, user_id: str, page: int = 1, per_page: int = 20

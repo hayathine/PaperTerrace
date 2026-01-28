@@ -225,6 +225,11 @@ async def stream(task_id: str):
                 # セッションコンテキスト保存 (Summary等のために必要)
                 s_id = session_id or new_paper_id
                 res = redis_service.set(f"session:{s_id}", full_text, expire=86400)
+
+                # DBにもセッションマッピングを保存 (再起動対策)
+                if s_id:
+                    storage.save_session_context(s_id, new_paper_id)
+
                 logger.info(
                     f"Saved session context for: {s_id} (result: {res}, length: {len(full_text)})"
                 )
@@ -414,6 +419,8 @@ async def stream(task_id: str):
             # セッションコンテキスト保存
             if session_id:
                 redis_service.set(f"session:{session_id}", full_text, expire=86400)
+                # DBにも保存
+                storage.save_session_context(session_id, paper_id)
 
             # 完了処理
             redis_service.delete(f"task:{task_id}")
