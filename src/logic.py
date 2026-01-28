@@ -52,6 +52,48 @@ class PDFOCRService:
         self.ai_provider = get_ai_provider()
         self.model = model
 
+    async def detect_language_from_pdf(self, file_bytes: bytes) -> str:
+        """PDFの言語を検出する（メタデータ -> AI判定の順）"""
+        import fitz
+
+        language = "en"  # default
+
+        try:
+            doc = fitz.open(stream=file_bytes, filetype="pdf")
+
+            # 1. メタデータ (Catalog Lang) の確認
+            # xref_get_key returns (type, value)
+            # type: 'name', 'string', etc.
+            catalog = doc.pdf_catalog()
+            lang_entry = doc.xref_get_key(catalog, "Lang")
+            if lang_entry[0] in ("name", "string") and lang_entry[1]:
+                lang_code = lang_entry[1]
+                logger.info(f"PDF Metadata Language detected: {lang_code}")
+                # Clean up (e.g., 'en-US' -> 'en')
+                language = lang_code.split("-")[0].lower()
+                doc.close()
+                return language
+
+            # 2. メタデータにない場合、1ページ目をAIで判定
+            if len(doc) > 0:
+                text = doc[0].get_text()[:1000]
+                if text.strip():
+                    prompt = f"""以下のテキストの主要な言語を判定し、ISO 639-1コード（'en', 'ja', 'fr'など）のみを返してください。
+テキストの例:
+{text}
+"""
+                    detected = await self.ai_provider.generate(prompt, model=self.model)
+                    detected = detected.strip().lower()
+                    if len(detected) == 2:
+                        language = detected
+                        logger.info(f"PDF Content Language detected by AI: {language}")
+
+            doc.close()
+        except Exception as e:
+            logger.error(f"Language detection failed: {e}")
+
+        return language
+
     async def extract_text_with_ai(self, file_bytes: bytes, filename: str = "unknown.pdf") -> str:
         file_hash = _get_file_hash(file_bytes)
         cached_ocr = get_ocr_from_db(file_hash)

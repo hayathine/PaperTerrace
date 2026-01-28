@@ -66,6 +66,12 @@ async def analyze_pdf(
     file_hash = _get_file_hash(content)
     logger.info(f"[analyze-pdf] File hash computed: {file_hash[:16]}...")
 
+    # Detect PDF language
+    detected_lang = await service.ocr_service.detect_language_from_pdf(content)
+    if detected_lang:
+        logger.info(f"[analyze-pdf] Auto-detected language override: {lang} -> {detected_lang}")
+        lang = detected_lang
+
     # Check for cached paper
     cached_paper = storage.get_paper_by_hash(file_hash)
     if cached_paper:

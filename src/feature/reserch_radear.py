@@ -164,3 +164,26 @@ JSONのみ出力してください。"""
                 return {"profile": authors[0], "papers": []}
 
         return {"profile": authors[0], "papers": []}
+
+    async def generate_search_queries(self, context: str) -> List[str]:
+        """Generate search queries for related research."""
+        prompt = f"""Based on the following paper context, generate 3-5 search queries to find related research papers.
+Context:
+{context[:2000]}
+
+Output as a JSON list of strings.
+"""
+        try:
+            response = await self.ai_provider.generate(prompt)
+            clean_res = response.strip().replace("```json", "").replace("```", "")
+            if clean_res.startswith("["):
+                return json.loads(clean_res)
+            return []
+        except Exception as e:
+            logger.error(f"Query generation failed: {e}")
+            return []
+
+    async def analyze_citations(self, context: str) -> Dict[str, Any]:
+        """Analyze citation network/importance."""
+        # Simple simulation for now
+        return {"status": "not_implemented_yet", "message": "Citation analysis logic pending."}

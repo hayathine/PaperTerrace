@@ -81,15 +81,17 @@ async def analyze_citations(session_id: str = Form(...)):
 
 
 @router.post("/explain-paragraph")
-async def explain_paragraph(paragraph: str = Form(...), session_id: str = Form(...)):
+async def explain_paragraph(
+    paragraph: str = Form(...), session_id: str = Form(...), lang: str = Form("ja")
+):
     context = redis_service.get(f"session:{session_id}") or ""
-    explanation = await paragraph_explain_service.explain(paragraph, context)
+    explanation = await paragraph_explain_service.explain(paragraph, context, lang=lang)
     return JSONResponse({"explanation": explanation})
 
 
 @router.post("/explain-terms")
-async def explain_terms(paragraph: str = Form(...)):
-    terms = await paragraph_explain_service.explain_terminology(paragraph)
+async def explain_terms(paragraph: str = Form(...), lang: str = Form("ja")):
+    terms = await paragraph_explain_service.explain_terminology(paragraph, lang=lang)
     return JSONResponse({"terms": terms})
 
 

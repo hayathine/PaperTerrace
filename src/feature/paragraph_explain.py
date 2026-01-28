@@ -21,37 +21,44 @@ class ParagraphExplainService:
         self.ai_provider = get_ai_provider()
         self.model = os.getenv("MODEL_PARAGRAPH", "gemini-2.0-flash")
 
-    async def explain(self, paragraph: str, full_context: str = "") -> str:
+    async def explain(self, paragraph: str, full_context: str = "", lang: str = "ja") -> str:
         """
         Generate a detailed explanation of a paragraph.
 
         Args:
             paragraph: The paragraph to explain
             full_context: The full paper text for context
+            lang: Target language for the explanation
 
         Returns:
-            Detailed explanation in Japanese
+            Detailed explanation in the target language
         """
+        from .translate import SUPPORTED_LANGUAGES
+
+        lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
+
         context_hint = ""
         if full_context:
             context_hint = f"""
-【論文全体のコンテキスト（抜粋）】
+[Full Paper Context (Excerpt)]
 {full_context[:5000]}
 """
 
-        prompt = f"""以下の段落を詳細に解説してください。
+        prompt = f"""Please analyze and explain the following paragraph in detail.
 {context_hint}
-【解説対象の段落】
+[Target Paragraph]
 {paragraph}
 
-以下の点を含めて、日本語で分かりやすく解説してください：
+Please provide a clear and easy-to-understand explanation in {lang_name}, covering the following points:
 
-1. **主張**: この段落で述べられている主な主張や内容
-2. **背景知識**: 理解に必要な前提知識や専門用語の説明
-3. **論理展開**: 議論がどのように展開されているか
-4. **重要ポイント**: 特に注目すべき点や含意
+1. **Main Claim**: The core argument or content of this paragraph.
+2. **Background Knowledge**: Prerequisites or technical terms needed to understand this.
+3. **Logic Flow**: How the argument or logic is developed.
+4. **Key Points**: Important implications or things to note.
 
-専門的な内容も、大学院生が理解できるレベルで説明してください。"""
+Even if the content is highly technical, please explain it at a level understandable by a graduate student.
+Ensure the output is in {lang_name}.
+"""
 
         try:
             logger.debug(
@@ -80,7 +87,7 @@ class ParagraphExplainService:
             return f"解説の生成に失敗しました: {e}"
 
     async def explain_terminology(
-        self, paragraph: str, terms: list[str] | None = None
+        self, paragraph: str, terms: list[str] | None = None, lang: str = "ja"
     ) -> list[dict]:
         """
         Extract and explain technical terms in a paragraph.
@@ -88,27 +95,34 @@ class ParagraphExplainService:
         Args:
             paragraph: The paragraph to analyze
             terms: Optional list of specific terms to explain
+            lang: Target language for explanation
 
         Returns:
             List of term explanations
         """
+        from .translate import SUPPORTED_LANGUAGES
+
+        lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
+
         terms_hint = ""
         if terms:
-            terms_hint = f"特に以下の用語を優先的に説明してください：{', '.join(terms)}"
+            terms_hint = f"Specifically explain these terms if found: {', '.join(terms)}"
 
-        prompt = f"""以下の段落から専門用語を抽出し、それぞれを簡潔に説明してください。
+        prompt = f"""Please extract technical terms from the paragraph below and provide concise explanations for each.
 
-【段落】
+[Paragraph]
 {paragraph}
 
 {terms_hint}
 
-以下のJSON形式で出力してください：
+Please output the explanations in {lang_name}.
+Return the result strictly in the following JSON format:
 [
-  {{"term": "用語", "explanation": "簡潔な説明（1-2文）", "importance": "high/medium/low"}}
+  {{"term": "Term", "explanation": "Concise explanation (1-2 sentences) in {lang_name}", "importance": "high/medium/low"}}
 ]
 
-最大10件まで。JSONのみを出力してください。"""
+Limit to at most 10 terms. Output JSON only.
+"""
 
         try:
             response = await self.ai_provider.generate(prompt, model=self.model)

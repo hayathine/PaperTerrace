@@ -415,6 +415,7 @@
       const formData = new FormData();
       formData.append("paragraph", text);
       formData.append("session_id", sessionId);
+      formData.append("lang", currentLanguage);
 
       const response = await fetch("/explain-paragraph", {
         method: "POST",
