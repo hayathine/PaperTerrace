@@ -1,8 +1,11 @@
 import React, { useState, useEffect } from 'react'
 import Sidebar from './components/Sidebar/Sidebar'
 import PDFViewer from './components/PDF/PDFViewer'
+import { useAuth } from './contexts/AuthContext'
+import Login from './components/Auth/Login'
 
 function App() {
+    const { user, logout } = useAuth()
     const [config, setConfig] = useState<any>(null)
     const [uploadFile, setUploadFile] = useState<File | null>(null)
 
@@ -18,11 +21,13 @@ function App() {
     const [selectedWord, setSelectedWord] = useState<string | undefined>(undefined)
 
     useEffect(() => {
-        fetch('/api/config')
-            .then(res => res.json())
-            .then(data => setConfig(data))
-            .catch(err => console.error(err))
-    }, [])
+        if (user) {
+            fetch('/api/config')
+                .then(res => res.json())
+                .then(data => setConfig(data))
+                .catch(err => console.error(err))
+        }
+    }, [user])
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -35,14 +40,34 @@ function App() {
         setActiveTab('dict')
     }
 
+    if (!user) {
+        return <Login />
+    }
+
     return (
         <div className="flex h-screen w-full bg-gray-100 overflow-hidden">
-            {/* ... (Sidebar Placeholder lines 25-48) */}
+            {/* Sidebar Placeholder */}
             <div className="w-64 bg-gray-900 text-white p-4 hidden md:flex flex-col">
                 <h1 className="text-xl font-bold mb-8">PaperTerrace</h1>
                 <div className="flex-1">
                     <p className="text-gray-400 text-sm">Validating React Migration...</p>
                     {config && <p className="text-green-400 text-xs mt-2">● API Connected</p>}
+                </div>
+
+                <div className="mt-auto mb-4">
+                    <div className="flex items-center gap-2 mb-4 p-2 bg-gray-800 rounded">
+                        {user.photoURL && <img src={user.photoURL} alt="User" className="w-8 h-8 rounded-full" />}
+                        <div className="overflow-hidden">
+                            <p className="text-sm font-medium truncate">{user.displayName}</p>
+                            <p className="text-xs text-gray-400 truncate">{user.email}</p>
+                        </div>
+                    </div>
+                    <button
+                        onClick={logout}
+                        className="w-full py-2 px-4 bg-red-600 hover:bg-red-700 rounded text-sm transition-colors"
+                    >
+                        Sign Out
+                    </button>
                 </div>
 
                 <div className="mt-4">
