@@ -38,6 +38,7 @@ MANIFEST
 *.manifest
 *.spec
 src/static/paper_images
+docs/
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
