@@ -5,7 +5,6 @@ Handles word translation, explanation, and language settings.
 
 import asyncio
 import os
-from concurrent.futures import ThreadPoolExecutor
 
 import google.genai as genai
 from fastapi import APIRouter
@@ -14,7 +13,7 @@ from pydantic import BaseModel
 
 from ..feature import TranslationService
 from ..logger import logger
-from ..logic import EnglishAnalysisService, _lookup_word_full
+from ..logic import EnglishAnalysisService, _lookup_word_full, executor
 
 router = APIRouter(tags=["Translation"])
 
@@ -80,7 +79,7 @@ async def explain(lemma: str):
 
     # キャッシュにない場合は Jamdict を検索
     loop = asyncio.get_event_loop()
-    executor = ThreadPoolExecutor(max_workers=2)
+    # executor は src.logic からインポートしたものを使用（スレッド/DB接続の再利用のため）
     lookup_res = await loop.run_in_executor(executor, _lookup_word_full, lemma)
 
     if lookup_res.entries:
