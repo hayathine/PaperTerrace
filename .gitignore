@@ -39,6 +39,7 @@ MANIFEST
 *.spec
 src/static/paper_images
 docs/
+frontend/
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt

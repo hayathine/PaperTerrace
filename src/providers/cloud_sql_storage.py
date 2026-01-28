@@ -260,15 +260,22 @@ class CloudSQLStorage(StorageInterface):
 
     # ===== Note methods =====
 
-    def save_note(self, note_id: str, session_id: str, term: str, note: str) -> str:
+    def save_note(
+        self,
+        note_id: str,
+        session_id: str,
+        term: str,
+        note: str,
+        image_url: str | None = None,
+    ) -> str:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO notes (note_id, session_id, term, note, created_at)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO notes (note_id, session_id, term, note, image_url, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                     """,
-                    (note_id, session_id, term, note, datetime.now()),
+                    (note_id, session_id, term, note, image_url, datetime.now()),
                 )
             conn.commit()
         return note_id
