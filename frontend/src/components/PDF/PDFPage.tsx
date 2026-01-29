@@ -34,6 +34,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
     const [isDragging, setIsDragging] = React.useState(false);
     const [selectionStart, setSelectionStart] = React.useState<number | null>(null);
     const [selectionEnd, setSelectionEnd] = React.useState<number | null>(null);
+    const [selectionMenu, setSelectionMenu] = React.useState<{ x: number, y: number, text: string, context: string, coords: any } | null>(null);
 
     const handleMouseUp = () => {
         if (isStampMode || isAreaMode) return;
@@ -42,40 +43,72 @@ const PDFPage: React.FC<PDFPageProps> = ({
             setIsDragging(false);
 
             if (selectionStart !== selectionEnd) {
-                // Multi-word selection -> Note
-                if (onTextSelect) {
-                    const min = Math.min(selectionStart, selectionEnd);
-                    const max = Math.max(selectionStart, selectionEnd);
-                    const selectedWords = words.slice(min, max + 1);
-                    const text = selectedWords.map(w => w.word).join(' ');
+                // Multi-word selection -> Show Menu
+                const min = Math.min(selectionStart, selectionEnd);
+                const max = Math.max(selectionStart, selectionEnd);
+                const selectedWords = words.slice(min, max + 1);
+                const text = selectedWords.map(w => w.word).join(' ');
+                // Context: grab a bit more surrounding text? For now just the selected text as context + some padding
+                const startCtx = Math.max(0, min - 10);
+                const endCtx = Math.min(words.length, max + 10);
+                const context = words.slice(startCtx, endCtx).map(w => w.word).join(' ');
 
-                    // Calculate bounding box of selection for anchor
-                    const firstWord = words[min];
-                    const lastWord = words[max];
-                    const x1 = firstWord.bbox[0];
-                    const y1 = firstWord.bbox[1];
-                    const x2 = lastWord.bbox[2];
-                    const y2 = lastWord.bbox[3];
+                // Calculate bounding box of selection for anchor
 
-                    // Center of selection
-                    const centerX = (x1 + x2) / 2 / width;
-                    const centerY = (y1 + y2) / 2 / height;
+                // Position menu near the end of selection or center? Center is better.
+                // We need pixel coordinates for the menu relative to the page container
+                // bbox is [x1, y1, x2, y2] in PDF coordinates (unscaled if width/height match PDF)
+                // BUT the words bbox in PageData are likely consistent with width/height.
+                // In the render, we use percentages.
+                // We want the menu to be absolute positioned in the div.
+                // x1, y1 etc are relative to page 'width' and 'height'.
 
-                    onTextSelect(text, { page: page_num, x: centerX, y: centerY });
-                }
+                // Let's use % for position
+                const x1 = Math.min(...selectedWords.map(w => w.bbox[0]));
+                const y1 = Math.min(...selectedWords.map(w => w.bbox[1]));
+                const x2 = Math.max(...selectedWords.map(w => w.bbox[2]));
+                const y2 = Math.max(...selectedWords.map(w => w.bbox[3]));
+
+                const centerPctX = ((x1 + x2) / 2 / width) * 100;
+                // Place it slightly above the selection
+                const topPctY = (y1 / height) * 100;
+
+                const centerX = (x1 + x2) / 2 / width;
+                const centerY = (y1 + y2) / 2 / height;
+
+                setSelectionMenu({
+                    x: centerPctX,
+                    y: topPctY,
+                    text,
+                    context,
+                    coords: { page: page_num, x: centerX, y: centerY }
+                });
+
             } else {
-                // Single click -> handled by onClick of the div, but we need to ensure not to duplicate
-                // Actually, if we use OnClick on the div, it fires after mouseup.
-                // We'll let the OnClick handler do the Dictionary lookup.
-            }
-
-            // Clear selection after a short delay so user sees what they selected
-            setTimeout(() => {
+                // Single click
                 setSelectionStart(null);
                 setSelectionEnd(null);
-            }, 300);
+            }
         }
     };
+
+    // Additional helper to clear selection on outside click
+    React.useEffect(() => {
+        const handleClickOutside = () => {
+            if (selectionMenu) {
+                setSelectionMenu(null);
+                setSelectionStart(null);
+                setSelectionEnd(null);
+            }
+        };
+
+        if (selectionMenu) {
+            document.addEventListener('mousedown', handleClickOutside);
+        }
+        return () => {
+            document.removeEventListener('mousedown', handleClickOutside);
+        }
+    }, [selectionMenu]);
 
     // Filter stamps for this page
     const pageStamps = useMemo(() => {
@@ -170,27 +203,26 @@ const PDFPage: React.FC<PDFPageProps> = ({
                                 }}
                                 onMouseDown={(e) => {
                                     if (isStampMode || isAreaMode) return;
-                                    // Prevent default text selection
                                     e.preventDefault();
                                     e.stopPropagation();
                                     setIsDragging(true);
                                     setSelectionStart(idx);
                                     setSelectionEnd(idx);
+                                    setSelectionMenu(null); // Hide menu on new select start
                                 }}
                                 onMouseEnter={() => {
                                     if (isDragging && selectionStart !== null) {
                                         setSelectionEnd(idx);
                                     }
                                 }}
-                                onClick={() => {
+                                onClick={(e) => {
+                                    e.stopPropagation(); // Stop propagation to document
                                     if (!isStampMode && onWordClick) {
-                                        // Only if it was a click (not a drag)
-                                        if (selectionStart === selectionEnd) {
+                                        if (selectionStart === selectionEnd && !selectionMenu) {
                                             const start = Math.max(0, idx - 50);
                                             const end = Math.min(words.length, idx + 50);
                                             const context = words.slice(start, end).map(w => w.word).join(' ');
 
-                                            // Calculate normalized center coordinates
                                             const centerX = (x1 + x2) / 2 / width;
                                             const centerY = (y1 + y2) / 2 / height;
 
@@ -204,6 +236,45 @@ const PDFPage: React.FC<PDFPageProps> = ({
                         );
                     })}
                 </div>
+
+                {/* Selection Menu */}
+                {selectionMenu && (
+                    <div
+                        className="absolute z-50 flex gap-1 bg-gray-900 text-white p-1.5 rounded-lg shadow-xl transform -translate-x-1/2 -translate-y-full"
+                        style={{ left: `${selectionMenu.x}%`, top: `${selectionMenu.y}%`, marginTop: '-10px' }}
+                        onMouseDown={(e) => e.stopPropagation()} // Prevent closing on click
+                    >
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (onWordClick) onWordClick(selectionMenu.text, selectionMenu.context, selectionMenu.coords);
+                                setSelectionMenu(null);
+                                setSelectionStart(null);
+                                setSelectionEnd(null);
+                            }}
+                            className="px-3 py-1.5 hover:bg-gray-700 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                        >
+                            <span>文A</span> Translate
+                        </button>
+                        <div className="w-px bg-gray-700 mx-1"></div>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (onTextSelect) onTextSelect(selectionMenu.text, selectionMenu.coords);
+                                setSelectionMenu(null);
+                                setSelectionStart(null);
+                                setSelectionEnd(null);
+                            }}
+                            className="px-3 py-1.5 hover:bg-gray-700 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                        >
+                            <span>📝</span> Note
+                        </button>
+
+                        {/* Triangle arrow */}
+                        <div className="absolute left-1/2 bottom-0 w-2 h-2 bg-gray-900 transform -translate-x-1/2 translate-y-1/2 rotate-45"></div>
+                    </div>
+                )}
+
             </div>
         </div>
     );

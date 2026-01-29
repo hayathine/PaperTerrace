@@ -57,8 +57,10 @@ async def explain(word: str, lang: str = "ja"):
             }
         )
 
-    # 2. Jamdict (Japanese only)
-    if lang == "ja":
+    is_phrase = " " in lemma.strip()
+
+    # 2. Jamdict (Japanese only) - Skip for phrases
+    if lang == "ja" and not is_phrase:
         lookup_res = await loop.run_in_executor(executor, _lookup_word_full, lemma)
 
         if lookup_res.entries:
@@ -85,7 +87,12 @@ async def explain(word: str, lang: str = "ja"):
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
         provider = get_ai_provider()
-        prompt = f"英単語「{lemma}」の{lang_name}訳を1〜3語で簡潔に。訳のみ出力。"
+
+        if is_phrase:
+            prompt = f"以下の英文を{lang_name}に翻訳してください。\n\n{original_word}\n\n訳のみを出力してください。"
+        else:
+            prompt = f"英単語「{lemma}」の{lang_name}訳を1〜3語で簡潔に。訳のみ出力。"
+
         translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.0-flash-lite")
 
         translation = await provider.generate(prompt, model=translate_model)
