@@ -238,7 +238,9 @@ async def stream(task_id: str):
                 # --- Auto-Summarization for Context ---
                 # Generate a short summary and save it to 'abstract' column for context usage
                 try:
-                    summary_context = await summary_service.summarize_context(full_text, max_length=500)
+                    summary_context = await summary_service.summarize_context(
+                        full_text, max_length=500
+                    )
                     if summary_context:
                         storage.update_paper_abstract(new_paper_id, summary_context)
                         logger.info(f"Auto-summary saved for paper {new_paper_id}")
@@ -285,6 +287,8 @@ async def stream(task_id: str):
                 s_id = session_id or paper_id
                 if s_id and paper_data and paper_data.get("ocr_text"):
                     res = redis_service.set(f"session:{s_id}", paper_data["ocr_text"], expire=86400)
+                    # DBにも保存
+                    storage.save_session_context(s_id, paper_id)
                     logger.info(f"Restored session context for: {s_id} (result: {res})")
                 else:
                     logger.warning(
