@@ -5,7 +5,7 @@ import { useAuth } from './contexts/AuthContext'
 import Login from './components/Auth/Login'
 
 function App() {
-    const { user, isGuest, loginAsGuest, logout } = useAuth()
+    const { user, logout } = useAuth()
     const [config, setConfig] = useState<any>(null)
     const [uploadFile, setUploadFile] = useState<File | null>(null)
 
@@ -22,9 +22,12 @@ function App() {
     const [selectedContext, setSelectedContext] = useState<string | undefined>(undefined)
     const [selectedCoordinates, setSelectedCoordinates] = useState<{ page: number, x: number, y: number } | undefined>(undefined)
     const [jumpTarget, setJumpTarget] = useState<{ page: number, x: number, y: number } | null>(null)
+    const [showLoginModal, setShowLoginModal] = useState(false)
+    const [isAnalyzing, setIsAnalyzing] = useState(false)
 
     useEffect(() => {
         if (user) {
+            setShowLoginModal(false)
             fetch('/api/config')
                 .then(res => res.json())
                 .then(data => setConfig(data))
@@ -49,8 +52,8 @@ function App() {
         setJumpTarget({ page, x, y })
     }
 
-    if (!user && !isGuest) {
-        return <Login onGuestAccess={loginAsGuest} />
+    const handleAnalysisStatusChange = (status: string) => {
+        setIsAnalyzing(status === 'uploading' || status === 'processing');
     }
 
     return (
@@ -73,7 +76,7 @@ function App() {
                             </div>
                         </div>
                     )}
-                    {!user && isGuest && (
+                    {!user && (
                         <div className="flex items-center gap-2 mb-4 p-2 bg-gray-800 rounded">
                             <div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-xs font-bold">G</div>
                             <div className="overflow-hidden">
@@ -82,12 +85,21 @@ function App() {
                             </div>
                         </div>
                     )}
-                    <button
-                        onClick={logout}
-                        className="w-full py-2 px-4 bg-red-600 hover:bg-red-700 rounded text-sm transition-colors"
-                    >
-                        Sign Out
-                    </button>
+                    {user ? (
+                        <button
+                            onClick={logout}
+                            className="w-full py-2 px-4 bg-red-600 hover:bg-red-700 rounded text-sm transition-colors"
+                        >
+                            Sign Out
+                        </button>
+                    ) : (
+                        <button
+                            onClick={() => setShowLoginModal(true)}
+                            className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 rounded text-sm transition-colors"
+                        >
+                            Sign In / Sign Up
+                        </button>
+                    )}
                 </div>
 
                 <div className="mt-4">
@@ -125,6 +137,7 @@ function App() {
                                     uploadFile={uploadFile}
                                     onWordClick={handleWordClick}
                                     jumpTarget={jumpTarget}
+                                    onStatusChange={handleAnalysisStatusChange}
                                 />
                             </div>
                         ) : (
@@ -144,10 +157,28 @@ function App() {
                             context={selectedContext}
                             coordinates={selectedCoordinates}
                             onJump={handleJumpToLocation}
+                            isAnalyzing={isAnalyzing}
                         />
                     </div>
                 </div>
             </div>
+
+            {/* Login Modal */}
+            {showLoginModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
+                    <div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden">
+                        <button
+                            onClick={() => setShowLoginModal(false)}
+                            className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+                        >
+                            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" />
+                            </svg>
+                        </button>
+                        <Login onGuestAccess={() => setShowLoginModal(false)} />
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

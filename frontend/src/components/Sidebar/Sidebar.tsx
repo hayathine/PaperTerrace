@@ -14,9 +14,10 @@ interface SidebarProps {
     context?: string;
     coordinates?: { page: number, x: number, y: number };
     onJump?: (page: number, x: number, y: number) => void;
+    isAnalyzing?: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord, context, coordinates, onJump }) => {
+const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord, context, coordinates, onJump, isAnalyzing = false }) => {
 
     return (
         <div className="flex flex-col h-full bg-white border-l border-gray-200 shadow-xl overflow-hidden font-sans">
@@ -87,7 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
                 )}
                 {activeTab === 'summary' && (
                     <div className="absolute inset-0">
-                        <Summary sessionId={sessionId} />
+                        <Summary sessionId={sessionId} isAnalyzing={isAnalyzing} />
                     </div>
                 )}
                 {activeTab === 'figure' && (

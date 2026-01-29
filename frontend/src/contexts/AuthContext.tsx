@@ -25,7 +25,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [user, setUser] = useState<User | null>(null);
     const [loading, setLoading] = useState(true);
     const [token, setToken] = useState<string | null>(null);
-    const [isGuest, setIsGuest] = useState(false);
+    const [isGuest, setIsGuest] = useState(true);
 
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -51,15 +51,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
             } else {
                 setToken(null);
-                // Guest mode might persist via local state if not explicitly logged out
+                // Default to guest mode on logout
+                setIsGuest(true);
             }
             setUser(currentUser);
-            if (!isGuest) setLoading(false); // Only set loading false if not waiting for guest check? Actually onAuthStateChanged fires initially
             setLoading(false);
         });
 
         return () => unsubscribe();
-    }, [isGuest]); // Re-run if isGuest changes? No, only once.
+    }, []); // Run once
 
     const signInWithGoogle = async () => {
         try {
@@ -85,8 +85,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const loginAsGuest = () => {
         setIsGuest(true);
-        // We can create a mock user or just rely on isGuest flag
-        // For simple logic, we just set isGuest true and let the app render
     };
 
     const logout = async () => {
@@ -94,7 +92,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             await firebaseSignOut(auth);
             setUser(null);
             setToken(null);
-            setIsGuest(false);
+            setIsGuest(true);
         } catch (error) {
             console.error("Error signing out", error);
             throw error;

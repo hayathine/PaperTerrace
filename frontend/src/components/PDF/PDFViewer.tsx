@@ -12,9 +12,10 @@ interface PDFViewerProps {
     sessionId?: string;
     onWordClick?: (word: string, context?: string, coords?: { page: number, x: number, y: number }) => void;
     jumpTarget?: { page: number, x: number, y: number } | null;
+    onStatusChange?: (status: 'idle' | 'uploading' | 'processing' | 'done' | 'error') => void;
 }
 
-const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionId, jumpTarget }) => {
+const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionId, jumpTarget, onStatusChange }) => {
     const { token } = useAuth();
     const [pages, setPages] = useState<PageData[]>([]);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle');
@@ -27,6 +28,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionI
     const [stamps, setStamps] = useState<Stamp[]>([]);
     const [isStampMode, setIsStampMode] = useState(false);
     const [selectedStamp, setSelectedStamp] = useState<StampType>('👍');
+
+    useEffect(() => {
+        if (onStatusChange) {
+            onStatusChange(status);
+        }
+    }, [status, onStatusChange]);
 
     useEffect(() => {
         if (uploadFile) {

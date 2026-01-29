@@ -3,11 +3,12 @@ import { CritiqueResponse, RadarResponse } from './types';
 
 interface SummaryProps {
     sessionId: string;
+    isAnalyzing?: boolean;
 }
 
 type Mode = 'summary' | 'critique' | 'radar';
 
-const Summary: React.FC<SummaryProps> = ({ sessionId }) => {
+const Summary: React.FC<SummaryProps> = ({ sessionId, isAnalyzing = false }) => {
     const [mode, setMode] = useState<Mode>('summary');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -110,7 +111,11 @@ const Summary: React.FC<SummaryProps> = ({ sessionId }) => {
                         {!summaryData && (
                             <div className="text-center py-8">
                                 <p className="text-xs text-slate-400 mb-4">Generate a comprehensive summary of the paper.</p>
-                                <button onClick={handleSummarize} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-indigo-700">Generate Summary</button>
+                                {isAnalyzing ? (
+                                    <button disabled className="px-4 py-2 bg-slate-300 text-white rounded-lg text-xs font-bold shadow-sm cursor-not-allowed">Processing PDF...</button>
+                                ) : (
+                                    <button onClick={handleSummarize} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-indigo-700">Generate Summary</button>
+                                )}
                             </div>
                         )}
                         {summaryData && (
