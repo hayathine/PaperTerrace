@@ -14,7 +14,6 @@ from ..logger import logger
 from ..logic import executor
 from ..providers import get_storage_provider
 from ..services.analysis_service import EnglishAnalysisService
-from ..services.jamdict_service import _lookup_word_full
 
 router = APIRouter(tags=["Translation"])
 
@@ -69,23 +68,39 @@ async def explain(word: str, lang: str = "ja"):
 
     is_phrase = " " in lemma.strip()
 
-    # 2. Jamdict (Japanese only) - Skip for phrases
+    # 2. Local Dictionary (EJDict) - Skip for phrases
     if lang == "ja" and not is_phrase:
-        lookup_res = await loop.run_in_executor(executor, _lookup_word_full, lemma)
+        from ..providers.dictionary_provider import get_dictionary_provider
 
-        if lookup_res.entries:
-            ja = [
-                e.kanji_forms[0].text if e.kanji_forms else e.kana_forms[0].text
-                for e in lookup_res.entries[:3]
-            ]
-            translation = " / ".join(list(dict.fromkeys(ja)))
-            logger.info(f"[explain] Jamdict HIT for '{lemma}' -> {translation}")
+        # logger.info(f"Looking up {lemma} in EJDict...")
+        dict_provider = get_dictionary_provider()
+
+        # Run DB lookup in executor to avoid blocking async loop (SQLite is fast but blocking)
+        definition = await loop.run_in_executor(executor, dict_provider.lookup, lemma)
+
+        if definition:
+            # EJDict definitions are often comma or slash separated.
+            # We might want to truncate if too long, but for now return as is.
+            # Usually format is "mean1, mean2..."
+            translation = definition.split("/")[0] if "/" in definition else definition
+            translation = translation.split(",")[
+                0
+            ]  # Take first meaning for simplicity in tooltip? Or show all?
+            # Let's show a bit more but keep it concise.
+            # Actually for "explain" popup, more detail is better?
+            # But the UI expects short translation currently?
+            # Existing code was doing: " / ".join(list(dict.fromkeys(ja))) from Jamdict.
+
+            # Use full definition but truncate if absurdly long
+            translation = definition[:100] + "..." if len(definition) > 100 else definition
+
+            logger.info(f"[explain] EJDict HIT for '{lemma}' -> {translation}")
             return JSONResponse(
                 {
                     "word": original_word,
                     "lemma": lemma,
                     "translation": translation,
-                    "source": "Jamdict",
+                    "source": "EJDict",
                 }
             )
 

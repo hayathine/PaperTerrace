@@ -7,7 +7,9 @@ import spacy
 
 from src.logger import logger
 from src.providers import RedisService, get_ai_provider, get_storage_provider
-from src.services.jamdict_service import lookup_word
+from src.providers.dictionary_provider import get_dictionary_provider
+
+# from src.services.jamdict_service import lookup_word # Removed
 from src.utils import clean_text_for_tokenization, truncate_context
 
 # 共通設定 (logic.pyから移行)
@@ -28,13 +30,15 @@ class EnglishAnalysisService:
         from src.services.pdf_ocr_service import PDFOCRService
 
         self.ai_provider = get_ai_provider()
+        self.dict_provider = get_dictionary_provider()  # Initialize provider
+
         self.model = os.getenv("OCR_MODEL", "gemini-1.5-flash")
         self.translate_model = os.getenv("MODEL_TRANSLATE", "gemini-1.5-flash")
         self.ocr_service = PDFOCRService(self.model)
         self.redis = RedisService()
-        self.word_cache = {}  # lemma -> bool (jamdict にあるかどうか)
+        self.word_cache = {}  # lemma -> bool (辞書にあるかどうか)
         self.translation_cache = {}  # lemma -> translation (Gemini翻訳キャッシュ)
-        self._unknown_words = set()  # Jamdictにない単語を収集
+        self._unknown_words = set()  # 辞書にない単語を収集
 
     def lemmatize(self, text: str) -> str:
         """Get lemma for text using Spacy model."""
@@ -75,7 +79,6 @@ class EnglishAnalysisService:
                 if token.is_punct or token.is_space:
                     p_tokens_html.append(f"<span>{token.text}</span>{whitespace}")
                     continue
-
                 lemma = token.lemma_.lower()
                 if lemma not in self.word_cache:
                     # 1. L1 Cache Check
@@ -88,10 +91,25 @@ class EnglishAnalysisService:
                             self.translation_cache[lemma] = cached_trans
                             self.word_cache[lemma] = False
                         else:
-                            # 3. Jamdict Check
-                            self.word_cache[lemma] = await loop.run_in_executor(
-                                executor, lookup_word, lemma
+                            # 3. EJDict Check
+                            # We just check if it exists in DB to highlight it as "translatable"
+                            # For EJDict, if lookup returns something, it's a known word.
+                            definition = await loop.run_in_executor(
+                                executor, self.dict_provider.lookup, lemma
                             )
+                            # If definition exists, we mark it as "needs simple translation" (False in word_cache means 'known/cached' usually?
+                            # Wait, original logic: self.word_cache[lemma] = lookup_word(lemma)
+                            # lookup_word returned True if found?
+                            # Let's check jamdict_service usage.
+                            # Usually we want: if found in dict -> highlight as blue (indigo).
+                            # If NOT found -> maybe unknown (purple)? Or vice versa.
+
+                            # Existing logic:
+                            # color = indigo (blue) if self.word_cache.get(lemma) else purple
+                            # So True = Indigo (Known/Found), False = Purple (Unknown/AI fallback?)
+
+                            self.word_cache[lemma] = bool(definition)
+
                             if not self.word_cache[lemma]:
                                 self._unknown_words.add(lemma)
 
