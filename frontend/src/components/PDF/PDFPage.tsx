@@ -6,7 +6,7 @@ import { Stamp } from '../Stamps/types';
 interface PDFPageProps {
     page: PageData;
     scale?: number;
-    onWordClick?: (word: string, context?: string) => void;
+    onWordClick?: (word: string, context?: string, coords?: { page: number, x: number, y: number }) => void;
     // Stamp props
     stamps?: Stamp[];
     isStampMode?: boolean;
@@ -34,7 +34,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
     };
 
     return (
-        <div className="relative mb-8 shadow-2xl rounded-xl overflow-hidden bg-white transition-all duration-300 border border-slate-200/50 mx-auto" style={{ maxWidth: '100%' }}>
+        <div id={`page-${page.page_num}`} className="relative mb-8 shadow-2xl rounded-xl overflow-hidden bg-white transition-all duration-300 border border-slate-200/50 mx-auto" style={{ maxWidth: '100%' }}>
             {/* Header / Page Number */}
             <div className="bg-gray-50 border-b border-gray-100 px-4 py-2 flex justify-between items-center">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
@@ -85,7 +85,12 @@ const PDFPage: React.FC<PDFPageProps> = ({
                                         const start = Math.max(0, idx - 50);
                                         const end = Math.min(words.length, idx + 50);
                                         const context = words.slice(start, end).map(w => w.word).join(' ');
-                                        onWordClick(w.word, context);
+
+                                        // Calculate normalized center coordinates
+                                        const centerX = (x1 + x2) / 2 / width;
+                                        const centerY = (y1 + y2) / 2 / height;
+
+                                        onWordClick(w.word, context, { page: page_num, x: centerX, y: centerY });
                                     }
                                 }}
                                 title={w.word}

@@ -12,9 +12,11 @@ interface SidebarProps {
     onTabChange: (tab: string) => void;
     selectedWord?: string;
     context?: string;
+    coordinates?: { page: number, x: number, y: number };
+    onJump?: (page: number, x: number, y: number) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord, context }) => {
+const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord, context, coordinates, onJump }) => {
 
     return (
         <div className="flex flex-col h-full bg-white border-l border-gray-200 shadow-xl overflow-hidden font-sans">
@@ -80,7 +82,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
             <div className="flex-1 overflow-hidden relative">
                 {activeTab === 'dict' && (
                     <div className="absolute inset-0">
-                        <Dictionary sessionId={sessionId} term={selectedWord} context={context} />
+                        <Dictionary sessionId={sessionId} term={selectedWord} context={context} coordinates={coordinates} />
                     </div>
                 )}
                 {activeTab === 'summary' && (
@@ -106,7 +108,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
 
                 {activeTab === 'notes' && (
                     <div className="absolute inset-0">
-                        <NoteList sessionId={sessionId} />
+                        <NoteList sessionId={sessionId} coordinates={coordinates} onJump={onJump} />
                     </div>
                 )}
             </div>

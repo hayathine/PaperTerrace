@@ -4,6 +4,9 @@ export interface Note {
     term: string;
     note: string;
     image_url?: string;
+    page_number?: number;
+    x?: number;
+    y?: number;
     created_at?: string;
 }
 
@@ -12,4 +15,7 @@ export interface NoteRequest {
     term: string;
     note: string;
     image_url?: string;
+    page_number?: number;
+    x?: number;
+    y?: number;
 }

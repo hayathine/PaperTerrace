@@ -83,6 +83,9 @@ class StorageInterface(ABC):
         term: str,
         note: str,
         image_url: str | None = None,
+        page_number: int | None = None,
+        x: float | None = None,
+        y: float | None = None,
         user_id: str | None = None,
     ) -> str:
         """Save a note. Returns note_id."""
@@ -315,6 +318,9 @@ class SQLiteStorage(StorageInterface):
                     "notes",
                     [
                         ("image_url", "TEXT"),
+                        ("page_number", "INTEGER"),
+                        ("x", "REAL"),
+                        ("y", "REAL"),
                         ("user_id", "TEXT"),
                     ],
                 ),
@@ -559,25 +565,30 @@ class SQLiteStorage(StorageInterface):
 
     # ===== Note methods =====
 
-    def save_note(
         self,
         note_id: str,
         session_id: str,
         term: str,
         note: str,
         image_url: str | None = None,
+        page_number: int | None = None,
+        x: float | None = None,
+        y: float | None = None,
         user_id: str | None = None,
     ) -> str:
         """Save a note."""
         with self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO notes (note_id, session_id, term, note, image_url, user_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO notes (note_id, session_id, term, note, image_url, page_number, x, y, user_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(note_id) DO UPDATE SET
                     term=excluded.term,
                     note=excluded.note,
                     image_url=excluded.image_url,
+                    page_number=excluded.page_number,
+                    x=excluded.x,
+                    y=excluded.y,
                     user_id=excluded.user_id,
                     created_at=excluded.created_at
                 """,
@@ -587,6 +598,9 @@ class SQLiteStorage(StorageInterface):
                     term,
                     note,
                     image_url,
+                    page_number,
+                    x,
+                    y,
                     user_id,
                     datetime.now().isoformat(),
                 ),

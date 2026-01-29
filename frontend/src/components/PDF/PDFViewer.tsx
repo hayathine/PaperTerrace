@@ -10,16 +10,18 @@ interface PDFViewerProps {
     initialData?: PageData[];
     uploadFile?: File | null;
     sessionId?: string;
-    onWordClick?: (word: string, context?: string) => void;
+    onWordClick?: (word: string, context?: string, coords?: { page: number, x: number, y: number }) => void;
+    jumpTarget?: { page: number, x: number, y: number } | null;
 }
 
-const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionId }) => {
+const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionId, jumpTarget }) => {
     const { token } = useAuth();
     const [pages, setPages] = useState<PageData[]>([]);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle');
     const [errorMsg, setErrorMsg] = useState<string>('');
     const eventSourceRef = useRef<EventSource | null>(null);
     const [paperId, setPaperId] = useState<string | null>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
     // Stamp State
     const [stamps, setStamps] = useState<Stamp[]>([]);
@@ -58,6 +60,31 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionI
             console.error('Failed to fetch stamps', e);
         }
     };
+
+    // Scroll to jump target when it changes
+    useEffect(() => {
+        if (jumpTarget && containerRef.current) {
+            const pageEl = document.getElementById(`page-${jumpTarget.page}`);
+            if (pageEl) {
+                // Determine vertical scroll position
+                // We want: pageTop + (pageHeight * y_percentage) - (containerHeight / 2)
+                // This centers the target y position in the viewport
+                const pageRect = pageEl.getBoundingClientRect();
+                const containerRect = containerRef.current.getBoundingClientRect();
+
+                // Calculate position relative to container's current scroll
+                const relativePageTop = pageEl.offsetTop;
+                const targetPixelY = relativePageTop + (pageRect.height * jumpTarget.y);
+
+                const scrollPos = targetPixelY - (containerRect.height / 2);
+
+                containerRef.current.scrollTo({
+                    top: Math.max(0, scrollPos),
+                    behavior: 'smooth'
+                });
+            }
+        }
+    }, [jumpTarget]);
 
     const startAnalysis = async (file: File) => {
         setStatus('uploading');
@@ -125,9 +152,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionI
         }
     };
 
-    const handleWordClick = (word: string, context?: string) => {
+    const handleWordClick = (word: string, context?: string, coords?: { page: number, x: number, y: number }) => {
         if (onWordClick) {
-            onWordClick(word, context);
+            onWordClick(word, context, coords);
         }
     };
 

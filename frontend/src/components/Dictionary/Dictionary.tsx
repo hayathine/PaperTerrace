@@ -6,9 +6,10 @@ interface DictionaryProps {
     term?: string;
     sessionId: string;
     context?: string;
+    coordinates?: { page: number, x: number, y: number };
 }
 
-const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context }) => {
+const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context, coordinates }) => {
     const { token } = useAuth();
     // Maintain a list of entries instead of a single one
     const [entries, setEntries] = useState<DictionaryEntry[]>([]);
@@ -69,7 +70,10 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context }) => 
                 body: JSON.stringify({
                     session_id: sessionId,
                     term: entry.word,
-                    note: entry.translation
+                    note: entry.translation,
+                    page_number: coordinates?.page,
+                    x: coordinates?.x,
+                    y: coordinates?.y
                 })
             });
 

@@ -54,6 +54,30 @@ class CloudSQLStorage(StorageInterface):
                 if not cur.fetchone():
                     logger.info("Migrating: Adding user_id to notes table")
                     cur.execute("ALTER TABLE notes ADD COLUMN user_id TEXT")
+
+                # Check notes table for page_number
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='notes' AND column_name='page_number'"
+                )
+                if not cur.fetchone():
+                    logger.info("Migrating: Adding page_number to notes table")
+                    cur.execute("ALTER TABLE notes ADD COLUMN page_number INTEGER")
+
+                # Check notes table for x
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='notes' AND column_name='x'"
+                )
+                if not cur.fetchone():
+                    logger.info("Migrating: Adding x to notes table")
+                    cur.execute("ALTER TABLE notes ADD COLUMN x REAL")
+
+                # Check notes table for y
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='notes' AND column_name='y'"
+                )
+                if not cur.fetchone():
+                    logger.info("Migrating: Adding y to notes table")
+                    cur.execute("ALTER TABLE notes ADD COLUMN y REAL")
             conn.commit()
 
     def _get_connection(self):
@@ -312,22 +336,39 @@ class CloudSQLStorage(StorageInterface):
         term: str,
         note: str,
         image_url: str | None = None,
+        page_number: int | None = None,
+        x: float | None = None,
+        y: float | None = None,
         user_id: str | None = None,
     ) -> str:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO notes (note_id, session_id, term, note, image_url, user_id, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO notes (note_id, session_id, term, note, image_url, page_number, x, y, user_id, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (note_id) DO UPDATE SET
                         term = EXCLUDED.term,
                         note = EXCLUDED.note,
                         image_url = EXCLUDED.image_url,
+                        page_number = EXCLUDED.page_number,
+                        x = EXCLUDED.x,
+                        y = EXCLUDED.y,
                         user_id = EXCLUDED.user_id,
                         created_at = EXCLUDED.created_at
                     """,
-                    (note_id, session_id, term, note, image_url, user_id, datetime.now()),
+                    (
+                        note_id,
+                        session_id,
+                        term,
+                        note,
+                        image_url,
+                        page_number,
+                        x,
+                        y,
+                        user_id,
+                        datetime.now(),
+                    ),
                 )
             conn.commit()
         return note_id

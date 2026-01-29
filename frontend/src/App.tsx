@@ -20,6 +20,8 @@ function App() {
     const [activeTab, setActiveTab] = useState('chat')
     const [selectedWord, setSelectedWord] = useState<string | undefined>(undefined)
     const [selectedContext, setSelectedContext] = useState<string | undefined>(undefined)
+    const [selectedCoordinates, setSelectedCoordinates] = useState<{ page: number, x: number, y: number } | undefined>(undefined)
+    const [jumpTarget, setJumpTarget] = useState<{ page: number, x: number, y: number } | null>(null)
 
     useEffect(() => {
         if (user) {
@@ -36,10 +38,15 @@ function App() {
         }
     }
 
-    const handleWordClick = (word: string, context?: string) => {
+    const handleWordClick = (word: string, context?: string, coords?: { page: number, x: number, y: number }) => {
         setSelectedWord(word)
         setSelectedContext(context)
+        setSelectedCoordinates(coords)
         setActiveTab('dict')
+    }
+
+    const handleJumpToLocation = (page: number, x: number, y: number) => {
+        setJumpTarget({ page, x, y })
     }
 
     if (!user && !isGuest) {
@@ -117,6 +124,7 @@ function App() {
                                     sessionId={sessionId}
                                     uploadFile={uploadFile}
                                     onWordClick={handleWordClick}
+                                    jumpTarget={jumpTarget}
                                 />
                             </div>
                         ) : (
@@ -134,6 +142,8 @@ function App() {
                             onTabChange={setActiveTab}
                             selectedWord={selectedWord}
                             context={selectedContext}
+                            coordinates={selectedCoordinates}
+                            onJump={handleJumpToLocation}
                         />
                     </div>
                 </div>

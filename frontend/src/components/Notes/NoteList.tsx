@@ -6,9 +6,11 @@ import { useAuth } from '../../contexts/AuthContext';
 
 interface NoteListProps {
     sessionId: string;
+    coordinates?: { page: number, x: number, y: number };
+    onJump?: (page: number, x: number, y: number) => void;
 }
 
-const NoteList: React.FC<NoteListProps> = ({ sessionId }) => {
+const NoteList: React.FC<NoteListProps> = ({ sessionId, coordinates, onJump }) => {
     const { token } = useAuth();
     const [notes, setNotes] = useState<Note[]>([]);
     const [loading, setLoading] = useState(false);
@@ -40,7 +42,7 @@ const NoteList: React.FC<NoteListProps> = ({ sessionId }) => {
         }
     }, [sessionId, fetchNotes]);
 
-    const handleAddNote = async (term: string, noteContent: string) => {
+    const handleAddNote = async (term: string, noteContent: string, coords?: { page: number, x: number, y: number }) => {
         try {
             const headers: HeadersInit = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
@@ -51,7 +53,10 @@ const NoteList: React.FC<NoteListProps> = ({ sessionId }) => {
                 body: JSON.stringify({
                     session_id: sessionId,
                     term,
-                    note: noteContent
+                    note: noteContent,
+                    page_number: coords?.page,
+                    x: coords?.x,
+                    y: coords?.y
                 })
             });
             if (res.ok) {
@@ -80,7 +85,7 @@ const NoteList: React.FC<NoteListProps> = ({ sessionId }) => {
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">My Notes</h3>
 
             {error && <div className="text-xs text-red-500 mb-2">{error}</div>}
-            <AddNoteForm onAdd={handleAddNote} />
+            <AddNoteForm onAdd={handleAddNote} coordinates={coordinates} />
 
             <div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
                 {loading && notes.length === 0 && (
@@ -94,7 +99,7 @@ const NoteList: React.FC<NoteListProps> = ({ sessionId }) => {
                 )}
 
                 {notes.map(note => (
-                    <NoteItem key={note.note_id} note={note} onDelete={handleDeleteNote} />
+                    <NoteItem key={note.note_id} note={note} onDelete={handleDeleteNote} onJump={onJump} />
                 ))}
             </div>
         </div>

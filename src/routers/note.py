@@ -23,6 +23,9 @@ class NoteRequest(BaseModel):
     term: str
     note: str
     image_url: str | None = None
+    page_number: int | None = None
+    x: float | None = None
+    y: float | None = None
 
 
 @router.get("/note/{session_id}")
@@ -36,7 +39,14 @@ async def get_notes(session_id: str, user: OptionalUser):
 async def add_note(request: NoteRequest, user: OptionalUser):
     user_id = user.uid if user else None
     note = sidebar_note_service.add_note(
-        request.session_id, request.term, request.note, request.image_url, user_id=user_id
+        request.session_id,
+        request.term,
+        request.note,
+        request.image_url,
+        request.page_number,
+        request.x,
+        request.y,
+        user_id=user_id,
     )
     return JSONResponse(jsonable_encoder(note))
 

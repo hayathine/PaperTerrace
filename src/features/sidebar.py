@@ -26,6 +26,9 @@ class SidebarNoteService:
         term: str,
         note: str,
         image_url: str | None = None,
+        page_number: int | None = None,
+        x: float | None = None,
+        y: float | None = None,
         user_id: str | None = None,
     ) -> dict:
         """
@@ -36,6 +39,9 @@ class SidebarNoteService:
             term: The term or keyword
             note: The note content
             image_url: Optional image URL
+            page_number: Page number for jump
+            x: X coordinate (relative %)
+            y: Y coordinate (relative %)
             user_id: Optional user identifier (if logged in)
 
         Returns:
@@ -43,7 +49,9 @@ class SidebarNoteService:
         """
         try:
             note_id = str(uuid6.uuid7())
-            self.storage.save_note(note_id, session_id, term, note, image_url, user_id)
+            self.storage.save_note(
+                note_id, session_id, term, note, image_url, page_number, x, y, user_id
+            )
             logger.info(
                 "Note added",
                 extra={
@@ -51,6 +59,7 @@ class SidebarNoteService:
                     "session_id": session_id,
                     "term": term,
                     "user_id": user_id,
+                    "page": page_number,
                 },
             )
             return {
@@ -59,6 +68,9 @@ class SidebarNoteService:
                 "term": term,
                 "note": note,
                 "image_url": image_url,
+                "page_number": page_number,
+                "x": x,
+                "y": y,
                 "user_id": user_id,
             }
         except Exception as e:

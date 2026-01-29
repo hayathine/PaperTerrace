@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 
 interface AddNoteFormProps {
-    onAdd: (term: string, note: string) => Promise<void>;
+    onAdd: (term: string, note: string, coords?: { page: number, x: number, y: number }) => Promise<void>;
+    coordinates?: { page: number, x: number, y: number };
 }
 
-const AddNoteForm: React.FC<AddNoteFormProps> = ({ onAdd }) => {
+const AddNoteForm: React.FC<AddNoteFormProps> = ({ onAdd, coordinates }) => {
     const [term, setTerm] = useState('');
     const [note, setNote] = useState('');
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -15,7 +16,7 @@ const AddNoteForm: React.FC<AddNoteFormProps> = ({ onAdd }) => {
 
         setIsSubmitting(true);
         try {
-            await onAdd(term, note);
+            await onAdd(term, note, coordinates);
             setTerm('');
             setNote('');
         } finally {
@@ -25,14 +26,24 @@ const AddNoteForm: React.FC<AddNoteFormProps> = ({ onAdd }) => {
 
     return (
         <form onSubmit={handleSubmit} className="mb-6 bg-slate-50 p-3 rounded-xl border border-slate-100">
-            <input
-                type="text"
-                placeholder="Term / Keyword"
-                className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5 mb-2 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 outline-none"
-                value={term}
-                onChange={(e) => setTerm(e.target.value)}
-                disabled={isSubmitting}
-            />
+            <div className="relative">
+                <input
+                    type="text"
+                    placeholder="Term / Keyword"
+                    className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5 mb-2 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 outline-none pr-8"
+                    value={term}
+                    onChange={(e) => setTerm(e.target.value)}
+                    disabled={isSubmitting}
+                />
+                {coordinates && (
+                    <div className="absolute right-2 top-2 text-indigo-500" title="Link to current location">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 00.5656 0l-4 4a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-4 4" />
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.172 13.828a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-4 4a4 4 0 005.656 5.656" />
+                        </svg>
+                    </div>
+                )}
+            </div>
             <textarea
                 placeholder="Write your note here..."
                 className="w-full text-[10px] text-slate-600 bg-white border border-slate-200 rounded-lg px-2 py-2 mb-2 h-16 resize-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 outline-none"
