@@ -125,9 +125,10 @@ class EnglishAnalysisService:
                     if self.word_cache.get(lemma, False)
                     else "border-transparent hover:border-purple-300 hover:bg-purple-50"
                 )
+                paper_param = f"&paper_id={paper_id}" if paper_id else ""
                 p_tokens_html.append(
                     f'<span class="cursor-pointer border-b transition-colors {color}'
-                    f'" hx-get="/explain/{lemma}?lang={lang}" hx-trigger="click" '
+                    f'" hx-get="/explain/{lemma}?lang={lang}{paper_param}" hx-trigger="click" '
                     f'hx-indicator="#dict-loading" '
                     f'hx-target="#definition-box" hx-swap="innerHTML">{token.text}</span>{whitespace}'
                 )

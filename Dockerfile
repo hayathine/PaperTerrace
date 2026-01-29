@@ -25,6 +25,12 @@ COPY pyproject.toml uv.lock ./
 # Install dependencies
 RUN uv sync --no-dev --frozen
 
+# Copy src for initialization
+COPY src/ ./src/
+
+# Convert M2M100 model to CTranslate2 format during build
+RUN mkdir -p models && PYTHONPATH=/app uv run python -m src.scripts.convert_m2m100
+
 # Production stage
 FROM python:3.12-slim AS production
 
@@ -38,6 +44,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy virtual environment from builder
 COPY --from=builder /app/.venv /app/.venv
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
+
+# Copy initialized models
+COPY --from=builder /app/models ./models
 
 # Copy application code
 COPY src/ ./src/

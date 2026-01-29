@@ -39,6 +39,8 @@ dependencies = [
     "tiktoken>=0.12.0",
     "uuid6>=2025.0.1",
     "uvicorn>=0.40.0",
+    "torch>=2.10.0",
+    "transformers>=5.0.0",
 ]
 
 [dependency-groups]
@@ -50,8 +52,6 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "httpx>=0.28.0",
     "pylance>=1.0.4",
-    "torch>=2.10.0",
-    "transformers>=5.0.0",
 ]
 
 [tool.ruff]

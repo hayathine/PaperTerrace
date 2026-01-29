@@ -35,12 +35,11 @@ async def translate_word(word: str, lang: str = "ja"):
 
 
 @router.get("/explain/{word}")
-async def explain(word: str, lang: str = "ja"):
+async def explain(word: str, lang: str = "ja", paper_id: str | None = None):
     """Word explanation (Lemmatize -> Cache -> Jamdict -> Gemini)"""
     loop = asyncio.get_event_loop()
 
     # 0. Lemmatize input (Backend side now)
-    # Spacy handles basic punctuation stripping usually, but we clean excessive stuff
     clean_input = word.replace("\n", " ").strip(" .,;!?(){}[\]\"'")
     if not clean_input:
         clean_input = word.strip()
@@ -48,15 +47,14 @@ async def explain(word: str, lang: str = "ja"):
     lemma = await loop.run_in_executor(executor, service.lemmatize, clean_input)
     original_word = word
 
-    # logger.info(f"[explain] word='{word}' -> lemma='{lemma}'")
     logger.info(
-        f"[explain] Request: word='{original_word}', clean='{clean_input}', lemma='{lemma}', lang='{lang}'"
+        f"[explain] Request: word='{original_word}', lemma='{lemma}', lang='{lang}', paper_id='{paper_id}'"
     )
 
     # 1. Cache Check
+    # (Existing cache logic...)
     cached = await service.get_translation(lemma, lang=lang)
     if cached:
-        logger.info(f"[explain] Cache HIT for '{lemma}' -> {cached['translation']}")
         return JSONResponse(
             {
                 "word": original_word,
@@ -68,22 +66,14 @@ async def explain(word: str, lang: str = "ja"):
 
     is_phrase = " " in lemma.strip()
 
-    # 2. Local Dictionary (jamdict) - Skip for phrases
+    # Stage 1: Local Dictionary (Jamdict)
     if lang == "ja" and not is_phrase:
         from ..providers.dictionary_provider import get_dictionary_provider
 
-        logger.info(f"Looking up {lemma} in Jamdict...")
         dict_provider = get_dictionary_provider()
-
-        # Run DB lookup in executor to avoid blocking async loop (SQLite is fast but blocking)
         definition = await loop.run_in_executor(executor, dict_provider.lookup, lemma)
-
         if definition:
-            # Jamdict returns "Kanji (Kana)" or "Kana".
-            # Truncate if too long
             translation = definition[:100] + "..." if len(definition) > 100 else definition
-
-            logger.info(f"[explain] Jamdict HIT for '{lemma}' -> {translation}")
             return JSONResponse(
                 {
                     "word": original_word,
@@ -93,7 +83,25 @@ async def explain(word: str, lang: str = "ja"):
                 }
             )
 
-    # 3. Gemini Fallback
+    # Stage 2: Local Machine Translation (M2M100)
+    if lang == "ja":
+        from ..services.local_translator import get_local_translator
+
+        local_translator = get_local_translator()
+        local_translation = await loop.run_in_executor(executor, local_translator.translate, lemma)
+        if local_translation:
+            service.translation_cache[lemma] = local_translation
+            service.word_cache[lemma] = False
+            return JSONResponse(
+                {
+                    "word": original_word,
+                    "lemma": lemma,
+                    "translation": local_translation,
+                    "source": "Local-MT",
+                }
+            )
+
+    # Stage 3: Gemini Fallback (With Paper Context if available)
     try:
         import os
 
@@ -103,23 +111,28 @@ async def explain(word: str, lang: str = "ja"):
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
         provider = get_ai_provider()
 
-        logger.info(f"[explain] Gemini Fallback for '{lemma}' (is_phrase={is_phrase})")
+        # Fetch paper summary context
+        paper_context = ""
+        if paper_id:
+            paper = storage.get_paper(paper_id)
+            if paper:
+                # Use abstract or summary if available
+                summary = paper.get("abstract") or paper.get("summary")
+                if summary:
+                    paper_context = f"\n[Paper Context / Summary]\n{summary}\n"
+
+        logger.info(f"[explain] Gemini Fallback for '{lemma}' (context size: {len(paper_context)})")
 
         if is_phrase:
-            prompt = f"以下の英文を{lang_name}に翻訳してください。\n\n{original_word}\n\n訳のみを出力してください。"
+            prompt = f"{paper_context}\n以上の文脈を考慮して、以下の英文を{lang_name}に翻訳してください。\n\n{original_word}\n\n訳のみを出力してください。"
         else:
-            prompt = f"英単語「{lemma}」の{lang_name}訳を1〜3語で簡潔に。訳のみ出力。"
+            prompt = f"{paper_context}\n以上の論文の文脈において、英単語「{lemma}」はどのような意味ですか？\n{lang_name}訳を1〜3語で簡潔に。訳のみ出力。"
 
         translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.0-flash-lite")
-
-        logger.info(f"[explain] Calling AI Provider with model={translate_model}")
-
-        translation = await provider.generate(prompt, model=translate_model)
+        translation = (await provider.generate(prompt, model=translate_model)).strip().strip("'\"")
 
         service.translation_cache[lemma] = translation
         service.word_cache[lemma] = False
-
-        logger.info(f"[explain] Gemini Success: '{lemma}' -> {translation}")
 
         return JSONResponse(
             {"word": original_word, "lemma": lemma, "translation": translation, "source": "Gemini"}
