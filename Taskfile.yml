@@ -62,3 +62,7 @@ tasks:
     desc: Start Cloud SQL instance
     cmds:
       - gcloud sql instances patch paperterrace-db --activation-policy=ALWAYS
+
+  all_stop:
+    desc: Stop all services
+    deps: [db:stop, remove_all_users]
