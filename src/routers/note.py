@@ -50,7 +50,28 @@ async def add_note(request: NoteRequest, user: OptionalUser):
     )
     return JSONResponse(jsonable_encoder(note))
 
-
+@router.put("/note/{note_id}")
+async def update_note(note_id: str, request: NoteRequest, user: OptionalUser):
+    user_id = user.uid if user else None
+    # We reuse the add_note logic or storage save logic which handles upsert
+    # But usually we want a specific update method in service.
+    # For now, let's assume upsert or create a new service method.
+    # checking sidebar_note_service... it just calls storage.save_note
+    try:
+        updated = sidebar_note_service.add_note(
+            request.session_id,
+            request.term,
+            request.note,
+            request.image_url,
+            request.page_number,
+            request.x,
+            request.y,
+            user_id=user_id,
+            note_id=note_id # We need to pass note_id to update specific note
+        )
+        return JSONResponse(jsonable_encoder(updated))
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=500)
 @router.delete("/note/{note_id}")
 async def delete_note(note_id: str):
     deleted = sidebar_note_service.delete_note(note_id)

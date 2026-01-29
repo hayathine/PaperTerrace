@@ -308,6 +308,18 @@ class CloudSQLStorage(StorageInterface):
                     (html_content, now, paper_id),
                 )
                 conn.commit()
+                conn.commit()
+                return cur.rowcount > 0
+
+    def update_paper_abstract(self, paper_id: str, abstract: str) -> bool:
+        now = datetime.now()
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE papers SET abstract = %s, updated_at = %s WHERE paper_id = %s",
+                    (abstract, now, paper_id),
+                )
+                conn.commit()
                 return cur.rowcount > 0
 
     def delete_paper(self, paper_id: str) -> bool:

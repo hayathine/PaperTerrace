@@ -23,7 +23,7 @@ const Summary: React.FC<SummaryProps> = ({ sessionId, isAnalyzing = false }) => 
         try {
             const formData = new FormData();
             formData.append('session_id', sessionId);
-            formData.append('mode', 'full');
+            formData.append('mode', 'abstract');
             formData.append('lang', 'ja');
 
             const res = await fetch('/summarize', { method: 'POST', body: formData });
@@ -34,6 +34,8 @@ const Summary: React.FC<SummaryProps> = ({ sessionId, isAnalyzing = false }) => 
             const data = await res.json();
             if (data.summary) {
                 setSummaryData(data.summary);
+            } else if (data.abstract) {
+                setSummaryData(data.abstract);
             } else {
                 setError(data.error || "Summary not found in response");
             }
@@ -88,6 +90,13 @@ const Summary: React.FC<SummaryProps> = ({ sessionId, isAnalyzing = false }) => 
             setLoading(false);
         }
     };
+
+    // Auto-fetch summary on mount
+    React.useEffect(() => {
+        if (sessionId) {
+            handleSummarize();
+        }
+    }, [sessionId]);
 
     return (
         <div className="flex flex-col h-full bg-slate-50">

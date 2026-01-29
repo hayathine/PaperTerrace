@@ -21,6 +21,7 @@ function App() {
     const [selectedWord, setSelectedWord] = useState<string | undefined>(undefined)
     const [selectedContext, setSelectedContext] = useState<string | undefined>(undefined)
     const [selectedCoordinates, setSelectedCoordinates] = useState<{ page: number, x: number, y: number } | undefined>(undefined)
+    const [selectedImage, setSelectedImage] = useState<string | undefined>(undefined)
     const [jumpTarget, setJumpTarget] = useState<{ page: number, x: number, y: number } | null>(null)
     const [showLoginModal, setShowLoginModal] = useState(false)
     const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -46,6 +47,24 @@ function App() {
         setSelectedContext(context)
         setSelectedCoordinates(coords)
         setActiveTab('dict')
+    }
+
+    const handleTextSelect = (text: string, coords: { page: number, x: number, y: number }) => {
+        // When text is selected, we want to maybe open notes?
+        // Let's set selected context as the text
+        setSelectedWord(undefined)
+        setSelectedContext(text)
+        setSelectedImage(undefined) // Clear image
+        setSelectedCoordinates(coords)
+        setActiveTab('notes') // Switch to notes for saving selection
+    }
+
+    const handleAreaSelect = (imageUrl: string, coords: { page: number, x: number, y: number }) => {
+        setSelectedWord(undefined)
+        setSelectedContext(undefined)
+        setSelectedImage(imageUrl)
+        setSelectedCoordinates(coords)
+        setActiveTab('notes')
     }
 
     const handleJumpToLocation = (page: number, x: number, y: number) => {
@@ -136,6 +155,12 @@ function App() {
                                     sessionId={sessionId}
                                     uploadFile={uploadFile}
                                     onWordClick={handleWordClick}
+                                    onTextSelect={handleTextSelect}
+                                    sessionId={sessionId}
+                                    uploadFile={uploadFile}
+                                    onWordClick={handleWordClick}
+                                    onTextSelect={handleTextSelect}
+                                    onAreaSelect={handleAreaSelect}
                                     jumpTarget={jumpTarget}
                                     onStatusChange={handleAnalysisStatusChange}
                                 />
@@ -156,6 +181,7 @@ function App() {
                             selectedWord={selectedWord}
                             context={selectedContext}
                             coordinates={selectedCoordinates}
+                            selectedImage={selectedImage}
                             onJump={handleJumpToLocation}
                             isAnalyzing={isAnalyzing}
                         />

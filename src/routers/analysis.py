@@ -74,7 +74,20 @@ async def summarize(session_id: str = Form(...), mode: str = Form("full"), lang:
         sections = await summary_service.summarize_sections(context, target_lang=lang)
         return JSONResponse({"sections": sections})
     elif mode == "abstract":
+        # Check DB first
+        paper_id = storage.get_session_paper_id(session_id)
+        if paper_id:
+            paper = storage.get_paper(paper_id)
+            if paper and paper.get("abstract"):
+                logger.info(f"[summarize] Cache HIT for abstract: {paper_id}")
+                return JSONResponse({"abstract": paper["abstract"]})
+
         abstract = await summary_service.summarize_abstract(context, target_lang=lang)
+        
+        # Save generated abstract if paper exists
+        if paper_id:
+            storage.update_paper_abstract(paper_id, abstract)
+            
         return JSONResponse({"abstract": abstract})
     else:
         summary = await summary_service.summarize_full(context, target_lang=lang)

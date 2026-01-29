@@ -30,9 +30,11 @@ class SidebarNoteService:
         x: float | None = None,
         y: float | None = None,
         user_id: str | None = None,
+        note_id: str | None = None,
     ) -> dict:
         """
         Add a note to the sidebar.
+        If note_id is provided, it updates the existing note.
 
         Args:
             session_id: The session identifier
@@ -43,17 +45,20 @@ class SidebarNoteService:
             x: X coordinate (relative %)
             y: Y coordinate (relative %)
             user_id: Optional user identifier (if logged in)
+            note_id: Optional existing note ID for update
 
         Returns:
-            The created note with its ID
+            The created/updated note with its ID
         """
         try:
-            note_id = str(uuid6.uuid7())
+            if not note_id:
+                note_id = str(uuid6.uuid7())
+            
             self.storage.save_note(
                 note_id, session_id, term, note, image_url, page_number, x, y, user_id
             )
             logger.info(
-                "Note added",
+                "Note added/updated",
                 extra={
                     "note_id": note_id,
                     "session_id": session_id,

@@ -109,7 +109,13 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
 
                 {activeTab === 'notes' && (
                     <div className="absolute inset-0">
-                        <NoteList sessionId={sessionId} coordinates={coordinates} onJump={onJump} />
+                        <NoteList
+                            sessionId={sessionId}
+                            coordinates={coordinates}
+                            onJump={onJump}
+                            selectedContext={context} // Use the shared context prop which now also holds selected text
+                            selectedTerm={selectedWord} // Word click sets this
+                        />
                     </div>
                 )}
             </div>

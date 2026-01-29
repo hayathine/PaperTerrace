@@ -188,3 +188,23 @@ Write in a concise, academic style in {lang_name}.
         except Exception as e:
             logger.error(f"Abstract generation failed: {e}")
             return f"要旨の生成に失敗しました: {str(e)}"
+
+    async def summarize_context(self, text: str, max_length: int = 500) -> str:
+        """
+        Generate a short summary for AI context (max 500 chars).
+        """
+        try:
+            # Use a fast model for context summarization if possible
+            prompt = f"""
+Summarize the following paper text in Japanese within {max_length} characters.
+Focus on key terminology and the main research topic to serve as context for technical term translation.
+
+[Paper Text]
+{text[:10000]}
+"""
+            summary = await self.ai_provider.generate(prompt, model=self.model)
+            logger.info(f"Context summary generated (length: {len(summary)})")
+            return summary[:max_length] 
+        except Exception as e:
+            logger.error(f"Context summary generation failed: {e}")
+            return ""

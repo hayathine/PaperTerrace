@@ -1,26 +1,103 @@
 import React, { useMemo } from 'react';
 import { PageData } from './types';
 import StampOverlay from '../Stamps/StampOverlay';
+import BoxOverlay from './BoxOverlay';
 import { Stamp } from '../Stamps/types';
 
 interface PDFPageProps {
     page: PageData;
     scale?: number;
     onWordClick?: (word: string, context?: string, coords?: { page: number, x: number, y: number }) => void;
+    onTextSelect?: (text: string, coords: { page: number, x: number, y: number }) => void;
     // Stamp props
     stamps?: Stamp[];
     isStampMode?: boolean;
     onAddStamp?: (page: number, x: number, y: number) => void;
+    // Area selection props
+    isAreaMode?: boolean;
+    onAreaSelect?: (coords: { page: number, x: number, y: number, width: number, height: number }) => void;
 }
 
 const PDFPage: React.FC<PDFPageProps> = ({
     page,
     onWordClick,
+    onTextSelect,
     stamps = [],
     isStampMode = false,
-    onAddStamp
+    onAddStamp,
+    isAreaMode = false,
+    onAreaSelect
 }) => {
     const { width, height, words, image_url, page_num } = page;
+
+    // Handle text selection
+    React.useEffect(() => {
+        const handleSelection = () => {
+            if (isStampMode) return;
+            const selection = window.getSelection();
+            if (!selection || selection.isCollapsed) return;
+
+            const text = selection.toString().trim();
+            if (text && onTextSelect) {
+                // Approximate coordinates using the first range rect
+                const range = selection.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+
+                // We need to convert viewport coordinates to page-relative coordinates
+                // This implies finding the page container relative to viewport
+                const pageEl = document.getElementById(`page-${page.page_num}`);
+                if (pageEl) {
+                    const pageRect = pageEl.getBoundingClientRect();
+
+                    // Check if selection is actually inside this page
+                    if (
+                        rect.top >= pageRect.top &&
+                        rect.bottom <= pageRect.bottom &&
+                        rect.left >= pageRect.left &&
+                        rect.right <= pageRect.right
+                    ) {
+                        const relX = (rect.left - pageRect.left) / pageRect.width;
+                        const relY = (rect.top - pageRect.top) / pageRect.height;
+
+                        // Pass the selection up (debouncing might be needed if mouseup is not used)
+                        // We'll rely on mouseup attached to document or element logic outside, 
+                        // but PDFPage is a good place to detect if it happened INSIDE it.
+                    }
+                }
+            }
+        };
+
+        // Listen to mouseup on the page element to capture selection end
+        const pageEl = document.getElementById(`page-${page.page_num}`);
+        if (pageEl) {
+            // Logic moved to JSX onMouseUp for simplicity and better React integration
+        }
+    }, [isStampMode, onTextSelect, page.page_num]);
+
+    const handleMouseUp = (e: React.MouseEvent) => {
+        if (isStampMode) return;
+
+        // Wait next tick for selection to populate
+        setTimeout(() => {
+            const selection = window.getSelection();
+            if (!selection || selection.isCollapsed) return;
+
+            const text = selection.toString().trim();
+            if (text && onTextSelect) {
+                const range = selection.getRangeAt(0);
+                const rect = range.getBoundingClientRect();
+                const pageEl = e.currentTarget.getBoundingClientRect();
+
+                // Calculate relative coordinates (center of selection)
+                const relX = ((rect.left + rect.width / 2) - pageEl.left) / pageEl.width;
+                const relY = ((rect.top + rect.height / 2) - pageEl.top) / pageEl.height;
+
+                if (relX >= 0 && relX <= 1 && relY >= 0 && relY <= 1) {
+                    onTextSelect(text, { page: page_num, x: relX, y: relY });
+                }
+            }
+        }, 10);
+    };
 
     // Filter stamps for this page
     const pageStamps = useMemo(() => {
@@ -34,7 +111,12 @@ const PDFPage: React.FC<PDFPageProps> = ({
     };
 
     return (
-        <div id={`page-${page.page_num}`} className="relative mb-8 shadow-2xl rounded-xl overflow-hidden bg-white transition-all duration-300 border border-slate-200/50 mx-auto" style={{ maxWidth: '100%' }}>
+        <div
+            id={`page-${page.page_num}`}
+            className="relative mb-8 shadow-2xl rounded-xl overflow-hidden bg-white transition-all duration-300 border border-slate-200/50 mx-auto"
+            style={{ maxWidth: '100%' }}
+            onMouseUp={handleMouseUp}
+        >
             {/* Header / Page Number */}
             <div className="bg-gray-50 border-b border-gray-100 px-4 py-2 flex justify-between items-center">
                 <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">
@@ -56,6 +138,22 @@ const PDFPage: React.FC<PDFPageProps> = ({
                     stamps={pageStamps}
                     isStampMode={isStampMode}
                     onAddStamp={handleAddStamp}
+                />
+
+                {/* Box Selection Overlay */}
+                <BoxOverlay
+                    isActive={isAreaMode}
+                    onSelect={(rect) => {
+                        if (onAreaSelect) {
+                            onAreaSelect({
+                                page: page_num,
+                                x: rect.x,
+                                y: rect.y,
+                                width: rect.width,
+                                height: rect.height
+                            });
+                        }
+                    }}
                 />
 
                 {/* Word Overlays */}

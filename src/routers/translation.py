@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from ..features import TranslationService
 from ..logger import logger
 from ..logic import executor
+from ..providers import get_storage_provider
 from ..services.analysis_service import EnglishAnalysisService
 from ..services.jamdict_service import _lookup_word_full
 
@@ -20,6 +21,7 @@ router = APIRouter(tags=["Translation"])
 # Services
 service = EnglishAnalysisService()
 translation_service = TranslationService()
+storage = get_storage_provider()
 
 
 class LanguageSettingRequest(BaseModel):
@@ -120,6 +122,7 @@ async def set_language(request: LanguageSettingRequest):
 class ExplainContextRequest(BaseModel):
     word: str
     context: str
+    session_id: str | None = None
     lang: str = "ja"
 
 
@@ -133,10 +136,21 @@ async def explain_with_context(req: ExplainContextRequest):
 
     lang_name = SUPPORTED_LANGUAGES.get(req.lang, req.lang)
     provider = get_ai_provider()
+    
+    # Retrieve Paper Summary Context if session_id is provided
+    summary_context = ""
+    if req.session_id:
+        paper_id = storage.get_session_paper_id(req.session_id)
+        if paper_id:
+            paper = storage.get_paper(paper_id)
+            if paper and paper.get("abstract"):
+                 summary_context = f"\n[Document Summary]\n{paper['abstract']}\n"
+    
     prompt = f"""
 以下の文脈において、単語「{req.word}」はどういう意味で使われていますか？
 文脈を考慮して、{lang_name}で簡潔に説明してください。
 
+{summary_context}
 文脈:
 {req.context}
 """

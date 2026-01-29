@@ -20,7 +20,12 @@ from ..utils import _get_file_hash
 router = APIRouter(tags=["PDF Analysis"])
 
 # Services
+
+from ..features import SummaryService
+
+# Services
 service = EnglishAnalysisService()
+summary_service = SummaryService()
 storage = get_storage_provider()
 redis_service = RedisService()
 
@@ -230,6 +235,16 @@ async def stream(task_id: str):
                 if s_id:
                     storage.save_session_context(s_id, new_paper_id)
 
+                # --- Auto-Summarization for Context ---
+                # Generate a short summary and save it to 'abstract' column for context usage
+                try:
+                    summary_context = await summary_service.summarize_context(full_text, max_length=500)
+                    if summary_context:
+                        storage.update_paper_abstract(new_paper_id, summary_context)
+                        logger.info(f"Auto-summary saved for paper {new_paper_id}")
+                except Exception as e:
+                    logger.error(f"Auto-summary generation failed: {e}")
+
                 logger.info(
                     f"Saved session context for: {s_id} (result: {res}, length: {len(full_text)})"
                 )
@@ -421,6 +436,17 @@ async def stream(task_id: str):
                 redis_service.set(f"session:{session_id}", full_text, expire=86400)
                 # DBにも保存
                 storage.save_session_context(session_id, paper_id)
+
+            # --- Auto-Summarization for Context ---
+            try:
+                summary_context = await summary_service.summarize_context(full_text, max_length=500)
+                if summary_context:
+                    storage.update_paper_abstract(paper_id, summary_context)
+                    logger.info(f"Auto-summary saved for paper {paper_id}")
+            except Exception as e:
+                logger.error(f"Auto-summary generation failed: {e}")
+
+            # 完了処理
 
             # 完了処理
             redis_service.delete(f"task:{task_id}")

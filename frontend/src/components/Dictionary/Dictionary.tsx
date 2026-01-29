@@ -110,6 +110,7 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context, coord
                 body: JSON.stringify({
                     word: term,
                     context: context.substring(0, 500), // Limit context length just in case
+                    session_id: sessionId,
                     lang: 'ja'
                 })
             });

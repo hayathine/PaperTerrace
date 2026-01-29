@@ -64,6 +64,11 @@ class StorageInterface(ABC):
         ...
 
     @abstractmethod
+    def update_paper_abstract(self, paper_id: str, abstract: str) -> bool:
+        """Update the abstract/summary of a paper."""
+        ...
+
+    @abstractmethod
     def delete_paper(self, paper_id: str) -> bool:
         """Delete a paper by ID."""
         ...
@@ -539,6 +544,18 @@ class SQLiteStorage(StorageInterface):
             cursor = conn.execute(
                 "UPDATE papers SET html_content = ?, updated_at = ? WHERE paper_id = ?",
                 (html_content, now, paper_id),
+            )
+            conn.commit()
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_paper_abstract(self, paper_id: str, abstract: str) -> bool:
+        """Update the abstract/summary of a paper."""
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE papers SET abstract = ?, updated_at = ? WHERE paper_id = ?",
+                (abstract, now, paper_id),
             )
             conn.commit()
             return cursor.rowcount > 0

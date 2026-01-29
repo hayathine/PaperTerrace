@@ -23,6 +23,7 @@ from .routers import (
     stamps_router,
     translation_router,
     users_router,
+    upload_router,
 )
 
 # Load environment variables
@@ -131,6 +132,9 @@ app.include_router(stamps_router)
 
 # Paper Management
 app.include_router(papers_router)
+
+# Uploads
+app.include_router(upload_router)
 
 
 # ============================================================================

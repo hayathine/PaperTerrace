@@ -11,11 +11,13 @@ interface PDFViewerProps {
     uploadFile?: File | null;
     sessionId?: string;
     onWordClick?: (word: string, context?: string, coords?: { page: number, x: number, y: number }) => void;
+    onTextSelect?: (text: string, coords: { page: number, x: number, y: number }) => void;
+    onAreaSelect?: (imageUrl: string, coords: { page: number, x: number, y: number }) => void; // New prop
     jumpTarget?: { page: number, x: number, y: number } | null;
     onStatusChange?: (status: 'idle' | 'uploading' | 'processing' | 'done' | 'error') => void;
 }
 
-const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionId, jumpTarget, onStatusChange }) => {
+const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSelect, onAreaSelect, sessionId, jumpTarget, onStatusChange }) => {
     const { token } = useAuth();
     const [pages, setPages] = useState<PageData[]>([]);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle');
@@ -25,8 +27,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionI
     const containerRef = useRef<HTMLDivElement>(null);
 
     // Stamp State
+    // Modes: 'text' (default), 'stamp', 'area'
+    const [mode, setMode] = useState<'text' | 'stamp' | 'area'>('text');
     const [stamps, setStamps] = useState<Stamp[]>([]);
-    const [isStampMode, setIsStampMode] = useState(false);
     const [selectedStamp, setSelectedStamp] = useState<StampType>('👍');
 
     useEffect(() => {
@@ -165,6 +168,68 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionI
         }
     };
 
+    const handleTextSelect = (text: string, coords: { page: number, x: number, y: number }) => {
+        if (onTextSelect) {
+            onTextSelect(text, coords);
+        }
+    };
+
+    const handleAreaSelect = async (coords: { page: number, x: number, y: number, width: number, height: number }) => {
+        // Find page data
+        const page = pages.find(p => p.page_num === coords.page);
+        if (!page || !onAreaSelect) return;
+
+        try {
+            // Load image for cropping
+            const img = new Image();
+            img.crossOrigin = "anonymous";
+            img.src = page.image_url;
+            await new Promise((resolve) => img.onload = resolve);
+
+            const canvas = document.createElement('canvas');
+            // Coords are in relative [0-1] format
+            const cropX = coords.x * img.naturalWidth;
+            const cropY = coords.y * img.naturalHeight;
+            const cropW = coords.width * img.naturalWidth;
+            const cropH = coords.height * img.naturalHeight;
+
+            canvas.width = cropW;
+            canvas.height = cropH;
+
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return;
+
+            ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+            // Upload the cropped image
+            canvas.toBlob(async (blob) => {
+                if (!blob) return;
+                const formData = new FormData();
+                formData.append('file', blob, 'crop.png');
+
+                // We need token if auth is enabled
+                const headers: HeadersInit = {};
+                if (token) headers['Authorization'] = `Bearer ${token}`;
+
+                const res = await fetch('/upload/image', {
+                    method: 'POST',
+                    headers,
+                    body: formData
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    onAreaSelect(data.url, { page: coords.page, x: coords.x, y: coords.y });
+                    // Switch back to text mode after selection?
+                    setMode('text');
+                }
+            }, 'image/png');
+
+        } catch (e) {
+            console.error('Failed to crop/upload image', e);
+        }
+    };
+
     const handleAddStamp = async (page: number, x: number, y: number) => {
         if (!paperId) {
             alert('Paper ID not found. Please wait for analysis to complete.');
@@ -233,15 +298,42 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionI
                 </div>
             )}
 
-            <div className={`space-y-6 ${isStampMode ? 'cursor-crosshair' : ''}`}>
+            {/* Toolbar */}
+            {pages.length > 0 && (
+                <div className="sticky top-0 z-40 bg-white/90 backdrop-blur shadow-sm rounded-lg mb-4 p-2 flex items-center gap-2 justify-center">
+                    <button
+                        onClick={() => setMode('text')}
+                        className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'text' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
+                    >
+                        <span>📝 Text</span>
+                    </button>
+                    <button
+                        onClick={() => setMode('area')}
+                        className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'area' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
+                    >
+                        <span>✂️ Crop</span>
+                    </button>
+                    <button
+                        onClick={() => setMode('stamp')}
+                        className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'stamp' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
+                    >
+                        <span>👍 Stamp</span>
+                    </button>
+                </div>
+            )}
+
+            <div className={`space-y-6 ${(mode === 'stamp' || mode === 'area') ? 'cursor-crosshair' : ''}`}>
                 {pages.map((page) => (
                     <PDFPage
                         key={page.page_num}
                         page={page}
                         onWordClick={handleWordClick}
+                        onTextSelect={handleTextSelect}
                         stamps={stamps}
-                        isStampMode={isStampMode}
+                        isStampMode={mode === 'stamp'}
                         onAddStamp={handleAddStamp}
+                        isAreaMode={mode === 'area'}
+                        onAreaSelect={handleAreaSelect}
                     />
                 ))}
             </div>
@@ -253,10 +345,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, sessionI
             )}
 
             {/* Stamp Palette (Only show if we have pages/paperId) */}
-            {paperId && (
+            {paperId && mode === 'stamp' && (
                 <StampPalette
-                    isStampMode={isStampMode}
-                    onToggleMode={() => setIsStampMode(!isStampMode)}
+                    isStampMode={true}
+                    onToggleMode={() => setMode('text')}
                     selectedStamp={selectedStamp}
                     onSelectStamp={setSelectedStamp}
                 />

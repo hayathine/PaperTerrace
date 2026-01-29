@@ -1,24 +1,70 @@
 import React, { useState } from 'react';
 
 interface AddNoteFormProps {
-    onAdd: (term: string, note: string, coords?: { page: number, x: number, y: number }) => Promise<void>;
+    onAdd: (term: string, note: string, coords?: { page: number, x: number, y: number }, imageUrl?: string) => Promise<void>;
+    onUpdate?: (id: string, term: string, note: string, coords?: { page: number, x: number, y: number }, imageUrl?: string) => Promise<void>;
+    onCancelEdit?: () => void;
     coordinates?: { page: number, x: number, y: number };
+    initialContent?: string;
+    initialTerm?: string;
+    initialImage?: string;
+    editingNote?: { id: string, term: string, note: string, page_number?: number, x?: number, y?: number, image_url?: string } | null;
 }
 
-const AddNoteForm: React.FC<AddNoteFormProps> = ({ onAdd, coordinates }) => {
-    const [term, setTerm] = useState('');
-    const [note, setNote] = useState('');
+const AddNoteForm: React.FC<AddNoteFormProps> = ({
+    onAdd,
+    onUpdate,
+    onCancelEdit,
+    coordinates,
+    initialContent = '',
+    initialTerm = '',
+    initialImage = '',
+    editingNote = null
+}) => {
+    const [term, setTerm] = useState(initialTerm);
+    const [note, setNote] = useState(initialContent);
+    const [imageUrl, setImageUrl] = useState<string | undefined>(initialImage);
     const [isSubmitting, setIsSubmitting] = useState(false);
+
+    // Effect for handling selection text/image injection
+    React.useEffect(() => {
+        if (!editingNote) {
+            if (initialContent) setNote(initialContent);
+            if (initialTerm) setTerm(initialTerm);
+            if (initialImage) setImageUrl(initialImage);
+        }
+    }, [initialContent, initialTerm, initialImage, editingNote]);
+
+    // Effect for handling edit mode
+    React.useEffect(() => {
+        if (editingNote) {
+            setTerm(editingNote.term);
+            setNote(editingNote.note);
+            setImageUrl(editingNote.image_url);
+        } else if (!initialContent && !initialTerm && !initialImage) {
+            setTerm('');
+            setNote('');
+            setImageUrl(undefined);
+        }
+    }, [editingNote]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!term.trim() || !note.trim()) return;
+        if (!term.trim() || (!note.trim() && !imageUrl)) return;
 
         setIsSubmitting(true);
         try {
-            await onAdd(term, note, coordinates);
-            setTerm('');
-            setNote('');
+            if (editingNote && onUpdate) {
+                await onUpdate(editingNote.id, term, note, coordinates, imageUrl);
+            } else {
+                await onAdd(term, note, coordinates, imageUrl);
+            }
+
+            if (!editingNote) {
+                setTerm('');
+                setNote('');
+                setImageUrl(undefined);
+            }
         } finally {
             setIsSubmitting(false);
         }
@@ -26,6 +72,19 @@ const AddNoteForm: React.FC<AddNoteFormProps> = ({ onAdd, coordinates }) => {
 
     return (
         <form onSubmit={handleSubmit} className="mb-6 bg-slate-50 p-3 rounded-xl border border-slate-100">
+            {imageUrl && (
+                <div className="relative mb-3 group">
+                    <img src={imageUrl} alt="Attached snippet" className="w-full h-auto rounded-lg border border-slate-200 shadow-sm" />
+                    <button
+                        type="button"
+                        onClick={() => setImageUrl(undefined)}
+                        className="absolute top-1 right-1 bg-black/50 hover:bg-black/70 text-white rounded-full p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                        <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                    </button>
+                </div>
+            )}
+
             <div className="relative">
                 <input
                     type="text"
@@ -51,13 +110,25 @@ const AddNoteForm: React.FC<AddNoteFormProps> = ({ onAdd, coordinates }) => {
                 onChange={(e) => setNote(e.target.value)}
                 disabled={isSubmitting}
             />
-            <button
-                type="submit"
-                disabled={isSubmitting || !term || !note}
-                className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm"
-            >
-                {isSubmitting ? 'Adding...' : 'Add Note'}
-            </button>
+            <div className="flex gap-2">
+                {editingNote && onCancelEdit && (
+                    <button
+                        type="button"
+                        onClick={onCancelEdit}
+                        disabled={isSubmitting}
+                        className="flex-1 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-600 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors"
+                    >
+                        Cancel
+                    </button>
+                )}
+                <button
+                    type="submit"
+                    disabled={isSubmitting || !term || (!note && !imageUrl)}
+                    className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm"
+                >
+                    {isSubmitting ? (editingNote ? 'Updating...' : 'Adding...') : (editingNote ? 'Update Note' : 'Add Note')}
+                </button>
+            </div>
         </form>
     );
 };
