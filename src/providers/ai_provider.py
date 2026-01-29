@@ -182,6 +182,8 @@ class GeminiProvider(AIProviderInterface):
             config_params: dict[str, Any] = {}
             if response_model:
                 config_params["response_mime_type"] = "application/json"
+                # For google-genai SDK, use response_schema directly if supported, or rely on auto-conversion
+                # If using google-genai, the field is 'response_schema' in GenerateContentConfig
                 config_params["response_schema"] = response_model
 
             config = types.GenerateContentConfig(**config_params) if config_params else None
@@ -197,13 +199,28 @@ class GeminiProvider(AIProviderInterface):
 
             if response_model:
                 try:
+                    # Method 1: Use .parsed if available (google-genai SDK 1.0+)
                     if hasattr(response, "parsed") and response.parsed is not None:
+                        # SDK might return a dict or object depending on config.
+                        # If response_schema was passed as Pydantic class, parsed should be instance of that class.
+                        if isinstance(response.parsed, response_model):
+                            return response.parsed
+                        # If it's something else but compatible?
                         return response.parsed
+
+                    # Method 2: Manual Parse
                     text_to_parse = response.text or ""
+                    # Handle potential markdown wrapping
+                    text_to_parse = text_to_parse.strip()
+                    if text_to_parse.startswith("```json"):
+                        text_to_parse = text_to_parse[7:].strip("` \n")
+                    elif text_to_parse.startswith("```"):
+                        text_to_parse = text_to_parse[3:].strip("` \n")
                     return response_model.model_validate_json(text_to_parse)
                 except Exception as parse_err:
                     logger.error(f"Failed to parse structured image output: {parse_err}")
                     text_to_parse = response.text or ""
+                    # Try cleaning again just in case
                     text_to_parse = text_to_parse.strip()
                     if text_to_parse.startswith("```json"):
                         text_to_parse = text_to_parse[7:].strip("` \n")

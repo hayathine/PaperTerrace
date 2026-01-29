@@ -3,9 +3,6 @@
 """
 
 import os
-from typing import List
-
-from pydantic import BaseModel, Field
 
 from src.logger import logger
 from src.prompts import (
@@ -14,31 +11,14 @@ from src.prompts import (
     SYSTEM_PROMPT,
 )
 from src.providers import get_ai_provider
+from src.schemas.paragraph_analysis import (
+    ParagraphExplanationResponse,
+)
+from src.schemas.paragraph_analysis import (
+    TerminologyList as TerminologyResponse,
+)
 
 from .translate import SUPPORTED_LANGUAGES
-
-
-class ParagraphExplanationResponse(BaseModel):
-    """段落の解説結果モデル"""
-
-    main_claim: str = Field(..., description="The core argument or content")
-    background_knowledge: str = Field(..., description="Prerequisites or technical terms")
-    logic_flow: str = Field(..., description="How the argument or logic is developed")
-    key_points: List[str] = Field(..., description="Important implications or notes")
-
-
-class TermExplanation(BaseModel):
-    """専門用語の解説モデル"""
-
-    term: str = Field(..., description="Technical term")
-    explanation: str = Field(..., description="Concise explanation")
-    importance: str = Field(..., description="high/medium/low")
-
-
-class TerminologyResponse(BaseModel):
-    """用語解説のリストモデル"""
-
-    terms: List[TermExplanation] = Field(..., max_length=10)
 
 
 class ParagraphExplainError(Exception):

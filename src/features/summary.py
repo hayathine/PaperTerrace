@@ -1,7 +1,4 @@
 import os
-from typing import List
-
-from pydantic import BaseModel, Field
 
 from src.logger import logger
 from src.prompts import (
@@ -12,30 +9,10 @@ from src.prompts import (
     SYSTEM_PROMPT,
 )
 from src.providers import get_ai_provider
+from src.schemas.summary import FullSummaryResponse
+from src.schemas.summary import SectionSummaryList as SectionSummariesResponse
 
 from .translate import SUPPORTED_LANGUAGES
-
-
-class FullSummaryResponse(BaseModel):
-    """論文全体の要約モデル"""
-
-    overview: str = Field(..., description="主題の簡潔な要約（1-2文）")
-    key_contributions: List[str] = Field(..., description="主な貢献（3-5点）")
-    methodology: str = Field(..., description="手法の説明")
-    conclusion: str = Field(..., description="主な発見と示唆")
-
-
-class SectionSummary(BaseModel):
-    """セクション別要約モデル"""
-
-    section: str = Field(..., description="セクションタイトル")
-    summary: str = Field(..., description="要約（2-3文）")
-
-
-class SectionSummariesResponse(BaseModel):
-    """セクション別要約リストモデル"""
-
-    sections: List[SectionSummary]
 
 
 class SummaryError(Exception):

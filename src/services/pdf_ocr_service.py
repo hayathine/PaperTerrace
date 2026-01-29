@@ -5,9 +5,10 @@ import fitz  # PyMuPDF
 
 from src.crud import get_ocr_from_db, save_ocr_to_db
 from src.logger import logger
-from src.prompts import PDF_FALLBACK_OCR_PROMPT, PDF_LANG_DETECT_PROMPT
+from src.prompts import DETECT_FIGURES_PROMPT, PDF_FALLBACK_OCR_PROMPT, PDF_LANG_DETECT_PROMPT
 from src.providers import get_ai_provider
 from src.providers.image_storage import get_page_images, save_page_image
+from src.schemas.figure import FigureDetectionResponse
 from src.utils import _get_file_hash
 
 
@@ -194,67 +195,107 @@ class PDFOCRService:
                     layout_data,
                 )
 
-                # --- Figure Extraction (New) ---
-                # Check for images in the page
+                # --- Figure Extraction (AI-Based) ---
                 try:
-                    images = page.get_images(full=True)
-                    if images:
-                        logger.info(f"[Figure] Found {len(images)} images on page {page_num + 1}")
-                        for img_index, img in enumerate(images):
-                            xref = img[0]
-                            base_image = pdf_doc.extract_image(xref)
-                            image_bytes = base_image["image"]
+                    # Detect figures/tables/equations using AI (Gemini) with structured output
+                    detection_result = await self.ai_provider.generate_with_image(
+                        prompt=DETECT_FIGURES_PROMPT,
+                        image_bytes=img_bytes,
+                        response_model=FigureDetectionResponse,
+                        model=self.model,
+                    )
 
-                            # Filter small images (icons, lines, etc.)
-                            if len(image_bytes) < 5000:  # 5KB threshold
-                                continue
+                    found_figures = detection_result.figures if detection_result else []
 
-                            # Save figure image
-                            # We use a suffix for figure images to distinguish from page images
+                    if found_figures:
+                        logger.info(
+                            f"[AI-Figure] Detected {len(found_figures)} items on page {page_num + 1}"
+                        )
 
-                            # Encode to b64 for saving
-                            image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+                        if layout_data is None:
+                            layout_data = {
+                                "width": img_width,
+                                "height": img_height,
+                                "words": [],
+                            }
+                        if isinstance(layout_data, list):  # Safety check
+                            layout_data = {
+                                "width": img_width,
+                                "height": img_height,
+                                "words": [],
+                            }
+                        if "figures" not in layout_data:
+                            layout_data["figures"] = []
 
-                            # Generate a unique hash for the figure or use file_hash + page + index
-                            figure_img_name_arg = f"figure_{page_num + 1}_{img_index}"
-                            figure_url = save_page_image(file_hash, figure_img_name_arg, image_b64)
+                        page_w = pix.width
+                        page_h = pix.height
 
-                            # Calculate bbox for the image if possible
+                        for i, fig in enumerate(found_figures):
                             try:
-                                # We need to find where this image is drawn on the page.
-                                rects = page.get_image_rects(xref)
-                                for rect in rects:
-                                    # Use the first rect found (usually images appear once)
-                                    # Rect is [x0, y0, x1, y1]
-                                    bbox = [rect.x0, rect.y0, rect.x1, rect.y1]
+                                # box_2d is [ymin, xmin, ymax, xmax] normalized 0-1
+                                ymin, xmin, ymax, xmax = fig.box_2d
 
-                                    # Add to layout data for later processing
-                                    if layout_data is None:
-                                        layout_data = {
-                                            "width": pix.width,
-                                            "height": pix.height,
-                                            "words": [],
-                                        }
+                                # Convert to pixels (PyMuPDF Rect: x0, y0, x1, y1)
+                                r_xmin = int(xmin * page_w)
+                                r_ymin = int(ymin * page_h)
+                                r_xmax = int(xmax * page_w)
+                                r_ymax = int(ymax * page_h)
 
-                                    if "figures" not in layout_data:
-                                        layout_data["figures"] = []
+                                # Clip to page bounds
+                                r_xmin = max(0, r_xmin)
+                                r_ymin = max(0, r_ymin)
+                                r_xmax = min(page_w, r_xmax)
+                                r_ymax = min(page_h, r_ymax)
 
-                                    layout_data["figures"].append(
-                                        {
-                                            "image_url": figure_url,
-                                            "bbox": bbox,
-                                            "explanation": "",  # Generated asynchronously later
-                                            "page_num": page_num + 1,
-                                            # We might want to save image_bytes or similar if needed for immediate analysis
-                                            # But URL is enough if we can resolve it.
-                                        }
-                                    )
-                                    break  # Handle one instance of the image
-                            except Exception as e:
-                                logger.error(f"[Figure] Error processing rects: {e}")
+                                # Skip invalid or tiny boxes
+                                if (r_xmax - r_xmin) < 10 or (r_ymax - r_ymin) < 10:
+                                    continue
+
+                                # Crop from the original page pixmap
+                                # Note: fitz.IRect(x0, y0, x1, y1)
+                                crop_rect = fitz.IRect(r_xmin, r_ymin, r_xmax, r_ymax)
+                                crop_pix = fitz.Pixmap(pix, crop_rect)
+                                crop_bytes = crop_pix.tobytes("png")
+
+                                if (
+                                    len(crop_bytes) < 500
+                                ):  # Skip very small images (e.g. empty space)
+                                    continue
+
+                                crop_b64 = base64.b64encode(crop_bytes).decode("utf-8")
+
+                                # Generate filename/URL
+                                # E.g. figure_page_index_label
+                                figure_img_name_arg = f"figure_{page_num + 1}_{i}_{fig.label}"
+                                figure_url = save_page_image(
+                                    file_hash, figure_img_name_arg, crop_b64
+                                )
+
+                                # Add to layout data
+                                layout_data["figures"].append(
+                                    {
+                                        "image_url": figure_url,
+                                        "bbox": [
+                                            r_xmin,
+                                            r_ymin,
+                                            r_xmax,
+                                            r_ymax,
+                                        ],  # Pixel coordinates
+                                        "explanation": "",
+                                        "page_num": page_num + 1,
+                                        "label": fig.label,
+                                    }
+                                )
+
+                            except Exception as crop_e:
+                                logger.warning(
+                                    f"[AI-Figure] Crop/Save failed for item {i}: {crop_e}"
+                                )
+                    else:
+                        logger.debug(f"[AI-Figure] No figures detected on page {page_num + 1}")
 
                 except Exception as e:
-                    logger.warning(f"[Figure] Extraction failed: {e}")
+                    logger.warning(f"[AI-Figure] Extraction failed: {e}")
 
                 yield (
                     page_num + 1,

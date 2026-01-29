@@ -6,10 +6,6 @@
     再現性リスク
 """
 
-from typing import List
-
-from pydantic import BaseModel, Field
-
 from src.logger import logger
 from src.prompts import (
     ADVERSARIAL_COUNTERARGUMENTS_PROMPT,
@@ -17,53 +13,15 @@ from src.prompts import (
     ADVERSARIAL_LIMITATIONS_PROMPT,
 )
 from src.providers import get_ai_provider
-
-
-class HiddenAssumption(BaseModel):
-    assumption: str
-    risk: str
-    severity: str
-
-
-class UnverifiedCondition(BaseModel):
-    condition: str
-    impact: str
-    severity: str
-
-
-class ReproducibilityRisk(BaseModel):
-    risk: str
-    detail: str
-    severity: str
-
-
-class MethodologyConcern(BaseModel):
-    concern: str
-    suggestion: str
-    severity: str
-
-
-class CritiqueResponse(BaseModel):
-    hidden_assumptions: List[HiddenAssumption]
-    unverified_conditions: List[UnverifiedCondition]
-    reproducibility_risks: List[ReproducibilityRisk]
-    methodology_concerns: List[MethodologyConcern]
-    overall_assessment: str
-
-
-class Limitation(BaseModel):
-    limitation: str
-    evidence: str
-    impact: str
-    severity: str
-
-
-class LimitationsResponse(BaseModel):
-    limitations: List[Limitation]
-
-
-class CounterArgumentsResponse(BaseModel):
-    counterarguments: List[str] = Field(..., description="3 potential counterarguments")
+from src.schemas.adversarial import (
+    AdversarialCritiqueResponse as CritiqueResponse,
+)
+from src.schemas.adversarial import (
+    CounterArgumentsResponse,
+)
+from src.schemas.adversarial import (
+    LimitationList as LimitationsResponse,
+)
 
 
 class AdversarialError(Exception):

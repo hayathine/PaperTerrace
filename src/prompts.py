@@ -142,6 +142,19 @@ Even if the content is highly technical, please explain it at a level understand
 Ensure the output is in {lang_name}.
 """
 
+TRANSLATE_PROMPT = """Please translate the following to {lang_name}.
+
+[context]
+{context}
+
+Output the translation in the following JSON format:
+[
+  {{"term": "Term", "translation": "Translation (1-2 words) in {lang_name}"}}
+]
+
+Output JSON only.
+"""
+
 EXPLAIN_TERMINOLOGY_PROMPT = """Please extract technical terms from the paragraph below and provide concise explanations for each.
 
 [Paragraph]
@@ -161,6 +174,27 @@ Limit to at most 10 terms. Output JSON only.
 # ==========================================
 # Figure Insight Prompts
 # ==========================================
+
+# ==========================================
+# Figure Insight Prompts
+# ==========================================
+
+DETECT_FIGURES_PROMPT = """Analyze the following image of a document page and identify all figures, tables, and independent mathematical equations.
+
+Return a JSON list of bounding boxes for each detected item:
+[
+  {"label": "figure" | "table" | "equation", "box_2d": [ymin, xmin, ymax, xmax]}
+]
+
+[Instructions]
+- Coordinates must be normalized (0.0 to 1.0).
+- "figure": Graphs, charts, diagrams, photos.
+- "table": Tabular data structures.
+- "equation": Significant mathematical formulas/equations displayed independently (not inline).
+- Ignore small icons, headers, footers, or page numbers.
+- Combine the figure image and its caption into one box if possible, or just the figure.
+- If no items are found, return an empty list [].
+"""
 
 FIGURE_ANALYSIS_PROMPT = """Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.
 {caption_hint}
