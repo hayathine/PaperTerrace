@@ -439,9 +439,9 @@
     if (!text) return;
 
     switchTab('dict');
-    const outputBox = document.getElementById("definition-box");
-    const emptyState = document.getElementById('dict-empty-state');
-    if (emptyState) emptyState.remove();
+    const outputBox = document.getElementById("dict-stack");
+    const statusContainer = document.getElementById('dict-status-container');
+    if (statusContainer) statusContainer.innerHTML = ''; // Keep cards, clear status
 
     // 一時的なローディングカードを追加
     const loadingId = "loading-" + Date.now();
@@ -497,6 +497,77 @@
     } catch (error) {
       document.getElementById(loadingId)?.remove();
       console.error("Paragraph explanation failed:", error);
+    }
+  }
+
+  // Explain word with context
+  async function explainWithContext(elementId, lemma, lang, paperId) {
+    const el = document.getElementById(elementId);
+    let context = "";
+    if (el) {
+      // Find sentence context. Use the paragraph container text.
+      const container = el.closest('.paragraph-container') || el.parentElement;
+      context = container.textContent.trim();
+    }
+
+    const outputBox = document.getElementById("dict-stack");
+    const statusContainer = document.getElementById("dict-status-container");
+    if (statusContainer) statusContainer.innerHTML = "";
+    const loadingId = "loading-" + Date.now();
+    const loadingHtml = `
+      <div id="${loadingId}" class="p-4 bg-emerald-50 border border-emerald-100 rounded-xl shadow-sm animate-pulse">
+        <div class="flex items-center gap-2 mb-2">
+            <svg class="w-4 h-4 text-emerald-400 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            <span class="text-xs font-bold text-emerald-500">AI文脈解析中...</span>
+        </div>
+      </div>`;
+    outputBox.insertAdjacentHTML('afterbegin', loadingHtml);
+
+    try {
+      const response = await fetch("/explain/context", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          word: lemma,
+          context: context,
+          session_id: sessionId,
+          lang: lang
+        }),
+      });
+      const data = await response.json();
+      document.getElementById(loadingId)?.remove();
+
+      if (data.translation) {
+        const safeLemma = lemma.replace(/'/g, "\\'");
+        const safeTranslation = data.translation.replace(/`/g, "\\`").replace(/\$/g, "\\$");
+        
+        const resultHtml = `
+          <div class="dict-card p-4 bg-white border border-emerald-100 rounded-2xl shadow-sm animate-fade-in group hover:shadow-md transition-all">
+            <div class="flex items-start justify-between mb-3">
+                <div class="flex flex-col">
+                    <div class="flex items-center gap-2 mb-0.5">
+                        <span class="text-xs font-black text-slate-800 tracking-tight">${lemma}</span>
+                        <span class="px-1.5 py-0.5 bg-emerald-100 text-emerald-600 rounded text-[8px] font-bold uppercase tracking-wider">Gemini Context</span>
+                    </div>
+                </div>
+                <div class="flex items-center gap-1">
+                    <button onclick="saveWordToNote('${safeLemma}', \`${safeTranslation}\` )" title="Save to Note" 
+                        class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all">
+                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+                    </button>
+                    <button onclick="this.closest('.dict-card').remove()" class="p-1.5 text-slate-300 hover:text-slate-500 transition-colors text-sm">×</button>
+                </div>
+            </div>
+            <div class="text-[11px] font-medium text-emerald-800 leading-relaxed bg-emerald-50/50 p-3 rounded-xl border border-emerald-100/30">
+                ${data.translation.replace(/\n/g, '<br>')}
+            </div>
+          </div>
+        `;
+        outputBox.insertAdjacentHTML('afterbegin', resultHtml);
+      }
+    } catch (e) {
+      document.getElementById(loadingId)?.remove();
+      console.error("Context explanation failed:", e);
     }
   }
 

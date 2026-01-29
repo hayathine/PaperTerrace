@@ -67,9 +67,6 @@ class VisionOCRService:
 
             # Since we send one image (page), there's usually just response.full_text_annotation.pages[0]
             for page in response.full_text_annotation.pages:
-                page_width = page.width
-                page_height = page.height
-
                 for block in page.blocks:
                     for paragraph in block.paragraphs:
                         for word in paragraph.words:

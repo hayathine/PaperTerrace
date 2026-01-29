@@ -20,7 +20,7 @@ tasks:
   run:
     desc: "Run local server"
     cmds:
-      - uv run uvicorn src.main:app --reload
+      - uv run uvicorn src.main:app
 
   build:
     desc: "Build frontend"
@@ -101,3 +101,8 @@ tasks:
     desc: "Run ruff"
     cmds:
       - uv run ruff check --fix .
+
+  chche_clear:
+    desc: "Clear cache"
+    cmds:
+      - sqlite3 ocr_reader.db "DELETE FROM ocr_reader;"

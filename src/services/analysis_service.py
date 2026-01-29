@@ -131,7 +131,7 @@ class EnglishAnalysisService:
                     f'<span id="{token_id}" class="cursor-pointer border-b transition-colors {color}'
                     f'" hx-get="/explain/{lemma}?lang={lang}{paper_param}&element_id={token_id}" hx-trigger="click" '
                     f'hx-indicator="#dict-loading" '
-                    f'hx-target="#definition-box" hx-swap="afterbegin">{token.text}</span>{whitespace}'
+                    f'hx-target="#dict-stack" hx-swap="afterbegin">{token.text}</span>{whitespace}'
                 )
 
             html_content = "".join(p_tokens_html)
@@ -191,7 +191,7 @@ class EnglishAnalysisService:
         # ストリーム終了時に未知の単語をバッチ翻訳
         if self._unknown_words:
             # 辞書準備中を表示
-            yield 'event: message\ndata: <div id="definition-box" hx-swap-oob="true" class="min-h-[300px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-3xl animate-pulse"><div class="mb-4 text-indigo-500"><svg class="animate-spin w-8 h-8 mx-auto" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div><p class="text-xs font-bold text-indigo-500">Building Dictionary...</p><p class="text-[10px] text-slate-400 mt-2">Translating unknown words</p></div>\n\n'
+            yield 'event: message\ndata: <div id="dict-status-container" hx-swap-oob="true" class="min-h-[300px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-3xl animate-pulse"><div class="mb-4 text-indigo-500"><svg class="animate-spin w-8 h-8 mx-auto" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div><p class="text-xs font-bold text-indigo-500">Building Dictionary...</p><p class="text-[10px] text-slate-400 mt-2">Translating unknown words</p></div>\n\n'
 
             logger.info(f"UNKNOWN WORDS count: {len(self._unknown_words)}")
             translations = await self._batch_translate_words(
@@ -206,7 +206,7 @@ class EnglishAnalysisService:
 
         # 辞書完了表示（元に戻す）
         # 辞書完了表示（元に戻す）＋ローディングインジケータ
-        yield 'event: message\ndata: <div id="definition-box" hx-swap-oob="true" class="relative min-h-[300px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-slate-100 rounded-3xl"><div id="dict-loading" class="htmx-indicator absolute inset-0 bg-white/90 flex flex-col items-center justify-center z-20 rounded-3xl transition-opacity duration-200"><svg class="animate-spin w-8 h-8 text-indigo-500 mb-2" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg><span class="text-sm text-indigo-500 font-medium">Looking up...</span></div><div class="bg-slate-50 p-4 rounded-2xl mb-4"><svg class="w-8 h-8 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></div><p class="text-xs font-bold text-slate-400 leading-relaxed">Dictionary Ready!<br>Click any word for definition.</p></div>\n\n'
+        yield 'event: message\ndata: <div id="dict-status-container" hx-swap-oob="true" class="relative min-h-[100px] flex flex-col items-center justify-center text-center p-4 border-2 border-dashed border-slate-100 rounded-2xl"><div class="bg-slate-50 p-2 rounded-xl mb-2"><svg class="w-6 h-6 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></div><p class="text-[10px] font-bold text-slate-400 leading-relaxed">Dictionary Ready!</p></div>\n\n'
 
         # ステータスを完了表示に変更 (oob swap)
         yield 'event: message\ndata: <div id="tokenize-status" hx-swap-oob="true" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg">✅ 分析完了！単語をクリックで翻訳</div>\n\n'
@@ -230,12 +230,9 @@ class EnglishAnalysisService:
 
         # Create batch prompt in English
         words_list = "\n".join(f"- {w}" for w in words_to_translate)
-        prompt = f"""Provide concise translations for the following English words in {lang_name}.
-Output format per line: "Word: Translation"
-Keep it very brief (1-2 words).
+        from src.prompts import TRANSLATE_BATCH_PROMPT
 
-Words:
-{words_list}"""
+        prompt = TRANSLATE_BATCH_PROMPT.format(lang_name=lang_name, words_list=words_list)
 
         try:
             # Simple wrapper around async generate
@@ -318,18 +315,11 @@ Words:
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
-        prompt = f"""Evaluate the meaning of the word "{word}" within the academic context below, and provide the most appropriate translation in {lang_name}.
-Keep it concise (1-3 words). Output ONLY the translation.
+        from src.prompts import TRANSLATE_CONTEXT_AWARE_SIMPLE_PROMPT
 
-[Academic Context]
-{context}
-
-[Target Word]
-{word}
-
-[Output]
-Translation only in {lang_name}.
-"""
+        prompt = TRANSLATE_CONTEXT_AWARE_SIMPLE_PROMPT.format(
+            word=word, lang_name=lang_name, context=context
+        )
 
         try:
             translation = await self.ai_provider.generate(prompt, model=self.translate_model)

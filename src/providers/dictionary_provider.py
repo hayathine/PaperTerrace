@@ -1,14 +1,25 @@
-from jamdict import Jamdict
+import os
 
 from src.logger import logger
 
 
 class DictionaryProvider:
     def __init__(self):
-        # Jamdictインスタンスの生成（内部で初期化が行われます）
-        self.jam = Jamdict()
-        self._initialized = True
-        logger.info("Jamdict initialized")
+        self.use_jamdict = os.getenv("USE_JAMDICT", "false").lower() == "true"
+        self.jam = None
+
+        if self.use_jamdict:
+            try:
+                from jamdict import Jamdict
+
+                # Jamdictインスタンスの生成（内部で初期化が行われます）
+                self.jam = Jamdict()
+                logger.info("Jamdict initialized and enabled")
+            except Exception as e:
+                logger.error(f"Failed to initialize Jamdict: {e}")
+                self.use_jamdict = False
+        else:
+            logger.info("Jamdict is disabled by configuration (USE_JAMDICT=false)")
 
     def ensure_initialized(self):
         """
@@ -20,15 +31,16 @@ class DictionaryProvider:
         """
         ワードを検索して日本語の定義を返します。
         """
+        if not self.use_jamdict or self.jam is None:
+            return None
+
         if not word:
             return None
 
         try:
             # 検索実行
-            result = self.jam.lookup(word, strict_lookup=True)
+            result = self.jam.lookup(word)
             logger.debug(f"Jamdict lookup result for '{word}': {result.entries[:5]}")
-            if not result:
-                result = self.jam.lookup(word)
 
             if result.entries:
                 meanings = []

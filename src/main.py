@@ -3,14 +3,15 @@ PaperTerrace - AI-powered paper reading assistant
 Main application entry point.
 """
 
+import contextlib
 import os
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.cors import CORSMiddleware
 
 from .routers import (
     analysis_router,
@@ -39,8 +40,6 @@ FIREBASE_CONFIG = {
     "appId": os.getenv("FIREBASE_APP_ID"),
     "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID"),
 }
-
-import contextlib
 
 
 @contextlib.asynccontextmanager
@@ -80,7 +79,7 @@ app.mount("/static", StaticFiles(directory="src/static"), name="static")
 
 # CORS configuration for React development
 app.add_middleware(
-    CORSMiddleware,
+    CORSMiddleware,  # type: ignore[arg-type]
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_credentials=True,
     allow_methods=["*"],

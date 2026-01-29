@@ -57,25 +57,9 @@ class SummaryService:
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = f"""Summarize the following paper in {lang_name}.
+        from src.prompts import SUMMARY_FULL_PROMPT
 
-[Paper Text]
-{text[:15000]}
-
-Format the summary as follows in {lang_name}:
-
-## Overview
-(1-2 sentences summarizing the main theme)
-
-## Key Contributions
-(3-5 bullet points)
-
-## Methodology
-(Concise explanation of methods used)
-
-## Conclusion
-(Key findings and implications)
-"""
+        prompt = SUMMARY_FULL_PROMPT.format(lang_name=lang_name, paper_text=text[:15000])
 
         try:
             logger.debug(
@@ -123,19 +107,9 @@ Format the summary as follows in {lang_name}:
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = f"""Summarize the following paper section by section in {lang_name}.
+        from src.prompts import SUMMARY_SECTIONS_PROMPT
 
-[Paper Text]
-{text[:15000]}
-
-For each section, output the result in the following JSON format:
-[
-  {{"section": "Section Title", "summary": "Summary (2-3 sentences) in {lang_name}"}},
-  ...
-]
-
-Output ONLY valid JSON.
-"""
+        prompt = SUMMARY_SECTIONS_PROMPT.format(lang_name=lang_name, paper_text=text[:15000])
 
         try:
             logger.debug(
@@ -173,13 +147,9 @@ Output ONLY valid JSON.
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = f"""Create an abstract of the following paper in {lang_name}.
-(Length: approx. 100-200 words or equivalent characters)
+        from src.prompts import SUMMARY_ABSTRACT_PROMPT
 
-{text[:10000]}
-
-Write in a concise, academic style in {lang_name}.
-"""
+        prompt = SUMMARY_ABSTRACT_PROMPT.format(lang_name=lang_name, paper_text=text[:10000])
 
         try:
             abstract = await self.ai_provider.generate(prompt, model=self.model)
@@ -195,16 +165,12 @@ Write in a concise, academic style in {lang_name}.
         """
         try:
             # Use a fast model for context summarization if possible
-            prompt = f"""
-Summarize the following paper text in Japanese within {max_length} characters.
-Focus on key terminology and the main research topic to serve as context for technical term translation.
+            from src.prompts import SUMMARY_CONTEXT_PROMPT
 
-[Paper Text]
-{text[:10000]}
-"""
+            prompt = SUMMARY_CONTEXT_PROMPT.format(max_length=max_length, paper_text=text[:10000])
             summary = await self.ai_provider.generate(prompt, model=self.model)
             logger.info(f"Context summary generated (length: {len(summary)})")
-            return summary[:max_length] 
+            return summary[:max_length]
         except Exception as e:
             logger.error(f"Context summary generation failed: {e}")
             return ""

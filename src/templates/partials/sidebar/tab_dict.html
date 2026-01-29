@@ -1,26 +1,35 @@
-<div id="content-dict" class="space-y-4 animate-fade-in">
-  <!-- 辞書カードスタック -->
+<div id="content-dict" class="space-y-4 animate-fade-in flex flex-col h-full">
+  <!-- 固定ローディングインジケータ -->
+  <div id="dict-loading" class="htmx-indicator flex items-center justify-center gap-2 p-2 bg-indigo-50 border border-indigo-100 rounded-xl mb-2 text-indigo-500 text-[10px] font-bold transition-all">
+    <svg class="animate-spin w-3.5 h-3.5" fill="none" viewBox="0 0 24 24">
+      <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+      <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+    </svg>
+    Looking up definitions...
+  </div>
+
+  <!-- 辞書カードスタック容器 -->
   <div
     id="definition-box"
-    class="flex flex-col gap-3 max-h-[500px] overflow-y-auto pr-1"
+    class="flex-1 flex flex-col gap-3 overflow-y-auto pr-1"
     style="scrollbar-width: thin;"
   >
-    <!-- 初期状態の空メッセージ -->
-    <div id="dict-empty-state" class="min-h-[200px] flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-slate-100 rounded-2xl">
-      <div class="bg-slate-50 p-3 rounded-xl mb-3">
-        <svg
-          class="w-6 h-6 text-slate-200"
-          fill="none"
-          stroke="currentColor"
-          viewBox="0 0 24 24"
-        >
-          <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
-        </svg>
+    <!-- カードが追加される領域 -->
+    <div id="dict-stack" class="flex flex-col gap-3"></div>
+
+    <!-- ステータスメッセージ領域 (サーバーからのOOBターゲット) -->
+    <div id="dict-status-container">
+      <!-- 初期状態の空メッセージ -->
+      <div id="dict-empty-state" class="min-h-[200px] flex flex-col items-center justify-center text-center p-6 border-2 border-dashed border-slate-100 rounded-2xl">
+        <div class="bg-slate-50 p-3 rounded-xl mb-3">
+          <svg class="w-6 h-6 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+          </svg>
+        </div>
+        <p class="text-[10px] font-bold text-slate-400 leading-relaxed">
+          Dictionary Ready!<br />Click any word for definition.
+        </p>
       </div>
-      <p class="text-[10px] font-bold text-slate-400 leading-relaxed">
-        Click any word in the reader<br />to get translation &
-        definition.
-      </p>
     </div>
   </div>
 </div>

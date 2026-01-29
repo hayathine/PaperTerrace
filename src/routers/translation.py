@@ -46,6 +46,8 @@ def build_dict_card_html(
 ) -> str:
     """辞書カードのHTMLレイアウトを構築します"""
     paper_param = f"&paper_id={paper_id}" if paper_id else ""
+
+    # 1. AI Re-translate Button (Lemma based)
     deep_btn = ""
     if show_deep_btn:
         deep_btn = f"""
@@ -54,12 +56,27 @@ def build_dict_card_html(
             hx-target="closest .dict-card"
             hx-swap="outerHTML"
             hx-indicator="#dict-loading"
-            class="mt-3 w-full py-2 flex items-center justify-center gap-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all border border-indigo-100 shadow-sm"
+            class="flex-1 py-1.5 flex items-center justify-center gap-1.5 text-[9px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-all border border-indigo-100 shadow-sm"
         >
             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            AIで再翻訳 (Gemini)
+            AI再翻訳
+        </button>
+        """
+
+    # 2. AI Context Analysis Button
+    context_btn = ""
+    if element_id:
+        context_btn = f"""
+        <button 
+            onclick="explainWithContext('{element_id}', '{lemma}', '{lang}', '{paper_id or ""}')"
+            class="flex-1 py-1.5 flex items-center justify-center gap-1.5 text-[9px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-all border border-emerald-100 shadow-sm"
+        >
+            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
+            </svg>
+            文脈解析
         </button>
         """
 
@@ -79,12 +96,24 @@ def build_dict_card_html(
     if element_id:
         jump_btn = f"""
         <button onclick="jumpToElement('{element_id}')" title="Jump to word" 
-            class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all">
+            class="flex-1 py-1.5 flex items-center justify-center gap-1.5 text-[9px] font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-all border border-slate-200 shadow-sm"
+        >
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
             </svg>
+            該当箇所へ
         </button>
+        """
+
+    actions_row = ""
+    if deep_btn or context_btn or jump_btn:
+        actions_row = f"""
+        <div class="flex flex-wrap gap-2 mt-3">
+            {jump_btn}
+            {deep_btn}
+            {context_btn}
+        </div>
         """
 
     return f"""
@@ -98,7 +127,6 @@ def build_dict_card_html(
                 <span class="text-[9px] font-bold text-slate-400 font-mono italic">lemma: {lemma}</span>
             </div>
             <div class="flex items-center gap-1">
-                {jump_btn}
                 {save_btn}
                 <button onclick="this.closest('.dict-card').remove()" class="p-1.5 text-slate-300 hover:text-slate-500 transition-colors text-sm">×</button>
             </div>
@@ -106,7 +134,7 @@ def build_dict_card_html(
         <div class="text-xs font-semibold text-indigo-600 leading-relaxed bg-indigo-50/30 p-3 rounded-xl border border-indigo-50/50">
             {translation}
         </div>
-        {deep_btn}
+        {actions_row}
     </div>
     """
 
@@ -282,9 +310,17 @@ async def explain_deep(
 
         is_phrase = " " in lemma.strip()
         if is_phrase:
-            prompt = f"{paper_context}\n以上の文脈を考慮して、以下の英文を{lang_name}に翻訳してください。\n\n{original_word}\n\n訳のみを出力してください。"
+            from src.prompts import TRANSLATE_PHRASE_WITH_CONTEXT_PROMPT
+
+            prompt = TRANSLATE_PHRASE_WITH_CONTEXT_PROMPT.format(
+                paper_context=paper_context, lang_name=lang_name, original_word=original_word
+            )
         else:
-            prompt = f"{paper_context}\n以上の論文の文脈において、英単語「{lemma}」はどのような意味ですか？\n{lang_name}訳を1〜3語で簡潔に。訳のみ出力。"
+            from src.prompts import TRANSLATE_WORD_SIMPLE_PROMPT
+
+            prompt = TRANSLATE_WORD_SIMPLE_PROMPT.format(
+                paper_context=paper_context, lemma=lemma, lang_name=lang_name
+            )
 
         translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.0-flash-lite")
         translation = (await provider.generate(prompt, model=translate_model)).strip().strip("'\"")
@@ -379,14 +415,11 @@ async def explain_with_context(req: ExplainContextRequest):
             if paper and paper.get("abstract"):
                 summary_context = f"\n[Document Summary]\n{paper['abstract']}\n"
 
-    prompt = f"""
-以下の文脈において、単語「{req.word}」はどういう意味で使われていますか？
-文脈を考慮して、{lang_name}で簡潔に説明してください。
+    from src.prompts import TRANSLATE_WORD_WITH_CONTEXT_EXPLAIN_PROMPT
 
-{summary_context}
-文脈:
-{req.context}
-"""
+    prompt = TRANSLATE_WORD_WITH_CONTEXT_EXPLAIN_PROMPT.format(
+        word=req.word, lang_name=lang_name, summary_context=summary_context, context=req.context
+    )
     translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.0-flash-lite")
 
     try:

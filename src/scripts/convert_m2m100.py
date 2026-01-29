@@ -2,12 +2,12 @@ import os
 
 import ctranslate2
 from huggingface_hub import snapshot_download
+from transformers.models.m2m_100.tokenization_m2m_100 import M2M100Tokenizer
 
 model_id = "facebook/m2m100_418M"
 output_dir = "models/m2m100_ct2"
 
 # M2M100Tokenizer has no attribute additional_special_tokens error fix
-from transformers.models.m2m_100.tokenization_m2m_100 import M2M100Tokenizer
 
 if not hasattr(M2M100Tokenizer, "additional_special_tokens"):
     M2M100Tokenizer.additional_special_tokens = []
