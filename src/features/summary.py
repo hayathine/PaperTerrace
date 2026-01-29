@@ -17,51 +17,48 @@ from .translate import SUPPORTED_LANGUAGES
 
 
 class FullSummaryResponse(BaseModel):
-    """論文全体の要約結果モデル"""
+    """論文全体の要約モデル"""
 
-    overview: str = Field(..., description="1-2 sentences summarizing the main theme")
-    key_contributions: List[str] = Field(..., description="3-5 bullet points of contributions")
-    methodology: str = Field(..., description="Concise explanation of methods used")
-    conclusion: str = Field(..., description="Key findings and implications")
+    overview: str = Field(..., description="主題の簡潔な要約（1-2文）")
+    key_contributions: List[str] = Field(..., description="主な貢献（3-5点）")
+    methodology: str = Field(..., description="手法の説明")
+    conclusion: str = Field(..., description="主な発見と示唆")
 
 
 class SectionSummary(BaseModel):
-    """セクション別の要約モデル"""
+    """セクション別要約モデル"""
 
-    section: str = Field(..., description="Section title")
-    summary: str = Field(..., description="2-3 sentences summary")
+    section: str = Field(..., description="セクションタイトル")
+    summary: str = Field(..., description="要約（2-3文）")
 
 
 class SectionSummariesResponse(BaseModel):
-    """セクション別要約のリストモデル"""
+    """セクション別要約リストモデル"""
 
     sections: List[SectionSummary]
 
 
 class SummaryError(Exception):
-    """Summary-specific exception."""
+    """要約処理に関する例外"""
 
     pass
 
 
 class SummaryService:
-    """Summary generation service for papers."""
+    """論文要約サービス"""
 
     def __init__(self):
         self.ai_provider = get_ai_provider()
         self.model = os.getenv("MODEL_SUMMARY", "gemini-2.0-flash")
-        # Default limit: 900,000 tokens (Gemini 1.5 Flash supports 1M, safety margin applied)
+        # デフォルト: 90万トークン（Gemini 1.5 Flashは100万上限だがマージン確保）
         self.token_limit = int(os.getenv("MAX_INPUT_TOKENS", "900000"))
 
     async def _truncate_to_token_limit(self, text: str) -> str:
         """
-        Check token count and truncate text if it exceeds the limit.
-        Uses a heuristic (1 token approx 4 chars) to reduce API calls for short texts,
-        and binary search or iterative cutting for long texts.
+        トークン数を確認し、制限を超える場合は切り詰める。
+        API呼び出し節約のため、文字数ベースのヒューリスティック判定を併用。
         """
-        # Quick heuristic check: if text length is well below token limit (e.g. chars < limit * 2), skip
-        # English: 1 token ~ 4 chars. Japanese: 1 token ~ 1-1.5 chars.
-        # Conservative check: if chars < limit, it's definitely safe.
+        # 文字数が制限値より大幅に少ない場合はスキップ
         if len(text) < self.token_limit:
             return text
 
@@ -71,12 +68,11 @@ class SummaryService:
 
         logger.warning(f"Token limit exceeded: {count} > {self.token_limit}. Truncating...")
 
-        # Simple iterative truncation
+        # 簡易的な反復切り詰め
         current_text = text
         while count > self.token_limit:
-            # Calculate ratio to cut
             ratio = self.token_limit / count
-            # Cut slightly more to be safe (95% of target ratio)
+            # 安全マージン 95%
             cut_len = int(len(current_text) * ratio * 0.95)
             current_text = current_text[:cut_len]
             count = await self.ai_provider.count_tokens(current_text, model=self.model)
@@ -86,18 +82,17 @@ class SummaryService:
 
     async def summarize_full(self, text: str, target_lang: str = "ja") -> str:
         """
-        Generate a comprehensive summary of the entire paper.
+        論文全体の包括的な要約を生成する。
 
         Args:
-            text: The full paper text
-            target_lang: The language to summarize in
+            text: 論文全文
+            target_lang: 出力言語
 
         Returns:
-            A structured summary in the target language
+            構造化された要約テキスト
         """
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        # Check token limit
         safe_text = await self._truncate_to_token_limit(text)
         prompt = SUMMARY_FULL_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
 
@@ -113,7 +108,7 @@ class SummaryService:
                 system_instruction=SYSTEM_PROMPT,
             )
 
-            # 整形された文字列として返す（後方互換性のため）
+            # 後方互換性のため整形済みテキストを返す
             result_lines = [
                 f"## Overview\n{analysis.overview}",
                 "\n## Key Contributions",
@@ -137,18 +132,17 @@ class SummaryService:
 
     async def summarize_sections(self, text: str, target_lang: str = "ja") -> list[dict]:
         """
-        Generate section-by-section summaries.
+        セクションごとの要約を生成する。
 
         Args:
-            text: The full paper text
-            target_lang: The language to summarize in
+            text: 論文全文
+            target_lang: 出力言語
 
         Returns:
-            List of section summaries with title and content
+            セクションタイトルと要約の辞書リスト
         """
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        # Check token limit
         safe_text = await self._truncate_to_token_limit(text)
         prompt = SUMMARY_SECTIONS_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
 
@@ -178,20 +172,18 @@ class SummaryService:
 
     async def summarize_abstract(self, text: str, target_lang: str = "ja") -> str:
         """
-        Generate a one-paragraph abstract-style summary.
+        アブストラクト形式の要約を生成する。
 
         Args:
-            text: The paper text
-            target_lang: The language to summarize in
+            text: 論文テキスト
+            target_lang: 出力言語
 
         Returns:
-            A concise abstract in the target language
+            簡潔な要旨
         """
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        # Abstract is usually short, but check anyway or use text[:20000] for speed?
-        # Let's use specific limit for abstract to avoid processing full paper for just an abstract
-        # or use the same safe logic.
+        # 処理速度のため冒頭5万文字のみ使用
         safe_text = await self._truncate_to_token_limit(text[:50000])
         prompt = SUMMARY_ABSTRACT_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
 
@@ -207,11 +199,10 @@ class SummaryService:
 
     async def summarize_context(self, text: str, max_length: int = 500) -> str:
         """
-        Generate a short summary for AI context (max 500 chars).
+        AIコンテキスト用の短い要約を生成する（最大max_length文字）。
         """
         try:
-            # Use a fast model for context summarization if possible
-            # Context summarization needs only a portion
+            # コンテキスト生成には冒頭部分のみ使用
             prompt = SUMMARY_CONTEXT_PROMPT.format(max_length=max_length, paper_text=text[:20000])
             summary = await self.ai_provider.generate(
                 prompt, model=self.model, system_instruction=SYSTEM_PROMPT

@@ -7,35 +7,35 @@ from src.providers import get_ai_provider
 
 
 class FigureAnalysisResponse(BaseModel):
-    """画像分析結果の構造化データモデル"""
+    """画像分析結果の構造化モデル"""
 
-    type_overview: str = Field(..., description="What this figure represents")
-    key_findings: List[str] = Field(..., description="Main trends or patterns observed")
-    interpretation: str = Field(..., description="Meaning of the numbers or trends")
-    implications: str = Field(..., description="How this supports the paper's claims")
-    highlights: List[str] = Field(..., description="Notable points or anomalies")
+    type_overview: str = Field(..., description="図の概要と種類")
+    key_findings: List[str] = Field(..., description="主な傾向やパターン")
+    interpretation: str = Field(..., description="数値や傾向の解釈")
+    implications: str = Field(..., description="論文の主張に対する裏付け")
+    highlights: List[str] = Field(..., description="特筆すべき点や異常値")
 
 
 class TableAnalysisResponse(BaseModel):
-    """表分析結果の構造化データモデル"""
+    """表分析結果の構造化モデル"""
 
-    overview: str = Field(..., description="Overview of what the table shows")
-    key_numbers: List[str] = Field(..., description="Key numbers and trends")
-    comparisons: List[str] = Field(..., description="Notable comparisons or differences")
-    conclusions: str = Field(..., description="Conclusions drawn from this table")
+    overview: str = Field(..., description="表の概要")
+    key_numbers: List[str] = Field(..., description="重要な数値と傾向")
+    comparisons: List[str] = Field(..., description="特筆すべき比較や差異")
+    conclusions: str = Field(..., description="表から導かれる結論")
 
 
 class FigureComparisonResponse(BaseModel):
-    """図表比較結果の構造化データモデル"""
+    """図表比較結果の構造化モデル"""
 
-    similarities: List[str] = Field(..., description="Similarities between the two figures")
-    differences: List[str] = Field(..., description="Differences between the two figures")
-    relationship: str = Field(..., description="Complementary or other relationship")
-    contradictions: Optional[List[str]] = Field(None, description="Contradictions if any")
+    similarities: List[str] = Field(..., description="2つの図の類似点")
+    differences: List[str] = Field(..., description="2つの図の相違点")
+    relationship: str = Field(..., description="補完関係などの関連性")
+    contradictions: Optional[List[str]] = Field(None, description="矛盾点（ある場合）")
 
 
 class FigureInsightService:
-    """Figure and table insight service using vision AI."""
+    """Vision AIを使用した図表分析サービス"""
 
     def __init__(self):
         self.ai_provider = get_ai_provider()
@@ -48,21 +48,20 @@ class FigureInsightService:
         target_lang: str = "ja",
     ) -> str:
         """
-        Analyze a figure image and generate insights.
+        図表画像を分析し、洞察を生成する。
 
         Args:
-            image_bytes: The image data
-            caption: Optional figure caption
-            mime_type: Image MIME type
-            target_lang: Output language
+            image_bytes: 画像データ
+            caption: 図のキャプション（任意）
+            mime_type: 画像のMIMEタイプ
+            target_lang: 出力言語
 
         Returns:
-            Analysis and insights in target language
+            ターゲット言語での分析結果
         """
         from .translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
-
         caption_hint = f"\n[Caption]\n{caption}" if caption else ""
 
         prompt = f"""Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.
@@ -87,12 +86,7 @@ Output in {lang_name}.
                 prompt, image_bytes, mime_type, response_model=FigureAnalysisResponse
             )
 
-            # 既存のコードが文字列を期待している可能性があるが、
-            # フロントエンド側での表示を考慮して、整形されたテキストを返すか、
-            # あるいはAPIエンドポイント側で調整する必要がある。
-            # ここではサービスとして構造化データを文字列に変換して返す（後方互換性のため）
-            # もしAPIエンドポイントも修正するなら、辞書をそのまま返しても良い。
-
+            # NOTE: フロントエンド表示用に整形したテキストを返す
             result_lines = [
                 f"### Type & Overview\n{analysis.type_overview}",
                 "\n### Key Findings",
@@ -120,20 +114,19 @@ Output in {lang_name}.
         self, table_text: str, context: str = "", target_lang: str = "ja"
     ) -> str:
         """
-        Analyze a table in text format.
+        テキスト形式の表を分析する。
 
         Args:
-            table_text: The table content as text
-            context: Surrounding text for context
-            target_lang: Output language
+            table_text: 表のテキスト内容
+            context: 周辺コンテキスト
+            target_lang: 出力言語
 
         Returns:
-            Analysis in target language
+            ターゲット言語での分析結果
         """
         from .translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
-
         context_hint = f"\n[Context]\n{context[:1000]}" if context else ""
 
         prompt = f"""Analyze the following table and explain it in {lang_name}.
@@ -176,15 +169,15 @@ Output in {lang_name}.
         self, description1: str, description2: str, target_lang: str = "ja"
     ) -> str:
         """
-        Compare two figures based on their descriptions.
+        記述に基づいて2つの図を比較する。
 
         Args:
-            description1: Description of first figure
-            description2: Description of second figure
-            target_lang: Output language
+            description1: 図1の記述
+            description2: 図2の記述
+            target_lang: 出力言語
 
         Returns:
-            Comparison analysis in target language
+            比較分析結果
         """
         from .translate import SUPPORTED_LANGUAGES
 

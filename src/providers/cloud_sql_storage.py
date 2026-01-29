@@ -78,6 +78,16 @@ class CloudSQLStorage(StorageInterface):
                 if not cur.fetchone():
                     logger.info("Migrating: Adding y to notes table")
                     cur.execute("ALTER TABLE notes ADD COLUMN y REAL")
+
+                # Check users table for plan
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='users' AND column_name='plan'"
+                )
+                if not cur.fetchone():
+                    logger.info("Migrating: Adding plan to users table")
+                    cur.execute("ALTER TABLE users ADD COLUMN plan TEXT DEFAULT 'free'")
+
+                # Check for paper_figures table (create if not exists handled in init_tables, but nice to have check here if needed or just rely on init)
             conn.commit()
 
     def _get_connection(self):
@@ -199,6 +209,19 @@ class CloudSQLStorage(StorageInterface):
                     CREATE TABLE IF NOT EXISTS app_sessions (
                         session_id TEXT PRIMARY KEY,
                         paper_id TEXT,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                # Paper Figures
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS paper_figures (
+                        id TEXT PRIMARY KEY,
+                        paper_id TEXT REFERENCES papers(paper_id) ON DELETE CASCADE,
+                        page_number INTEGER,
+                        bbox_json TEXT,
+                        image_url TEXT,
+                        caption TEXT,
+                        explanation TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
@@ -491,6 +514,89 @@ class CloudSQLStorage(StorageInterface):
             conn.commit()
             return cur.rowcount > 0
 
+    # ===== Figure methods =====
+
+    def save_figure(
+        self,
+        paper_id: str,
+        page_number: int,
+        bbox: list | tuple,
+        image_url: str,
+        caption: str = "",
+        explanation: str = "",
+    ) -> str:
+        import uuid6
+
+        figure_id = str(uuid6.uuid7())
+        import json
+
+        bbox_json = json.dumps(bbox)
+
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO paper_figures (id, paper_id, page_number, bbox_json, image_url, caption, explanation, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    """,
+                    (
+                        figure_id,
+                        paper_id,
+                        page_number,
+                        bbox_json,
+                        image_url,
+                        caption,
+                        explanation,
+                        datetime.now(),
+                    ),
+                )
+            conn.commit()
+        return figure_id
+
+    def get_paper_figures(self, paper_id: str) -> list[dict]:
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute(
+                    "SELECT * FROM paper_figures WHERE paper_id = %s ORDER BY page_number, created_at",
+                    (paper_id,),
+                )
+                rows = cur.fetchall()
+                results = []
+                for row in rows:
+                    d = dict(row)
+                    if d.get("bbox_json"):
+                        try:
+                            d["bbox"] = json.loads(d["bbox_json"])
+                        except:
+                            d["bbox"] = []
+                    results.append(d)
+                return results
+
+    def get_figure(self, figure_id: str) -> dict | None:
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT * FROM paper_figures WHERE id = %s", (figure_id,))
+                row = cur.fetchone()
+                if row:
+                    d = dict(row)
+                    if d.get("bbox_json"):
+                        try:
+                            d["bbox"] = json.loads(d["bbox_json"])
+                        except:
+                            d["bbox"] = []
+                    return d
+                return None
+
+    def update_figure_explanation(self, figure_id: str, explanation: str) -> bool:
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE paper_figures SET explanation = %s WHERE id = %s",
+                    (explanation, figure_id),
+                )
+            conn.commit()
+            return cur.rowcount > 0
+
     # ===== User methods =====
 
     def create_user(self, user_data: dict) -> str:
@@ -499,9 +605,9 @@ class CloudSQLStorage(StorageInterface):
                 cur.execute(
                     """
                     INSERT INTO users (id, email, display_name, affiliation, bio, 
-                                       research_fields, profile_image_url, is_public, 
+                                       research_fields, profile_image_url, is_public, plan,
                                        created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         user_data["id"],
@@ -512,6 +618,7 @@ class CloudSQLStorage(StorageInterface):
                         json.dumps(user_data.get("research_fields", [])),
                         user_data.get("profile_image_url"),
                         1 if user_data.get("is_public", True) else 0,
+                        user_data.get("plan", "free"),
                         user_data.get("created_at", datetime.now()),
                         user_data.get("updated_at", datetime.now()),
                     ),
@@ -527,6 +634,7 @@ class CloudSQLStorage(StorageInterface):
                 if row:
                     data = dict(row)
                     data["is_public"] = bool(data.get("is_public", 1))
+                    data["plan"] = data.get("plan", "free")
                     if data.get("research_fields"):
                         try:
                             # Postgres TEXT might come as string

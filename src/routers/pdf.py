@@ -8,7 +8,7 @@ import uuid
 from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from src.auth import OptionalUser
 
@@ -28,6 +28,80 @@ service = EnglishAnalysisService()
 summary_service = SummaryService()
 storage = get_storage_provider()
 redis_service = RedisService()
+
+
+@router.post("/analyze-pdf")
+async def analyze_pdf(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    session_id: Optional[str] = Form(None),
+    lang: str = Form("ja"),
+    user: OptionalUser = None,
+):
+    """
+    Standard HTML version of analyze-pdf for HTMX.
+    Returns HTML with SSE connection.
+    """
+    # Reuse JSON logic but return HTML
+    # We can call analyze_pdf_json but we need to unpack the response or refactor
+    # To save space, let's just copy the logic and adapt default format.
+
+    if not file.filename or file.size == 0:
+        return Response("Error: No file", status_code=400)
+
+    user_id = user.uid if user else None
+
+    content = await file.read()
+    file_hash = _get_file_hash(content)
+
+    # Language detection
+    detected_lang = await service.ocr_service.detect_language_from_pdf(content)
+    if detected_lang:
+        lang = detected_lang
+
+    # Cache check
+    cached_paper = storage.get_paper_by_hash(file_hash)
+    raw_text = None
+    paper_id = "pending"
+    import base64
+
+    pdf_b64 = None
+
+    if cached_paper:
+        paper_id = cached_paper["paper_id"]
+        if cached_paper.get("ocr_text"):
+            raw_text = cached_paper["ocr_text"]
+    else:
+        pdf_b64 = base64.b64encode(content).decode("utf-8")
+
+    task_id = str(uuid.uuid4())
+
+    task_data = {
+        "format": "html",  # Default for HTMX
+        "lang": lang,
+        "session_id": session_id,
+        "filename": file.filename,
+        "file_hash": file_hash,
+        "user_id": user_id,
+    }
+
+    if raw_text is None:
+        task_data.update({"pending_ocr": True, "pdf_b64": pdf_b64})
+    else:
+        task_data.update({"text": raw_text, "paper_id": paper_id})
+
+    redis_service.set(f"task:{task_id}", task_data, expire=3600)
+
+    return HTMLResponse(f"""
+    <div hx-ext="sse" sse-connect="/stream/{task_id}" sse-swap="message">
+        <div id="paper-content">
+             <div class="flex flex-col items-center justify-center min-h-[400px] text-center">
+               <div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-4"></div>
+               <p class="text-slate-500 font-medium">Starting analysis...</p>
+           </div>
+        </div>
+    </div>
+    """)
 
 
 @router.post("/analyze-pdf-json")
@@ -140,6 +214,29 @@ async def analyze_pdf_json(
     return JSONResponse({"task_id": task_id, "stream_url": f"/stream/{task_id}"})
 
 
+async def process_figure_auto_analysis(figure_id: str, image_url: str):
+    """
+    Background task to automatically analyze and explain a figure.
+    """
+    from src.features.figure_insight import FigureInsightService
+    from src.utils import fetch_image_bytes_from_url
+
+    try:
+        image_bytes = await fetch_image_bytes_from_url(image_url)
+        if image_bytes:
+            # We use a fresh service instance
+            insight_service = FigureInsightService()
+            explanation = await insight_service.analyze_figure(
+                image_bytes, caption="Figure from paper", target_lang="ja"
+            )
+
+            # Save explanation
+            storage.update_figure_explanation(figure_id, explanation)
+            logger.info(f"[Auto-Explain] Completed for figure {figure_id}")
+    except Exception as e:
+        logger.error(f"[Auto-Explain] Failed for figure {figure_id}: {e}")
+
+
 @router.get("/stream/{task_id}")
 async def stream(task_id: str):
     import json
@@ -178,6 +275,16 @@ async def stream(task_id: str):
                 full_text_fragments = []
                 all_layout_data = []
 
+                # User plan lookup
+                user_plan = "free"
+                if user_id:
+                    user_data = storage.get_user(user_id)
+                    if user_data:
+                        user_plan = user_data.get("plan", "free")
+
+                # Collect figures to save later
+                collected_figures = []
+
                 async for (
                     page_num,
                     total_pages,
@@ -186,7 +293,9 @@ async def stream(task_id: str):
                     f_hash,
                     page_image_url,
                     layout_data,
-                ) in service.ocr_service.extract_text_streaming(pdf_content, filename):
+                ) in service.ocr_service.extract_text_streaming(
+                    pdf_content, filename, user_plan=user_plan
+                ):
                     if page_text.startswith("ERROR_API_FAILED:"):
                         error_msg = page_text.replace("ERROR_API_FAILED: ", "")
                         yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
@@ -209,7 +318,12 @@ async def stream(task_id: str):
                         page_payload["height"] = layout_data["height"]
                         # Convert words to frontend format if needed, or pass as is
                         # Backend layout_data['words'] has {bbox, word}
-                        page_payload["words"] = layout_data["words"]
+                        page_payload["words"] = layout_data.get("words", [])
+
+                        # Collect figures if present
+                        if "figures" in layout_data:
+                            collected_figures.extend(layout_data["figures"])
+
                         all_layout_data.append(layout_data)
                     else:
                         all_layout_data.append(None)
@@ -232,6 +346,26 @@ async def stream(task_id: str):
                         layout_json=json.dumps(all_layout_data),
                         owner_id=user_id,  # Pass owner_id
                     )
+
+                    # Save Collected Figures and Trigger Auto-Explanation
+                    if collected_figures:
+                        from src.crud import save_figure_to_db
+
+                        logger.info(
+                            f"Saving {len(collected_figures)} extracted figures for paper {new_paper_id}"
+                        )
+                        for fig in collected_figures:
+                            fid = save_figure_to_db(
+                                paper_id=new_paper_id,
+                                page_number=fig["page_num"],
+                                bbox=fig["bbox"],
+                                image_url=fig["image_url"],
+                                caption="",  # Can't easily extract yet
+                                explanation="",  # Initially empty
+                            )
+                            # Trigger background explanation
+                            asyncio.create_task(process_figure_auto_analysis(fid, fig["image_url"]))
+
                 except Exception as e:
                     logger.error(f"Failed to save paper: {e}")
 
@@ -331,6 +465,7 @@ async def stream(task_id: str):
             yield 'event: message\ndata: <div id="paper-content" hx-swap-oob="innerHTML"><div class="flex flex-col items-center justify-center min-h-[400px] text-center"><div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-4"></div><p class="text-slate-500 font-medium">📄 PDFを解析中...</p><p class="text-xs text-slate-400 mt-2">AI OCRで文字認識を実行しています<br>ページごとに順次表示されます</p></div></div>\n\n'
 
             full_text_fragments = []
+            collected_figures = []
 
             # ページ単位OCRストリーム
             async for (
@@ -359,6 +494,10 @@ async def stream(task_id: str):
                     return
 
                 full_text_fragments.append(page_text)
+
+                # Collect figures for HTMX flow
+                if layout_data and "figures" in layout_data:
+                    collected_figures.extend(layout_data["figures"])
 
                 # 初回（1ページ目）はローディング表示をクリア
                 if page_num == 1:
@@ -441,6 +580,25 @@ async def stream(task_id: str):
                     target_language="ja",
                 )
                 logger.info(f"Paper saved completed: {paper_id}")
+
+                # Save Collected Figures and Explain
+                if collected_figures:
+                    from src.crud import save_figure_to_db
+
+                    logger.info(
+                        f"Saving {len(collected_figures)} extracted figures for paper {paper_id}"
+                    )
+                    for fig in collected_figures:
+                        fid = save_figure_to_db(
+                            paper_id=paper_id,
+                            page_number=fig["page_num"],
+                            bbox=fig["bbox"],
+                            image_url=fig["image_url"],
+                            caption="",
+                            explanation="",
+                        )
+                        asyncio.create_task(process_figure_auto_analysis(fid, fig["image_url"]))
+
             except Exception as e:
                 logger.error(f"Failed to save paper: {e}")
 

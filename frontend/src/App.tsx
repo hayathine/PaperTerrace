@@ -24,6 +24,7 @@ function App() {
     const [selectedImage, setSelectedImage] = useState<string | undefined>(undefined)
     const [jumpTarget, setJumpTarget] = useState<{ page: number, x: number, y: number } | null>(null)
     const [showLoginModal, setShowLoginModal] = useState(false)
+    const [currentPaperId, setCurrentPaperId] = useState<string | null>(null)
     const [isAnalyzing, setIsAnalyzing] = useState(false)
 
     useEffect(() => {
@@ -36,11 +37,17 @@ function App() {
         }
     }, [user])
 
+    const handlePaperLoaded = (paperId: string | null) => {
+        setCurrentPaperId(paperId);
+    }
+    
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             setUploadFile(e.target.files[0])
+            setCurrentPaperId(null);
         }
     }
+
 
     const handleWordClick = (word: string, context?: string, coords?: { page: number, x: number, y: number }) => {
         setSelectedWord(word)
@@ -159,6 +166,7 @@ function App() {
                                     onAreaSelect={handleAreaSelect}
                                     jumpTarget={jumpTarget}
                                     onStatusChange={handleAnalysisStatusChange}
+                                    onPaperLoaded={handlePaperLoaded}
                                 />
                             </div>
                         ) : (
@@ -180,6 +188,7 @@ function App() {
                             selectedImage={selectedImage}
                             onJump={handleJumpToLocation}
                             isAnalyzing={isAnalyzing}
+                            paperId={currentPaperId}
                         />
                     </div>
                 </div>

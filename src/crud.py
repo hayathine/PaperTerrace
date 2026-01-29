@@ -12,3 +12,16 @@ def save_ocr_to_db(
     model_name: str = "unknown",
 ) -> None:
     get_storage_provider().save_ocr_cache(file_hash, ocr_text, filename, model_name)
+
+
+def save_figure_to_db(
+    paper_id: str,
+    page_number: int,
+    bbox: list | tuple,
+    image_url: str,
+    caption: str = "",
+    explanation: str = "",
+) -> str:
+    return get_storage_provider().save_figure(
+        paper_id, page_number, bbox, image_url, caption, explanation
+    )

@@ -18,7 +18,7 @@ load_dotenv()
 
 class ImageStorageStrategy(ABC):
     @abstractmethod
-    def save(self, file_hash: str, page_num: int, image_b64: str) -> str:
+    def save(self, file_hash: str, page_num: int | str, image_b64: str) -> str:
         pass
 
     @abstractmethod
@@ -38,7 +38,7 @@ class LocalImageStorage(ImageStorageStrategy):
     def _ensure_dir(self):
         self.images_dir.mkdir(parents=True, exist_ok=True)
 
-    def save(self, file_hash: str, page_num: int, image_b64: str) -> str:
+    def save(self, file_hash: str, page_num: int | str, image_b64: str) -> str:
         hash_dir = self.images_dir / file_hash
         hash_dir.mkdir(exist_ok=True)
 
@@ -79,7 +79,7 @@ class GCSImageStorage(ImageStorageStrategy):
         self.client = storage.Client()
         self.bucket = self.client.bucket(self.bucket_name)
 
-    def save(self, file_hash: str, page_num: int, image_b64: str) -> str:
+    def save(self, file_hash: str, page_num: int | str, image_b64: str) -> str:
         blob_name = f"paper_images/{file_hash}/page_{page_num}.png"
         blob = self.bucket.blob(blob_name)
 
@@ -175,7 +175,7 @@ def _get_instance():
 
 
 # 既存APIとの互換レイヤー
-def save_page_image(file_hash: str, page_num: int, image_b64: str) -> str:
+def save_page_image(file_hash: str, page_num: int | str, image_b64: str) -> str:
     return _get_instance().save(file_hash, page_num, image_b64)
 
 

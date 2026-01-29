@@ -1,8 +1,3 @@
-"""
-関連する論文を調査・取得する機能を提供するモジュール
-Consensus APIを利用して論文検索や著者検索を行います。
-"""
-
 import os
 from typing import Any, Dict, List
 
@@ -26,17 +21,19 @@ class SimulatedSearchResponse(BaseModel):
 
 
 class SearchQueriesResponse(BaseModel):
-    queries: List[str] = Field(..., description="3-5 search queries")
+    """検索クエリ生成モデル"""
+
+    queries: List[str] = Field(..., description="検索クエリリスト（3-5件）")
 
 
 class ResearchRadarError(Exception):
-    """Research Radar-specific exception."""
+    """Research Radarに関する例外"""
 
     pass
 
 
 class ResearchRadarService:
-    """Consensus API service for finding related papers."""
+    """Consensus APIを利用した関連論文検索サービス"""
 
     BASE_URL = "https://consensus.app/api"
 
@@ -62,15 +59,15 @@ class ResearchRadarService:
         limit: int = 10,
     ) -> List[Dict[str, Any]]:
         """
-        Search for papers using Consensus API.
+        Consensus APIを使用して論文を検索する。
 
         Args:
-            query: Search query string
-            year_min: Minimum publication year
-            limit: Number of results to return
+            query: 検索クエリ
+            year_min: 最低発行年
+            limit: 取得件数
 
         Returns:
-            List of paper dictionaries
+            論文情報のリスト
         """
         if not self.api_key:
             logger.warning("CONSENSUS_API_KEY not found. Using AI simulation fallback.")
@@ -78,11 +75,7 @@ class ResearchRadarService:
 
         try:
             logger.info(f"Consensus paper search: query='{query}'")
-            # Endpoint structure is hypothetical based on typical patterns since official docs access is limited here.
-            # Assuming /paper_search or similar. Adjust based on real API docs if provided.
-            # USER PROVIDED URL: https://consensus.app/home/api/ -> check if we can infer.
-            # Usually strict APIs are like /v1/papers/search.
-            # Let's assume a standard search endpoint for now.
+            # NOTE: APIエンドポイントは仮定（正式ドキュメントに基づく調整が必要）
             response = await self.client.get(
                 "/paper_search",
                 params={
@@ -102,7 +95,7 @@ class ResearchRadarService:
             return []
 
     async def author_search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
-        """Search for authors."""
+        """著者検索を実行する。"""
         if not self.api_key:
             return []
 
@@ -118,7 +111,7 @@ class ResearchRadarService:
             return []
 
     async def _simulate_paper_search(self, query: str) -> List[Dict[str, Any]]:
-        """Fallback method using Gemini to simulate search results."""
+        """API利用不可時にAIによる検索結果シミュレーションを行う。"""
         prompt = f"""Since the paper search API is unavailable, simulate a search result for the following query.
 List 5 real, highly relevant academic papers.
 
@@ -135,30 +128,28 @@ Search Query: {query}
 
     async def find_related_papers(self, abstract: str) -> List[Dict[str, Any]]:
         """
-        Synthesize a query from the abstract and search.
-        Legacy method adapter.
+        アブストラクトからクエリを生成して関連論文を検索する。
         """
-        # 1. Generate a search query from abstract using AI
-        # 1. Generate a search query from abstract using AI
+        # 1. AIを使用して検索クエリを生成
         query_prompt = f"Generate a single optimal English search query to find related papers based on the following abstract.\n\n{abstract[:1000]}"
         search_query = await self.ai_provider.generate(query_prompt)
         search_query = search_query.strip().strip('"')
 
-        # 2. Search
+        # 2. 検索実行
         return await self.paper_search(search_query)
 
     async def get_author_profile_and_papers(self, author_name: str) -> Dict[str, Any]:
         """
-        Get author profile and their top papers for persona generation.
+        ペルソナ生成のために著者プロフィールと主要論文を取得する。
         """
-        # 1. Search author
+        # 1. 著者検索
         authors = await self.author_search(author_name, limit=1)
         if not authors:
             return {}
 
         author_id = authors[0].get("id")
 
-        # 2. Get author papers (hypothetical endpoint)
+        # 2. 論文取得（APIキーがある場合）
         if self.api_key and author_id:
             try:
                 response = await self.client.get(
@@ -172,7 +163,7 @@ Search Query: {query}
         return {"profile": authors[0], "papers": []}
 
     async def generate_search_queries(self, context: str) -> List[str]:
-        """Generate search queries for related research."""
+        """関連研究探索用の検索クエリを生成する。"""
         prompt = f"""Based on the following paper context, generate 3-5 search queries to find related research papers.
 Context:
 {context[:2000]}
@@ -187,6 +178,5 @@ Context:
             return []
 
     async def analyze_citations(self, context: str) -> Dict[str, Any]:
-        """Analyze citation network/importance."""
-        # Simple simulation for now
+        """引用ネットワークの分析（未実装）"""
         return {"status": "not_implemented_yet", "message": "Citation analysis logic pending."}

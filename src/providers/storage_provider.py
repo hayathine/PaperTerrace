@@ -160,6 +160,36 @@ class StorageInterface(ABC):
         """Delete a stamp from a note."""
         ...
 
+    # ===== Figure methods =====
+
+    @abstractmethod
+    def save_figure(
+        self,
+        paper_id: str,
+        page_number: int,
+        bbox: list | tuple,
+        image_url: str,
+        caption: str = "",
+        explanation: str = "",
+    ) -> str:
+        """Save a figure. Returns figure_id."""
+        ...
+
+    @abstractmethod
+    def get_paper_figures(self, paper_id: str) -> list[dict]:
+        """Get figures for a paper."""
+        ...
+
+    @abstractmethod
+    def get_figure(self, figure_id: str) -> dict | None:
+        """Get a figure by ID."""
+        ...
+
+    @abstractmethod
+    def update_figure_explanation(self, figure_id: str, explanation: str) -> bool:
+        """Update figure explanation."""
+        ...
+
     # ===== User methods =====
 
     @abstractmethod
@@ -449,6 +479,20 @@ class SQLiteStorage(StorageInterface):
                     y REAL,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(note_id) REFERENCES notes(note_id) ON DELETE CASCADE
+                )
+            """)
+            # Paper Figures table
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS paper_figures (
+                    id TEXT PRIMARY KEY,
+                    paper_id TEXT,
+                    page_number INTEGER,
+                    bbox_json TEXT,
+                    image_url TEXT,
+                    caption TEXT,
+                    explanation TEXT,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    FOREIGN KEY(paper_id) REFERENCES papers(paper_id) ON DELETE CASCADE
                 )
             """)
             # App Sessions table
@@ -755,6 +799,91 @@ class SQLiteStorage(StorageInterface):
         """Delete a stamp from a note."""
         with self._get_connection() as conn:
             cursor = conn.execute("DELETE FROM note_stamps WHERE id = ?", (stamp_id,))
+            conn.commit()
+            return cursor.rowcount > 0
+
+    # ===== Figure methods =====
+
+    def save_figure(
+        self,
+        paper_id: str,
+        page_number: int,
+        bbox: list | tuple,
+        image_url: str,
+        caption: str = "",
+        explanation: str = "",
+    ) -> str:
+        """Save a figure."""
+        import json
+
+        import uuid6
+
+        figure_id = str(uuid6.uuid7())
+        bbox_json = json.dumps(bbox)
+
+        with self._get_connection() as conn:
+            conn.execute(
+                """
+                INSERT INTO paper_figures (id, paper_id, page_number, bbox_json, image_url, caption, explanation, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    figure_id,
+                    paper_id,
+                    page_number,
+                    bbox_json,
+                    image_url,
+                    caption,
+                    explanation,
+                    datetime.now().isoformat(),
+                ),
+            )
+            conn.commit()
+        return figure_id
+
+    def get_paper_figures(self, paper_id: str) -> list[dict]:
+        """Get figures for a paper."""
+        import json
+
+        with self._get_connection() as conn:
+            rows = conn.execute(
+                "SELECT * FROM paper_figures WHERE paper_id = ? ORDER BY page_number, created_at",
+                (paper_id,),
+            ).fetchall()
+            results = []
+            for row in rows:
+                d = dict(row)
+                if d.get("bbox_json"):
+                    try:
+                        d["bbox"] = json.loads(d["bbox_json"])
+                    except Exception:
+                        d["bbox"] = []
+                results.append(d)
+            return results
+
+    def get_figure(self, figure_id: str) -> dict | None:
+        """Get a figure by ID."""
+        import json
+
+        with self._get_connection() as conn:
+            row = conn.execute("SELECT * FROM paper_figures WHERE id = ?", (figure_id,)).fetchone()
+            if row:
+                d = dict(row)
+                if d.get("bbox_json"):
+                    try:
+                        d["bbox"] = json.loads(d["bbox_json"])
+                    except Exception:
+                        d["bbox"] = []
+                return d
+            return None
+
+    def update_figure_explanation(self, figure_id: str, explanation: str) -> bool:
+        """Update figure explanation."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE paper_figures SET explanation = ? WHERE id = ?",
+                (explanation, figure_id),
+            )
             conn.commit()
             return cursor.rowcount > 0
 

@@ -1,0 +1,116 @@
+<div id="content-figures" class="hidden h-full flex flex-col bg-slate-50">
+  <div class="p-6 border-b border-slate-100 flex justify-between items-center bg-white">
+    <h2 class="font-bold text-slate-800 text-lg flex items-center gap-2">
+      <svg class="w-5 h-5 text-indigo-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+      </svg>
+      Figure Insight
+    </h2>
+    <span class="text-xs font-mono text-slate-400 bg-slate-100 px-2 py-1 rounded">Beta</span>
+  </div>
+
+  <div class="flex-1 overflow-y-auto p-6" id="figures-container"
+       hx-trigger="load, tab-figures-active from:body"
+       hx-get="/api/projects/figures-list-placeholder" 
+       >
+       <!-- Content will be loaded via JS or HTMX when paper ID is available -->
+       <div class="text-center text-slate-400 py-10">
+           <p>Open a paper to see figures.</p>
+       </div>
+  </div>
+</div>
+
+<script>
+document.body.addEventListener('tab-figures-active', function() {
+    refreshFigures();
+});
+
+function refreshFigures() {
+    const paperId = document.getElementById('current-paper-id')?.value;
+    if (!paperId || paperId === 'pending') return;
+    
+    fetch(`/api/papers/${paperId}/figures`)
+        .then(r => r.json())
+        .then(data => {
+            const container = document.getElementById('figures-container');
+            if (data.figures && data.figures.length > 0) {
+                container.innerHTML = `<div class="grid grid-cols-1 gap-6 pb-20">
+                    ${data.figures.map(fig => renderFigureCard(fig)).join('')}
+                </div>`;
+            } else {
+                container.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-64 text-slate-400">
+                    <svg class="w-12 h-12 mb-3 opacity-50" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                    </svg>
+                    <p>No figures detected in this paper.</p>
+                </div>`;
+            }
+        });
+}
+
+function renderFigureCard(fig) {
+    const explanationHtml = fig.explanation 
+        ? `<div class="mt-4 p-3 bg-indigo-50/50 rounded-lg text-sm text-slate-700 leading-relaxed border border-indigo-100 prose prose-sm max-w-none">
+             ${formatMarkdown(fig.explanation)}
+           </div>`
+        : `<div class="mt-4 text-center" id="explain-box-${fig.id}">
+             <button onclick="generateExplanation('${fig.id}')" 
+                class="inline-flex items-center gap-2 px-4 py-2 bg-white border border-indigo-200 text-indigo-600 rounded-full text-sm font-medium hover:bg-indigo-50 transition-colors shadow-sm">
+                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                Generate Insight
+             </button>
+           </div>`;
+
+    return `
+    <div class="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition-shadow">
+        <div class="relative bg-slate-100 aspect-video flex items-center justify-center overflow-hidden cursor-pointer" onclick="viewImage('${fig.image_url}')">
+            <img src="${fig.image_url}" class="max-w-full max-h-full object-contain" alt="Figure on page ${fig.page_number}">
+            <span class="absolute top-2 right-2 bg-black/50 text-white text-[10px] px-2 py-1 rounded backdrop-blur-sm">Page ${fig.page_number}</span>
+        </div>
+        <div class="p-4">
+            ${explanationHtml}
+        </div>
+    </div>
+    `;
+}
+
+function generateExplanation(figureId) {
+    const box = document.getElementById(`explain-box-${figureId}`);
+    box.innerHTML = `<div class="flex items-center justify-center gap-2 text-indigo-500 text-sm py-2">
+        <div class="animate-spin rounded-full h-4 w-4 border-2 border-indigo-500 border-t-transparent"></div>
+        Analyzing...
+    </div>`;
+    
+    fetch(`/api/figures/${figureId}/explain`, { method: 'POST' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.explanation) {
+                // Find the parent div and replace formatted content
+                const parent = box.parentElement; // div.p-4
+                const newContent = `<div class="mt-4 p-3 bg-indigo-50/50 rounded-lg text-sm text-slate-700 leading-relaxed border border-indigo-100 prose prose-sm max-w-none animate-fade-in">
+                     ${formatMarkdown(data.explanation)}
+                   </div>`;
+                 
+                // Replace the button box with explanation
+                box.outerHTML = newContent;
+            } else {
+                 box.innerHTML = `<span class="text-red-500 text-sm">Failed to generate.</span>`;
+            }
+        })
+        .catch(e => {
+            console.error(e);
+            box.innerHTML = `<span class="text-red-500 text-sm">Error: ${e.message}</span>`;
+        });
+}
+
+function formatMarkdown(text) {
+    // Simple formatter (you might use a library in prod)
+    return text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+               .replace(/### (.*?)\n/g, '<h4 class="font-bold text-indigo-700 mt-2 mb-1">$1</h4>')
+               .replace(/- (.*?)\n/g, '<li class="ml-4">$1</li>')
+               .replace(/\n\n/g, '<br><br>');
+}
+</script>

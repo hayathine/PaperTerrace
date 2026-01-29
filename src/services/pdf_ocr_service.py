@@ -54,7 +54,7 @@ Text Sample:
         return language
 
     async def extract_text_streaming(
-        self, file_bytes: bytes, filename: str = "unknown.pdf"
+        self, file_bytes: bytes, filename: str = "unknown.pdf", user_plan: str = "free"
     ) -> AsyncGenerator:
         """ページ単位でOCR処理をストリーミングするジェネレータ。
 
@@ -185,6 +185,78 @@ Text Sample:
 
                 all_text_parts.append(page_text)
                 is_last = page_num == total_pages - 1
+
+                yield (
+                    page_num + 1,
+                    total_pages,
+                    page_text,
+                    is_last,
+                    file_hash,
+                    image_url,
+                    layout_data,
+                )
+
+                # --- Figure Extraction (New) ---
+                # Check for images in the page
+                try:
+                    images = page.get_images(full=True)
+                    if images:
+                        logger.info(f"[Figure] Found {len(images)} images on page {page_num + 1}")
+                        for img_index, img in enumerate(images):
+                            xref = img[0]
+                            base_image = pdf_doc.extract_image(xref)
+                            image_bytes = base_image["image"]
+
+                            # Filter small images (icons, lines, etc.)
+                            if len(image_bytes) < 5000:  # 5KB threshold
+                                continue
+
+                            # Save figure image
+                            # We use a suffix for figure images to distinguish from page images
+
+                            # Encode to b64 for saving
+                            image_b64 = base64.b64encode(image_bytes).decode("utf-8")
+
+                            # Generate a unique hash for the figure or use file_hash + page + index
+                            figure_img_name_arg = f"figure_{page_num + 1}_{img_index}"
+                            figure_url = save_page_image(file_hash, figure_img_name_arg, image_b64)
+
+                            # Calculate bbox for the image if possible
+                            try:
+                                # We need to find where this image is drawn on the page.
+                                rects = page.get_image_rects(xref)
+                                for rect in rects:
+                                    # Use the first rect found (usually images appear once)
+                                    # Rect is [x0, y0, x1, y1]
+                                    bbox = [rect.x0, rect.y0, rect.x1, rect.y1]
+
+                                    # Add to layout data for later processing
+                                    if layout_data is None:
+                                        layout_data = {
+                                            "width": pix.width,
+                                            "height": pix.height,
+                                            "words": [],
+                                        }
+
+                                    if "figures" not in layout_data:
+                                        layout_data["figures"] = []
+
+                                    layout_data["figures"].append(
+                                        {
+                                            "image_url": figure_url,
+                                            "bbox": bbox,
+                                            "explanation": "",  # Generated asynchronously later
+                                            "page_num": page_num + 1,
+                                            # We might want to save image_bytes or similar if needed for immediate analysis
+                                            # But URL is enough if we can resolve it.
+                                        }
+                                    )
+                                    break  # Handle one instance of the image
+                            except Exception as e:
+                                logger.error(f"[Figure] Error processing rects: {e}")
+
+                except Exception as e:
+                    logger.warning(f"[Figure] Extraction failed: {e}")
 
                 yield (
                     page_num + 1,

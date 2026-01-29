@@ -7,6 +7,7 @@ from .analysis import router as analysis_router
 from .auth import router as auth_router
 from .chat import router as chat_router
 from .explore import router as explore_router
+from .figures import router as figures_router
 from .note import router as note_router
 from .papers import router as papers_router
 from .pdf import router as pdf_router
@@ -23,6 +24,7 @@ __all__ = [
     "translation_router",
     "chat_router",
     "analysis_router",
+    "figures_router",
     "note_router",
     "papers_router",
     "stamps_router",

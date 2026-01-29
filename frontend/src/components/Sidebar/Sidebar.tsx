@@ -16,9 +16,10 @@ interface SidebarProps {
     selectedImage?: string;
     onJump?: (page: number, x: number, y: number) => void;
     isAnalyzing?: boolean;
+    paperId?: string | null;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord, context, coordinates, selectedImage, onJump, isAnalyzing = false }) => {
+const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord, context, coordinates, selectedImage, onJump, isAnalyzing = false, paperId }) => {
 
     return (
         <div className="flex flex-col h-full bg-white border-l border-gray-200 shadow-xl overflow-hidden font-sans">
@@ -94,7 +95,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
                 )}
                 {activeTab === 'figure' && (
                     <div className="absolute inset-0">
-                        <FigureInsight />
+                        <FigureInsight paperId={paperId} />
                     </div>
                 )}
                 {activeTab === 'chat' && (

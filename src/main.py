@@ -18,6 +18,7 @@ from .routers import (
     auth_router,
     chat_router,
     explore_router,
+    figures_router,
     note_router,
     papers_router,
     pdf_router,
@@ -122,6 +123,7 @@ app.include_router(chat_router)
 
 # Analysis Features
 app.include_router(analysis_router)
+app.include_router(figures_router)
 
 # Notes
 app.include_router(note_router)

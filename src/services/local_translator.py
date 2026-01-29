@@ -33,8 +33,13 @@ class LocalTranslator:
             try:
                 # Load CTranslate2 translator
                 self.translator = ctranslate2.Translator(
-                    self.model_path, device="cpu", compute_type="int8"
+                    self.model_path,
+                    device="cpu",
+                    compute_type="int8",
+                    inter_threads=1,
+                    intra_threads=2,
                 )
+
                 # Load tokenizer
                 self.tokenizer = transformers.AutoTokenizer.from_pretrained(self.tokenizer_path)
                 self._initialized = True
