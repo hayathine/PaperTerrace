@@ -29,7 +29,4 @@ output "storage_bucket_name" {
 }
 
 # Networking
-output "vpc_connector_id" {
-  description = "VPC Connector ID for Cloud Run"
-  value       = module.networking.vpc_connector_id
-}
+
