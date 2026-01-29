@@ -8,12 +8,9 @@ import spacy
 from src.logger import logger
 from src.providers import RedisService, get_ai_provider, get_storage_provider
 from src.providers.dictionary_provider import get_dictionary_provider
-
-# from src.services.jamdict_service import lookup_word # Removed
 from src.utils import clean_text_for_tokenization, truncate_context
 
-# 共通設定 (logic.pyから移行)
-# 共通設定 (logic.pyから移行)
+# 共通設定
 executor = ThreadPoolExecutor(max_workers=4)
 try:
     # 原型抽出を正確にするため、parserやattribute_rulerを有効にする（nerのみ無効化）
@@ -98,23 +95,11 @@ class EnglishAnalysisService:
                             self.translation_cache[lemma] = cached_trans
                             self.word_cache[lemma] = False
                         else:
-                            # 3. EJDict Check
-                            # We just check if it exists in DB to highlight it as "translatable"
-                            # For EJDict, if lookup returns something, it's a known word.
+                            # 3. Dictionary Provider Check (Jamdict)
                             definition = await loop.run_in_executor(
                                 executor, self.dict_provider.lookup, lemma
                             )
-                            # If definition exists, we mark it as "needs simple translation" (False in word_cache means 'known/cached' usually?
-                            # Wait, original logic: self.word_cache[lemma] = lookup_word(lemma)
-                            # lookup_word returned True if found?
-                            # Let's check jamdict_service usage.
-                            # Usually we want: if found in dict -> highlight as blue (indigo).
-                            # If NOT found -> maybe unknown (purple)? Or vice versa.
-
-                            # Existing logic:
-                            # color = indigo (blue) if self.word_cache.get(lemma) else purple
-                            # So True = Indigo (Known/Found), False = Purple (Unknown/AI fallback?)
-
+                            # True if definition exists (Blue/Indigo), False if not (Purple/AI fallback)
                             self.word_cache[lemma] = bool(definition)
 
                             if not self.word_cache[lemma]:
@@ -204,8 +189,7 @@ class EnglishAnalysisService:
             self.translation_cache.update(translations)
             self._unknown_words.clear()
 
-        # 辞書完了表示（元に戻す）
-        # 辞書完了表示（元に戻す）＋ローディングインジケータ
+        # 辞書完了表示（ローディングインジケータ削除）
         yield 'event: message\ndata: <div id="dict-status-container" hx-swap-oob="true" class="relative min-h-[100px] flex flex-col items-center justify-center text-center p-4 border-2 border-dashed border-slate-100 rounded-2xl"><div class="bg-slate-50 p-2 rounded-xl mb-2"><svg class="w-6 h-6 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></div><p class="text-[10px] font-bold text-slate-400 leading-relaxed">Dictionary Ready!</p></div>\n\n'
 
         # ステータスを完了表示に変更 (oob swap)

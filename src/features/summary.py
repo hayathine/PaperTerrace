@@ -4,7 +4,15 @@ from typing import List
 from pydantic import BaseModel, Field
 
 from src.logger import logger
+from src.prompts import (
+    SUMMARY_ABSTRACT_PROMPT,
+    SUMMARY_CONTEXT_PROMPT,
+    SUMMARY_FULL_PROMPT,
+    SUMMARY_SECTIONS_PROMPT,
+)
 from src.providers import get_ai_provider
+
+from .translate import SUPPORTED_LANGUAGES
 
 
 class FullSummaryResponse(BaseModel):
@@ -53,11 +61,7 @@ class SummaryService:
         Returns:
             A structured summary in the target language
         """
-        from .translate import SUPPORTED_LANGUAGES
-
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
-
-        from src.prompts import SUMMARY_FULL_PROMPT
 
         prompt = SUMMARY_FULL_PROMPT.format(lang_name=lang_name, paper_text=text[:15000])
 
@@ -103,11 +107,7 @@ class SummaryService:
         Returns:
             List of section summaries with title and content
         """
-        from .translate import SUPPORTED_LANGUAGES
-
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
-
-        from src.prompts import SUMMARY_SECTIONS_PROMPT
 
         prompt = SUMMARY_SECTIONS_PROMPT.format(lang_name=lang_name, paper_text=text[:15000])
 
@@ -143,11 +143,7 @@ class SummaryService:
         Returns:
             A concise abstract in the target language
         """
-        from .translate import SUPPORTED_LANGUAGES
-
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
-
-        from src.prompts import SUMMARY_ABSTRACT_PROMPT
 
         prompt = SUMMARY_ABSTRACT_PROMPT.format(lang_name=lang_name, paper_text=text[:10000])
 
@@ -165,8 +161,6 @@ class SummaryService:
         """
         try:
             # Use a fast model for context summarization if possible
-            from src.prompts import SUMMARY_CONTEXT_PROMPT
-
             prompt = SUMMARY_CONTEXT_PROMPT.format(max_length=max_length, paper_text=text[:10000])
             summary = await self.ai_provider.generate(prompt, model=self.model)
             logger.info(f"Context summary generated (length: {len(summary)})")

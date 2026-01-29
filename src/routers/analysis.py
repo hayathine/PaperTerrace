@@ -45,9 +45,6 @@ def _get_context(session_id: str) -> str | None:
         f"[_get_context] Redis MISS for session {session_id}. debug: exists={redis_service.exists(f'session:{session_id}')}"
     )
 
-    # Debug: Check existing sessions
-    # logger.debug(f"DEBUG Redis Keys: {redis_service.keys('session:*')}")
-
     # 2. Try DB persistence (Session mapping)
     paper_id = storage.get_session_paper_id(session_id)
     resolved_paper_id = paper_id or session_id

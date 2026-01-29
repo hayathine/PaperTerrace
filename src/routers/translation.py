@@ -4,16 +4,26 @@ Handles word translation, explanation, and language settings.
 """
 
 import asyncio
+import os
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
+from src.prompts import (
+    TRANSLATE_PHRASE_WITH_CONTEXT_PROMPT,
+    TRANSLATE_WORD_SIMPLE_PROMPT,
+    TRANSLATE_WORD_WITH_CONTEXT_EXPLAIN_PROMPT,
+)
+
 from ..features import TranslationService
+from ..features.translate import SUPPORTED_LANGUAGES
 from ..logger import logger
 from ..logic import executor
-from ..providers import get_storage_provider
+from ..providers import get_ai_provider, get_storage_provider
+from ..providers.dictionary_provider import get_dictionary_provider
 from ..services.analysis_service import EnglishAnalysisService
+from ..services.local_translator import get_local_translator
 
 router = APIRouter(tags=["Translation"])
 
@@ -188,8 +198,6 @@ async def explain(
 
     # Stage 1: Local Dictionary (Jamdict)
     if lang == "ja" and not is_phrase:
-        from ..providers.dictionary_provider import get_dictionary_provider
-
         dict_provider = get_dictionary_provider()
         definition = await loop.run_in_executor(executor, dict_provider.lookup, lemma)
         if definition:
@@ -217,8 +225,6 @@ async def explain(
 
     # Stage 2: Local Machine Translation (M2M100)
     if lang == "ja":
-        from ..services.local_translator import get_local_translator
-
         local_translator = get_local_translator()
         local_translation = await loop.run_in_executor(executor, local_translator.translate, lemma)
         if local_translation:
@@ -289,11 +295,6 @@ async def explain_deep(
 
     # Stage 3: Gemini translation
     try:
-        import os
-
-        from ..features.translate import SUPPORTED_LANGUAGES
-        from ..providers import get_ai_provider
-
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
         provider = get_ai_provider()
 
@@ -310,14 +311,10 @@ async def explain_deep(
 
         is_phrase = " " in lemma.strip()
         if is_phrase:
-            from src.prompts import TRANSLATE_PHRASE_WITH_CONTEXT_PROMPT
-
             prompt = TRANSLATE_PHRASE_WITH_CONTEXT_PROMPT.format(
                 paper_context=paper_context, lang_name=lang_name, original_word=original_word
             )
         else:
-            from src.prompts import TRANSLATE_WORD_SIMPLE_PROMPT
-
             prompt = TRANSLATE_WORD_SIMPLE_PROMPT.format(
                 paper_context=paper_context, lemma=lemma, lang_name=lang_name
             )
@@ -398,11 +395,6 @@ class ExplainContextRequest(BaseModel):
 @router.post("/explain/context")
 async def explain_with_context(req: ExplainContextRequest):
     """Explain word with context using Gemini"""
-    import os
-
-    from ..features.translate import SUPPORTED_LANGUAGES
-    from ..providers import get_ai_provider
-
     lang_name = SUPPORTED_LANGUAGES.get(req.lang, req.lang)
     provider = get_ai_provider()
 
@@ -414,8 +406,6 @@ async def explain_with_context(req: ExplainContextRequest):
             paper = storage.get_paper(paper_id)
             if paper and paper.get("abstract"):
                 summary_context = f"\n[Document Summary]\n{paper['abstract']}\n"
-
-    from src.prompts import TRANSLATE_WORD_WITH_CONTEXT_EXPLAIN_PROMPT
 
     prompt = TRANSLATE_WORD_WITH_CONTEXT_EXPLAIN_PROMPT.format(
         word=req.word, lang_name=lang_name, summary_context=summary_context, context=req.context
