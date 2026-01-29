@@ -80,7 +80,7 @@ class EnglishAnalysisService:
             doc = await loop.run_in_executor(executor, nlp, p_text)
             p_tokens_html = []
 
-            for token in doc:
+            for j, token in enumerate(doc):
                 whitespace = token.whitespace_
 
                 if token.is_punct or token.is_space:
@@ -126,11 +126,12 @@ class EnglishAnalysisService:
                     else "border-transparent hover:border-purple-300 hover:bg-purple-50"
                 )
                 paper_param = f"&paper_id={paper_id}" if paper_id else ""
+                token_id = f"{unique_id}-{j}"
                 p_tokens_html.append(
-                    f'<span class="cursor-pointer border-b transition-colors {color}'
-                    f'" hx-get="/explain/{lemma}?lang={lang}{paper_param}" hx-trigger="click" '
+                    f'<span id="{token_id}" class="cursor-pointer border-b transition-colors {color}'
+                    f'" hx-get="/explain/{lemma}?lang={lang}{paper_param}&element_id={token_id}" hx-trigger="click" '
                     f'hx-indicator="#dict-loading" '
-                    f'hx-target="#definition-box" hx-swap="innerHTML">{token.text}</span>{whitespace}'
+                    f'hx-target="#definition-box" hx-swap="afterbegin">{token.text}</span>{whitespace}'
                 )
 
             html_content = "".join(p_tokens_html)

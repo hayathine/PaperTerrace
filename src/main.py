@@ -22,8 +22,8 @@ from .routers import (
     pdf_router,
     stamps_router,
     translation_router,
-    users_router,
     upload_router,
+    users_router,
 )
 
 # Load environment variables

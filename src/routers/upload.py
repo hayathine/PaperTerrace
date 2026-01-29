@@ -3,10 +3,9 @@ Upload Router
 Handles file uploads (e.g. images for notes).
 """
 
-import os
 import shutil
-import uuid
 import time
+import uuid
 from pathlib import Path
 
 from fastapi import APIRouter, File, UploadFile

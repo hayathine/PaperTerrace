@@ -5,8 +5,8 @@ Handles word translation, explanation, and language settings.
 
 import asyncio
 
-from fastapi import APIRouter
-from fastapi.responses import JSONResponse
+from fastapi import APIRouter, Request
+from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from ..features import TranslationService
@@ -34,12 +34,96 @@ async def translate_word(word: str, lang: str = "ja"):
     return JSONResponse(result)
 
 
-@router.get("/explain/{word}")
-async def explain(word: str, lang: str = "ja", paper_id: str | None = None):
-    """Word explanation (Lemmatize -> Cache -> Jamdict -> Gemini)"""
-    loop = asyncio.get_event_loop()
+def build_dict_card_html(
+    word: str,
+    lemma: str,
+    translation: str,
+    source: str,
+    lang: str = "ja",
+    paper_id: str | None = None,
+    show_deep_btn: bool = True,
+    element_id: str | None = None,
+) -> str:
+    """辞書カードのHTMLレイアウトを構築します"""
+    paper_param = f"&paper_id={paper_id}" if paper_id else ""
+    deep_btn = ""
+    if show_deep_btn:
+        deep_btn = f"""
+        <button 
+            hx-get="/explain-deep/{lemma}?lang={lang}{paper_param}"
+            hx-target="closest .dict-card"
+            hx-swap="outerHTML"
+            hx-indicator="#dict-loading"
+            class="mt-3 w-full py-2 flex items-center justify-center gap-2 text-[10px] font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-xl transition-all border border-indigo-100 shadow-sm"
+        >
+            <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
+            </svg>
+            AIで再翻訳 (Gemini)
+        </button>
+        """
 
-    # 0. Lemmatize input (Backend side now)
+    # Note saving button
+    save_btn = f"""
+    <button onclick="saveWordToNote('{lemma}', '{translation}')" title="Save to Note" 
+        class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all">
+        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
+        </svg>
+    </button>
+    """
+
+    source_label = f"""<span class="px-1.5 py-0.5 bg-slate-100 text-slate-400 rounded text-[8px] font-bold uppercase tracking-wider">{source}</span>"""
+
+    jump_btn = ""
+    if element_id:
+        jump_btn = f"""
+        <button onclick="jumpToElement('{element_id}')" title="Jump to word" 
+            class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition-all">
+            <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+            </svg>
+        </button>
+        """
+
+    return f"""
+    <div class="dict-card p-4 bg-white border border-slate-100 rounded-2xl shadow-sm animate-fade-in group hover:shadow-md transition-all">
+        <div class="flex items-start justify-between mb-3">
+            <div class="flex flex-col">
+                <div class="flex items-center gap-2 mb-0.5">
+                    <span class="text-xs font-black text-slate-800 tracking-tight">{word}</span>
+                    {source_label}
+                </div>
+                <span class="text-[9px] font-bold text-slate-400 font-mono italic">lemma: {lemma}</span>
+            </div>
+            <div class="flex items-center gap-1">
+                {jump_btn}
+                {save_btn}
+                <button onclick="this.closest('.dict-card').remove()" class="p-1.5 text-slate-300 hover:text-slate-500 transition-colors text-sm">×</button>
+            </div>
+        </div>
+        <div class="text-xs font-semibold text-indigo-600 leading-relaxed bg-indigo-50/30 p-3 rounded-xl border border-indigo-50/50">
+            {translation}
+        </div>
+        {deep_btn}
+    </div>
+    """
+
+
+@router.get("/explain/{word}")
+async def explain(
+    req: Request,
+    word: str,
+    lang: str = "ja",
+    paper_id: str | None = None,
+    element_id: str | None = None,
+):
+    """単語の解説 (Local: Cache -> Jamdict -> local-MT)"""
+    loop = asyncio.get_event_loop()
+    is_htmx = req.headers.get("HX-Request") == "true"
+
+    # 0. Lemmatize input
     clean_input = word.replace("\n", " ").strip(" .,;!?(){}[\]\"'")
     if not clean_input:
         clean_input = word.strip()
@@ -47,21 +131,29 @@ async def explain(word: str, lang: str = "ja", paper_id: str | None = None):
     lemma = await loop.run_in_executor(executor, service.lemmatize, clean_input)
     original_word = word
 
-    logger.info(
-        f"[explain] Request: word='{original_word}', lemma='{lemma}', lang='{lang}', paper_id='{paper_id}'"
-    )
-
     # 1. Cache Check
-    # (Existing cache logic...)
     cached = await service.get_translation(lemma, lang=lang)
     if cached:
-        return JSONResponse(
-            {
-                "word": original_word,
-                "lemma": lemma,
-                "translation": cached["translation"],
-                "source": "Cache",
-            }
+        if not is_htmx:
+            return JSONResponse(
+                {
+                    "word": original_word,
+                    "lemma": lemma,
+                    "translation": cached["translation"],
+                    "source": "Cache",
+                    "element_id": element_id,
+                }
+            )
+        return HTMLResponse(
+            build_dict_card_html(
+                original_word,
+                lemma,
+                cached["translation"],
+                "Cache",
+                lang,
+                paper_id,
+                element_id=element_id,
+            )
         )
 
     is_phrase = " " in lemma.strip()
@@ -74,13 +166,25 @@ async def explain(word: str, lang: str = "ja", paper_id: str | None = None):
         definition = await loop.run_in_executor(executor, dict_provider.lookup, lemma)
         if definition:
             translation = definition[:100] + "..." if len(definition) > 100 else definition
-            return JSONResponse(
-                {
-                    "word": original_word,
-                    "lemma": lemma,
-                    "translation": translation,
-                    "source": "Jamdict",
-                }
+            if not is_htmx:
+                return JSONResponse(
+                    {
+                        "word": original_word,
+                        "lemma": lemma,
+                        "translation": translation,
+                        "source": "Jamdict",
+                    }
+                )
+            return HTMLResponse(
+                build_dict_card_html(
+                    original_word,
+                    lemma,
+                    translation,
+                    "Jamdict",
+                    lang,
+                    paper_id,
+                    element_id=element_id,
+                )
             )
 
     # Stage 2: Local Machine Translation (M2M100)
@@ -92,16 +196,70 @@ async def explain(word: str, lang: str = "ja", paper_id: str | None = None):
         if local_translation:
             service.translation_cache[lemma] = local_translation
             service.word_cache[lemma] = False
-            return JSONResponse(
-                {
-                    "word": original_word,
-                    "lemma": lemma,
-                    "translation": local_translation,
-                    "source": "Local-MT",
-                }
+            if not is_htmx:
+                return JSONResponse(
+                    {
+                        "word": original_word,
+                        "lemma": lemma,
+                        "translation": local_translation,
+                        "source": "Local-MT",
+                    }
+                )
+            return HTMLResponse(
+                build_dict_card_html(
+                    original_word,
+                    lemma,
+                    local_translation,
+                    "Local-MT",
+                    lang,
+                    paper_id,
+                    element_id=element_id,
+                )
             )
 
-    # Stage 3: Gemini Fallback (With Paper Context if available)
+    # 見つからない場合もローカル翻訳の枠組みで「未発見」として返し、AIボタンを表示
+    if not is_htmx:
+        return JSONResponse(
+            {
+                "word": original_word,
+                "lemma": lemma,
+                "translation": "Not found in local dict",
+                "source": "Search",
+                "element_id": element_id,
+            }
+        )
+    return HTMLResponse(
+        build_dict_card_html(
+            original_word,
+            lemma,
+            "Not found in local dict",
+            "Search",
+            lang,
+            paper_id,
+            element_id=element_id,
+        )
+    )
+
+
+@router.get("/explain-deep/{word}")
+async def explain_deep(
+    req: Request,
+    word: str,
+    lang: str = "ja",
+    paper_id: str | None = None,
+    element_id: str | None = None,
+):
+    """Geminiによる詳細翻訳（ユーザー押下により発動）"""
+    is_htmx = req.headers.get("HX-Request") == "true"
+    # 0. Lemmatize input
+    clean_input = word.replace("\n", " ").strip(" .,;!?(){}[\]\"'")
+    if not clean_input:
+        clean_input = word.strip()
+
+    lemma = await asyncio.get_event_loop().run_in_executor(executor, service.lemmatize, clean_input)
+    original_word = word
+
+    # Stage 3: Gemini translation
     try:
         import os
 
@@ -116,13 +274,13 @@ async def explain(word: str, lang: str = "ja", paper_id: str | None = None):
         if paper_id:
             paper = storage.get_paper(paper_id)
             if paper:
-                # Use abstract or summary if available
                 summary = paper.get("abstract") or paper.get("summary")
                 if summary:
                     paper_context = f"\n[Paper Context / Summary]\n{summary}\n"
 
-        logger.info(f"[explain] Gemini Fallback for '{lemma}' (context size: {len(paper_context)})")
+        logger.info(f"[explain-deep] Gemini Call for '{lemma}'")
 
+        is_phrase = " " in lemma.strip()
         if is_phrase:
             prompt = f"{paper_context}\n以上の文脈を考慮して、以下の英文を{lang_name}に翻訳してください。\n\n{original_word}\n\n訳のみを出力してください。"
         else:
@@ -134,18 +292,52 @@ async def explain(word: str, lang: str = "ja", paper_id: str | None = None):
         service.translation_cache[lemma] = translation
         service.word_cache[lemma] = False
 
-        return JSONResponse(
-            {"word": original_word, "lemma": lemma, "translation": translation, "source": "Gemini"}
+        if not is_htmx:
+            return JSONResponse(
+                {
+                    "word": original_word,
+                    "lemma": lemma,
+                    "translation": translation,
+                    "source": "Gemini",
+                    "element_id": element_id,
+                }
+            )
+
+        return HTMLResponse(
+            build_dict_card_html(
+                original_word,
+                lemma,
+                translation,
+                "Gemini AI",
+                lang,
+                paper_id,
+                show_deep_btn=False,
+                element_id=element_id,
+            )
         )
     except Exception as e:
         logger.error(f"Gemini translation failed: {e}")
-        return JSONResponse(
-            {
-                "word": original_word,
-                "lemma": lemma,
-                "translation": "Translation failed",
-                "source": "Error",
-            }
+        if not is_htmx:
+            return JSONResponse(
+                {
+                    "word": original_word,
+                    "lemma": lemma,
+                    "translation": "Translation failed",
+                    "source": "Error",
+                    "element_id": element_id,
+                },
+                status_code=500,
+            )
+        return HTMLResponse(
+            build_dict_card_html(
+                original_word,
+                lemma,
+                "Translation failed",
+                "Error",
+                lang,
+                paper_id,
+                element_id=element_id,
+            )
         )
 
 

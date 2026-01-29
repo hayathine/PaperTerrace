@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse, Response, StreamingResponse
 
 from src.auth import OptionalUser
 
+from ..features import SummaryService
 from ..logger import logger
 from ..providers import RedisService, get_storage_provider
 from ..services.analysis_service import EnglishAnalysisService
@@ -21,7 +22,6 @@ router = APIRouter(tags=["PDF Analysis"])
 
 # Services
 
-from ..features import SummaryService
 
 # Services
 service = EnglishAnalysisService()
@@ -374,7 +374,7 @@ async def stream(task_id: str):
                     img_h = layout_data["height"]
                     words_html = []
 
-                    for w in layout_data["words"]:
+                    for j, w in enumerate(layout_data["words"]):
                         bbox = w["bbox"]
                         # パーセント計算
                         left = (bbox[0] / img_w) * 100
@@ -382,12 +382,13 @@ async def stream(task_id: str):
                         width = ((bbox[2] - bbox[0]) / img_w) * 100
                         height = ((bbox[3] - bbox[1]) / img_h) * 100
                         word_text = w["word"]
+                        word_id = f"w-{page_num}-{j}"
 
                         # 透明なクリック領域を作成
                         words_html.append(
-                            f'<a class="absolute cursor-pointer hover:bg-yellow-300/30 transition-colors rounded-sm group"'
+                            f'<a id="{word_id}" class="absolute cursor-pointer hover:bg-yellow-300/30 transition-colors rounded-sm group"'
                             f' style="left:{left}%; top:{top}%; width:{width}%; height:{height}%;"'
-                            f' hx-get="/explain/{word_text}?lang={lang}"'
+                            f' hx-get="/explain/{word_text}?lang={lang}&element_id={word_id}"'
                             f' hx-trigger="click"'
                             f' hx-target="#definition-box"'
                             f' hx-swap="afterbegin">'

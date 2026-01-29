@@ -105,6 +105,14 @@
         visibility: visible;
         transform: translateY(0);
       }
+      @keyframes highlight-pulse {
+        0% { background-color: rgba(99, 102, 241, 0.4); }
+        100% { background-color: transparent; }
+      }
+      .highlight-jump {
+        animation: highlight-pulse 2s ease-out;
+        border-radius: 4px;
+      }
     </style>
   </head>
   <body class="bg-[#f8fafc] text-slate-900 min-h-screen" hx-ext="sse">

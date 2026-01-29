@@ -25,8 +25,10 @@ class DictionaryProvider:
 
         try:
             # 検索実行
-            result = self.jam.lookup(word)
-            logger.debug(f"Jamdict lookup result for '{word}': {result}")
+            result = self.jam.lookup(word, strict_lookup=True)
+            logger.debug(f"Jamdict lookup result for '{word}': {result.entries[:5]}")
+            if not result:
+                result = self.jam.lookup(word)
 
             if result.entries:
                 meanings = []

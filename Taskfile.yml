@@ -96,3 +96,8 @@ tasks:
      - db:start
      - db:wait
      - deploy
+
+  ruff:
+    desc: "Run ruff"
+    cmds:
+      - uv run ruff check --fix .

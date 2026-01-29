@@ -149,6 +149,18 @@
     });
   }
 
+  function jumpToElement(id) {
+    const el = document.getElementById(id);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      el.classList.remove('highlight-jump');
+      void el.offsetWidth; // trigger reflow
+      el.classList.add('highlight-jump');
+    } else {
+      console.warn("Element not found:", id);
+    }
+  }
+
   function setLanguage(lang) {
     currentLanguage = lang;
     localStorage.setItem('user-language', lang);
