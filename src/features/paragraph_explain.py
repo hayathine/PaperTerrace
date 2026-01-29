@@ -70,21 +70,11 @@ class ParagraphExplainService:
 {full_context[:5000]}
 """
 
-        prompt = f"""Please analyze and explain the following paragraph in detail.
-{context_hint}
-[Target Paragraph]
-{paragraph}
+        from src.prompts import EXPLAIN_PARAGRAPH_PROMPT
 
-Please provide a clear and easy-to-understand explanation in {lang_name}, covering the following points:
-
-1. **Main Claim**: The core argument or content of this paragraph.
-2. **Background Knowledge**: Prerequisites or technical terms needed to understand this.
-3. **Logic Flow**: How the argument or logic is developed.
-4. **Key Points**: Important implications or things to note.
-
-Even if the content is highly technical, please explain it at a level understandable by a graduate student.
-Ensure the output is in {lang_name}.
-"""
+        prompt = EXPLAIN_PARAGRAPH_PROMPT.format(
+            context_hint=context_hint, paragraph=paragraph, lang_name=lang_name
+        )
 
         try:
             logger.debug(
@@ -139,21 +129,11 @@ Ensure the output is in {lang_name}.
         if terms:
             terms_hint = f"Specifically explain these terms if found: {', '.join(terms)}"
 
-        prompt = f"""Please extract technical terms from the paragraph below and provide concise explanations for each.
+        from src.prompts import EXPLAIN_TERMINOLOGY_PROMPT
 
-[Paragraph]
-{paragraph}
-
-{terms_hint}
-
-Please output the explanations in {lang_name}.
-Return the result strictly in the following JSON format:
-[
-  {{"term": "Term", "explanation": "Concise explanation (1-2 sentences) in {lang_name}", "importance": "high/medium/low"}}
-]
-
-Limit to at most 10 terms. Output JSON only.
-"""
+        prompt = EXPLAIN_TERMINOLOGY_PROMPT.format(
+            paragraph=paragraph, terms_hint=terms_hint, lang_name=lang_name
+        )
 
         try:
             response: TerminologyResponse = await self.ai_provider.generate(
