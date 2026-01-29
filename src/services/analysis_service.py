@@ -6,6 +6,7 @@ from concurrent.futures import ThreadPoolExecutor
 import spacy
 
 from src.logger import logger
+from src.prompts import SYSTEM_PROMPT
 from src.providers import RedisService, get_ai_provider, get_storage_provider
 from src.providers.dictionary_provider import get_dictionary_provider
 from src.utils import clean_text_for_tokenization, truncate_context
@@ -220,7 +221,9 @@ class EnglishAnalysisService:
 
         try:
             # Simple wrapper around async generate
-            response_text = await self.ai_provider.generate(prompt, model=self.translate_model)
+            response_text = await self.ai_provider.generate(
+                prompt, model=self.translate_model, system_instruction=SYSTEM_PROMPT
+            )
 
             # レスポンスをパース
             for line in response_text.split("\n"):
@@ -306,7 +309,9 @@ class EnglishAnalysisService:
         )
 
         try:
-            translation = await self.ai_provider.generate(prompt, model=self.translate_model)
+            translation = await self.ai_provider.generate(
+                prompt, model=self.translate_model, system_instruction=SYSTEM_PROMPT
+            )
             translation = translation.strip()
 
             self.translation_cache[word] = translation

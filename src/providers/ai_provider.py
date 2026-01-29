@@ -35,6 +35,7 @@ class AIProviderInterface(ABC):
         model: str | None = None,
         enable_search: bool = False,
         response_model: Type[BaseModel] | None = None,
+        system_instruction: str | None = None,
     ) -> Any:
         """Generate text or structured response from prompt."""
         ...
@@ -58,6 +59,11 @@ class AIProviderInterface(ABC):
         """Generate text response from prompt with PDF input."""
         ...
 
+    @abstractmethod
+    async def count_tokens(self, contents: Any, model: str | None = None) -> int:
+        """Count tokens for the given contents."""
+        ...
+
 
 class GeminiProvider(AIProviderInterface):
     """Gemini API provider implementation."""
@@ -77,6 +83,7 @@ class GeminiProvider(AIProviderInterface):
         model: str | None = None,
         enable_search: bool = False,
         response_model: Type[BaseModel] | None = None,
+        system_instruction: str | None = None,
     ) -> Any:
         """Generate text response from prompt, optionally as structured data."""
         target_model = model or self.model
@@ -104,6 +111,9 @@ class GeminiProvider(AIProviderInterface):
             if response_model:
                 config_params["response_mime_type"] = "application/json"
                 config_params["response_schema"] = response_model
+
+            if system_instruction:
+                config_params["system_instruction"] = system_instruction
 
             config = types.GenerateContentConfig(**config_params) if config_params else None
 
@@ -242,6 +252,16 @@ class GeminiProvider(AIProviderInterface):
             )
             raise AIGenerationError(f"PDF analysis failed: {e}") from e
 
+    async def count_tokens(self, contents: Any, model: str | None = None) -> int:
+        """Count tokens using Gemini API."""
+        target_model = model or self.model
+        try:
+            resp = await self.client.aio.models.count_tokens(model=target_model, contents=contents)
+            return int(resp.total_tokens or 0)
+        except Exception as e:
+            logger.error(f"Token counting failed: {e}")
+            return 0
+
 
 class VertexAIProvider(AIProviderInterface):
     """
@@ -282,6 +302,7 @@ class VertexAIProvider(AIProviderInterface):
         model: str | None = None,
         enable_search: bool = False,
         response_model: Type[BaseModel] | None = None,
+        system_instruction: str | None = None,
     ) -> Any:
         """Generate text response from prompt."""
         target_model = model or self.model
@@ -305,6 +326,9 @@ class VertexAIProvider(AIProviderInterface):
             if response_model:
                 config_params["response_mime_type"] = "application/json"
                 config_params["response_schema"] = response_model
+
+            if system_instruction:
+                config_params["system_instruction"] = system_instruction
 
             config = types.GenerateContentConfig(**config_params)
 
@@ -414,6 +438,16 @@ class VertexAIProvider(AIProviderInterface):
         except Exception as e:
             logger.exception("Vertex AI PDF generation failed", extra={"error": str(e)})
             raise AIGenerationError(f"Vertex PDF analysis failed: {e}") from e
+
+    async def count_tokens(self, contents: Any, model: str | None = None) -> int:
+        """Count tokens using Vertex AI API."""
+        target_model = model or self.model
+        try:
+            resp = await self.client.aio.models.count_tokens(model=target_model, contents=contents)
+            return int(resp.total_tokens or 0)
+        except Exception as e:
+            logger.error(f"Token counting failed (Vertex): {e}")
+            return 0
 
 
 # Singleton instance cache

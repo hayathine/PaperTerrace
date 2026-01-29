@@ -9,6 +9,7 @@ from src.prompts import (
     SUMMARY_CONTEXT_PROMPT,
     SUMMARY_FULL_PROMPT,
     SUMMARY_SECTIONS_PROMPT,
+    SYSTEM_PROMPT,
 )
 from src.providers import get_ai_provider
 
@@ -49,6 +50,39 @@ class SummaryService:
     def __init__(self):
         self.ai_provider = get_ai_provider()
         self.model = os.getenv("MODEL_SUMMARY", "gemini-2.0-flash")
+        # Default limit: 900,000 tokens (Gemini 1.5 Flash supports 1M, safety margin applied)
+        self.token_limit = int(os.getenv("MAX_INPUT_TOKENS", "900000"))
+
+    async def _truncate_to_token_limit(self, text: str) -> str:
+        """
+        Check token count and truncate text if it exceeds the limit.
+        Uses a heuristic (1 token approx 4 chars) to reduce API calls for short texts,
+        and binary search or iterative cutting for long texts.
+        """
+        # Quick heuristic check: if text length is well below token limit (e.g. chars < limit * 2), skip
+        # English: 1 token ~ 4 chars. Japanese: 1 token ~ 1-1.5 chars.
+        # Conservative check: if chars < limit, it's definitely safe.
+        if len(text) < self.token_limit:
+            return text
+
+        count = await self.ai_provider.count_tokens(text, model=self.model)
+        if count <= self.token_limit:
+            return text
+
+        logger.warning(f"Token limit exceeded: {count} > {self.token_limit}. Truncating...")
+
+        # Simple iterative truncation
+        current_text = text
+        while count > self.token_limit:
+            # Calculate ratio to cut
+            ratio = self.token_limit / count
+            # Cut slightly more to be safe (95% of target ratio)
+            cut_len = int(len(current_text) * ratio * 0.95)
+            current_text = current_text[:cut_len]
+            count = await self.ai_provider.count_tokens(current_text, model=self.model)
+
+        logger.info(f"Truncated to {len(current_text)} chars ({count} tokens)")
+        return current_text
 
     async def summarize_full(self, text: str, target_lang: str = "ja") -> str:
         """
@@ -63,7 +97,9 @@ class SummaryService:
         """
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = SUMMARY_FULL_PROMPT.format(lang_name=lang_name, paper_text=text[:15000])
+        # Check token limit
+        safe_text = await self._truncate_to_token_limit(text)
+        prompt = SUMMARY_FULL_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
 
         try:
             logger.debug(
@@ -71,7 +107,10 @@ class SummaryService:
                 extra={"text_length": len(text)},
             )
             analysis: FullSummaryResponse = await self.ai_provider.generate(
-                prompt, model=self.model, response_model=FullSummaryResponse
+                prompt,
+                model=self.model,
+                response_model=FullSummaryResponse,
+                system_instruction=SYSTEM_PROMPT,
             )
 
             # 整形された文字列として返す（後方互換性のため）
@@ -109,7 +148,9 @@ class SummaryService:
         """
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = SUMMARY_SECTIONS_PROMPT.format(lang_name=lang_name, paper_text=text[:15000])
+        # Check token limit
+        safe_text = await self._truncate_to_token_limit(text)
+        prompt = SUMMARY_SECTIONS_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
 
         try:
             logger.debug(
@@ -117,7 +158,10 @@ class SummaryService:
                 extra={"text_length": len(text)},
             )
             response: SectionSummariesResponse = await self.ai_provider.generate(
-                prompt, model=self.model, response_model=SectionSummariesResponse
+                prompt,
+                model=self.model,
+                response_model=SectionSummariesResponse,
+                system_instruction=SYSTEM_PROMPT,
             )
 
             logger.info(
@@ -145,10 +189,16 @@ class SummaryService:
         """
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = SUMMARY_ABSTRACT_PROMPT.format(lang_name=lang_name, paper_text=text[:10000])
+        # Abstract is usually short, but check anyway or use text[:20000] for speed?
+        # Let's use specific limit for abstract to avoid processing full paper for just an abstract
+        # or use the same safe logic.
+        safe_text = await self._truncate_to_token_limit(text[:50000])
+        prompt = SUMMARY_ABSTRACT_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
 
         try:
-            abstract = await self.ai_provider.generate(prompt, model=self.model)
+            abstract = await self.ai_provider.generate(
+                prompt, model=self.model, system_instruction=SYSTEM_PROMPT
+            )
             logger.info("Abstract summary generated")
             return abstract
         except Exception as e:
@@ -161,8 +211,11 @@ class SummaryService:
         """
         try:
             # Use a fast model for context summarization if possible
-            prompt = SUMMARY_CONTEXT_PROMPT.format(max_length=max_length, paper_text=text[:10000])
-            summary = await self.ai_provider.generate(prompt, model=self.model)
+            # Context summarization needs only a portion
+            prompt = SUMMARY_CONTEXT_PROMPT.format(max_length=max_length, paper_text=text[:20000])
+            summary = await self.ai_provider.generate(
+                prompt, model=self.model, system_instruction=SYSTEM_PROMPT
+            )
             logger.info(f"Context summary generated (length: {len(summary)})")
             return summary[:max_length]
         except Exception as e:

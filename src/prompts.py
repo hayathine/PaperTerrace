@@ -4,30 +4,42 @@ Centralized location for all AI prompts used in PaperTerrace.
 """
 
 # ==========================================
+# System Prompt
+# ==========================================
+
+SYSTEM_PROMPT = """You are an expert academic research assistant.
+Your goal is to help users understand complex academic papers, translate technical terms accurately within context, and summarize research findings clearly.
+
+# Global Rules
+1. Always output in the requested language (e.g., if asked for Japanese, answer in Japanese).
+2. Maintain a professional, objective, and academic tone.
+3. When translating, prioritize accuracy and academic context over literal translation.
+4. For summaries, capture the core essence, methods, and contributions.
+5. If the user asks for JSON, output ONLY valid JSON without Markdown formatting.
+6. No intro/outro.
+"""
+
+# ==========================================
 # Translation & Dictionary Prompts
 # ==========================================
 
 TRANSLATE_PHRASE_WITH_CONTEXT_PROMPT = """{paper_context}
-以上の文脈を考慮して、以下の英文を{lang_name}に翻訳してください。
-
+Based on the context above, translate the following English text into {lang_name}.
 {original_word}
-
-訳のみを出力してください。"""
+Output the translation and intuitive explanation."""
 
 TRANSLATE_WORD_SIMPLE_PROMPT = """{paper_context}
-以上の論文の文脈において、英単語「{lemma}」はどのような意味ですか？
-{lang_name}訳を1〜3語で簡潔に。訳のみ出力。"""
-
+In the context of the paper above, what does the word "{lemma}" mean?
+Provide a concise translation in {lang_name} (1-3 words). Output ONLY the translation."""
 
 TRANSLATE_WORD_WITH_CONTEXT_EXPLAIN_PROMPT = """
-以下の文脈において、単語「{word}」はどういう意味で使われていますか？
-文脈を考慮して、{lang_name}で簡潔に説明してください。
+How is the word "{word}" used in the following context?
+Please explain it concisely in {lang_name}, taking the context into account.
 
 {summary_context}
-文脈:
+Context:
 {context}
 """
-
 TRANSLATE_BATCH_PROMPT = """Provide concise translations for the following English words in {lang_name}.
 Output format per line: "Word: Translation"
 Keep it very brief (1-2 words).
@@ -47,6 +59,15 @@ Keep it concise (1-3 words). Output ONLY the translation.
 [Output]
 Translation only in {lang_name}.
 """
+
+TRANSLATE_GENERAL_PROMPT = """Translate the English word or phrase "{word}" to {lang_name}.
+Provide only the translation, nothing else. If it's a technical term, include a brief explanation in parentheses."""
+
+TRANSLATE_PHRASE_GENERAL_PROMPT = """Translate the following English text to {lang_name}:
+
+"{phrase}"
+
+Provide only the translation, maintaining the original meaning and nuance. Output ONLY the translation."""
 
 # ==========================================
 # Summary Prompts

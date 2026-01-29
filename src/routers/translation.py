@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from src.prompts import (
+    SYSTEM_PROMPT,
     TRANSLATE_PHRASE_WITH_CONTEXT_PROMPT,
     TRANSLATE_WORD_SIMPLE_PROMPT,
     TRANSLATE_WORD_WITH_CONTEXT_EXPLAIN_PROMPT,
@@ -320,7 +321,15 @@ async def explain_deep(
             )
 
         translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.0-flash-lite")
-        translation = (await provider.generate(prompt, model=translate_model)).strip().strip("'\"")
+        translation = (
+            (
+                await provider.generate(
+                    prompt, model=translate_model, system_instruction=SYSTEM_PROMPT
+                )
+            )
+            .strip()
+            .strip("'\"")
+        )
 
         service.translation_cache[lemma] = translation
         service.word_cache[lemma] = False
@@ -413,7 +422,9 @@ async def explain_with_context(req: ExplainContextRequest):
     translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.0-flash-lite")
 
     try:
-        explanation = await provider.generate(prompt, model=translate_model)
+        explanation = await provider.generate(
+            prompt, model=translate_model, system_instruction=SYSTEM_PROMPT
+        )
         return JSONResponse(
             {
                 "word": req.word,

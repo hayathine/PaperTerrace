@@ -6,6 +6,11 @@
 import os
 
 from src.logger import logger
+from src.prompts import (
+    SYSTEM_PROMPT,
+    TRANSLATE_GENERAL_PROMPT,
+    TRANSLATE_PHRASE_GENERAL_PROMPT,
+)
 from src.providers import get_ai_provider
 
 
@@ -57,12 +62,11 @@ class TranslationService:
             }
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
-        prompt = f"""Translate the English word or phrase "{word}" to {lang_name}.
-Provide only the translation, nothing else. If it's a technical term, include a brief explanation in parentheses."""
+        prompt = TRANSLATE_GENERAL_PROMPT.format(word=word, lang_name=lang_name)
 
         try:
             logger.debug(f"Translating word: '{word}' to {target_lang}")
-            translation = await self.ai_provider.generate(prompt)
+            translation = await self.ai_provider.generate(prompt, system_instruction=SYSTEM_PROMPT)
             translation = translation.strip()
 
             if not translation:
@@ -117,15 +121,11 @@ Provide only the translation, nothing else. If it's a technical term, include a 
             }
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
-        prompt = f"""Translate the following English text to {lang_name}:
-
-"{phrase}"
-
-Provide only the translation, maintaining the original meaning and nuance."""
+        prompt = TRANSLATE_PHRASE_GENERAL_PROMPT.format(phrase=phrase, lang_name=lang_name)
 
         try:
             logger.debug(f"Translating phrase of {len(phrase)} chars to {target_lang}")
-            translation = await self.ai_provider.generate(prompt)
+            translation = await self.ai_provider.generate(prompt, system_instruction=SYSTEM_PROMPT)
             translation = translation.strip()
 
             if not translation:

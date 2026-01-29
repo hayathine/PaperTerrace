@@ -8,7 +8,14 @@ from typing import List
 from pydantic import BaseModel, Field
 
 from src.logger import logger
+from src.prompts import (
+    EXPLAIN_PARAGRAPH_PROMPT,
+    EXPLAIN_TERMINOLOGY_PROMPT,
+    SYSTEM_PROMPT,
+)
 from src.providers import get_ai_provider
+
+from .translate import SUPPORTED_LANGUAGES
 
 
 class ParagraphExplanationResponse(BaseModel):
@@ -59,8 +66,6 @@ class ParagraphExplainService:
         Returns:
             Detailed explanation in the target language
         """
-        from .translate import SUPPORTED_LANGUAGES
-
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
         context_hint = ""
@@ -69,8 +74,6 @@ class ParagraphExplainService:
 [Full Paper Context (Excerpt)]
 {full_context[:5000]}
 """
-
-        from src.prompts import EXPLAIN_PARAGRAPH_PROMPT
 
         prompt = EXPLAIN_PARAGRAPH_PROMPT.format(
             context_hint=context_hint, paragraph=paragraph, lang_name=lang_name
@@ -82,7 +85,10 @@ class ParagraphExplainService:
                 extra={"paragraph_length": len(paragraph)},
             )
             analysis: ParagraphExplanationResponse = await self.ai_provider.generate(
-                prompt, model=self.model, response_model=ParagraphExplanationResponse
+                prompt,
+                model=self.model,
+                response_model=ParagraphExplanationResponse,
+                system_instruction=SYSTEM_PROMPT,
             )
 
             # 整形された文字列として返す（後方互換性のため）
@@ -121,15 +127,11 @@ class ParagraphExplainService:
         Returns:
             List of term explanations
         """
-        from .translate import SUPPORTED_LANGUAGES
-
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
         terms_hint = ""
         if terms:
             terms_hint = f"Specifically explain these terms if found: {', '.join(terms)}"
-
-        from src.prompts import EXPLAIN_TERMINOLOGY_PROMPT
 
         prompt = EXPLAIN_TERMINOLOGY_PROMPT.format(
             paragraph=paragraph, terms_hint=terms_hint, lang_name=lang_name
@@ -137,7 +139,10 @@ class ParagraphExplainService:
 
         try:
             response: TerminologyResponse = await self.ai_provider.generate(
-                prompt, model=self.model, response_model=TerminologyResponse
+                prompt,
+                model=self.model,
+                response_model=TerminologyResponse,
+                system_instruction=SYSTEM_PROMPT,
             )
             logger.info(f"Explained {len(response.terms)} terms")
             return [t.model_dump() for t in response.terms]
