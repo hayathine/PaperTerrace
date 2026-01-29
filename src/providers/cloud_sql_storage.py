@@ -180,6 +180,14 @@ class CloudSQLStorage(StorageInterface):
                 """)
             conn.commit()
 
+            # Verify tables
+            with conn.cursor() as cur:
+                cur.execute("SELECT tablename FROM pg_tables WHERE schemaname='public'")
+                tables = [row[0] for row in cur.fetchall()]
+                logger.info(
+                    f"CLOUD_SQL_DEBUG: Database initialized. Tables in public schema: {tables}"
+                )
+
     # ===== Paper methods =====
 
     def save_paper(

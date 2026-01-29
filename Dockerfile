@@ -26,7 +26,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --no-dev --frozen
 
 # Download spacy model
-RUN uv run python -m spacy download en_core_web_lg
+RUN uv run python -m spacy download en_core_web_sm
 
 # Production stage
 FROM python:3.12-slim AS production

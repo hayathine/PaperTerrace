@@ -11,8 +11,16 @@ from src.services.jamdict_service import lookup_word
 from src.utils import clean_text_for_tokenization, truncate_context
 
 # 共通設定 (logic.pyから移行)
+# 共通設定 (logic.pyから移行)
 executor = ThreadPoolExecutor(max_workers=4)
-nlp = spacy.load("en_core_web_lg", disable=["ner", "parser"])
+try:
+    # メモリ節約のため sm モデルを優先
+    nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
+    logger.info("Loaded spaCy model: en_core_web_sm")
+except OSError:
+    # 最悪の場合、モデルなし（エラーになるがログ出す）
+    logger.error("No spaCy model found. Please verify Dockerfile installs 'en_core_web_sm'.")
+    raise
 
 
 class EnglishAnalysisService:
