@@ -13,11 +13,12 @@ interface SidebarProps {
     selectedWord?: string;
     context?: string;
     coordinates?: { page: number, x: number, y: number };
+    selectedImage?: string;
     onJump?: (page: number, x: number, y: number) => void;
     isAnalyzing?: boolean;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord, context, coordinates, onJump, isAnalyzing = false }) => {
+const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord, context, coordinates, selectedImage, onJump, isAnalyzing = false }) => {
 
     return (
         <div className="flex flex-col h-full bg-white border-l border-gray-200 shadow-xl overflow-hidden font-sans">
@@ -115,6 +116,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
                             onJump={onJump}
                             selectedContext={context} // Use the shared context prop which now also holds selected text
                             selectedTerm={selectedWord} // Word click sets this
+                            selectedImage={selectedImage}
                         />
                     </div>
                 )}

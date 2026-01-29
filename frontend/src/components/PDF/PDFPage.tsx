@@ -31,48 +31,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
     const { width, height, words, image_url, page_num } = page;
 
     // Handle text selection
-    React.useEffect(() => {
-        const handleSelection = () => {
-            if (isStampMode) return;
-            const selection = window.getSelection();
-            if (!selection || selection.isCollapsed) return;
 
-            const text = selection.toString().trim();
-            if (text && onTextSelect) {
-                // Approximate coordinates using the first range rect
-                const range = selection.getRangeAt(0);
-                const rect = range.getBoundingClientRect();
-
-                // We need to convert viewport coordinates to page-relative coordinates
-                // This implies finding the page container relative to viewport
-                const pageEl = document.getElementById(`page-${page.page_num}`);
-                if (pageEl) {
-                    const pageRect = pageEl.getBoundingClientRect();
-
-                    // Check if selection is actually inside this page
-                    if (
-                        rect.top >= pageRect.top &&
-                        rect.bottom <= pageRect.bottom &&
-                        rect.left >= pageRect.left &&
-                        rect.right <= pageRect.right
-                    ) {
-                        const relX = (rect.left - pageRect.left) / pageRect.width;
-                        const relY = (rect.top - pageRect.top) / pageRect.height;
-
-                        // Pass the selection up (debouncing might be needed if mouseup is not used)
-                        // We'll rely on mouseup attached to document or element logic outside, 
-                        // but PDFPage is a good place to detect if it happened INSIDE it.
-                    }
-                }
-            }
-        };
-
-        // Listen to mouseup on the page element to capture selection end
-        const pageEl = document.getElementById(`page-${page.page_num}`);
-        if (pageEl) {
-            // Logic moved to JSX onMouseUp for simplicity and better React integration
-        }
-    }, [isStampMode, onTextSelect, page.page_num]);
 
     const handleMouseUp = (e: React.MouseEvent) => {
         if (isStampMode) return;
@@ -188,7 +147,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
                                         const centerX = (x1 + x2) / 2 / width;
                                         const centerY = (y1 + y2) / 2 / height;
 
-                                        onWordClick(w.word, context, { page: page_num, x: centerX, y: centerY });
+                                        const cleanWord = w.word.replace(/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g, '');
+                                        onWordClick(cleanWord, context, { page: page_num, x: centerX, y: centerY });
                                     }
                                 }}
                                 title={w.word}

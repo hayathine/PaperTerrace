@@ -156,10 +156,6 @@ function App() {
                                     uploadFile={uploadFile}
                                     onWordClick={handleWordClick}
                                     onTextSelect={handleTextSelect}
-                                    sessionId={sessionId}
-                                    uploadFile={uploadFile}
-                                    onWordClick={handleWordClick}
-                                    onTextSelect={handleTextSelect}
                                     onAreaSelect={handleAreaSelect}
                                     jumpTarget={jumpTarget}
                                     onStatusChange={handleAnalysisStatusChange}

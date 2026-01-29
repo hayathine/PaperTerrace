@@ -39,7 +39,7 @@ async def translate_word(word: str, lang: str = "ja"):
 async def explain(word: str, lang: str = "ja"):
     """Word explanation (Lemmatize -> Cache -> Jamdict -> Gemini)"""
     # 0. Assume input word is already lemmatized by frontend
-    lemma = word.lower()
+    lemma = word.lower().strip(".,;!?(){}[\]\"'")
     original_word = word  # Input is typically lemma from frontend
     loop = asyncio.get_event_loop()
 
@@ -136,7 +136,7 @@ async def explain_with_context(req: ExplainContextRequest):
 
     lang_name = SUPPORTED_LANGUAGES.get(req.lang, req.lang)
     provider = get_ai_provider()
-    
+
     # Retrieve Paper Summary Context if session_id is provided
     summary_context = ""
     if req.session_id:
@@ -144,8 +144,8 @@ async def explain_with_context(req: ExplainContextRequest):
         if paper_id:
             paper = storage.get_paper(paper_id)
             if paper and paper.get("abstract"):
-                 summary_context = f"\n[Document Summary]\n{paper['abstract']}\n"
-    
+                summary_context = f"\n[Document Summary]\n{paper['abstract']}\n"
+
     prompt = f"""
 以下の文脈において、単語「{req.word}」はどういう意味で使われていますか？
 文脈を考慮して、{lang_name}で簡潔に説明してください。

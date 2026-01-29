@@ -17,15 +17,15 @@ tasks:
     cmds:
       - docker run -d --name paper-terrace-redis -p 6379:6379 redis:latest || docker start paper-terrace-redisU
 
-  run:
-    desc: "Run local server"
-    cmds:
-      - uv run uvicorn src.main:app --reload
+  # run:
+  #   desc: "Run local server"
+  #   cmds:
+  #     - uv run uvicorn src.main:app --reload
 
-  build:
-    desc: "Build frontend"
-    cmds:
-      - cd frontend && npm run dev
+  # build:
+  #   desc: "Build frontend"
+  #   cmds:
+  #     - cd frontend && npm run dev
 
   read:
     desc: "Run local server"
@@ -65,4 +65,34 @@ tasks:
 
   all_stop:
     desc: Stop all services
-    deps: [db:stop, remove_all_users]
+    deps: [remove_all_users, db:stop]
+
+  deploy:
+    desc: start:build deploy
+    cmds:
+     - ./deploy.sh
+
+  db:wait:
+    desc: Wait for Cloud SQL to be RUNNABLE
+    cmds:
+      - |
+        echo "Waiting for Cloud SQL to be RUNNABLE..."
+        for i in 1 2 3 4 5 6; do
+          STATUS=$(gcloud sql instances describe paperterrace-db \
+            --format="value(state)")
+          echo "Current state: $STATUS"
+          if [ "$STATUS" = "RUNNABLE" ]; then
+            echo "Cloud SQL is ready"
+            exit 0
+          fi
+          sleep 30
+        done
+        echo "Cloud SQL did not become RUNNABLE"
+        exit 1
+
+  start:
+    desc: start db and deploy 
+    deps: 
+     - db:start
+     - db:wait
+     - deploy
