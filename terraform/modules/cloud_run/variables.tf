@@ -13,8 +13,13 @@ variable "image_url" {
   type        = string
 }
 
-variable "vpc_connector_id" {
-  description = "VPC Connector ID for Cloud Run"
+variable "subnet_name" {
+  description = "Subnet Name for Direct VPC Egress"
+  type        = string
+}
+
+variable "vpc_network_name" {
+  description = "VPC Network Name"
   type        = string
 }
 

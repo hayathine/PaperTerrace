@@ -52,3 +52,13 @@ tasks:
     desc: "Remove IAM policy"
     cmds:
       - gcloud run services remove-iam-policy-binding paperterrace --member="allUsers" --role="roles/run.invoker"
+
+  db:stop:
+    desc: Stop Cloud SQL instance (save cost)
+    cmds:
+      - gcloud sql instances patch paperterrace-db --activation-policy=NEVER
+      
+  db:start:
+    desc: Start Cloud SQL instance
+    cmds:
+      - gcloud sql instances patch paperterrace-db --activation-policy=ALWAYS

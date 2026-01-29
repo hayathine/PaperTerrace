@@ -18,17 +18,8 @@ resource "google_compute_subnetwork" "main" {
   private_ip_google_access = true
 }
 
-# VPC Connector for Cloud Run to access Cloud SQL
-resource "google_vpc_access_connector" "connector" {
-  name          = "paperterrace-connector"
-  region        = var.region
-  project       = var.project_id
-  ip_cidr_range = "10.8.0.0/28"
-  network       = google_compute_network.main.name
+# VPC Connector removed for Direct VPC Egress
 
-  min_instances = 2
-  max_instances = 3
-}
 
 # Private IP allocation for Cloud SQL
 resource "google_compute_global_address" "private_ip" {

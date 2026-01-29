@@ -126,7 +126,8 @@ module "cloud_run" {
   project_id               = var.project_id
   region                   = var.region
   image_url                = var.image_url
-  vpc_connector_id         = module.networking.vpc_connector_id
+  subnet_name              = module.networking.subnet_name
+  vpc_network_name         = module.networking.vpc_network_name
   cloud_sql_connection     = module.cloud_sql.connection_name
   gemini_api_key_secret_id = module.secrets.gemini_api_key_secret_id
   db_password_secret_id    = module.secrets.db_password_secret_id

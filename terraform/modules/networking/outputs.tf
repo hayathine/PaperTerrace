@@ -13,9 +13,9 @@ output "subnet_id" {
   value       = google_compute_subnetwork.main.id
 }
 
-output "vpc_connector_id" {
-  description = "VPC Connector ID"
-  value       = google_vpc_access_connector.connector.id
+output "subnet_name" {
+  description = "Subnet Name"
+  value       = google_compute_subnetwork.main.name
 }
 
 output "private_ip_address" {
