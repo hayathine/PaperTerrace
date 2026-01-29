@@ -668,11 +668,11 @@ wheels = [
 ]
 
 [[package]]
-name = "en-core-web-lg"
+name = "en-core-web-sm"
 version = "3.8.0"
-source = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" }
+source = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
 wheels = [
-    { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl", hash = "sha256:293e9547a655b25499198ab15a525b05b9407a75f10255e405e8c3854329ab63" },
+    { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl", hash = "sha256:1932429db727d4bff3deed6b34cfc05df17794f4a52eeb26cf8928f7c1a0fb85" },
 ]
 
 [[package]]
@@ -843,7 +843,7 @@ dependencies = [
     { name = "datetime" },
     { name = "dotenv" },
     { name = "email-validator" },
-    { name = "en-core-web-lg" },
+    { name = "en-core-web-sm" },
     { name = "fastapi" },
     { name = "firebase-admin" },
     { name = "gcloud" },
@@ -894,7 +894,7 @@ requires-dist = [
     { name = "datetime", specifier = ">=6.0" },
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "email-validator", specifier = ">=2.3.0" },
-    { name = "en-core-web-lg", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_lg-3.8.0/en_core_web_lg-3.8.0-py3-none-any.whl" },
+    { name = "en-core-web-sm", url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" },
     { name = "fastapi", specifier = ">=0.128.0" },
     { name = "firebase-admin", specifier = ">=6.0.0" },
     { name = "gcloud", specifier = ">=0.18.3" },

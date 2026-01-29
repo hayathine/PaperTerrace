@@ -17,15 +17,15 @@ tasks:
     cmds:
       - docker run -d --name paper-terrace-redis -p 6379:6379 redis:latest || docker start paper-terrace-redisU
 
-  # run:
-  #   desc: "Run local server"
-  #   cmds:
-  #     - uv run uvicorn src.main:app --reload
+  run:
+    desc: "Run local server"
+    cmds:
+      - uv run uvicorn src.main:app --reload
 
-  # build:
-  #   desc: "Build frontend"
-  #   cmds:
-  #     - cd frontend && npm run dev
+  build:
+    desc: "Build frontend"
+    cmds:
+      - cd frontend && npm run dev
 
   read:
     desc: "Run local server"
