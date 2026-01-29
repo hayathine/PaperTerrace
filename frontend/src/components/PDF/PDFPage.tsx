@@ -30,32 +30,51 @@ const PDFPage: React.FC<PDFPageProps> = ({
 }) => {
     const { width, height, words, image_url, page_num } = page;
 
-    // Handle text selection
+    // Text Selection State
+    const [isDragging, setIsDragging] = React.useState(false);
+    const [selectionStart, setSelectionStart] = React.useState<number | null>(null);
+    const [selectionEnd, setSelectionEnd] = React.useState<number | null>(null);
 
+    const handleMouseUp = () => {
+        if (isStampMode || isAreaMode) return;
 
-    const handleMouseUp = (e: React.MouseEvent) => {
-        if (isStampMode) return;
+        if (isDragging && selectionStart !== null && selectionEnd !== null) {
+            setIsDragging(false);
 
-        // Wait next tick for selection to populate
-        setTimeout(() => {
-            const selection = window.getSelection();
-            if (!selection || selection.isCollapsed) return;
+            if (selectionStart !== selectionEnd) {
+                // Multi-word selection -> Note
+                if (onTextSelect) {
+                    const min = Math.min(selectionStart, selectionEnd);
+                    const max = Math.max(selectionStart, selectionEnd);
+                    const selectedWords = words.slice(min, max + 1);
+                    const text = selectedWords.map(w => w.word).join(' ');
 
-            const text = selection.toString().trim();
-            if (text && onTextSelect) {
-                const range = selection.getRangeAt(0);
-                const rect = range.getBoundingClientRect();
-                const pageEl = e.currentTarget.getBoundingClientRect();
+                    // Calculate bounding box of selection for anchor
+                    const firstWord = words[min];
+                    const lastWord = words[max];
+                    const x1 = firstWord.bbox[0];
+                    const y1 = firstWord.bbox[1];
+                    const x2 = lastWord.bbox[2];
+                    const y2 = lastWord.bbox[3];
 
-                // Calculate relative coordinates (center of selection)
-                const relX = ((rect.left + rect.width / 2) - pageEl.left) / pageEl.width;
-                const relY = ((rect.top + rect.height / 2) - pageEl.top) / pageEl.height;
+                    // Center of selection
+                    const centerX = (x1 + x2) / 2 / width;
+                    const centerY = (y1 + y2) / 2 / height;
 
-                if (relX >= 0 && relX <= 1 && relY >= 0 && relY <= 1) {
-                    onTextSelect(text, { page: page_num, x: relX, y: relY });
+                    onTextSelect(text, { page: page_num, x: centerX, y: centerY });
                 }
+            } else {
+                // Single click -> handled by onClick of the div, but we need to ensure not to duplicate
+                // Actually, if we use OnClick on the div, it fires after mouseup.
+                // We'll let the OnClick handler do the Dictionary lookup.
             }
-        }, 10);
+
+            // Clear selection after a short delay so user sees what they selected
+            setTimeout(() => {
+                setSelectionStart(null);
+                setSelectionEnd(null);
+            }, 300);
+        }
     };
 
     // Filter stamps for this page
@@ -75,6 +94,13 @@ const PDFPage: React.FC<PDFPageProps> = ({
             className="relative mb-8 shadow-2xl rounded-xl overflow-hidden bg-white transition-all duration-300 border border-slate-200/50 mx-auto"
             style={{ maxWidth: '100%' }}
             onMouseUp={handleMouseUp}
+            onMouseLeave={() => {
+                if (isDragging) {
+                    setIsDragging(false);
+                    setSelectionStart(null);
+                    setSelectionEnd(null);
+                }
+            }}
         >
             {/* Header / Page Number */}
             <div className="bg-gray-50 border-b border-gray-100 px-4 py-2 flex justify-between items-center">
@@ -127,28 +153,50 @@ const PDFPage: React.FC<PDFPageProps> = ({
                         const styleW = (w_width / width) * 100;
                         const styleH = (w_height / height) * 100;
 
+                        const isSelected = selectionStart !== null && selectionEnd !== null &&
+                            ((idx >= selectionStart && idx <= selectionEnd) || (idx >= selectionEnd && idx <= selectionStart));
+
                         return (
                             <div
                                 key={`${idx}`}
-                                className={`absolute rounded-sm group ${!isStampMode ? 'cursor-pointer hover:bg-yellow-300/30' : 'pointer-events-none'}`}
+                                className={`absolute rounded-sm group ${!isStampMode ? 'cursor-pointer' : 'pointer-events-none'} 
+                                    ${!isStampMode && !isSelected ? 'hover:bg-yellow-300/30' : ''} 
+                                    ${isSelected ? 'bg-indigo-500/30 border border-indigo-500/50' : ''}`}
                                 style={{
                                     left: `${left}%`,
                                     top: `${top}%`,
                                     width: `${styleW}%`,
                                     height: `${styleH}%`,
                                 }}
+                                onMouseDown={(e) => {
+                                    if (isStampMode || isAreaMode) return;
+                                    // Prevent default text selection
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setIsDragging(true);
+                                    setSelectionStart(idx);
+                                    setSelectionEnd(idx);
+                                }}
+                                onMouseEnter={() => {
+                                    if (isDragging && selectionStart !== null) {
+                                        setSelectionEnd(idx);
+                                    }
+                                }}
                                 onClick={() => {
                                     if (!isStampMode && onWordClick) {
-                                        const start = Math.max(0, idx - 50);
-                                        const end = Math.min(words.length, idx + 50);
-                                        const context = words.slice(start, end).map(w => w.word).join(' ');
+                                        // Only if it was a click (not a drag)
+                                        if (selectionStart === selectionEnd) {
+                                            const start = Math.max(0, idx - 50);
+                                            const end = Math.min(words.length, idx + 50);
+                                            const context = words.slice(start, end).map(w => w.word).join(' ');
 
-                                        // Calculate normalized center coordinates
-                                        const centerX = (x1 + x2) / 2 / width;
-                                        const centerY = (y1 + y2) / 2 / height;
+                                            // Calculate normalized center coordinates
+                                            const centerX = (x1 + x2) / 2 / width;
+                                            const centerY = (y1 + y2) / 2 / height;
 
-                                        const cleanWord = w.word.replace(/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g, '');
-                                        onWordClick(cleanWord, context, { page: page_num, x: centerX, y: centerY });
+                                            const cleanWord = w.word.replace(/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g, '');
+                                            onWordClick(cleanWord, context, { page: page_num, x: centerX, y: centerY });
+                                        }
                                     }
                                 }}
                                 title={w.word}
