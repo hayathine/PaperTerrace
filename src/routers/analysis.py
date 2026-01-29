@@ -38,19 +38,34 @@ def _get_context(session_id: str) -> str | None:
     # 1. Try Redis
     context = redis_service.get(f"session:{session_id}")
     if context:
+        logger.debug(f"[_get_context] Redis HIT for session {session_id} (len={len(context)})")
         return context
+
+    logger.info(f"[_get_context] Redis MISS for session {session_id}. Trying DB.")
 
     # 2. Try DB persistence (Session mapping)
-    paper_id = storage.get_session_paper_id(session_id) or session_id
+    paper_id = storage.get_session_paper_id(session_id)
+    resolved_paper_id = paper_id or session_id
+
+    logger.info(
+        f"[_get_context] Resolved paper_id: {resolved_paper_id} (from session mapping: {paper_id})"
+    )
 
     # 3. Get Paper
-    paper = storage.get_paper(paper_id)
-    if paper and paper.get("ocr_text"):
-        context = paper["ocr_text"]
-        # Restore cache
-        redis_service.set(f"session:{session_id}", context, expire=3600)
-        logger.info(f"Restored context from DB for session {session_id} -> paper {paper_id}")
-        return context
+    paper = storage.get_paper(resolved_paper_id)
+    if paper:
+        if paper.get("ocr_text"):
+            context = paper["ocr_text"]
+            # Restore cache
+            redis_service.set(f"session:{session_id}", context, expire=3600)
+            logger.info(
+                f"[_get_context] Restored context from DB for session {session_id} -> paper {resolved_paper_id}"
+            )
+            return context
+        else:
+            logger.warning(f"[_get_context] Paper found ({resolved_paper_id}) but NO ocr_text.")
+    else:
+        logger.warning(f"[_get_context] Paper NOT found in DB: {resolved_paper_id}")
 
     return None
 
@@ -83,11 +98,11 @@ async def summarize(session_id: str = Form(...), mode: str = Form("full"), lang:
                 return JSONResponse({"abstract": paper["abstract"]})
 
         abstract = await summary_service.summarize_abstract(context, target_lang=lang)
-        
+
         # Save generated abstract if paper exists
         if paper_id:
             storage.update_paper_abstract(paper_id, abstract)
-            
+
         return JSONResponse({"abstract": abstract})
     else:
         summary = await summary_service.summarize_full(context, target_lang=lang)

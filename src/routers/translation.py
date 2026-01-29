@@ -50,10 +50,14 @@ async def explain(word: str, lang: str = "ja"):
     original_word = word
 
     # logger.info(f"[explain] word='{word}' -> lemma='{lemma}'")
+    logger.info(
+        f"[explain] Request: word='{original_word}', clean='{clean_input}', lemma='{lemma}', lang='{lang}'"
+    )
 
     # 1. Cache Check
     cached = await service.get_translation(lemma, lang=lang)
     if cached:
+        logger.info(f"[explain] Cache HIT for '{lemma}' -> {cached['translation']}")
         return JSONResponse(
             {
                 "word": original_word,
@@ -75,6 +79,7 @@ async def explain(word: str, lang: str = "ja"):
                 for e in lookup_res.entries[:3]
             ]
             translation = " / ".join(list(dict.fromkeys(ja)))
+            logger.info(f"[explain] Jamdict HIT for '{lemma}' -> {translation}")
             return JSONResponse(
                 {
                     "word": original_word,
@@ -94,6 +99,8 @@ async def explain(word: str, lang: str = "ja"):
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
         provider = get_ai_provider()
 
+        logger.info(f"[explain] Gemini Fallback for '{lemma}' (is_phrase={is_phrase})")
+
         if is_phrase:
             prompt = f"以下の英文を{lang_name}に翻訳してください。\n\n{original_word}\n\n訳のみを出力してください。"
         else:
@@ -101,10 +108,14 @@ async def explain(word: str, lang: str = "ja"):
 
         translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.0-flash-lite")
 
+        logger.info(f"[explain] Calling AI Provider with model={translate_model}")
+
         translation = await provider.generate(prompt, model=translate_model)
 
         service.translation_cache[lemma] = translation
         service.word_cache[lemma] = False
+
+        logger.info(f"[explain] Gemini Success: '{lemma}' -> {translation}")
 
         return JSONResponse(
             {"word": original_word, "lemma": lemma, "translation": translation, "source": "Gemini"}
