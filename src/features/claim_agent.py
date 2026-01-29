@@ -34,24 +34,13 @@ class ClaimVerificationService:
         """
         Verify claims in a paragraph using Web Search.
         """
+        from src.prompts import CLAIM_VERIFICATION_PROMPT
+
         from .translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
-        prompt = f"""You are an autonomous "Evidence Checker".
-Your task is to critically verify the claims made in the following text by cross-referencing with external information (Web Search).
-
-[Target Text]
-{paragraph}
-
-[Instructions]
-1. Identify the core claims (e.g., "Outperforms SOTA by 10%", "New architecture X").
-2. AUTONOMOUSLY SEARCH for these claims online. Look for:
-   - Reproducibility reports (GitHub issues, Twitter discussions, Reddit threads).
-   - Contradictory papers (Google Scholar).
-   - Consensus in the community.
-3. Report your findings in {lang_name}.
-"""
+        prompt = CLAIM_VERIFICATION_PROMPT.format(paragraph=paragraph, lang_name=lang_name)
         try:
             logger.info(f"Verifying paragraph claims with model: {self.model}")
 

@@ -11,6 +11,11 @@ from typing import List
 from pydantic import BaseModel, Field
 
 from src.logger import logger
+from src.prompts import (
+    ADVERSARIAL_COUNTERARGUMENTS_PROMPT,
+    ADVERSARIAL_CRITIQUE_PROMPT,
+    ADVERSARIAL_LIMITATIONS_PROMPT,
+)
 from src.providers import get_ai_provider
 
 
@@ -88,30 +93,7 @@ class AdversarialReviewService:
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = f"""You are a rigorous reviewer. Analyze the following paper from a critical perspective and identify potential issues.
-
-[Paper Text]
-{text[:12000]}
-
-Please output in the following JSON format in {lang_name}:
-{{
-  "hidden_assumptions": [
-    {{"assumption": "Hidden assumption", "risk": "Why it is a problem", "severity": "high/medium/low"}}
-  ],
-  "unverified_conditions": [
-    {{"condition": "Unverified condition", "impact": "Impact if not verified", "severity": "high/medium/low"}}
-  ],
-  "reproducibility_risks": [
-    {{"risk": "Reproducibility risk", "detail": "Detailed explanation", "severity": "high/medium/low"}}
-  ],
-  "methodology_concerns": [
-    {{"concern": "Methodological concern", "suggestion": "Suggestion for improvement", "severity": "high/medium/low"}}
-  ],
-  "overall_assessment": "Overall assessment (2-3 sentences)"
-}}
-
-Be constructive but critical. Output ONLY valid JSON.
-"""
+        prompt = ADVERSARIAL_CRITIQUE_PROMPT.format(text=text[:12000], lang_name=lang_name)
 
         try:
             logger.debug(
@@ -162,23 +144,7 @@ Be constructive but critical. Output ONLY valid JSON.
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = f"""Identify limitations in the following paper that may not be explicitly stated by the authors.
-
-[Paper Text]
-{text[:10000]}
-
-Output in the following JSON format in {lang_name}:
-[
-  {{
-    "limitation": "Explanation of limitation",
-    "evidence": "Basis for this judgment",
-    "impact": "Impact on research results",
-    "severity": "high/medium/low"
-  }}
-]
-
-Max 5 items. Output ONLY valid JSON.
-"""
+        prompt = ADVERSARIAL_LIMITATIONS_PROMPT.format(text=text[:10000], lang_name=lang_name)
 
         try:
             logger.debug(
@@ -219,15 +185,9 @@ Max 5 items. Output ONLY valid JSON.
 
         context_hint = f"\n[Context]\n{context[:3000]}" if context else ""
 
-        prompt = f"""Generate 3 potential counterarguments to the following claim in {lang_name}.
-{context_hint}
-
-[Claim]
-{claim}
-
-Provide constructive and academic counterarguments, 2-3 sentences each.
-Output as a numbered list.
-"""
+        prompt = ADVERSARIAL_COUNTERARGUMENTS_PROMPT.format(
+            lang_name=lang_name, context_hint=context_hint, claim=claim
+        )
 
         try:
             response: CounterArgumentsResponse = await self.ai_provider.generate(

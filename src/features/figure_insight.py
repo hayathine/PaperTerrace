@@ -3,6 +3,11 @@ from typing import List, Optional
 from pydantic import BaseModel, Field
 
 from src.logger import logger
+from src.prompts import (
+    FIGURE_ANALYSIS_PROMPT,
+    FIGURE_COMPARISON_PROMPT,
+    TABLE_ANALYSIS_PROMPT,
+)
 from src.providers import get_ai_provider
 
 
@@ -64,18 +69,7 @@ class FigureInsightService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
         caption_hint = f"\n[Caption]\n{caption}" if caption else ""
 
-        prompt = f"""Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.
-{caption_hint}
-
-1. **Type & Overview**: What this figure represents.
-2. **Key Findings**: Main trends or patterns observed.
-3. **Interpretation**: Meaning of the numbers or trends.
-4. **Implications**: How this supports the paper's claims.
-5. **Highlights**: Notable points or anomalies.
-
-Verbalize visual information so it can be understood without seeing the figure.
-Output in {lang_name}.
-"""
+        prompt = FIGURE_ANALYSIS_PROMPT.format(lang_name=lang_name, caption_hint=caption_hint)
 
         try:
             logger.debug(
@@ -129,20 +123,9 @@ Output in {lang_name}.
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
         context_hint = f"\n[Context]\n{context[:1000]}" if context else ""
 
-        prompt = f"""Analyze the following table and explain it in {lang_name}.
-{context_hint}
-
-[Table Content]
-{table_text}
-
-Please explain:
-1. Overview of what the table shows.
-2. Key numbers and trends.
-3. Notable comparisons or differences.
-4. Conclusions drawn from this table.
-
-Output in {lang_name}.
-"""
+        prompt = TABLE_ANALYSIS_PROMPT.format(
+            lang_name=lang_name, context_hint=context_hint, table_text=table_text
+        )
 
         try:
             analysis: TableAnalysisResponse = await self.ai_provider.generate(
@@ -183,22 +166,9 @@ Output in {lang_name}.
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = f"""Compare the following two figures and analyze their relationship or differences in {lang_name}.
-
-[Figure 1]
-{description1}
-
-[Figure 2]
-{description2}
-
-Comparison Points:
-1. Similarities
-2. Differences
-3. Complementary relationship
-4. Contradictions (if any)
-
-Output in {lang_name}.
-"""
+        prompt = FIGURE_COMPARISON_PROMPT.format(
+            lang_name=lang_name, description1=description1, description2=description2
+        )
 
         try:
             comparison: FigureComparisonResponse = await self.ai_provider.generate(

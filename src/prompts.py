@@ -100,8 +100,7 @@ SUMMARY_SECTIONS_PROMPT = """Summarize the following paper section by section in
 
 For each section, output the result in the following JSON format:
 [
-  {{"section": "Section Title", "summary": "Summary (2-3 sentences) in {lang_name}"}},
-  ...
+  {{"section": "Section Title", "summary": "Summary (2-3 sentences) in {lang_name}"}}
 ]
 
 Output ONLY valid JSON.
@@ -158,3 +157,236 @@ Return the result strictly in the following JSON format:
 
 Limit to at most 10 terms. Output JSON only.
 """
+
+# ==========================================
+# Figure Insight Prompts
+# ==========================================
+
+FIGURE_ANALYSIS_PROMPT = """Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.
+{caption_hint}
+
+1. **Type & Overview**: What this figure represents.
+2. **Key Findings**: Main trends or patterns observed.
+3. **Interpretation**: Meaning of the numbers or trends.
+4. **Implications**: How this supports the paper's claims.
+5. **Highlights**: Notable points or anomalies.
+
+Verbalize visual information so it can be understood without seeing the figure.
+Output in {lang_name}.
+"""
+
+TABLE_ANALYSIS_PROMPT = """Analyze the following table and explain it in {lang_name}.
+{context_hint}
+
+[Table Content]
+{table_text}
+
+Please explain:
+1. Overview of what the table shows.
+2. Key numbers and trends.
+3. Notable comparisons or differences.
+4. Conclusions drawn from this table.
+
+Output in {lang_name}.
+"""
+
+FIGURE_COMPARISON_PROMPT = """Compare the following two figures and analyze their relationship or differences in {lang_name}.
+
+[Figure 1]
+{description1}
+
+[Figure 2]
+{description2}
+
+Comparison Points:
+1. Similarities
+2. Differences
+3. Complementary relationship
+4. Contradictions (if any)
+
+Output in {lang_name}.
+"""
+
+# ==========================================
+# Adversarial Review Prompts
+# ==========================================
+
+ADVERSARIAL_CRITIQUE_PROMPT = """You are a rigorous reviewer. Analyze the following paper from a critical perspective and identify potential issues.
+
+[Paper Text]
+{text}
+
+Please output in the following JSON format in {lang_name}:
+{{
+  "hidden_assumptions": [
+    {{"assumption": "Hidden assumption", "risk": "Why it is a problem", "severity": "high/medium/low"}}
+  ],
+  "unverified_conditions": [
+    {{"condition": "Unverified condition", "impact": "Impact if not verified", "severity": "high/medium/low"}}
+  ],
+  "reproducibility_risks": [
+    {{"risk": "Reproducibility risk", "detail": "Detailed explanation", "severity": "high/medium/low"}}
+  ],
+  "methodology_concerns": [
+    {{"concern": "Methodological concern", "suggestion": "Suggestion for improvement", "severity": "high/medium/low"}}
+  ],
+  "overall_assessment": "Overall assessment (2-3 sentences)"
+}}
+
+Be constructive but critical. Output ONLY valid JSON.
+"""
+
+ADVERSARIAL_LIMITATIONS_PROMPT = """Identify limitations in the following paper that may not be explicitly stated by the authors.
+
+[Paper Text]
+{text}
+
+Output in the following JSON format in {lang_name}:
+[
+  {{
+    "limitation": "Explanation of limitation",
+    "evidence": "Basis for this judgment",
+    "impact": "Impact on research results",
+    "severity": "high/medium/low"
+  }}
+]
+
+Max 5 items. Output ONLY valid JSON.
+"""
+
+ADVERSARIAL_COUNTERARGUMENTS_PROMPT = """Generate 3 potential counterarguments to the following claim in {lang_name}.
+{context_hint}
+
+[Claim]
+{claim}
+
+Provide constructive and academic counterarguments, 2-3 sentences each.
+Output as a numbered list.
+"""
+
+# ==========================================
+# Research Radar Prompts
+# ==========================================
+
+RADAR_SIMULATE_SEARCH_PROMPT = """Since the paper search API is unavailable, simulate a search result for the following query.
+List 5 real, highly relevant academic papers.
+
+Search Query: {query}
+"""
+
+RADAR_QUERY_FROM_ABSTRACT_PROMPT = "Generate a single optimal English search query to find related papers based on the following abstract.\n\n{abstract}"
+
+RADAR_QUERY_FROM_CONTEXT_PROMPT = """Based on the following paper context, generate 3-5 search queries to find related research papers.
+Context:
+{context}
+"""
+
+# ==========================================
+# Chat Prompts
+# ==========================================
+
+CHAT_RESPONSE_PROMPT = """You are an AI assistant helping a researcher read this academic paper.
+Based on the paper context below, answer the user's question in {lang_name}.
+
+[Paper Context]
+{document_context}
+
+[Chat History]
+{history_text}
+
+Please provide a clear and concise answer in {lang_name}.
+"""
+
+CHAT_AUTHOR_AGENT_PROMPT = """You are the author of this paper. Answer the reader's question from the author's perspective in {lang_name}.
+
+[Paper Content]
+{paper_text}
+
+[Reader's Question]
+{question}
+
+Answer as if you are the author (using "I", "we", "our team").
+Explain the background, motivation, and methodology rationale where appropriate.
+Ensure the response is in {lang_name}.
+"""
+
+# ==========================================
+# Citation Intent Prompts
+# ==========================================
+
+CITATION_INTENT_PROMPT = """Identify and analyze all "citations" (references to other works) in the following academic text, and classify the intent of each citation.
+
+[Text]
+{paragraph}
+
+[Classification Criteria]
+- Support: The author supports the findings of the previous research or uses it as evidence for their own claims (e.g., "consistent with", "provides evidence for").
+- Use: The author uses/adopts a method, data, software, theory, or tool from the previous research (e.g., "following X", "based on data from Y").
+- Contrast: The author compares or contrasts their findings/methods with the previous research (e.g., "in contrast to", "unlike previous work").
+- Criticize: The author points out flaws, limitations, or errors in the previous research, or argues against it (e.g., "however, X failed to", "a limitation of").
+- Neutral: The author mentions the research as background or context without explicit evaluation or dynamic usage.
+
+[Instructions]
+1. Identify the citation strings (e.g., [1], Author et al. (2020), etc.) from the text.
+2. Select the most appropriate category from the 5 categories above.
+3. Write a brief reason for the classification in {lang_name}.
+"""
+
+# ==========================================
+# Author Agent Prompts
+# ==========================================
+
+AUTHOR_PERSONA_PROMPT = """
+あなたは著名な研究者である {author_name} のペルソナを作成するAIです。
+以下の情報と、現在読まれている論文「{current_paper_title}」を元に、
+この著者がチャットボットとして振る舞うための「システムプロンプト」を作成してください。
+
+{papers_text}
+
+【指示】
+- 著者の研究テーマや専門分野を反映させてください。
+- 文体や口調（論理的、情熱的、慎重など）を推測して定義してください。
+- ユーザーからの質問には、この著者の視点で答えるように指示してください。
+- 決して「AIです」とは答えず、著者本人になりきって対話するように指示してください。
+- 出力はシステムプロンプトのテキストのみにしてください。
+"""
+
+# ==========================================
+# Claim Verification Prompts
+# ==========================================
+
+CLAIM_VERIFICATION_PROMPT = """You are an autonomous "Evidence Checker".
+Your task is to critically verify the claims made in the following text by cross-referencing with external information (Web Search).
+
+[Target Text]
+{paragraph}
+
+[Instructions]
+1. Identify the core claims (e.g., "Outperforms SOTA by 10%", "New architecture X").
+2. AUTONOMOUSLY SEARCH for these claims online. Look for:
+   - Reproducibility reports (GitHub issues, Twitter discussions, Reddit threads).
+   - Contradictory papers (Google Scholar).
+   - Consensus in the community.
+3. Report your findings in {lang_name}.
+"""
+
+# ==========================================
+# Dictionary Prompts
+# ==========================================
+
+DICT_EXPLAIN_PROMPT = """Provide the translation of the English word "{word}" in {lang_name} and a concise explanation (approx. 15 characters or 3-5 words).
+Format: [Translation] Explanation
+"""
+
+# ==========================================
+# PDF Processing & OCR Prompts
+# ==========================================
+
+PDF_LANG_DETECT_PROMPT = """Identify the primary language of the following text and return ONLY the ISO 639-1 code (e.g., 'en', 'ja', 'fr').
+Text Sample:
+{text}
+"""
+
+PDF_FALLBACK_OCR_PROMPT = (
+    "Transcribe the text from this PDF page preserving the structure as much as possible."
+)

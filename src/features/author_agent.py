@@ -40,20 +40,13 @@ class AuthorAgentService:
             papers_text = "（著者の詳細な論文リストはAPIから取得できませんでした。一般的なこの分野の研究者として振る舞ってください）"
 
         # 2. Geminiにペルソナ生成を依頼
-        prompt = f"""
-あなたは著名な研究者である {author_name} のペルソナを作成するAIです。
-以下の情報と、現在読まれている論文「{current_paper_title}」を元に、
-この著者がチャットボットとして振る舞うための「システムプロンプト」を作成してください。
+        from src.prompts import AUTHOR_PERSONA_PROMPT
 
-{papers_text}
-
-【指示】
-- 著者の研究テーマや専門分野を反映させてください。
-- 文体や口調（論理的、情熱的、慎重など）を推測して定義してください。
-- ユーザーからの質問には、この著者の視点で答えるように指示してください。
-- 決して「AIです」とは答えず、著者本人になりきって対話するように指示してください。
-- 出力はシステムプロンプトのテキストのみにしてください。
-"""
+        prompt = AUTHOR_PERSONA_PROMPT.format(
+            author_name=author_name,
+            current_paper_title=current_paper_title,
+            papers_text=papers_text,
+        )
 
         persona_instruction = await self.ai_provider.generate(prompt)
         return persona_instruction.strip()

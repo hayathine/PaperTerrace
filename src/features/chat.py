@@ -6,6 +6,7 @@ AIチャットアシスタント機能を提供するモジュール
 import os
 
 from src.logger import logger
+from src.prompts import CHAT_AUTHOR_AGENT_PROMPT, CHAT_RESPONSE_PROMPT
 from src.providers import get_ai_provider
 
 
@@ -50,18 +51,11 @@ class ChatService:
         from .translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+        doc_context = document_context[:8000] if document_context else "No paper loaded."
 
-        prompt = f"""You are an AI assistant helping a researcher read this academic paper.
-Based on the paper context below, answer the user's question in {lang_name}.
-
-[Paper Context]
-{document_context[:8000] if document_context else "No paper loaded."}
-
-[Chat History]
-{history_text}
-
-Please provide a clear and concise answer in {lang_name}.
-"""
+        prompt = CHAT_RESPONSE_PROMPT.format(
+            lang_name=lang_name, document_context=doc_context, history_text=history_text
+        )
 
         try:
             logger.debug(
@@ -117,18 +111,9 @@ Please provide a clear and concise answer in {lang_name}.
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = f"""You are the author of this paper. Answer the reader's question from the author's perspective in {lang_name}.
-
-[Paper Content]
-{paper_text[:10000]}
-
-[Reader's Question]
-{question}
-
-Answer as if you are the author (using "I", "we", "our team").
-Explain the background, motivation, and methodology rationale where appropriate.
-Ensure the response is in {lang_name}.
-"""
+        prompt = CHAT_AUTHOR_AGENT_PROMPT.format(
+            lang_name=lang_name, paper_text=paper_text[:10000], question=question
+        )
 
         try:
             logger.debug(

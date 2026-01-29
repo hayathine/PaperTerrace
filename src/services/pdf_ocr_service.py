@@ -5,6 +5,7 @@ import fitz  # PyMuPDF
 
 from src.crud import get_ocr_from_db, save_ocr_to_db
 from src.logger import logger
+from src.prompts import PDF_FALLBACK_OCR_PROMPT, PDF_LANG_DETECT_PROMPT
 from src.providers import get_ai_provider
 from src.providers.image_storage import get_page_images, save_page_image
 from src.utils import _get_file_hash
@@ -37,10 +38,7 @@ class PDFOCRService:
             if len(doc) > 0:
                 text = doc[0].get_text()[:1000]
                 if text.strip():
-                    prompt = f"""Identify the primary language of the following text and return ONLY the ISO 639-1 code (e.g., 'en', 'ja', 'fr').
-Text Sample:
-{text}
-"""
+                    prompt = PDF_LANG_DETECT_PROMPT.format(text=text)
                     detected = await self.ai_provider.generate(prompt, model=self.model)
                     detected = detected.strip().lower()
                     if len(detected) == 2:
@@ -173,7 +171,7 @@ Text Sample:
                         single_page_pdf.close()
 
                         try:
-                            prompt = "Transcribe the text from this PDF page preserving the structure as much as possible."
+                            prompt = PDF_FALLBACK_OCR_PROMPT
                             page_text = await self.ai_provider.generate_with_pdf(
                                 prompt, page_bytes, model=self.model
                             )

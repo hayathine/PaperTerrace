@@ -76,27 +76,13 @@ class CiteIntentService:
         """
         段落内の引用を特定し、その意図を分類して詳細情報を付与する。
         """
+        from src.prompts import CITATION_INTENT_PROMPT
+
         from .translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
-        prompt = f"""Identify and analyze all "citations" (references to other works) in the following academic text, and classify the intent of each citation.
-
-[Text]
-{paragraph}
-
-[Classification Criteria]
-- Support: The author supports the findings of the previous research or uses it as evidence for their own claims (e.g., "consistent with", "provides evidence for").
-- Use: The author uses/adopts a method, data, software, theory, or tool from the previous research (e.g., "following X", "based on data from Y").
-- Contrast: The author compares or contrasts their findings/methods with the previous research (e.g., "in contrast to", "unlike previous work").
-- Criticize: The author points out flaws, limitations, or errors in the previous research, or argues against it (e.g., "however, X failed to", "a limitation of").
-- Neutral: The author mentions the research as background or context without explicit evaluation or dynamic usage.
-
-[Instructions]
-1. Identify the citation strings (e.g., [1], Author et al. (2020), etc.) from the text.
-2. Select the most appropriate category from the 5 categories above.
-3. Write a brief reason for the classification in {lang_name}.
-"""
+        prompt = CITATION_INTENT_PROMPT.format(paragraph=paragraph, lang_name=lang_name)
         try:
             logger.info(f"Analyzing citation intent for paragraph with model: {self.model}")
 

@@ -5,6 +5,11 @@ import httpx
 from pydantic import BaseModel, Field
 
 from src.logger import logger
+from src.prompts import (
+    RADAR_QUERY_FROM_ABSTRACT_PROMPT,
+    RADAR_QUERY_FROM_CONTEXT_PROMPT,
+    RADAR_SIMULATE_SEARCH_PROMPT,
+)
 from src.providers import get_ai_provider
 
 
@@ -112,11 +117,7 @@ class ResearchRadarService:
 
     async def _simulate_paper_search(self, query: str) -> List[Dict[str, Any]]:
         """API利用不可時にAIによる検索結果シミュレーションを行う。"""
-        prompt = f"""Since the paper search API is unavailable, simulate a search result for the following query.
-List 5 real, highly relevant academic papers.
-
-Search Query: {query}
-"""
+        prompt = RADAR_SIMULATE_SEARCH_PROMPT.format(query=query)
         try:
             response: SimulatedSearchResponse = await self.ai_provider.generate(
                 prompt, response_model=SimulatedSearchResponse
@@ -131,7 +132,7 @@ Search Query: {query}
         アブストラクトからクエリを生成して関連論文を検索する。
         """
         # 1. AIを使用して検索クエリを生成
-        query_prompt = f"Generate a single optimal English search query to find related papers based on the following abstract.\n\n{abstract[:1000]}"
+        query_prompt = RADAR_QUERY_FROM_ABSTRACT_PROMPT.format(abstract=abstract[:1000])
         search_query = await self.ai_provider.generate(query_prompt)
         search_query = search_query.strip().strip('"')
 
@@ -164,10 +165,7 @@ Search Query: {query}
 
     async def generate_search_queries(self, context: str) -> List[str]:
         """関連研究探索用の検索クエリを生成する。"""
-        prompt = f"""Based on the following paper context, generate 3-5 search queries to find related research papers.
-Context:
-{context[:2000]}
-"""
+        prompt = RADAR_QUERY_FROM_CONTEXT_PROMPT.format(context=context[:2000])
         try:
             response: SearchQueriesResponse = await self.ai_provider.generate(
                 prompt, response_model=SearchQueriesResponse

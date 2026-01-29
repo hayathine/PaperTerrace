@@ -14,13 +14,13 @@ class Translate:
 
     async def explain_unknown_word(self, word: str, lang: str = "ja") -> str:
         """Explain an unknown word in the target language."""
+        from src.prompts import DICT_EXPLAIN_PROMPT
+
         from .translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
-        prompt = f"""Provide the translation of the English word "{word}" in {lang_name} and a concise explanation (approx. 15 characters or 3-5 words).
-Format: [Translation] Explanation
-"""
+        prompt = DICT_EXPLAIN_PROMPT.format(word=word, lang_name=lang_name)
         try:
             return await self.ai_provider.generate(prompt, model=self.model)
         except Exception:
