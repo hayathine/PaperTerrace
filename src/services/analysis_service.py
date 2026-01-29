@@ -16,13 +16,19 @@ from src.utils import clean_text_for_tokenization, truncate_context
 # 共通設定 (logic.pyから移行)
 executor = ThreadPoolExecutor(max_workers=4)
 try:
-    # メモリ節約のため sm モデルを優先
-    nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
-    logger.info("Loaded spaCy model: en_core_web_sm")
+    # 原型抽出を正確にするため、parserやattribute_rulerを有効にする（nerのみ無効化）
+    nlp = spacy.load("en_core_web_sm", disable=["ner"])
+    logger.info("Loaded spaCy model: en_core_web_sm (with parser for better lemmatization)")
 except OSError:
-    # 最悪の場合、モデルなし（エラーになるがログ出す）
-    logger.error("No spaCy model found. Please verify Dockerfile installs 'en_core_web_sm'.")
-    raise
+    try:
+        # Fallback to sm if lg is not found
+        nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
+        logger.info("Loaded spaCy model: en_core_web_sm (fallback)")
+    except OSError:
+        logger.error(
+            "No spaCy model found. Please run 'python -m spacy download en_core_web_lg' or 'en_core_web_sm'."
+        )
+        raise
 
 
 class EnglishAnalysisService:
@@ -45,7 +51,8 @@ class EnglishAnalysisService:
         text = text.strip()
         if not text:
             return ""
-        doc = nlp(text)
+        # 小文字化することで、文頭の単語（Proposedなど）を正しく原型（propose）に戻せるようにする
+        doc = nlp(text.lower())
         return " ".join([token.lemma_.lower() for token in doc])
 
     async def tokenize_stream(

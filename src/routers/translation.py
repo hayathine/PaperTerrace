@@ -68,39 +68,28 @@ async def explain(word: str, lang: str = "ja"):
 
     is_phrase = " " in lemma.strip()
 
-    # 2. Local Dictionary (EJDict) - Skip for phrases
+    # 2. Local Dictionary (jamdict) - Skip for phrases
     if lang == "ja" and not is_phrase:
         from ..providers.dictionary_provider import get_dictionary_provider
 
-        # logger.info(f"Looking up {lemma} in EJDict...")
+        logger.info(f"Looking up {lemma} in Jamdict...")
         dict_provider = get_dictionary_provider()
 
         # Run DB lookup in executor to avoid blocking async loop (SQLite is fast but blocking)
         definition = await loop.run_in_executor(executor, dict_provider.lookup, lemma)
 
         if definition:
-            # EJDict definitions are often comma or slash separated.
-            # We might want to truncate if too long, but for now return as is.
-            # Usually format is "mean1, mean2..."
-            translation = definition.split("/")[0] if "/" in definition else definition
-            translation = translation.split(",")[
-                0
-            ]  # Take first meaning for simplicity in tooltip? Or show all?
-            # Let's show a bit more but keep it concise.
-            # Actually for "explain" popup, more detail is better?
-            # But the UI expects short translation currently?
-            # Existing code was doing: " / ".join(list(dict.fromkeys(ja))) from Jamdict.
-
-            # Use full definition but truncate if absurdly long
+            # Jamdict returns "Kanji (Kana)" or "Kana".
+            # Truncate if too long
             translation = definition[:100] + "..." if len(definition) > 100 else definition
 
-            logger.info(f"[explain] EJDict HIT for '{lemma}' -> {translation}")
+            logger.info(f"[explain] Jamdict HIT for '{lemma}' -> {translation}")
             return JSONResponse(
                 {
                     "word": original_word,
                     "lemma": lemma,
                     "translation": translation,
-                    "source": "EJDict",
+                    "source": "Jamdict",
                 }
             )
 

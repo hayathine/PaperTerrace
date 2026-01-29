@@ -26,18 +26,29 @@ class DictionaryProvider:
         try:
             # 検索実行
             result = self.jam.lookup(word)
+            logger.debug(f"Jamdict lookup result for '{word}': {result}")
 
-            # 結果から最初の意味（日本語）を抽出
             if result.entries:
-                # 最初の項目の、最初の意味の文字列を返す
-                definitions = []
-                for sense in result.entries[0].senses:
-                    # 日本語の定義を探す
-                    glosses = [g.gloss for g in sense.gloss]
-                    definitions.append(", ".join(glosses))
+                meanings = []
+                for entry in result.entries:
+                    # Jamdict (JMdict) の正しい属性名は kanji_forms と kana_forms です
+                    # 各フォームの文字列表記は .text で取得できます
+                    kanji_list = getattr(entry, "kanji_forms", [])
+                    kana_list = getattr(entry, "kana_forms", [])
 
-                if definitions:
-                    return " / ".join(definitions)
+                    kanji = [getattr(k, "text", "") for k in kanji_list if hasattr(k, "text")]
+                    kana = [getattr(k, "text", "") for k in kana_list if hasattr(k, "text")]
+
+                    if kanji:
+                        # 漢字がある場合は「漢字 (かな)」の形式にする
+                        meanings.append(f"{kanji[0]} ({kana[0]})" if kana else kanji[0])
+                    elif kana:
+                        # かなのみの場合
+                        meanings.append(kana[0])
+
+                if meanings:
+                    # 重複を除いて上位数件を結合
+                    return ", ".join(list(dict.fromkeys(meanings))[:3])
 
             return None
         except Exception as e:
