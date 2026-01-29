@@ -867,12 +867,16 @@ class SQLiteStorage(StorageInterface):
 
     def save_session_context(self, session_id: str, paper_id: str) -> None:
         """Save session to paper mapping."""
-        with self._get_connection() as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO app_sessions (session_id, paper_id, created_at) VALUES (?, ?, ?)",
-                (session_id, paper_id, datetime.now().isoformat()),
-            )
-            conn.commit()
+        try:
+            with self._get_connection() as conn:
+                conn.execute(
+                    "INSERT OR REPLACE INTO app_sessions (session_id, paper_id, created_at) VALUES (?, ?, ?)",
+                    (session_id, paper_id, datetime.now().isoformat()),
+                )
+                conn.commit()
+            logger.info(f"[Storage] Session context saved: {session_id} -> {paper_id}")
+        except Exception as e:
+            logger.error(f"[Storage] Failed to save session context: {e}")
 
     def get_session_paper_id(self, session_id: str) -> str | None:
         """Get paper ID for a session."""

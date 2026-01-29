@@ -100,6 +100,14 @@ async def analyze_pdf_json(
 
     task_id = str(uuid.uuid4())
 
+    # Save session context immediately if using existing paper
+    if session_id and paper_id and paper_id != "pending":
+        try:
+            storage.save_session_context(session_id, paper_id)
+            logger.info(f"[analyze-pdf-json] Pre-saved session context: {session_id} -> {paper_id}")
+        except Exception as e:
+            logger.error(f"[analyze-pdf-json] Failed to pre-save session context: {e}")
+
     task_data = {
         "format": "json",  # Flag for JSON streaming
         "lang": lang,

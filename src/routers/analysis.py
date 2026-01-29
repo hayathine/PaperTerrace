@@ -41,14 +41,19 @@ def _get_context(session_id: str) -> str | None:
         logger.debug(f"[_get_context] Redis HIT for session {session_id} (len={len(context)})")
         return context
 
-    logger.info(f"[_get_context] Redis MISS for session {session_id}. Trying DB.")
+    logger.info(
+        f"[_get_context] Redis MISS for session {session_id}. debug: exists={redis_service.exists(f'session:{session_id}')}"
+    )
+
+    # Debug: Check existing sessions
+    # logger.debug(f"DEBUG Redis Keys: {redis_service.keys('session:*')}")
 
     # 2. Try DB persistence (Session mapping)
     paper_id = storage.get_session_paper_id(session_id)
     resolved_paper_id = paper_id or session_id
 
     logger.info(
-        f"[_get_context] Resolved paper_id: {resolved_paper_id} (from session mapping: {paper_id})"
+        f"[_get_context] DB Session Lookup: session_id={session_id} -> paper_id={paper_id}. resolved={resolved_paper_id}"
     )
 
     # 3. Get Paper
@@ -59,13 +64,15 @@ def _get_context(session_id: str) -> str | None:
             # Restore cache
             redis_service.set(f"session:{session_id}", context, expire=3600)
             logger.info(
-                f"[_get_context] Restored context from DB for session {session_id} -> paper {resolved_paper_id}"
+                f"[_get_context] Restored context from DB for session {session_id} -> paper {resolved_paper_id} (len={len(context)})"
             )
             return context
         else:
-            logger.warning(f"[_get_context] Paper found ({resolved_paper_id}) but NO ocr_text.")
+            logger.warning(
+                f"[_get_context] Paper found in DB ({resolved_paper_id}) but 'ocr_text' is Empty/None."
+            )
     else:
-        logger.warning(f"[_get_context] Paper NOT found in DB: {resolved_paper_id}")
+        logger.warning(f"[_get_context] Paper NOT found in DB. ID: {resolved_paper_id}")
 
     return None
 
