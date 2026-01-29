@@ -276,7 +276,9 @@ class SQLiteStorage(StorageInterface):
             ]
 
             # Session table migration
-            cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='app_sessions'")
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='app_sessions'"
+            )
             if not cursor.fetchone():
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS app_sessions (
@@ -444,8 +446,6 @@ class SQLiteStorage(StorageInterface):
                     FOREIGN KEY(note_id) REFERENCES notes(note_id) ON DELETE CASCADE
                 )
             """)
-                )
-            """)
             # App Sessions table
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS app_sessions (
@@ -565,6 +565,7 @@ class SQLiteStorage(StorageInterface):
 
     # ===== Note methods =====
 
+    def save_note(
         self,
         note_id: str,
         session_id: str,
@@ -863,8 +864,6 @@ class SQLiteStorage(StorageInterface):
                 "SELECT paper_id FROM app_sessions WHERE session_id = ?", (session_id,)
             ).fetchone()
             return row[0] if row else None
-                "total_likes": likes,
-            }
 
     # ===== Social paper methods =====
 
