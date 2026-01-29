@@ -38,10 +38,16 @@ async def translate_word(word: str, lang: str = "ja"):
 @router.get("/explain/{word}")
 async def explain(word: str, lang: str = "ja"):
     """Word explanation (Lemmatize -> Cache -> Jamdict -> Gemini)"""
-    # 0. Assume input word is already lemmatized by frontend
-    lemma = word.lower().strip(".,;!?(){}[\]\"'")
-    original_word = word  # Input is typically lemma from frontend
     loop = asyncio.get_event_loop()
+
+    # 0. Lemmatize input (Backend side now)
+    # Spacy handles basic punctuation stripping usually, but we clean excessive stuff
+    clean_input = word.replace("\n", " ").strip(" .,;!?(){}[\]\"'")
+    if not clean_input:
+        clean_input = word.strip()
+
+    lemma = await loop.run_in_executor(executor, service.lemmatize, clean_input)
+    original_word = word
 
     # logger.info(f"[explain] word='{word}' -> lemma='{lemma}'")
 

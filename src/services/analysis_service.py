@@ -36,6 +36,14 @@ class EnglishAnalysisService:
         self.translation_cache = {}  # lemma -> translation (Gemini翻訳キャッシュ)
         self._unknown_words = set()  # Jamdictにない単語を収集
 
+    def lemmatize(self, text: str) -> str:
+        """Get lemma for text using Spacy model."""
+        text = text.strip()
+        if not text:
+            return ""
+        doc = nlp(text)
+        return " ".join([token.lemma_.lower() for token in doc])
+
     async def tokenize_stream(
         self,
         text: str,
