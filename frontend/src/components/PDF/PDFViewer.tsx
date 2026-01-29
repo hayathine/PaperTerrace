@@ -24,7 +24,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
     const [errorMsg, setErrorMsg] = useState<string>('');
     const eventSourceRef = useRef<EventSource | null>(null);
     const [paperId, setPaperId] = useState<string | null>(null);
-    const containerRef = useRef<HTMLDivElement>(null);
+    // const containerRef = useRef<HTMLDivElement>(null); // Unused now
 
     // Stamp State
     // Modes: 'text' (default), 'stamp', 'area'
@@ -73,25 +73,43 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
 
     // Scroll to jump target when it changes
     useEffect(() => {
-        if (jumpTarget && containerRef.current) {
+        if (jumpTarget) {
             const pageEl = document.getElementById(`page-${jumpTarget.page}`);
             if (pageEl) {
-                // Determine vertical scroll position
-                // We want: pageTop + (pageHeight * y_percentage) - (containerHeight / 2)
-                // This centers the target y position in the viewport
-                const pageRect = pageEl.getBoundingClientRect();
-                const containerRect = containerRef.current.getBoundingClientRect();
+                // Find scrollable container (assuming one of the parents is overflow-y-auto)
+                // In App.tsx it's the div with ".overflow-y-auto"
+                const scroller = pageEl.closest('.overflow-y-auto');
 
-                // Calculate position relative to container's current scroll
-                const relativePageTop = pageEl.offsetTop;
-                const targetPixelY = relativePageTop + (pageRect.height * jumpTarget.y);
+                if (scroller) {
+                    const pageRect = pageEl.getBoundingClientRect();
+                    const scrollerRect = scroller.getBoundingClientRect();
 
-                const scrollPos = targetPixelY - (containerRect.height / 2);
+                    // Current scroll position
+                    const currentScrollTop = scroller.scrollTop;
 
-                containerRef.current.scrollTo({
-                    top: Math.max(0, scrollPos),
-                    behavior: 'smooth'
-                });
+                    // pageRect.top is relative to viewport
+                    // We need offset from scroller top
+                    // scrollerRect.top is viewport top of scroller
+
+                    // Page top position inside the scrollable content
+                    const pageTopInScroller = currentScrollTop + (pageRect.top - scrollerRect.top);
+
+                    // Target Y within the page (height * percentage)
+                    const targetYInPage = pageRect.height * (jumpTarget.y || 0); // Default to top if y is missing
+
+                    // Center the target in the viewport (scroller height / 2)
+                    const targetScrollTop = pageTopInScroller + targetYInPage - (scrollerRect.height / 2);
+
+                    scroller.scrollTo({
+                        top: targetScrollTop,
+                        behavior: 'smooth'
+                    });
+
+                    // Also highlight the target location temporarily?
+                } else {
+                    // Fallback if no specific scroller found (e.g. window scroll)
+                    pageEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
             }
         }
     }, [jumpTarget]);
