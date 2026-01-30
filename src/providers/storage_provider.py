@@ -373,6 +373,13 @@ class SQLiteStorage(StorageInterface):
                         ("user_id", "TEXT"),
                     ],
                 ),
+                (
+                    "paper_figures",
+                    [
+                        ("label", "TEXT"),
+                        ("latex", "TEXT"),
+                    ],
+                ),
             ]:
                 # Check if table exists first
                 cursor = conn.execute(
@@ -510,15 +517,6 @@ class SQLiteStorage(StorageInterface):
                     FOREIGN KEY(paper_id) REFERENCES papers(paper_id) ON DELETE CASCADE
                 )
             """)
-            # Ensure columns exist for existing databases
-            try:
-                conn.execute("ALTER TABLE paper_figures ADD COLUMN label TEXT")
-            except Exception:
-                pass
-            try:
-                conn.execute("ALTER TABLE paper_figures ADD COLUMN latex TEXT")
-            except Exception:
-                pass
             # App Sessions table
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS app_sessions (
