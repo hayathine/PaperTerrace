@@ -40,7 +40,7 @@ class AdversarialReviewService:
         Returns:
             Dictionary with critical analysis categories
         """
-        from .translate import SUPPORTED_LANGUAGES
+        from ..translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 

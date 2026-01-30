@@ -11,6 +11,8 @@ from .paragraph_explain import ParagraphExplainService
 from .research_radar import ResearchRadarService
 from .sidebar import SidebarNoteService
 from .summary import SummaryService
+from .tokenization import TokenizationService
+from .word_analysis import WordAnalysisService
 
 __all__ = [
     "AdversarialReviewService",
@@ -22,4 +24,6 @@ __all__ = [
     "ResearchRadarService",
     "SidebarNoteService",
     "SummaryService",
+    "TokenizationService",
+    "WordAnalysisService",
 ]

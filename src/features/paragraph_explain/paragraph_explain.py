@@ -15,7 +15,7 @@ from src.schemas.paragraph_analysis import (
     ParagraphExplanationResponse,
 )
 
-from .translate import SUPPORTED_LANGUAGES
+from ..translate import SUPPORTED_LANGUAGES
 
 
 class ParagraphExplainError(Exception):

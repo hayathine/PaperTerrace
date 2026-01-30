@@ -11,7 +11,7 @@ from src.providers import get_ai_provider
 from src.schemas.summary import FullSummaryResponse
 from src.schemas.summary import SectionSummaryList as SectionSummariesResponse
 
-from .translate import SUPPORTED_LANGUAGES
+from ..translate import SUPPORTED_LANGUAGES
 
 
 class SummaryError(Exception):

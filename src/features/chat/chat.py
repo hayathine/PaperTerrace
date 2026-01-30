@@ -52,7 +52,7 @@ class ChatService:
             [f"{msg['role']}: {msg['content']}" for msg in current_conversation]
         )  # This will be passed as context to the AI provider
 
-        from .translate import SUPPORTED_LANGUAGES
+        from ..translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
         context = document_context if document_context else "No paper loaded."
@@ -111,7 +111,7 @@ class ChatService:
         Returns:
             Response simulating the author's viewpoint
         """
-        from .translate import SUPPORTED_LANGUAGES
+        from ..translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 

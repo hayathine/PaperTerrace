@@ -39,7 +39,7 @@ class ClaimVerificationService:
             CORE_SYSTEM_PROMPT,
         )
 
-        from .translate import SUPPORTED_LANGUAGES
+        from ..translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
