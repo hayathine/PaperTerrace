@@ -8,7 +8,15 @@ assets/
 __pycache__/
 *.py[codz]
 *$py.class
-
+logs/
+*.deb
+*.zip
+*.tar.gz
+*.pt
+*.ckpt
+*.pdf
+node_modules/
+__pycache__/
 # C extensions
 *.so
 
@@ -218,3 +226,6 @@ __marimo__/
 node_modules/
 # AI Models
 models/
+*.deb
+google-chrome-stable_current_amd64.deb
+google-chrome-stable_current_amd64.deb

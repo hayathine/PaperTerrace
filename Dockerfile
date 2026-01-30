@@ -63,7 +63,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # Copy virtual environment from runtime-builder (without torch/transformers)
 COPY --from=runtime-builder /app/.venv /app/.venv
-COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 
 # Copy initialized models
 COPY --from=builder /app/models ./models
