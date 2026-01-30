@@ -6,11 +6,9 @@ from src.prompts import (
     PAPER_SUMMARY_ABSTRACT_PROMPT,
     PAPER_SUMMARY_AI_CONTEXT_PROMPT,
     PAPER_SUMMARY_FULL_PROMPT,
-    PAPER_SUMMARY_SECTIONS_PROMPT,
 )
 from src.providers import get_ai_provider
 from src.schemas.summary import FullSummaryResponse
-from src.schemas.summary import SectionSummaryList as SectionSummariesResponse
 
 from .translate import SUPPORTED_LANGUAGES
 
@@ -106,46 +104,6 @@ class SummaryService:
                 extra={"error": str(e), "text_length": len(text)},
             )
             return f"要約の生成に失敗しました: {str(e)}"
-
-    async def summarize_sections(self, text: str, target_lang: str = "ja") -> list[dict]:
-        """
-        セクションごとの要約を生成する。
-
-        Args:
-            text: 論文全文
-            target_lang: 出力言語
-
-        Returns:
-            セクションタイトルと要約の辞書リスト
-        """
-        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
-
-        safe_text = await self._truncate_to_token_limit(text)
-        prompt = PAPER_SUMMARY_SECTIONS_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
-
-        try:
-            logger.debug(
-                "Generating section summary",
-                extra={"text_length": len(text)},
-            )
-            response: SectionSummariesResponse = await self.ai_provider.generate(
-                prompt,
-                model=self.model,
-                response_model=SectionSummariesResponse,
-                system_instruction=CORE_SYSTEM_PROMPT,
-            )
-
-            logger.info(
-                "Section summary generated",
-                extra={"section_count": len(response.sections)},
-            )
-            return [s.model_dump() for s in response.sections]
-        except Exception as e:
-            logger.exception(
-                "Section summary failed",
-                extra={"error": str(e)},
-            )
-            return [{"section": "Error", "summary": f"要約生成に失敗: {e}"}]
 
     async def summarize_abstract(self, text: str, target_lang: str = "ja") -> str:
         """
