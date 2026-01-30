@@ -1,47 +1,45 @@
----
-trigger: always_on
----
+# General Project Rules
 
-# プロジェクトの目的
-* おもなターゲットユーザーは論文を読むことがまだ苦手な人
-* 論文のノート化
-* プロジェクトの目的：テラスで読むくらい気軽に論文を読むためのサポートすること
+All agents and developers must verify these general rules before starting any task.
 
-# Antigravity 汎用エンジニアリング規則 (Global Rules)
+## 🎯 Project Goal & Target
 
-## 1. 言語および出力に関する規定
-* **原則:** すべての回答、解説、コメント、ドキュメントは**日本語**を使用すること。
-* **例外:** エラーメッセージ、ログ出力、システム識別子については英語を許可する。
-* 実装中に問題のあるコードがあった場合に見なかった振りはせず修正が必要か確認すること。
+- **Goal**: Support reading papers as casually as reading on a terrace ("テラスで読むくらい気軽に").
+- **Target**: People who struggle with reading papers or want to organize information efficiently.
+- **Core Concept**: "Intellectual & Relaxed"
 
-## 2. 共通コード規約
-* **命名規則:** 変数・関数・クラス名はセマンティクス（意味論）を重視し、一目で役割が理解できるものにする。安易な略称（`tmp`, `data1` など）は万死に値する。
-* ruffやtyによる警告などがなくなるように、都度修正を行うこと。
-* **コメント（強制）:** 
-    * コードの「挙動（何をしているか）」ではなく、「意図（なぜそうしたのか）」を記述せよ。
-    * 複雑なロジック、ビジネス上の判断根拠、境界条件には、後世のエンジニアが涙を流さないよう注釈を付けること。
-    * 自明なコメント（`i++ // iをインクリメント`）は直ちに削除せよ。
+## 🛠 Technology Stack
 
-## 3. エラーハンドリングと堅牢性
-* **早期リターン:** ネストを深くするのは思考の迷宮を作るも同義。異常系は冒頭で処理（Early Return）せよ。
-* **例外処理:** 例外を握り潰すのは、爆弾の導火線を隠す行為である。適切にキャッチし、適切に報告せよ。
-* **型定義:** `any` を使うのは、型安全への敗北宣言である。可能な限り厳密な型を定義せよ。
+Ensure consistency with these technologies:
 
-## 4. 依存関係と再利用性
-* **DRY原則:** 「同じコードを2回書いたら、それは共通化の合図」と刻み込め。
-* **依存管理:** 外部ライブラリの導入は、セキュリティとメンテナンス状況を確認し、必要最小限に留めよ。
+- **Infrastructure**: Google Cloud Platform (GCP)
+- **IaC**: Terraform
+- **Containerization**: Docker
+- **Package Management**: uv (Python)
+- **Backend**: Python (FastAPI), SQLAlchemy
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS
+- **Database**: SQLite (Local), Cloud SQL (Production)
+- **Cache**: Redis
 
-## 5. AI 共同作業の運用規範
-* **品質基準:** 構造が明快で、型安全が保証され、保守性が高く、セキュリティ的に堅牢であること。
-* **簡潔性:** オーバーエンジニアリングは罪である。最もシンプルで効果的な解を導き出せ。
+## 📏 Common Coding Standards
 
-## 6. ログ
-* 後々の修正のためログは適宜利用すること。
+### 1. Directory Structure
 
-## 7. プロンプト
-* エラーが出た場合はエージェント自身で修正までおこない、エラーの出ないコードにすること。
-* "実装"とプロンプトにあったらコードを生成してください。
-* 「～？」の時は質問に答えるだけにしてください。
+- `src/features/`: Feature-specific logic.
+- `src/services/`: General application services.
+- `src/routers/`: API endpoint definitions.
+- `src/schemas/`: Pydantic data models.
+- `src/utils/`: Pure utility functions.
 
-## 8. 依存関係
-* uv , terraform ,docker , gcp を使用しています。
+### 2. Naming Conventions
+
+- **Python**: `snake_case` (vars/funcs, files), `PascalCase` (classes), `UPPER_SNAKE_CASE` (constants).
+- **TypeScript**: `camelCase` (vars/funcs), `PascalCase` (components).
+- **General**: Be descriptive (no `data`, `item`). Booleans start with `is_`/`has_`.
+
+### 3. Comments
+
+- **Why, not What**: Explain design intent.
+- **Docstrings**: Mandatory for public Python functions/classes.
+- **Language**: Japanese.
+- **TODO**: Use `# TODO: [content]` for future tasks.
