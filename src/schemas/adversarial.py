@@ -1,6 +1,6 @@
 from typing import List, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 
 class HiddenAssumption(BaseModel):
@@ -37,22 +37,3 @@ class AdversarialCritiqueResponse(BaseModel):
     reproducibility_risks: List[ReproducibilityRisk]
     methodology_concerns: List[MethodologyConcern]
     overall_assessment: str
-
-
-class Limitation(BaseModel):
-    limitation: str
-    evidence: str
-    impact: str
-    severity: Literal["high", "medium", "low"]
-
-
-class LimitationList(BaseModel):
-    limitations: List[Limitation]
-
-
-class CounterArgumentsResponse(BaseModel):
-    """
-    Response model for counterarguments.
-    """
-
-    counterarguments: List[str] = Field(..., description="List of 3 potential counterarguments")

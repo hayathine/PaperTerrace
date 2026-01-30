@@ -17,7 +17,6 @@ from src.prompts import (
     TRANSLATE_WORD_WITH_CONTEXT_EXPLAIN_PROMPT,
 )
 
-from ..features import TranslationService
 from ..features.translate import SUPPORTED_LANGUAGES
 from ..logger import logger
 from ..logic import executor
@@ -30,19 +29,7 @@ router = APIRouter(tags=["Translation"])
 
 # Services
 service = EnglishAnalysisService()
-translation_service = TranslationService()
 storage = get_storage_provider()
-
-
-class LanguageSettingRequest(BaseModel):
-    session_id: str
-    language: str
-
-
-@router.get("/translate/{word}")
-async def translate_word(word: str, lang: str = "ja"):
-    result = await translation_service.translate_word(word, lang)
-    return JSONResponse(result)
 
 
 def build_dict_card_html(
@@ -390,17 +377,6 @@ async def explain_deep(
                 element_id=element_id,
             )
         )
-
-
-@router.get("/languages")
-async def get_languages():
-    return JSONResponse(translation_service.get_supported_languages())
-
-
-@router.post("/settings/language")
-async def set_language(request: LanguageSettingRequest):
-    # Store language preference (could be in session or database)
-    return JSONResponse({"status": "ok", "language": request.language})
 
 
 class ExplainContextRequest(BaseModel):

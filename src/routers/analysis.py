@@ -199,23 +199,6 @@ async def critique(session_id: str = Form(...), lang: str = Form("ja")):
     return JSONResponse(critique)
 
 
-@router.post("/identify-limitations")
-async def identify_limitations(session_id: str = Form(...)):
-    context = _get_context(session_id)
-    if not context:
-        return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
-
-    limitations = await adversarial_service.identify_limitations(context)
-    return JSONResponse({"limitations": limitations})
-
-
-@router.post("/counterarguments")
-async def counterarguments(claim: str = Form(...), session_id: str = Form("")):
-    context = _get_context(session_id) or ""
-    args = await adversarial_service.suggest_counterarguments(claim, context)
-    return JSONResponse({"counterarguments": args})
-
-
 # ============================================================================
 # Claim Verification
 # ============================================================================

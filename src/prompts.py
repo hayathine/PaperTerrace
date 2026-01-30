@@ -60,15 +60,6 @@ Keep it concise (1-3 words). Output ONLY the translation.
 Translation only in {lang_name}.
 """
 
-TRANSLATE_GENERAL_PROMPT = """Translate the English word or phrase "{word}" to {lang_name}.
-Provide only the translation, nothing else. If it's a technical term, include a brief explanation in parentheses."""
-
-TRANSLATE_PHRASE_GENERAL_PROMPT = """Translate the following English text to {lang_name}:
-
-"{phrase}"
-
-Provide only the translation, maintaining the original meaning and nuance. Output ONLY the translation."""
-
 # ==========================================
 # Summary Prompts
 # ==========================================
@@ -154,10 +145,6 @@ Maintain the original tone and nuance.
 Output ONLY the translation.
 """
 
-
-# ==========================================
-# Figure Insight Prompts
-# ==========================================
 
 # ==========================================
 # Figure Insight Prompts
@@ -252,34 +239,6 @@ Please output in the following JSON format in {lang_name}:
 }}
 
 Be constructive but critical. Output ONLY valid JSON.
-"""
-
-ADVERSARIAL_LIMITATIONS_PROMPT = """Identify limitations in the following paper that may not be explicitly stated by the authors.
-
-[Paper Text]
-{text}
-
-Output in the following JSON format in {lang_name}:
-[
-  {{
-    "limitation": "Explanation of limitation",
-    "evidence": "Basis for this judgment",
-    "impact": "Impact on research results",
-    "severity": "high/medium/low"
-  }}
-]
-
-Max 5 items. Output ONLY valid JSON.
-"""
-
-ADVERSARIAL_COUNTERARGUMENTS_PROMPT = """Generate 3 potential counterarguments to the following claim in {lang_name}.
-{context_hint}
-
-[Claim]
-{claim}
-
-Provide constructive and academic counterarguments, 2-3 sentences each.
-Output as a numbered list.
 """
 
 # ==========================================
@@ -386,14 +345,6 @@ Your task is to critically verify the claims made in the following text by cross
    - Contradictory papers (Google Scholar).
    - Consensus in the community.
 3. Report your findings in {lang_name}.
-"""
-
-# ==========================================
-# Dictionary Prompts
-# ==========================================
-
-DICT_EXPLAIN_PROMPT = """Provide the translation of the English word "{word}" in {lang_name} and a concise explanation (approx. 15 characters or 3-5 words).
-Format: [Translation] Explanation
 """
 
 # ==========================================

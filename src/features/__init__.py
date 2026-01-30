@@ -11,7 +11,6 @@ from .paragraph_explain import ParagraphExplainService
 from .research_radar import ResearchRadarService
 from .sidebar import SidebarNoteService
 from .summary import SummaryService
-from .translate import TranslationService
 
 __all__ = [
     "AdversarialReviewService",
@@ -23,5 +22,4 @@ __all__ = [
     "ResearchRadarService",
     "SidebarNoteService",
     "SummaryService",
-    "TranslationService",
 ]
