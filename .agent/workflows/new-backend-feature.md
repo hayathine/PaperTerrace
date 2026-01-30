@@ -40,3 +40,6 @@ This workflow guides you through creating a new backend feature following the `f
 6. **Test the Endpoint**
    - Create a test case in `tests/`.
    - Verify the endpoint works as expected.
+
+7. **Explain**
+   - step by step explain for user in japanese.

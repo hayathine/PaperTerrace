@@ -1,6 +1,11 @@
+---
+trigger: always_on
+---
+
 # Frontend Engineer Rules
 
 Follow these rules when writing frontend code (React, TypeScript).
+Don't touch backend.
 
 ## Implementation Guidelines
 

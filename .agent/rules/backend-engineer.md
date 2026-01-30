@@ -1,6 +1,11 @@
+---
+trigger: always_on
+---
+
 # Backend Engineer Rules
 
 Follow these rules when writing backend code (Python, FastAPI).
+Don't touch frontend.
 
 ## Implementation Guidelines
 

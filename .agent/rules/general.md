@@ -1,3 +1,7 @@
+---
+trigger: always_on
+---
+
 # General Project Rules
 
 All agents and developers must verify these general rules before starting any task.
@@ -43,3 +47,7 @@ Ensure consistency with these technologies:
 - **Docstrings**: Mandatory for public Python functions/classes.
 - **Language**: Japanese.
 - **TODO**: Use `# TODO: [content]` for future tasks.
+
+### 4. Explain
+
+- When complete implementation or analyze , step by step explain for user in japanese.
