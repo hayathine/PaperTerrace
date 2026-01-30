@@ -24,6 +24,11 @@ tasks:
   build:
     desc: "Build frontend"
     cmds:
+      - cd frontend && npm run build
+
+  dev:
+    desc: "Run frontend dev server"
+    cmds:
       - cd frontend && npm run dev
 
   read:

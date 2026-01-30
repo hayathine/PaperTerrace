@@ -17,7 +17,7 @@ class AbstractService:
                 if not pdf.pages:
                     return None
                 page = pdf.pages[0]
-                words = page.extract_words()
+                words = page.extract_words(use_text_flow=True)
 
                 # Find the word "abstract" (case-insensitive)
                 logger.debug("[AbstractService] Searching for 'Abstract' keyword on first page")

@@ -83,6 +83,14 @@ function App() {
         if (e.target.files && e.target.files[0]) {
             setUploadFile(e.target.files[0])
             setCurrentPaperId(null);
+            // Reset all paper-specific states
+            setSelectedWord(undefined);
+            setSelectedContext(undefined);
+            setSelectedCoordinates(undefined);
+            setSelectedImage(undefined);
+            setPendingChatPrompt(null);
+            setPendingFigureId(null);
+            setActiveTab('chat');
         }
     }
 

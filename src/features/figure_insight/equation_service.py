@@ -54,8 +54,8 @@ class EquationService:
 
                     # Crop and render for high-quality images
                     cropped_page = page.crop(expanded_bbox)
-                    # Use high resolution for math clarity (3.0 zoom approx 216 DPI)
-                    page_img = cropped_page.to_image(resolution=216)
+                    # Use high resolution for math clarity (400 DPI)
+                    page_img = cropped_page.to_image(resolution=400)
                     img_pil = page_img.original.convert("RGB")
 
                     buffer = io.BytesIO()
@@ -127,7 +127,7 @@ class EquationService:
 
                 # 2. Look for large gaps (whitespace analysis)
                 # Group text into lines
-                text_objects = page.extract_words()
+                text_objects = page.extract_words(use_text_flow=True)
                 if len(text_objects) > 1:
                     text_objects.sort(key=lambda x: x["top"])
                     for i in range(len(text_objects) - 1):

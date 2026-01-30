@@ -39,7 +39,7 @@ class FigureService:
             try:
                 # Step 3: Caption check
                 # Note: 'page' is a pdfplumber Page object, extract_text() is efficient
-                page_text = page.extract_text() or ""
+                page_text = page.extract_text(use_text_flow=True) or ""
                 caption_keywords = ["Figure", "Fig.", "FIG.", "図"]
                 has_caption = any(k in page_text for k in caption_keywords)
 

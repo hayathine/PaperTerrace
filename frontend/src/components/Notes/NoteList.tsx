@@ -55,7 +55,7 @@ const NoteList: React.FC<NoteListProps> = ({ sessionId, paperId, coordinates, on
 
     useEffect(() => {
         setNotes([]); // Clear notes when session or paper changes
-        if (sessionId) {
+        if (sessionId && paperId) {
             fetchNotes();
         }
     }, [sessionId, paperId, fetchNotes]);

@@ -31,14 +31,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
         const fetchHistory = async () => {
             setMessages([]);
             
-            // Initial messages prop might be useful, but usually we want server history if available
-            // If paperId is not set, we might be in global context?
+            if (!paperId) return;
             
             setIsLoading(true);
             try {
                 const url = new URL('/chat/history', window.location.origin);
                 url.searchParams.append('session_id', sessionId);
-                if (paperId) url.searchParams.append('paper_id', paperId);
+                url.searchParams.append('paper_id', paperId);
 
                 const res = await fetch(url.toString());
                 if (res.ok) {

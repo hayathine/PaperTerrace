@@ -194,7 +194,7 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, conte
 
                             {onAskAI && (
                                 <button
-                                    onClick={() => onAskAI(`${entry.word}について、この論文の文脈（${context?.substring(0, 200)}...）を踏まえて詳しくチャットで教えてください。`)}
+                                    onClick={() => onAskAI('EXPLAIN THIS WORD')}
                                     className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
                                 >
                                     <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">

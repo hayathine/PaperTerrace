@@ -103,7 +103,7 @@ const Summary: React.FC<SummaryProps> = ({ sessionId, paperId, isAnalyzing = fal
 
     // Auto-fetch summary on mount or paper change
     React.useEffect(() => {
-        if (sessionId) {
+        if (sessionId && paperId) {
             handleSummarize();
         }
     }, [sessionId, paperId, handleSummarize]);
