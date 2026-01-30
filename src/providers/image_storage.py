@@ -55,8 +55,24 @@ class LocalImageStorage(ImageStorageStrategy):
         if not hash_dir.exists():
             return []
 
-        images = sorted(hash_dir.glob("page_*.png"), key=lambda p: int(p.stem.split("_")[1]))
-        return [f"/static/paper_images/{file_hash}/{img.name}" for img in images]
+        def extract_page_num(p):
+            try:
+                parts = p.stem.split("_")
+                if len(parts) == 2 and parts[1].isdigit():
+                    return int(parts[1])
+                return -1
+            except (IndexError, ValueError):
+                return -1
+
+        images = []
+        for p in hash_dir.glob("page_*.png"):
+            num = extract_page_num(p)
+            if num >= 0:
+                images.append((num, p))
+
+        # Sort by page number
+        images.sort()
+        return [f"/static/paper_images/{file_hash}/{img[1].name}" for img in images]
 
     def delete(self, file_hash: str) -> bool:
         import shutil
@@ -121,20 +137,28 @@ class GCSImageStorage(ImageStorageStrategy):
         # page_1.png, page_2.png...
         blob_list = list(blobs)
 
-        def extract_page_num(blob):
+        def extract_page_num_and_filter(blob):
             try:
-                # paper_images/{hash}/page_{num}.png
-                basename = os.path.basename(blob.name)
-                return int(basename.split("_")[1].split(".")[0])
-            except (IndexError, ValueError):
-                return 0
+                basename = os.path.basename(blob.name).replace(".png", "")
+                parts = basename.split("_")
+                if len(parts) == 2 and parts[1].isdigit():
+                    return int(parts[1])
+                return -1
+            except Exception:
+                return -1
 
-        blob_list.sort(key=extract_page_num)
+        blob_list = []
+        for b in blobs:
+            num = extract_page_num_and_filter(b)
+            if num >= 0:
+                blob_list.append((num, b))
+
+        blob_list.sort()
 
         urls = []
         import datetime
 
-        for blob in blob_list:
+        for _, blob in blob_list:
             # 署名付きURL生成（キャッシュなどを考慮すると非効率だが一旦これで）
             url = blob.generate_signed_url(
                 version="v4", expiration=datetime.timedelta(hours=12), method="GET"

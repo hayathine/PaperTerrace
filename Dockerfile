@@ -22,8 +22,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
-# Install ALL dependencies (including torch/transformers for model conversion)
-RUN uv sync --no-dev --frozen
+# Install ALL dependencies (including dev deps like torch/transformers for model conversion)
+RUN uv sync --frozen
 
 # Copy src for initialization
 COPY src/ ./src/
@@ -32,7 +32,7 @@ COPY src/ ./src/
 # This requires torch and transformers, but only at build time
 RUN mkdir -p models && PYTHONPATH=/app uv run python -m src.scripts.convert_m2m100
 
-# Create a minimal runtime environment WITHOUT torch/transformers
+# Create a minimal runtime environment WITHOUT dev dependencies (no torch/transformers)
 FROM python:3.12-slim AS runtime-builder
 
 WORKDIR /app
@@ -48,10 +48,8 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
-# Install runtime dependencies, excluding torch and transformers
-# We use --no-deps for torch/transformers to skip them
-RUN uv sync --no-dev --frozen && \
-    uv pip uninstall torch transformers -y
+# Install runtime dependencies only (no torch/transformers)
+RUN uv sync --no-dev --frozen
 
 # Production stage
 FROM python:3.12-slim AS production

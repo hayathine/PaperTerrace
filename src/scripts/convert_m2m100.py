@@ -1,4 +1,5 @@
 import os
+import shutil
 
 import ctranslate2
 from huggingface_hub import snapshot_download
@@ -26,6 +27,15 @@ def convert_model():
     # 2. Use CTranslate2 converter
     converter = ctranslate2.converters.TransformersConverter(model_path)
     converter.convert(output_dir, quantization="int8", force=True)
+
+    # 3. Copy SentencePiece model for runtime use (without transformers)
+    spm_source = os.path.join(model_path, "sentencepiece.bpe.model")
+    spm_dest = os.path.join(output_dir, "sentencepiece.bpe.model")
+    if os.path.exists(spm_source):
+        shutil.copy2(spm_source, spm_dest)
+        print(f"Copied SentencePiece model to {spm_dest}")
+    else:
+        print(f"Warning: SentencePiece model not found at {spm_source}")
 
     print(f"Conversion finished. Model saved to {output_dir}")
 

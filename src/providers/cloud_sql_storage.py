@@ -87,6 +87,30 @@ class CloudSQLStorage(StorageInterface):
                     logger.info("Migrating: Adding plan to users table")
                     cur.execute("ALTER TABLE users ADD COLUMN plan TEXT DEFAULT 'free'")
 
+                # Check paper_figures table for label
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='paper_figures' AND column_name='label'"
+                )
+                if not cur.fetchone():
+                    logger.info("Migrating: Adding label to paper_figures table")
+                    cur.execute("ALTER TABLE paper_figures ADD COLUMN label TEXT")
+
+                # Check paper_figures table for latex
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='paper_figures' AND column_name='latex'"
+                )
+                if not cur.fetchone():
+                    logger.info("Migrating: Adding latex to paper_figures table")
+                    cur.execute("ALTER TABLE paper_figures ADD COLUMN latex TEXT")
+
+                # Check papers table for raw_abstract
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='papers' AND column_name='raw_abstract'"
+                )
+                if not cur.fetchone():
+                    logger.info("Migrating: Adding raw_abstract to papers table")
+                    cur.execute("ALTER TABLE papers ADD COLUMN raw_abstract TEXT")
+
                 # Check for paper_figures table (create if not exists handled in init_tables, but nice to have check here if needed or just rely on init)
             conn.commit()
 
@@ -144,6 +168,7 @@ class CloudSQLStorage(StorageInterface):
                         view_count INTEGER DEFAULT 0,
                         like_count INTEGER DEFAULT 0,
                         layout_json TEXT,
+                        raw_abstract TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -222,6 +247,8 @@ class CloudSQLStorage(StorageInterface):
                         image_url TEXT,
                         caption TEXT,
                         explanation TEXT,
+                        label TEXT,
+                        latex TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
                 """)
@@ -524,6 +551,8 @@ class CloudSQLStorage(StorageInterface):
         image_url: str,
         caption: str = "",
         explanation: str = "",
+        label: str = "figure",
+        latex: str = "",
     ) -> str:
         import uuid6
 
@@ -536,8 +565,8 @@ class CloudSQLStorage(StorageInterface):
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO paper_figures (id, paper_id, page_number, bbox_json, image_url, caption, explanation, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO paper_figures (id, paper_id, page_number, bbox_json, image_url, caption, explanation, label, latex, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     """,
                     (
                         figure_id,
@@ -547,6 +576,8 @@ class CloudSQLStorage(StorageInterface):
                         image_url,
                         caption,
                         explanation,
+                        label,
+                        latex,
                         datetime.now(),
                     ),
                 )
@@ -567,7 +598,7 @@ class CloudSQLStorage(StorageInterface):
                     if d.get("bbox_json"):
                         try:
                             d["bbox"] = json.loads(d["bbox_json"])
-                        except:
+                        except Exception:
                             d["bbox"] = []
                     results.append(d)
                 return results
@@ -582,7 +613,7 @@ class CloudSQLStorage(StorageInterface):
                     if d.get("bbox_json"):
                         try:
                             d["bbox"] = json.loads(d["bbox_json"])
-                        except:
+                        except Exception:
                             d["bbox"] = []
                     return d
                 return None
@@ -593,6 +624,29 @@ class CloudSQLStorage(StorageInterface):
                 cur.execute(
                     "UPDATE paper_figures SET explanation = %s WHERE id = %s",
                     (explanation, figure_id),
+                )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def update_figure_latex(self, figure_id: str, latex: str) -> bool:
+        """Update figure LaTeX."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE paper_figures SET latex = %s WHERE id = %s",
+                    (latex, figure_id),
+                )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def update_paper_raw_abstract(self, paper_id: str, raw_abstract: str) -> bool:
+        """Update the raw extracted abstract of a paper."""
+        now = datetime.now()
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE papers SET raw_abstract = %s, updated_at = %s WHERE paper_id = %s",
+                    (raw_abstract, now, paper_id),
                 )
             conn.commit()
             return cur.rowcount > 0

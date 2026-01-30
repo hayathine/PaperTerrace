@@ -869,8 +869,6 @@ dependencies = [
     { name = "spacy" },
     { name = "structlog" },
     { name = "tiktoken" },
-    { name = "torch" },
-    { name = "transformers" },
     { name = "uuid6" },
     { name = "uvicorn" },
 ]
@@ -882,6 +880,8 @@ dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "ruff" },
+    { name = "torch" },
+    { name = "transformers" },
     { name = "ty" },
     { name = "unidic-lite" },
 ]
@@ -920,8 +920,6 @@ requires-dist = [
     { name = "spacy", specifier = ">=3.8.11" },
     { name = "structlog", specifier = ">=24.1.0" },
     { name = "tiktoken", specifier = ">=0.12.0" },
-    { name = "torch", specifier = ">=2.10.0" },
-    { name = "transformers", specifier = ">=5.0.0" },
     { name = "uuid6", specifier = ">=2025.0.1" },
     { name = "uvicorn", specifier = ">=0.40.0" },
 ]
@@ -933,6 +931,8 @@ dev = [
     { name = "pytest", specifier = ">=8.0.0" },
     { name = "pytest-asyncio", specifier = ">=0.23.0" },
     { name = "ruff", specifier = ">=0.14.14" },
+    { name = "torch", specifier = ">=2.10.0" },
+    { name = "transformers", specifier = ">=5.0.0" },
     { name = "ty", specifier = ">=0.0.13" },
     { name = "unidic-lite", specifier = ">=1.0.8" },
 ]
