@@ -1,6 +1,6 @@
 # yaml-language-server: $schema=https://taskfile.dev/schema.json
 
-version: '3'
+version: "3"
 
 vars:
   GREETING: Hello, world!
@@ -20,8 +20,7 @@ tasks:
   run:
     desc: "Run local server"
     cmds:
-      - uv run uvicorn src.main:app
-
+      - uv run uvicorn src.main:app 2>&1 | tee logs/server.log
   build:
     desc: "Build frontend"
     cmds:
@@ -31,7 +30,7 @@ tasks:
     desc: "Run local server"
     cmds:
       - gcloud run services logs read paperterrace --limit=1000
-  
+
   tail:
     desc: "Run local server"
     cmds:
@@ -47,7 +46,6 @@ tasks:
     cmds:
       - gcloud run services add-iam-policy-binding paperterrace --member="allUsers" --role="roles/run.invoker"
 
-
   remove_all_users:
     desc: "Remove IAM policy"
     cmds:
@@ -57,7 +55,7 @@ tasks:
     desc: Stop Cloud SQL instance (save cost)
     cmds:
       - gcloud sql instances patch paperterrace-db --activation-policy=NEVER
-      
+
   db:start:
     desc: Start Cloud SQL instance
     cmds:
@@ -70,7 +68,7 @@ tasks:
   deploy:
     desc: start:build deploy
     cmds:
-     - ./deploy.sh
+      - ./deploy.sh
 
   db:wait:
     desc: Wait for Cloud SQL to be RUNNABLE
@@ -91,11 +89,11 @@ tasks:
         exit 1
 
   start:
-    desc: start db and deploy 
-    deps: 
-     - db:start
-     - db:wait
-     - deploy
+    desc: start db and deploy
+    deps:
+      - db:start
+      - db:wait
+      - deploy
 
   ruff:
     desc: "Run ruff"

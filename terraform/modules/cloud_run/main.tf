@@ -18,7 +18,7 @@ resource "google_cloud_run_v2_service" "main" {
       resources {
         limits = {
           cpu    = "2"
-          memory = "4Gi"
+          memory = "2Gi"
         }
         cpu_idle = true
       }
@@ -41,6 +41,11 @@ resource "google_cloud_run_v2_service" "main" {
 
       env {
         name  = "STORAGE_BUCKET"
+        value = var.storage_bucket
+      }
+
+      env {
+        name  = "GCS_BUCKET_NAME"
         value = var.storage_bucket
       }
 

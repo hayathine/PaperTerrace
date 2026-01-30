@@ -2,13 +2,13 @@
 variable "project_id" {
   description = "GCP Project ID"
   type        = string
-  default     = "paperterrace"
+  default     = "gen-lang-client-0800253336"
 }
 
 variable "project_number" {
   description = "GCP Project Number"
   type        = string
-  default     = "316073929194"
+  default     = "602776143589"
 }
 
 variable "region" {
@@ -21,7 +21,7 @@ variable "region" {
 variable "image_url" {
   description = "Docker image URL for Cloud Run"
   type        = string
-  default     = "asia-northeast1-docker.pkg.dev/paperterrace/paperterrace/app:latest"
+  default     = "asia-northeast1-docker.pkg.dev/gen-lang-client-0800253336/paperterrace/app:latest"
 }
 
 # Secrets (sensitive)
