@@ -12,7 +12,7 @@ def test_instantiation():
     print("Testing SQLiteStorage instantiation...")
     try:
         # We use a temp db path to avoid messing with real data
-        sqlite = SQLiteStorage(db_path=":memory:")
+        _ = SQLiteStorage(db_path=":memory:")
         print("✅ SQLiteStorage instantiated successfully.")
     except TypeError as e:
         print(f"❌ SQLiteStorage failed: {e}")
@@ -36,7 +36,7 @@ def test_instantiation():
         CloudSQLStorage.init_tables = lambda self: None
         CloudSQLStorage._migrate_tables = lambda self: None
 
-        cloudsql = CloudSQLStorage()
+        _ = CloudSQLStorage()
         print("✅ CloudSQLStorage instantiated successfully (abstract methods check passed).")
 
         # Restore

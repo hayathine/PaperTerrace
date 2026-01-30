@@ -25,8 +25,8 @@ else:
     sys.modules["google.cloud"] = mock_cloud
 
 # Ensure the module is loaded so it can be patched
-import src.providers.vision_ocr
-from src.services.pdf_ocr_service import PDFOCRService
+import src.providers.vision_ocr  # noqa: E402
+from src.services.pdf_ocr_service import PDFOCRService  # noqa: E402
 
 
 @pytest.fixture
@@ -39,7 +39,9 @@ def mock_dependencies():
         patch("src.services.pdf_ocr_service.save_ocr_to_db") as mock_save_db,
         patch("src.services.pdf_ocr_service.get_page_images") as mock_get_imgs,
         patch("src.services.pdf_ocr_service.save_page_image") as mock_save_img,
+        patch("pypdf.PdfReader") as mock_pdf_reader,
     ):
+        mock_pdf_reader.return_value.pages = []
         yield {
             "ai": mock_ai,
             "figure_cls": mock_figure_cls,
@@ -48,6 +50,7 @@ def mock_dependencies():
             "save_db": mock_save_db,
             "get_imgs": mock_get_imgs,
             "save_img": mock_save_img,
+            "pdf_reader": mock_pdf_reader,
         }
 
 
@@ -74,7 +77,7 @@ async def test_detect_language_from_pdf(ocr_service):
 async def test_extract_text_streaming_cache_hit(ocr_service, mock_dependencies):
     """Test extracting text when cache exists."""
     # Setup cache hit
-    mock_dependencies["get_db"].return_value = "Cached Text"
+    mock_dependencies["get_db"].return_value = {"ocr_text": "Cached Text", "layout_json": None}
     mock_dependencies["get_imgs"].return_value = ["img1.png", "img2.png"]
 
     results = []
@@ -99,28 +102,29 @@ async def test_extract_text_streaming_cache_miss(ocr_service, mock_dependencies)
     # Setup cache miss
     mock_dependencies["get_db"].return_value = None
 
-    # Mock fitz
-    with patch("src.services.pdf_ocr_service.fitz.open") as mock_fitz:
-        mock_doc = MagicMock()
-        mock_doc.__len__.return_value = 1
+    # Mock pdfplumber
+    with patch("src.services.pdf_ocr_service.pdfplumber.open") as mock_pdfplumber:
+        mock_pdf = MagicMock()
         mock_page = MagicMock()
-        mock_page.number = 0
+        mock_page.page_number = 1
 
-        # Mock get_text("words") return value: (x0, y0, x1, y1, word, block_no, line_no, word_no)
-        mock_page.get_text.return_value = [
-            (0, 0, 10, 10, "Hello", 0, 0, 0),
-            (20, 0, 30, 10, "World", 0, 0, 1),
+        # Mock extract_words return value: list of dicts with word, x0, top, x1, bottom
+        mock_page.extract_words.return_value = [
+            {"text": "Hello", "x0": 0, "top": 0, "x1": 10, "bottom": 10},
+            {"text": "World", "x0": 20, "top": 0, "x1": 30, "bottom": 10},
         ]
 
-        # Mock get_pixmap
-        mock_pix = MagicMock()
-        mock_pix.tobytes.return_value = b"img_bytes"
-        mock_pix.width = 100
-        mock_pix.height = 100
-        mock_page.get_pixmap.return_value = mock_pix
+        # Mock to_image
+        mock_img_obj = MagicMock()
+        mock_pil_image = MagicMock()
+        mock_pil_image.width = 100
+        mock_pil_image.height = 100
+        mock_pil_image.convert.return_value = mock_pil_image
+        mock_img_obj.original = mock_pil_image
+        mock_page.to_image.return_value = mock_img_obj
 
-        mock_doc.__getitem__.return_value = mock_page
-        mock_fitz.return_value = mock_doc
+        mock_pdf.pages = [mock_page]
+        mock_pdfplumber.return_value.__enter__.return_value = mock_pdf
 
         results = []
         async for page in ocr_service.extract_text_streaming(b"pdf_bytes", "test.pdf"):
@@ -147,25 +151,29 @@ async def test_extract_text_streaming_ocr_fallback(ocr_service, mock_dependencie
     mock_dependencies["get_db"].return_value = None
 
     with (
-        patch("src.services.pdf_ocr_service.fitz.open") as mock_fitz,
+        patch("src.services.pdf_ocr_service.pdfplumber.open") as mock_pdfplumber,
         # Patch the class directly on the imported module to avoid path resolution issues
         patch.object(src.providers.vision_ocr, "VisionOCRService") as MockVisionService,
     ):
-        mock_doc = MagicMock()
-        mock_doc.__len__.return_value = 1
+        mock_pdf = MagicMock()
         mock_page = MagicMock()
-        mock_page.number = 0
+        mock_page.page_number = 1
 
         # Native extraction returns empty
-        mock_page.get_text.return_value = []
+        mock_page.extract_words.return_value = []
+        mock_page.extract_text.return_value = ""
 
-        # Pixmap
-        mock_pix = MagicMock()
-        mock_pix.tobytes.return_value = b"img_bytes"
-        mock_page.get_pixmap.return_value = mock_pix
+        # Image
+        mock_img_obj = MagicMock()
+        mock_pil_image = MagicMock()
+        mock_pil_image.width = 100
+        mock_pil_image.height = 100
+        mock_pil_image.convert.return_value = mock_pil_image
+        mock_img_obj.original = mock_pil_image
+        mock_page.to_image.return_value = mock_img_obj
 
-        mock_doc.__getitem__.return_value = mock_page
-        mock_fitz.return_value = mock_doc
+        mock_pdf.pages = [mock_page]
+        mock_pdfplumber.return_value.__enter__.return_value = mock_pdf
 
         # Setup Vision Service Mock
         mock_vision_instance = MockVisionService.return_value

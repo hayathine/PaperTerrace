@@ -79,22 +79,28 @@ async def test_detect_and_convert_equations_with_candidates(equation_service):
     )
     equation_service._analyze_bbox_with_ai = AsyncMock(return_value=mock_analysis)
 
-    # Mock fitz (PyMuPDF)
-    with patch("src.features.figure_insight.equation_service.fitz.open") as mock_fitz:
-        mock_doc = MagicMock()
+    # Mock pdfplumber
+    with patch("src.features.figure_insight.equation_service.pdfplumber.open") as mock_pdfplumber:
+        mock_pdf = MagicMock()
         mock_page = MagicMock()
 
         # Setup page width/height
-        mock_page.rect.width = 1000
-        mock_page.rect.height = 1000
+        mock_page.width = 1000
+        mock_page.height = 1000
 
-        mock_doc.__getitem__.return_value = mock_page
-        mock_fitz.return_value = mock_doc
+        # Mock to_image and crop
+        mock_cropped_page = MagicMock()
+        mock_page.crop.return_value = mock_cropped_page
+        mock_img_obj = MagicMock()
+        mock_pil_image = MagicMock()
+        mock_pil_image.width = 100
+        mock_pil_image.height = 100
+        mock_pil_image.convert.return_value = mock_pil_image
+        mock_img_obj.original = mock_pil_image
+        mock_cropped_page.to_image.return_value = mock_img_obj
 
-        # Mock getting pixmap and bytes
-        mock_pix = MagicMock()
-        mock_pix.tobytes.return_value = b"image_bytes"
-        mock_page.get_pixmap.return_value = mock_pix
+        mock_pdf.pages = [mock_page]
+        mock_pdfplumber.return_value.__enter__.return_value = mock_pdf
 
         results = await equation_service.detect_and_convert_equations(b"pdf_bytes", 1)
 

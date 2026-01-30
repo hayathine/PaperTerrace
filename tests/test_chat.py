@@ -14,23 +14,37 @@ async def test_chat_basic(mock_ai_provider):
         from src.features.chat import ChatService
 
         service = ChatService()
-        response = await service.chat("What is this paper about?", "Sample context")
+        # Pass empty history list
+        response = await service.chat(
+            user_message="What is this paper about?", history=[], document_context="Sample context"
+        )
 
         assert response == "Mock AI response"
         mock_ai_provider.generate.assert_called_once()
 
 
 @pytest.mark.asyncio
-async def test_chat_history(mock_ai_provider):
-    """Test that chat maintains conversation history."""
+async def test_chat_with_history(mock_ai_provider):
+    """Test chat with provided history."""
     with patch("src.features.chat.chat.get_ai_provider", return_value=mock_ai_provider):
         from src.features.chat import ChatService
 
         service = ChatService()
-        await service.chat("First message", "Context")
-        await service.chat("Second message", "Context")
+        history = [
+            {"role": "user", "content": "Hello"},
+            {"role": "assistant", "content": "Hi there"},
+        ]
 
-        assert len(service.history) == 4  # 2 user + 2 assistant messages
+        response = await service.chat(
+            user_message="Follow up question", history=history, document_context="Context"
+        )
+
+        assert response == "Mock AI response"
+        # Verify prompt construction includes history
+        call_args = mock_ai_provider.generate.call_args[0][0]
+        assert "Hello" in call_args
+        assert "Hi there" in call_args
+        assert "Follow up question" in call_args
 
 
 @pytest.mark.asyncio
@@ -47,17 +61,3 @@ async def test_author_agent_response(mock_ai_provider):
         assert response == "Mock AI response"
         args = mock_ai_provider.generate.call_args[0][0]
         assert "author" in args.lower() or "著者" in args
-
-
-@pytest.mark.asyncio
-async def test_clear_history(mock_ai_provider):
-    """Test clearing conversation history."""
-    with patch("src.features.chat.chat.get_ai_provider", return_value=mock_ai_provider):
-        from src.features.chat import ChatService
-
-        service = ChatService()
-        await service.chat("Message", "Context")
-        assert len(service.history) > 0
-
-        service.clear_history()
-        assert len(service.history) == 0

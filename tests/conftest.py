@@ -59,3 +59,17 @@ def sample_paper_text():
     This research contributes to the advancement of NLP techniques for academic
     document analysis.
     """
+
+
+@pytest.fixture(autouse=True)
+def reset_storage_provider():
+    """Reset the storage provider singleton before and after each test."""
+    # Reset before
+    import src.providers.storage_provider
+
+    src.providers.storage_provider._storage_provider_instance = None
+
+    yield
+
+    # Reset after
+    src.providers.storage_provider._storage_provider_instance = None
