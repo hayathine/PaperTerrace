@@ -51,3 +51,7 @@ Ensure consistency with these technologies:
 ### 4. Explain
 
 - When complete implementation or analyze , step by step explain for user in japanese.
+
+\*\* 5. Secret
+
+- Stop display secret infomation such as API and identity . When necesarry , proposal writing .gitignore.
