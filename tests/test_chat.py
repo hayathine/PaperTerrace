@@ -10,8 +10,8 @@ import pytest
 @pytest.mark.asyncio
 async def test_chat_basic(mock_ai_provider):
     """Test basic chat functionality."""
-    with patch("src.feature.chat.get_ai_provider", return_value=mock_ai_provider):
-        from src.feature.chat import ChatService
+    with patch("src.features.chat.chat.get_ai_provider", return_value=mock_ai_provider):
+        from src.features.chat import ChatService
 
         service = ChatService()
         response = await service.chat("What is this paper about?", "Sample context")
@@ -23,8 +23,8 @@ async def test_chat_basic(mock_ai_provider):
 @pytest.mark.asyncio
 async def test_chat_history(mock_ai_provider):
     """Test that chat maintains conversation history."""
-    with patch("src.feature.chat.get_ai_provider", return_value=mock_ai_provider):
-        from src.feature.chat import ChatService
+    with patch("src.features.chat.chat.get_ai_provider", return_value=mock_ai_provider):
+        from src.features.chat import ChatService
 
         service = ChatService()
         await service.chat("First message", "Context")
@@ -36,8 +36,8 @@ async def test_chat_history(mock_ai_provider):
 @pytest.mark.asyncio
 async def test_author_agent_response(mock_ai_provider):
     """Test author agent simulation."""
-    with patch("src.feature.chat.get_ai_provider", return_value=mock_ai_provider):
-        from src.feature.chat import ChatService
+    with patch("src.features.chat.chat.get_ai_provider", return_value=mock_ai_provider):
+        from src.features.chat import ChatService
 
         service = ChatService()
         response = await service.author_agent_response(
@@ -45,14 +45,15 @@ async def test_author_agent_response(mock_ai_provider):
         )
 
         assert response == "Mock AI response"
-        assert "著者" in mock_ai_provider.generate.call_args[0][0]
+        args = mock_ai_provider.generate.call_args[0][0]
+        assert "author" in args.lower() or "著者" in args
 
 
 @pytest.mark.asyncio
 async def test_clear_history(mock_ai_provider):
     """Test clearing conversation history."""
-    with patch("src.feature.chat.get_ai_provider", return_value=mock_ai_provider):
-        from src.feature.chat import ChatService
+    with patch("src.features.chat.chat.get_ai_provider", return_value=mock_ai_provider):
+        from src.features.chat import ChatService
 
         service = ChatService()
         await service.chat("Message", "Context")

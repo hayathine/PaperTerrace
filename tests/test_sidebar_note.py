@@ -25,8 +25,8 @@ def note_service():
     storage = SQLiteStorage(db_path)
 
     # Create the service with patched storage
-    with patch("src.feature.sidebar.get_storage_provider", return_value=storage):
-        from src.feature.sidebar import SidebarNoteService
+    with patch("src.features.sidebar.get_storage_provider", return_value=storage):
+        from src.features.sidebar import SidebarNoteService
 
         service = SidebarNoteService()
         service.storage = storage  # Ensure it uses our storage

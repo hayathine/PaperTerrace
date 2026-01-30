@@ -94,7 +94,7 @@ PAPER_SUMMARY_SECTIONS_PROMPT = """Summarize the following paper section by sect
 
 For each section, output the result in the following JSON format:
 [
-  {"section": "Section Title", "summary": "Summary (2-3 sentences) in {lang_name}"}
+  {{"section": "Section Title", "summary": "Summary (2-3 sentences) in {lang_name}"}}
 ]
 
 Output ONLY valid JSON.
