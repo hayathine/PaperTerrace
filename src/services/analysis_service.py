@@ -15,9 +15,17 @@ class EnglishAnalysisService:
     """
 
     def __init__(self):
+        import os
+
+        from src.services.pdf_ocr_service import PDFOCRService
+
         self.nlp_service = NLPService()
         self.word_analysis = WordAnalysisService()
         self.tokenization = TokenizationService()
+
+        # Initialize OCR service
+        self.model = os.getenv("OCR_MODEL", "gemini-1.5-flash")
+        self.ocr_service = PDFOCRService(self.model)
 
         # Maintain public properties if they were used outside
         self.word_cache = self.word_analysis.word_cache

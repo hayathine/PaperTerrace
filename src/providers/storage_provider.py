@@ -176,6 +176,8 @@ class StorageInterface(ABC):
         image_url: str,
         caption: str = "",
         explanation: str = "",
+        label: str = "figure",
+        latex: str = "",
     ) -> str:
         """Save a figure. Returns figure_id."""
         ...
@@ -193,6 +195,11 @@ class StorageInterface(ABC):
     @abstractmethod
     def update_figure_explanation(self, figure_id: str, explanation: str) -> bool:
         """Update figure explanation."""
+        ...
+
+    @abstractmethod
+    def update_figure_latex(self, figure_id: str, latex: str) -> bool:
+        """Update figure LaTeX."""
         ...
 
     # ===== User methods =====
@@ -497,10 +504,21 @@ class SQLiteStorage(StorageInterface):
                     image_url TEXT,
                     caption TEXT,
                     explanation TEXT,
+                    label TEXT,
+                    latex TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     FOREIGN KEY(paper_id) REFERENCES papers(paper_id) ON DELETE CASCADE
                 )
             """)
+            # Ensure columns exist for existing databases
+            try:
+                conn.execute("ALTER TABLE paper_figures ADD COLUMN label TEXT")
+            except Exception:
+                pass
+            try:
+                conn.execute("ALTER TABLE paper_figures ADD COLUMN latex TEXT")
+            except Exception:
+                pass
             # App Sessions table
             conn.execute("""
                 CREATE TABLE IF NOT EXISTS app_sessions (
@@ -829,6 +847,8 @@ class SQLiteStorage(StorageInterface):
         image_url: str,
         caption: str = "",
         explanation: str = "",
+        label: str = "figure",
+        latex: str = "",
     ) -> str:
         """Save a figure."""
         import json
@@ -841,8 +861,8 @@ class SQLiteStorage(StorageInterface):
         with self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO paper_figures (id, paper_id, page_number, bbox_json, image_url, caption, explanation, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO paper_figures (id, paper_id, page_number, bbox_json, image_url, caption, explanation, label, latex, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     figure_id,
@@ -852,6 +872,8 @@ class SQLiteStorage(StorageInterface):
                     image_url,
                     caption,
                     explanation,
+                    label,
+                    latex,
                     datetime.now().isoformat(),
                 ),
             )
@@ -900,6 +922,16 @@ class SQLiteStorage(StorageInterface):
             cursor = conn.execute(
                 "UPDATE paper_figures SET explanation = ? WHERE id = ?",
                 (explanation, figure_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_figure_latex(self, figure_id: str, latex: str) -> bool:
+        """Update figure LaTeX."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE paper_figures SET latex = ? WHERE id = ?",
+                (latex, figure_id),
             )
             conn.commit()
             return cursor.rowcount > 0

@@ -7,12 +7,27 @@
     <script src="https://unpkg.com/htmx.org@1.9.10"></script>
     <script src="https://unpkg.com/htmx.org@1.9.10/dist/ext/sse.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css"
+    />
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"
+    ></script>
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+      onload="renderMathInElement(document.body)"
+    ></script>
     <!-- Firebase Config from Backend -->
     <script id="firebase-config" type="application/json">
       {{ firebase_config | tojson | safe }}
     </script>
     <script>
-      window.firebaseConfig = JSON.parse(document.getElementById('firebase-config').textContent);
+      window.firebaseConfig = JSON.parse(
+        document.getElementById("firebase-config").textContent,
+      );
     </script>
     <!-- Firebase Auth -->
     <script type="module" src="/static/js/auth.js"></script>
@@ -106,8 +121,12 @@
         transform: translateY(0);
       }
       @keyframes highlight-pulse {
-        0% { background-color: rgba(99, 102, 241, 0.4); }
-        100% { background-color: transparent; }
+        0% {
+          background-color: rgba(99, 102, 241, 0.4);
+        }
+        100% {
+          background-color: transparent;
+        }
       }
       .highlight-jump {
         animation: highlight-pulse 2s ease-out;
@@ -116,10 +135,7 @@
     </style>
   </head>
   <body class="bg-[#f8fafc] text-slate-900 min-h-screen" hx-ext="sse">
-    {% block content %}{% endblock %}
-    
-    {% include "components/auth_modal.html" %}
-    
+    {% block content %}{% endblock %} {% include "components/auth_modal.html" %}
     {% block scripts %}{% endblock %}
   </body>
 </html>

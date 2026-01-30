@@ -21,7 +21,9 @@ def save_figure_to_db(
     image_url: str,
     caption: str = "",
     explanation: str = "",
+    label: str = "figure",
+    latex: str = "",
 ) -> str:
     return get_storage_provider().save_figure(
-        paper_id, page_number, bbox, image_url, caption, explanation
+        paper_id, page_number, bbox, image_url, caption, explanation, label, latex
     )

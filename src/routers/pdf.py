@@ -214,7 +214,9 @@ async def analyze_pdf_json(
     return JSONResponse({"task_id": task_id, "stream_url": f"/stream/{task_id}"})
 
 
-async def process_figure_auto_analysis(figure_id: str, image_url: str):
+async def process_figure_auto_analysis(
+    figure_id: str, image_url: str, label: str = "figure", target_lang: str = "ja"
+):
     """
     Background task to automatically analyze and explain a figure.
     """
@@ -224,17 +226,27 @@ async def process_figure_auto_analysis(figure_id: str, image_url: str):
     try:
         image_bytes = await fetch_image_bytes_from_url(image_url)
         if image_bytes:
-            # We use a fresh service instance
             insight_service = FigureInsightService()
-            explanation = await insight_service.analyze_figure(
-                image_bytes, caption="Figure from paper", target_lang="ja"
-            )
 
-            # Save explanation
-            storage.update_figure_explanation(figure_id, explanation)
-            logger.info(f"[Auto-Explain] Completed for figure {figure_id}")
+            if label == "equation":
+                from src.features.figure_insight.equation_service import EquationService
+
+                eq_service = EquationService()
+                analysis = await eq_service._analyze_bbox_with_ai(
+                    image_bytes, target_lang=target_lang
+                )
+                if analysis:
+                    storage.update_figure_explanation(figure_id, analysis.explanation)
+                    storage.update_figure_latex(figure_id, analysis.latex)
+            else:
+                explanation = await insight_service.analyze_figure(
+                    image_bytes, caption="Figure from paper", target_lang=target_lang
+                )
+                storage.update_figure_explanation(figure_id, explanation)
+
+            logger.info(f"[Auto-Explain] Completed for {label} {figure_id}")
     except Exception as e:
-        logger.error(f"[Auto-Explain] Failed for figure {figure_id}: {e}")
+        logger.error(f"[Auto-Explain] Failed for {label} {figure_id}: {e}")
 
 
 @router.get("/stream/{task_id}")
@@ -601,8 +613,15 @@ async def stream(task_id: str):
                             image_url=fig["image_url"],
                             caption="",
                             explanation="",
+                            label=fig.get("label", "figure"),
+                            latex=fig.get("latex", ""),
                         )
-                        asyncio.create_task(process_figure_auto_analysis(fid, fig["image_url"]))
+                        label = fig.get("label", "figure")
+                        asyncio.create_task(
+                            process_figure_auto_analysis(
+                                fid, fig["image_url"], label, target_lang=lang
+                            )
+                        )
 
             except Exception as e:
                 logger.error(f"Failed to save paper: {e}")
