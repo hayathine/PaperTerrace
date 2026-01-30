@@ -1,6 +1,6 @@
 """
 Analysis Router
-Handles paper analysis features: summary, research radar, paragraph explanation,
+Handles paper analysis features: summary, research radar,
 figure/table analysis, and adversarial review.
 """
 
@@ -12,7 +12,6 @@ from ..features import (
     CiteIntentService,
     ClaimVerificationService,
     FigureInsightService,
-    ParagraphExplainService,
     ResearchRadarService,
     SummaryService,
 )
@@ -24,7 +23,6 @@ router = APIRouter(tags=["Analysis"])
 # Services
 summary_service = SummaryService()
 research_radar_service = ResearchRadarService()
-paragraph_explain_service = ParagraphExplainService()
 figure_insight_service = FigureInsightService()
 adversarial_service = AdversarialReviewService()
 cite_intent_service = CiteIntentService()
@@ -80,21 +78,34 @@ def _get_context(session_id: str) -> str | None:
 
 
 @router.post("/summarize")
-async def summarize(session_id: str = Form(...), mode: str = Form("full"), lang: str = Form("ja")):
+async def summarize(
+    session_id: str = Form(...),
+    mode: str = Form("full"),
+    lang: str = Form("ja"),
+    paper_id: str | None = Form(None),
+):
     context = _get_context(session_id)
     if not context:
         logger.warning(f"[summarize] Context not found for session {session_id}")
         return JSONResponse(
             {"error": f"論文が読み込まれていません (session_id: {session_id})"}, status_code=400
         )
-    logger.info(f"[summarize] session_id={session_id}, context_len={len(context)}")
+
+    # Resolve paper_id if missing
+    if not paper_id:
+        paper_id = storage.get_session_paper_id(session_id)
+
+    logger.info(
+        f"[summarize] session_id={session_id}, paper_id={paper_id}, context_len={len(context)}"
+    )
 
     if mode == "sections":
-        sections = await summary_service.summarize_sections(context, target_lang=lang)
+        sections = await summary_service.summarize_sections(
+            context, target_lang=lang, paper_id=paper_id
+        )
         return JSONResponse({"sections": sections})
     elif mode == "abstract":
         # Check DB first
-        paper_id = storage.get_session_paper_id(session_id)
         if paper_id:
             paper = storage.get_paper(paper_id)
             if paper and paper.get("abstract"):
@@ -109,7 +120,7 @@ async def summarize(session_id: str = Form(...), mode: str = Form("full"), lang:
 
         return JSONResponse({"abstract": abstract})
     else:
-        summary = await summary_service.summarize_full(context, target_lang=lang)
+        summary = await summary_service.summarize_full(context, target_lang=lang, paper_id=paper_id)
         return JSONResponse({"summary": summary})
 
 
@@ -137,31 +148,6 @@ async def analyze_citations(session_id: str = Form(...)):
 
     citations = await research_radar_service.analyze_citations(context)
     return JSONResponse({"citations": citations})
-
-
-# ============================================================================
-# Paragraph Explanation
-# ============================================================================
-
-
-@router.post("/explain-paragraph")
-async def explain_paragraph(
-    paragraph: str = Form(...), session_id: str = Form(...), lang: str = Form("ja")
-):
-    context = _get_context(session_id)
-    explanation = await paragraph_explain_service.explain(paragraph, context or "", lang=lang)
-    return JSONResponse({"explanation": explanation})
-
-
-@router.post("/translate-paragraph")
-async def translate_paragraph_endpoint(
-    paragraph: str = Form(...), session_id: str = Form(...), lang: str = Form("ja")
-):
-    context = _get_context(session_id)
-    translation = await paragraph_explain_service.translate_paragraph(
-        paragraph, context or "", lang=lang
-    )
-    return JSONResponse({"translation": translation})
 
 
 # ============================================================================

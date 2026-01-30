@@ -74,6 +74,16 @@ class StorageInterface(ABC):
         ...
 
     @abstractmethod
+    def update_paper_full_summary(self, paper_id: str, summary: str) -> bool:
+        """Update the full summary of a paper."""
+        ...
+
+    @abstractmethod
+    def update_paper_section_summary(self, paper_id: str, json_summary: str) -> bool:
+        """Update the section summary (JSON) of a paper."""
+        ...
+
+    @abstractmethod
     def delete_paper(self, paper_id: str) -> bool:
         """Delete a paper by ID."""
         ...
@@ -97,13 +107,16 @@ class StorageInterface(ABC):
         x: float | None = None,
         y: float | None = None,
         user_id: str | None = None,
+        paper_id: str | None = None,
     ) -> str:
         """Save a note. Returns note_id."""
         ...
 
     @abstractmethod
-    def get_notes(self, session_id: str, user_id: str | None = None) -> list[dict]:
-        """Get all notes for a session or user."""
+    def get_notes(
+        self, session_id: str, paper_id: str | None = None, user_id: str | None = None
+    ) -> list[dict]:
+        """Get all notes for a session, paper, or user."""
         ...
 
     @abstractmethod
@@ -265,12 +278,19 @@ class StorageInterface(ABC):
         ...
 
     @abstractmethod
-    def get_ocr_cache(self, file_hash: str) -> str | None:
-        """Get cached OCR text."""
+    def get_ocr_cache(self, file_hash: str) -> dict | None:
+        """Get cached OCR text and layout."""
         ...
 
     @abstractmethod
-    def save_ocr_cache(self, file_hash: str, ocr_text: str, filename: str, model_name: str) -> None:
+    def save_ocr_cache(
+        self,
+        file_hash: str,
+        ocr_text: str,
+        filename: str,
+        model_name: str,
+        layout_json: str | None = None,
+    ) -> None:
         """Save OCR text to cache."""
         ...
 
@@ -292,6 +312,7 @@ class SQLiteStorage(StorageInterface):
         self.db_path = db_path
         self.init_tables()
         self._migrate_tables()
+        self._init_indexes()
         logger.info(f"SQLiteStorage initialized with db: {self.db_path}")
 
     def _get_connection(self) -> sqlite3.Connection:
@@ -320,6 +341,8 @@ class SQLiteStorage(StorageInterface):
                 ("layout_json", "TEXT"),
                 ("updated_at", "TIMESTAMP"),
                 ("raw_abstract", "TEXT"),
+                ("full_summary", "TEXT"),
+                ("section_summary_json", "TEXT"),
             ]
 
             # Session table migration
@@ -346,23 +369,26 @@ class SQLiteStorage(StorageInterface):
 
             conn.commit()
 
+            # ocr_reader migration
+            cursor = conn.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='ocr_reader'"
+            )
+            if cursor.fetchone():
+                cursor = conn.execute("PRAGMA table_info(ocr_reader)")
+                ocr_reader_cols = {row[1] for row in cursor.fetchall()}
+                if "layout_json" not in ocr_reader_cols:
+                    try:
+                        conn.execute("ALTER TABLE ocr_reader ADD COLUMN layout_json TEXT")
+                        logger.info("Added column 'layout_json' to ocr_reader table")
+                    except sqlite3.OperationalError as e:
+                        logger.debug(f"ocr_reader migration skipped: {e}")
+
+            conn.commit()
+
             # Migrations for stamps and notes
             for table, columns in [
-                (
-                    "paper_stamps",
-                    [
-                        ("page_number", "INTEGER"),
-                        ("x", "REAL"),
-                        ("y", "REAL"),
-                    ],
-                ),
-                (
-                    "note_stamps",
-                    [
-                        ("x", "REAL"),
-                        ("y", "REAL"),
-                    ],
-                ),
+                ("paper_stamps", [("page_number", "INTEGER"), ("x", "REAL"), ("y", "REAL")]),
+                ("note_stamps", [("x", "REAL"), ("y", "REAL")]),
                 (
                     "notes",
                     [
@@ -371,15 +397,10 @@ class SQLiteStorage(StorageInterface):
                         ("x", "REAL"),
                         ("y", "REAL"),
                         ("user_id", "TEXT"),
+                        ("paper_id", "TEXT"),
                     ],
                 ),
-                (
-                    "paper_figures",
-                    [
-                        ("label", "TEXT"),
-                        ("latex", "TEXT"),
-                    ],
-                ),
+                ("paper_figures", [("label", "TEXT"), ("latex", "TEXT")]),
             ]:
                 # Check if table exists first
                 cursor = conn.execute(
@@ -394,8 +415,6 @@ class SQLiteStorage(StorageInterface):
                 for col_name, col_type in columns:
                     if col_name not in existing_cols:
                         try:
-                            # Use empty string default for non-null constraint issues if any,
-                            # but here we allow nulls so it's fine.
                             conn.execute(f"ALTER TABLE {table} ADD COLUMN {col_name} {col_type}")
                             logger.info(f"Added column '{col_name}' to {table}")
                         except sqlite3.OperationalError as e:
@@ -439,6 +458,8 @@ class SQLiteStorage(StorageInterface):
                     like_count INTEGER DEFAULT 0,
                     layout_json TEXT,
                     raw_abstract TEXT,
+                    full_summary TEXT,
+                    section_summary_json TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -458,6 +479,7 @@ class SQLiteStorage(StorageInterface):
                     file_hash TEXT PRIMARY KEY,
                     filename TEXT,
                     ocr_text TEXT,
+                    layout_json TEXT,
                     model_name TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -470,7 +492,11 @@ class SQLiteStorage(StorageInterface):
                     term TEXT,
                     note TEXT,
                     image_url TEXT,
+                    page_number INTEGER,
+                    x REAL,
+                    y REAL,
                     user_id TEXT,
+                    paper_id TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
@@ -525,6 +551,18 @@ class SQLiteStorage(StorageInterface):
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            conn.commit()
+
+    def _init_indexes(self) -> None:
+        """Initialize database indexes after tables and migrations are complete."""
+        with self._get_connection() as conn:
+            conn.execute("CREATE INDEX IF NOT EXISTS idx_notes_paper_id ON notes(paper_id)")
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_paper_figures_paper_id ON paper_figures(paper_id)"
+            )
+            conn.execute(
+                "CREATE INDEX IF NOT EXISTS idx_paper_stamps_paper_id ON paper_stamps(paper_id)"
+            )
             conn.commit()
 
     # ===== Paper methods =====
@@ -637,6 +675,28 @@ class SQLiteStorage(StorageInterface):
             conn.commit()
             return cursor.rowcount > 0
 
+    def update_paper_full_summary(self, paper_id: str, summary: str) -> bool:
+        """Update the full summary of a paper."""
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE papers SET full_summary = ?, updated_at = ? WHERE paper_id = ?",
+                (summary, now, paper_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_paper_section_summary(self, paper_id: str, json_summary: str) -> bool:
+        """Update the section summary (JSON) of a paper."""
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE papers SET section_summary_json = ?, updated_at = ? WHERE paper_id = ?",
+                (json_summary, now, paper_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
     def delete_paper(self, paper_id: str) -> bool:
         """Delete a paper by ID."""
         with self._get_connection() as conn:
@@ -670,13 +730,14 @@ class SQLiteStorage(StorageInterface):
         x: float | None = None,
         y: float | None = None,
         user_id: str | None = None,
+        paper_id: str | None = None,
     ) -> str:
         """Save a note."""
         with self._get_connection() as conn:
             conn.execute(
                 """
-                INSERT INTO notes (note_id, session_id, term, note, image_url, page_number, x, y, user_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO notes (note_id, session_id, term, note, image_url, page_number, x, y, user_id, paper_id, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(note_id) DO UPDATE SET
                     term=excluded.term,
                     note=excluded.note,
@@ -685,6 +746,7 @@ class SQLiteStorage(StorageInterface):
                     x=excluded.x,
                     y=excluded.y,
                     user_id=excluded.user_id,
+                    paper_id=excluded.paper_id,
                     created_at=excluded.created_at
                 """,
                 (
@@ -697,32 +759,47 @@ class SQLiteStorage(StorageInterface):
                     x,
                     y,
                     user_id,
+                    paper_id,
                     datetime.now().isoformat(),
                 ),
             )
             conn.commit()
-        logger.info(f"Note saved: {note_id} (user: {user_id})")
+        logger.info(f"Note saved: {note_id} (user: {user_id}, paper: {paper_id})")
         return note_id
 
-    def get_notes(self, session_id: str, user_id: str | None = None) -> list[dict]:
-        """Get all notes for a session or user."""
+    def get_notes(
+        self, session_id: str, paper_id: str | None = None, user_id: str | None = None
+    ) -> list[dict]:
+        """Get all notes for a session, paper, or user."""
         with self._get_connection() as conn:
-            if user_id:
-                # Get notes for user OR session (to keep guest notes if linked?)
-                # For now let's just get user notes + session notes for that user context
-                # Or just user notes if logged in.
-                # Actually, if user is logged in, we probably only care about their notes,
-                # but if they just logged in and had session notes, we might want both or merged.
-                # Simplest: user_id takes precedence, but maybe include session_id too?
-                # "session_id" is usually current browser session.
-                # If we want to show all user's notes, we query by user_id.
-                query = "SELECT * FROM notes WHERE user_id = ? OR session_id = ? ORDER BY created_at DESC"
-                params = (user_id, session_id)
-            else:
-                query = "SELECT * FROM notes WHERE session_id = ? ORDER BY created_at DESC"
-                params = (session_id,)
+            query_parts = ["SELECT * FROM notes"]
+            where_clauses = []
+            query_params = []
 
-            rows = conn.execute(query, params).fetchall()
+            # Filter by paper_id if provided
+            if paper_id:
+                where_clauses.append("paper_id = ?")
+                query_params.append(paper_id)
+
+            # Filter by ownership (User or Session)
+            if user_id:
+                # If user is logged in, show their notes.
+                # Also include session notes if they haven't been claimed yet (implied by design logic, but simplistic here)
+                # Ideally, simple logic: user_id = ? OR (user_id IS NULL AND session_id = ?)
+                where_clauses.append("(user_id = ? OR (user_id IS NULL AND session_id = ?))")
+                query_params.extend([user_id, session_id])
+            else:
+                # Guest user: show notes for this session
+                where_clauses.append("session_id = ?")
+                query_params.append(session_id)
+
+            if where_clauses:
+                query_parts.append("WHERE " + " AND ".join(where_clauses))
+
+            query_parts.append("ORDER BY created_at DESC")
+
+            final_query = " ".join(query_parts)
+            rows = conn.execute(final_query, tuple(query_params)).fetchall()
             return [dict(row) for row in rows]
 
     def delete_note(self, note_id: str) -> bool:
@@ -890,6 +967,9 @@ class SQLiteStorage(StorageInterface):
             results = []
             for row in rows:
                 d = dict(row)
+                # Ensure frontend-compatible keys
+                d["figure_id"] = d["id"]
+                d["page_num"] = d["page_number"]
                 if d.get("bbox_json"):
                     try:
                         d["bbox"] = json.loads(d["bbox_json"])
@@ -1146,22 +1226,31 @@ class SQLiteStorage(StorageInterface):
         # For now, return empty list - implement when tags are properly used
         return []
 
-    def get_ocr_cache(self, file_hash: str) -> str | None:
-        """Get cached OCR text."""
+    def get_ocr_cache(self, file_hash: str) -> dict | None:
+        """Get cached OCR text and layout."""
         with self._get_connection() as conn:
             row = conn.execute(
-                "SELECT ocr_text FROM ocr_reader WHERE file_hash = ?", (file_hash,)
+                "SELECT ocr_text, layout_json FROM ocr_reader WHERE file_hash = ?", (file_hash,)
             ).fetchone()
             if row:
-                return row[0]
+                return {"ocr_text": row[0], "layout_json": row[1]}
             return None
 
-    def save_ocr_cache(self, file_hash: str, ocr_text: str, filename: str, model_name: str) -> None:
-        """Save OCR text to cache."""
+    def save_ocr_cache(
+        self,
+        file_hash: str,
+        ocr_text: str,
+        filename: str,
+        model_name: str,
+        layout_json: str | None = None,
+    ) -> None:
+        """Save OCR text and layout to cache."""
         with self._get_connection() as conn:
             conn.execute(
-                "INSERT OR REPLACE INTO ocr_reader (file_hash, filename, ocr_text, model_name, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)",
-                (file_hash, filename, ocr_text, model_name),
+                """INSERT OR REPLACE INTO ocr_reader 
+                   (file_hash, filename, ocr_text, layout_json, model_name, created_at) 
+                   VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
+                (file_hash, filename, ocr_text, layout_json, model_name),
             )
             conn.commit()
 

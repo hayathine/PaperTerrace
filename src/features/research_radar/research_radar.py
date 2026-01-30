@@ -157,7 +157,7 @@ class ResearchRadarService:
                     f"/authors/{author_id}/papers", params={"limit": 10}
                 )
                 papers = response.json().get("papers", [])
-                return {"profile": authors[0], "papers": []}
+                return {"profile": authors[0], "papers": papers}
             except Exception:
                 return {"profile": authors[0], "papers": []}
 

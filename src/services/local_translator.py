@@ -53,6 +53,18 @@ class LocalTranslator:
             except Exception as e:
                 logger.error(f"Failed to initialize LocalTranslator: {e}")
 
+    async def prewarm(self):
+        """Pre-initialize models to avoid delay on first request."""
+        if not self._initialized:
+            logger.info("Pre-warming LocalTranslator (M2M100)...")
+            # Running in executor to not block the event loop
+            import asyncio
+            from concurrent.futures import ThreadPoolExecutor
+
+            loop = asyncio.get_event_loop()
+            with ThreadPoolExecutor(max_workers=1) as pool:
+                await loop.run_in_executor(pool, self.__init__)
+
     def translate(self, text: str, src_lang: str = "en", tgt_lang: str = "ja") -> str | None:
         if not self._initialized or self.translator is None or self.sp_model is None:
             return None

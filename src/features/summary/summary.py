@@ -4,10 +4,11 @@ from src.logger import logger
 from src.prompts import (
     CORE_SYSTEM_PROMPT,
     PAPER_SUMMARY_AI_CONTEXT_PROMPT,
+    PAPER_SUMMARY_FROM_PDF_PROMPT,
     PAPER_SUMMARY_FULL_PROMPT,
     PAPER_SUMMARY_SECTIONS_PROMPT,
 )
-from src.providers import get_ai_provider
+from src.providers import get_ai_provider, get_storage_provider
 from src.schemas.summary import FullSummaryResponse
 from src.schemas.summary import SectionSummaryList as SectionSummariesResponse
 
@@ -23,9 +24,10 @@ class SummaryError(Exception):
 class SummaryService:
     """論文要約サービス"""
 
-    def __init__(self):
+    def __init__(self, storage=None):
         self.ai_provider = get_ai_provider()
-        self.model = os.getenv("MODEL_SUMMARY", "gemini-2.0-flash")
+        self.storage = storage or get_storage_provider()  # Inject storage
+        self.model = os.getenv("MODEL_SUMMARY", "gemini-2.5-flash-lite")
         # デフォルト: 90万トークン（Gemini 1.5 Flashは100万上限だがマージン確保）
         self.token_limit = int(os.getenv("MAX_INPUT_TOKENS", "900000"))
 
@@ -56,67 +58,110 @@ class SummaryService:
         logger.info(f"Truncated to {len(current_text)} chars ({count} tokens)")
         return current_text
 
-    async def summarize_full(self, text: str, target_lang: str = "ja") -> str:
+    async def summarize_full(
+        self,
+        text: str = "",
+        target_lang: str = "ja",
+        paper_id: str | None = None,
+        pdf_bytes: bytes | None = None,
+    ) -> str:
         """
         論文全体の包括的な要約を生成する。
-
-        Args:
-            text: 論文全文
-            target_lang: 出力言語
-
-        Returns:
-            構造化された要約テキスト
+        pdf_bytesが指定されている場合はPDF直接入力方式を使用。
+        paper_idが指定されている場合、キャッシュを確認・保存する。
         """
+        # Check cache if paper_id is provided
+        if paper_id:
+            paper = self.storage.get_paper(paper_id)
+            if paper and paper.get("full_summary"):
+                logger.info(f"Full summary cache HIT for {paper_id}")
+                return paper["full_summary"]
+
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        safe_text = await self._truncate_to_token_limit(text)
-        prompt = PAPER_SUMMARY_FULL_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
-
         try:
-            logger.debug(
-                "Generating full summary",
-                extra={"text_length": len(text)},
-            )
-            analysis: FullSummaryResponse = await self.ai_provider.generate(
-                prompt,
-                model=self.model,
-                response_model=FullSummaryResponse,
-                system_instruction=CORE_SYSTEM_PROMPT,
-            )
+            # PDF直接入力方式
+            if pdf_bytes:
+                logger.debug(
+                    "Generating full summary from PDF",
+                    extra={"pdf_size": len(pdf_bytes)},
+                )
+                prompt = PAPER_SUMMARY_FROM_PDF_PROMPT.format(lang_name=lang_name)
+                raw_response = await self.ai_provider.generate_with_pdf(
+                    prompt, pdf_bytes, model=self.model
+                )
 
-            # 後方互換性のため整形済みテキストを返す
-            result_lines = [
-                f"## Overview\n{analysis.overview}",
-                "\n## Key Contributions",
-                *[f"- {item}" for item in analysis.key_contributions],
-                f"\n## Methodology\n{analysis.methodology}",
-                f"\n## Conclusion\n{analysis.conclusion}",
-            ]
-            formatted_text = "\n".join(result_lines)
+                # Parse the response to extract sections
+                formatted_text = raw_response.strip()
 
-            logger.info(
-                "Full summary generated",
-                extra={"input_length": len(text), "output_length": len(formatted_text)},
-            )
+                logger.info(
+                    "Full summary generated from PDF",
+                    extra={"pdf_size": len(pdf_bytes), "output_length": len(formatted_text)},
+                )
+            else:
+                # 従来のテキストベース方式
+                logger.debug(
+                    "Generating full summary from text",
+                    extra={"text_length": len(text)},
+                )
+                safe_text = await self._truncate_to_token_limit(text)
+                prompt = PAPER_SUMMARY_FULL_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
+
+                analysis: FullSummaryResponse = await self.ai_provider.generate(
+                    prompt,
+                    model=self.model,
+                    response_model=FullSummaryResponse,
+                    system_instruction=CORE_SYSTEM_PROMPT,
+                )
+
+                # 後方互換性のため整形済みテキストを返す
+                result_lines = [
+                    f"## Overview\n{analysis.overview}",
+                    "\n## Key Contributions",
+                    *[f"- {item}" for item in analysis.key_contributions],
+                    f"\n## Methodology\n{analysis.methodology}",
+                    f"\n## Conclusion\n{analysis.conclusion}",
+                ]
+                formatted_text = "\n".join(result_lines)
+
+                logger.info(
+                    "Full summary generated from text",
+                    extra={"input_length": len(text), "output_length": len(formatted_text)},
+                )
+
+            # Save to cache
+            if paper_id:
+                self.storage.update_paper_full_summary(paper_id, formatted_text)
+                logger.info(f"Full summary cached for {paper_id}")
+
             return formatted_text
         except Exception as e:
             logger.exception(
                 "Full summary generation failed",
-                extra={"error": str(e), "text_length": len(text)},
+                extra={"error": str(e), "text_length": len(text) if text else 0},
             )
             return f"要約の生成に失敗しました: {str(e)}"
 
-    async def summarize_sections(self, text: str, target_lang: str = "ja") -> list[dict]:
+    async def summarize_sections(
+        self, text: str, target_lang: str = "ja", paper_id: str | None = None
+    ) -> list[dict]:
         """
         セクションごとの要約を生成する。
-
-        Args:
-            text: 論文全文
-            target_lang: 出力言語
-
-        Returns:
-            セクションタイトルと要約の辞書リスト
+        paper_idが指定されている場合、キャッシュを確認・保存する。
         """
+        # Check cache
+        if paper_id:
+            paper = self.storage.get_paper(paper_id)
+            if paper and paper.get("section_summary_json"):
+                import json
+
+                try:
+                    cached_sections = json.loads(paper["section_summary_json"])
+                    logger.info(f"Section summary cache HIT for {paper_id}")
+                    return cached_sections
+                except json.JSONDecodeError:
+                    logger.warning(f"Invalid JSON in section summary cache for {paper_id}")
+
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         safe_text = await self._truncate_to_token_limit(text)
@@ -138,7 +183,18 @@ class SummaryService:
                 "Section summary generated",
                 extra={"section_count": len(response.sections)},
             )
-            return [s.model_dump() for s in response.sections]
+            sections = [s.model_dump() for s in response.sections]
+
+            # Save to cache
+            if paper_id:
+                import json
+
+                self.storage.update_paper_section_summary(
+                    paper_id, json.dumps(sections, ensure_ascii=False)
+                )
+                logger.info(f"Section summary cached for {paper_id}")
+
+            return sections
         except Exception as e:
             logger.exception(
                 "Section summary failed",

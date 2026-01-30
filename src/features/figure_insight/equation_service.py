@@ -1,7 +1,6 @@
 import io
 from typing import Any, Dict, List, Optional
 
-import fitz
 import pdfplumber
 from pydantic import BaseModel
 
@@ -38,41 +37,43 @@ class EquationService:
 
         results = []
         try:
-            # Use fitz to crop for high-quality images
-            doc = fitz.open(stream=file_bytes, filetype="pdf")
-            page = doc[page_num - 1]
+            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                if page_num > len(pdf.pages):
+                    return []
+                page = pdf.pages[page_num - 1]
 
-            for bbox in potential_bboxes:
-                # fitz bbox is (x0, y0, x1, y1)
-                # pdfplumber bbox is (x0, top, x1, bottom) which is same as (x0, y0, x1, y1) in fitz coordinates (points)
-                zoom = 3.0  # High zoom for math clarity
-                mat = fitz.Matrix(zoom, zoom)
-
-                # Expand bbox slightly to catch symbols like exponents
-                expanded_bbox = [
-                    max(0, bbox[0] - 5),
-                    max(0, bbox[1] - 5),
-                    min(page.rect.width, bbox[2] + 5),
-                    min(page.rect.height, bbox[3] + 5),
-                ]
-
-                rect = fitz.Rect(expanded_bbox)
-                pix = page.get_pixmap(matrix=mat, clip=rect)
-                img_bytes = pix.tobytes("png")
-
-                # Analyze with AI
-                analysis = await self._analyze_bbox_with_ai(img_bytes, target_lang)
-                if analysis and analysis.is_equation and analysis.confidence > 0.6:
-                    results.append(
-                        {
-                            "bbox": bbox,
-                            "latex": analysis.latex,
-                            "explanation": analysis.explanation,
-                            "page_num": page_num,
-                        }
+                for bbox in potential_bboxes:
+                    # pdfplumber bbox is (x0, top, x1, bottom)
+                    # Expand bbox slightly to catch symbols like exponents
+                    expanded_bbox = (
+                        max(0, bbox[0] - 5),
+                        max(0, bbox[1] - 5),
+                        min(page.width, bbox[2] + 5),
+                        min(page.height, bbox[3] + 5),
                     )
 
-            doc.close()
+                    # Crop and render for high-quality images
+                    cropped_page = page.crop(expanded_bbox)
+                    # Use high resolution for math clarity (3.0 zoom approx 216 DPI)
+                    page_img = cropped_page.to_image(resolution=216)
+                    img_pil = page_img.original.convert("RGB")
+
+                    buffer = io.BytesIO()
+                    img_pil.save(buffer, format="PNG")
+                    img_bytes = buffer.getvalue()
+
+                    # Analyze with AI
+                    analysis = await self._analyze_bbox_with_ai(img_bytes, target_lang)
+                    if analysis and analysis.is_equation and analysis.confidence > 0.6:
+                        results.append(
+                            {
+                                "bbox": bbox,
+                                "latex": analysis.latex,
+                                "explanation": analysis.explanation,
+                                "page_num": page_num,
+                            }
+                        )
+
         except Exception as e:
             logger.error(f"Equation extraction failed: {e}")
 

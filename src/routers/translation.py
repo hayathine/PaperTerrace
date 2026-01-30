@@ -316,7 +316,7 @@ async def explain_deep(
                 paper_context=paper_context, lemma=lemma, lang_name=lang_name
             )
 
-        translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.0-flash-lite")
+        translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
         translation = (
             (
                 await provider.generate(
@@ -404,7 +404,7 @@ async def explain_with_context(req: ExplainContextRequest):
     prompt = DICT_EXPLAIN_WORD_CONTEXT_PROMPT.format(
         word=req.word, lang_name=lang_name, summary_context=summary_context, context=req.context
     )
-    translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.0-flash-lite")
+    translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
 
     try:
         explanation = await provider.generate(

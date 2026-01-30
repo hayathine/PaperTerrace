@@ -12,11 +12,9 @@ Your goal is to help users understand complex academic papers, translate technic
 
 # Global Rules
 1. Always output in the requested language (e.g., if asked for Japanese, answer in Japanese).
-2. Maintain a professional, objective, and academic tone.
-3. When translating, prioritize accuracy and academic context over literal translation.
-4. For summaries, capture the core essence, methods, and contributions.
-5. If the user asks for JSON, output ONLY valid JSON without Markdown formatting.
-6. No intro/outro.
+2.. When translating, prioritize accuracy and academic context over literal translation.
+3. For summaries, capture the core essence, methods, and contributions.
+4. If the user asks for JSON, output ONLY valid JSON without Markdown formatting.
 """
 
 # ==========================================
@@ -67,24 +65,13 @@ Translation only in {lang_name}.
 # ==========================================
 # 論文全体の要約、セクション別要約、アブストラクト生成に使用
 
-PAPER_SUMMARY_FULL_PROMPT = """Summarize the following paper in {lang_name}.
-
-[Paper Text]
-{paper_text}
-
-Format the summary as follows in {lang_name}:
-
-## Overview
-(1-2 sentences summarizing the main theme)
-
-## Key Contributions
-(3-5 bullet points)
-
-## Methodology
-(Concise explanation of methods used)
-
-## Conclusion
-(Key findings and implications)
+PAPER_SUMMARY_FULL_PROMPT = """TASK: Summarize the following paper
+PAPER_TEXT: {paper_text}
+* Output language must be {lang_name}.
+Overview_{lang_name}: (1-2 sentences summarizing the main theme)
+Key Contributions_{lang_name}: (2-4 bullet points)
+Methodology_{lang_name}: (Concise explanation of methods used)
+Conclusion_{lang_name}: (Key findings and implications)
 """
 
 PAPER_SUMMARY_SECTIONS_PROMPT = """Summarize the following paper section by section in {lang_name}.
@@ -114,39 +101,6 @@ Focus on key terminology and the main research topic to serve as context for tec
 
 [Paper Text]
 {paper_text}
-"""
-
-# ==========================================
-# Paragraph Analysis Prompts
-# ==========================================
-# 特定の段落の詳細解説や翻訳に使用
-
-PARAGRAPH_EXPLAIN_PROMPT = """Please analyze and explain the following paragraph in detail.
-{context_hint}
-[Target Paragraph]
-{paragraph}
-
-Please provide a clear and easy-to-understand explanation in {lang_name}, covering the following points:
-
-1. **Main Claim**: The core argument or content of this paragraph.
-2. **Background Knowledge**: Prerequisites or technical terms needed to understand this.
-3. **Logic Flow**: How the argument or logic is developed.
-4. **Key Points**: Important implications or things to note.
-
-Even if the content is highly technical, please explain it at a level understandable by a graduate student.
-Ensure the output is in {lang_name}.
-"""
-
-PARAGRAPH_TRANSLATE_PROMPT = """Translate the following academic paragraph into naturally flowing {lang_name}.
-Do not summarize or explain; provide a direct translation.
-Maintain the original tone and nuance.
-
-{context_hint}
-
-[Target Paragraph]
-{paragraph}
-
-Output ONLY the translation.
 """
 
 # ==========================================
@@ -373,3 +327,106 @@ Text Sample:
 PDF_EXTRACT_TEXT_OCR_PROMPT = (
     "Transcribe the text from this PDF page preserving the structure as much as possible."
 )
+
+# ==========================================
+# PDF Direct Input Prompts
+# ==========================================
+# PDF を直接 Gemini に渡して処理するためのプロンプト
+
+PAPER_SUMMARY_FROM_PDF_PROMPT = """TASK: Summarize the attached PDF paper.
+OUTPUT_LANGUAGE: {lang_name} * Output language must be {lang_name}.
+
+# Instructions
+- Analyze the entire PDF including text, figures, tables, and equations.
+- Pay attention to visual elements and their captions.
+- Extract key information comprehensively.
+
+# Output Format
+Provide the following in {lang_name}:
+
+## Overview
+(1-2 sentences summarizing the main theme)
+
+## Key Contributions
+- (2-4 bullet points)
+
+## Methodology
+(Concise explanation of methods used)
+
+## Conclusion
+(Key findings and implications)
+"""
+
+ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT = """You are a rigorous reviewer. Analyze the attached PDF paper from a critical perspective and identify potential issues.
+
+Please output in the following JSON format in {lang_name}:
+{{
+  "hidden_assumptions": [
+    {{"assumption": "Hidden assumption", "risk": "Why it is a problem", "severity": "high/medium/low"}}
+  ],
+  "unverified_conditions": [
+    {{"condition": "Unverified condition", "impact": "Impact if not verified", "severity": "high/medium/low"}}
+  ],
+  "reproducibility_risks": [
+    {{"risk": "Reproducibility risk", "detail": "Detailed explanation", "severity": "high/medium/low"}}
+  ],
+  "methodology_concerns": [
+    {{"concern": "Methodological concern", "suggestion": "Suggestion for improvement", "severity": "high/medium/low"}}
+  ],
+  "overall_assessment": "Overall assessment (2-3 sentences)"
+}}
+
+Be constructive but critical. Analyze figures and tables as well. Output ONLY valid JSON.
+"""
+
+CHAT_GENERAL_FROM_PDF_PROMPT = """You are an AI assistant helping a researcher read the attached academic paper.
+Based on the PDF content and the conversation history, answer the user's question in {lang_name}.
+
+[Chat History]
+{history_text}
+
+[User's Question]
+{user_message}
+
+Please provide a clear and concise answer in {lang_name}, referencing specific parts of the paper when relevant.
+"""
+
+CHAT_WITH_FIGURE_PROMPT = """You are an AI assistant helping a researcher understand a specific figure or table in an academic paper.
+Based on the provided image and paper context, answer the user's question in {lang_name}.
+
+[Paper Context]
+{document_context}
+
+[Chat History]
+{history_text}
+
+[User's Question]
+{user_message}
+
+Please provide a clear and easy-to-understand explanation in {lang_name}.
+"""
+
+CHAT_AUTHOR_FROM_PDF_PROMPT = """You are the author of this paper. Answer the reader's question from the author's perspective in {lang_name}.
+
+The attached PDF is your paper. Answer the following question as if you are the author (using "I", "we", "our team").
+Explain the background, motivation, and methodology rationale where appropriate.
+
+[Reader's Question]
+{question}
+
+Ensure the response is in {lang_name}.
+"""
+
+CLAIM_VERIFY_FROM_PDF_PROMPT = """You are an autonomous "Evidence Checker".
+Your task is to critically verify the claims made in the attached PDF by cross-referencing with external information (Web Search).
+
+[Instructions]
+1. Identify the core claims in this paper (e.g., "Outperforms SOTA by 10%", "New architecture X").
+2. AUTONOMOUSLY SEARCH for these claims online. Look for:
+   - Reproducibility reports (GitHub issues, Twitter discussions, Reddit threads).
+   - Contradictory papers (Google Scholar).
+   - Consensus in the community.
+3. Report your findings in {lang_name}.
+
+Output should be comprehensive and cite sources where possible.
+"""

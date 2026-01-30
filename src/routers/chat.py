@@ -3,18 +3,22 @@ Chat Router
 Handles chat interactions with the AI assistant.
 """
 
+import json
+
 from fastapi import APIRouter, Form
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from ..features import ChatService
-from ..providers import RedisService
+from ..logger import logger
+from ..providers import RedisService, get_image_bytes, get_storage_provider
 
 router = APIRouter(tags=["Chat"])
 
 # Services
 chat_service = ChatService()
 redis_service = RedisService()
+storage = get_storage_provider()
 
 
 class ChatRequest(BaseModel):
@@ -22,23 +26,82 @@ class ChatRequest(BaseModel):
     session_id: str
     author_mode: bool = False
     lang: str = "ja"
+    paper_id: str | None = None
+    figure_id: str | None = None
 
 
 @router.post("/chat")
 async def chat(request: ChatRequest):
     context = redis_service.get(f"session:{request.session_id}") or ""
 
+    # Resolve paper_id
+    paper_id = request.paper_id
+    if not paper_id:
+        paper_id = storage.get_session_paper_id(request.session_id)
+
+    # Get history from Redis
+    history_key = f"chat:{request.session_id}:{paper_id if paper_id else 'global'}"
+    history = redis_service.get(history_key) or []
+
     if request.author_mode:
         response = await chat_service.author_agent_response(
             request.message, context, target_lang=request.lang
         )
+        # Author agent is stateless/different flow? Or should we append to history too?
+        # Usually author agent answers just the question. Let's not mix it with main chat history for now,
+        # or treat it as a special interaction.
+        # For now, let's keep it separate or just return without history update.
     else:
-        response = await chat_service.chat(request.message, context, target_lang=request.lang)
+        # Fetch image if figure_id provided
+        image_bytes = None
+        if request.figure_id:
+            figure = storage.get_figure(request.figure_id)
+            if figure and figure.get("image_url"):
+                try:
+                    image_bytes = get_image_bytes(figure["image_url"])
+                    logger.info(f"Loaded image for figure_id {request.figure_id}")
+                except Exception as e:
+                    logger.error(f"Failed to load image for figure {request.figure_id}: {e}")
+
+        response = await chat_service.chat(
+            request.message,
+            history=history,
+            document_context=context,
+            target_lang=request.lang,
+            image_bytes=image_bytes,
+        )
+
+        # Update history
+        history.append({"role": "user", "content": request.message})
+        history.append({"role": "assistant", "content": response})
+
+        # Trim history (keep last 40)
+        if len(history) > 40:
+            history = history[-40:]
+
+        # Save to Redis (TTL 24h = 86400s)
+        redis_service.set(history_key, json.dumps(history), expire=86400)
 
     return JSONResponse({"response": response})
 
 
+@router.get("/chat/history")
+async def get_chat_history(session_id: str, paper_id: str | None = None):
+    # Resolve paper_id if missing
+    if not paper_id:
+        paper_id = storage.get_session_paper_id(session_id)
+
+    auth_key = f"chat:{session_id}:{paper_id if paper_id else 'global'}"
+    history = redis_service.get(auth_key) or []
+
+    return JSONResponse({"history": history})
+
+
 @router.post("/chat/clear")
-async def clear_chat(session_id: str = Form(...)):
-    chat_service.clear_history()
+async def clear_chat(session_id: str = Form(...), paper_id: str | None = Form(None)):
+    if not paper_id:
+        paper_id = storage.get_session_paper_id(session_id)
+
+    history_key = f"chat:{session_id}:{paper_id if paper_id else 'global'}"
+    redis_service.delete(history_key)
     return JSONResponse({"status": "ok"})

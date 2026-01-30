@@ -50,10 +50,20 @@ class AuthorAgentService:
         return persona_instruction.strip()
 
     async def chat_with_author(
-        self, message: str, history: List[Dict[str, str]], system_instruction: str
+        self,
+        message: str,
+        history: List[Dict[str, str]],
+        system_instruction: str,
+        pdf_bytes: bytes | None = None,
     ) -> str:
         """
         Chat with the generated author persona.
+
+        Args:
+            message: ユーザーからのメッセージ
+            history: 会話履歴
+            system_instruction: 著者ペルソナの指示
+            pdf_bytes: PDFバイナリデータ (PDF直接入力方式)
         """
         # Create prompt with history and persona
         conversation = f"System: {system_instruction}\n\n"
@@ -64,5 +74,11 @@ class AuthorAgentService:
 
         conversation += f"User: {message}\nAuthor:"
 
-        response = await self.ai_provider.generate(conversation)
+        # PDF直接入力方式
+        if pdf_bytes:
+            logger.info("Chat with author using PDF context")
+            response = await self.ai_provider.generate_with_pdf(conversation, pdf_bytes)
+        else:
+            response = await self.ai_provider.generate(conversation)
+
         return response

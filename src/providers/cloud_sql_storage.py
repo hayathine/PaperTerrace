@@ -103,13 +103,21 @@ class CloudSQLStorage(StorageInterface):
                     logger.info("Migrating: Adding latex to paper_figures table")
                     cur.execute("ALTER TABLE paper_figures ADD COLUMN latex TEXT")
 
-                # Check papers table for raw_abstract
+                # Check papers table for full_summary
                 cur.execute(
-                    "SELECT column_name FROM information_schema.columns WHERE table_name='papers' AND column_name='raw_abstract'"
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='papers' AND column_name='full_summary'"
                 )
                 if not cur.fetchone():
-                    logger.info("Migrating: Adding raw_abstract to papers table")
-                    cur.execute("ALTER TABLE papers ADD COLUMN raw_abstract TEXT")
+                    logger.info("Migrating: Adding full_summary to papers table")
+                    cur.execute("ALTER TABLE papers ADD COLUMN full_summary TEXT")
+
+                # Check papers table for section_summary_json
+                cur.execute(
+                    "SELECT column_name FROM information_schema.columns WHERE table_name='papers' AND column_name='section_summary_json'"
+                )
+                if not cur.fetchone():
+                    logger.info("Migrating: Adding section_summary_json to papers table")
+                    cur.execute("ALTER TABLE papers ADD COLUMN section_summary_json TEXT")
 
                 # Check for paper_figures table (create if not exists handled in init_tables, but nice to have check here if needed or just rely on init)
             conn.commit()
@@ -169,6 +177,8 @@ class CloudSQLStorage(StorageInterface):
                         like_count INTEGER DEFAULT 0,
                         layout_json TEXT,
                         raw_abstract TEXT,
+                        full_summary TEXT,
+                        section_summary_json TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -188,6 +198,7 @@ class CloudSQLStorage(StorageInterface):
                         file_hash TEXT PRIMARY KEY,
                         filename TEXT,
                         ocr_text TEXT,
+                        layout_json TEXT,
                         model_name TEXT,
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     )
@@ -402,13 +413,14 @@ class CloudSQLStorage(StorageInterface):
         x: float | None = None,
         y: float | None = None,
         user_id: str | None = None,
+        paper_id: str | None = None,
     ) -> str:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
                     """
-                    INSERT INTO notes (note_id, session_id, term, note, image_url, page_number, x, y, user_id, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    INSERT INTO notes (note_id, session_id, term, note, image_url, page_number, x, y, user_id, paper_id, created_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (note_id) DO UPDATE SET
                         term = EXCLUDED.term,
                         note = EXCLUDED.note,
@@ -417,6 +429,7 @@ class CloudSQLStorage(StorageInterface):
                         x = EXCLUDED.x,
                         y = EXCLUDED.y,
                         user_id = EXCLUDED.user_id,
+                        paper_id = EXCLUDED.paper_id,
                         created_at = EXCLUDED.created_at
                     """,
                     (
@@ -429,25 +442,35 @@ class CloudSQLStorage(StorageInterface):
                         x,
                         y,
                         user_id,
+                        paper_id,
                         datetime.now(),
                     ),
                 )
             conn.commit()
         return note_id
 
-    def get_notes(self, session_id: str, user_id: str | None = None) -> list[dict]:
+    def get_notes(
+        self, session_id: str, paper_id: str | None = None, user_id: str | None = None
+    ) -> list[dict]:
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                query = "SELECT * FROM notes WHERE "
+                conditions = []
+                params = []
+
+                if paper_id:
+                    conditions.append("paper_id = %s")
+                    params.append(paper_id)
+
                 if user_id:
-                    cur.execute(
-                        "SELECT * FROM notes WHERE user_id = %s OR session_id = %s ORDER BY created_at DESC",
-                        (user_id, session_id),
-                    )
+                    conditions.append("(user_id = %s OR (user_id IS NULL AND session_id = %s))")
+                    params.extend([user_id, session_id])
                 else:
-                    cur.execute(
-                        "SELECT * FROM notes WHERE session_id = %s ORDER BY created_at DESC",
-                        (session_id,),
-                    )
+                    conditions.append("session_id = %s")
+                    params.append(session_id)
+
+                query += " AND ".join(conditions) + " ORDER BY created_at DESC"
+                cur.execute(query, tuple(params))
                 rows = cur.fetchall()
                 return [dict(row) for row in rows]
 
@@ -647,6 +670,30 @@ class CloudSQLStorage(StorageInterface):
                 cur.execute(
                     "UPDATE papers SET raw_abstract = %s, updated_at = %s WHERE paper_id = %s",
                     (raw_abstract, now, paper_id),
+                )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def update_paper_full_summary(self, paper_id: str, summary: str) -> bool:
+        """Update the full summary of a paper."""
+        now = datetime.now()
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE papers SET full_summary = %s, updated_at = %s WHERE paper_id = %s",
+                    (summary, now, paper_id),
+                )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def update_paper_section_summary(self, paper_id: str, json_summary: str) -> bool:
+        """Update the section summary (JSON) of a paper."""
+        now = datetime.now()
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE papers SET section_summary_json = %s, updated_at = %s WHERE paper_id = %s",
+                    (json_summary, now, paper_id),
                 )
             conn.commit()
             return cur.rowcount > 0
@@ -875,27 +922,39 @@ class CloudSQLStorage(StorageInterface):
     def get_popular_tags(self, limit: int = 20) -> list[dict]:
         return []
 
-    def get_ocr_cache(self, file_hash: str) -> str | None:
-        with self._get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute("SELECT ocr_text FROM ocr_reader WHERE file_hash = %s", (file_hash,))
-                row = cur.fetchone()
-                if row:
-                    return row[0]
-                return None
-
-    def save_ocr_cache(self, file_hash: str, ocr_text: str, filename: str, model_name: str) -> None:
+    def get_ocr_cache(self, file_hash: str) -> dict | None:
+        """Get cached OCR text and layout."""
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    """
-                    INSERT INTO ocr_reader (file_hash, filename, ocr_text, model_name, created_at)
-                    VALUES (%s, %s, %s, %s, %s)
-                    ON CONFLICT (file_hash) DO UPDATE SET
-                    filename = EXCLUDED.filename,
-                    ocr_text = EXCLUDED.ocr_text,
-                    model_name = EXCLUDED.model_name
-                    """,
-                    (file_hash, filename, ocr_text, model_name, datetime.now()),
+                    "SELECT ocr_text, layout_json FROM ocr_reader WHERE file_hash = %s",
+                    (file_hash,),
+                )
+                row = cur.fetchone()
+                if row:
+                    return {"ocr_text": row[0], "layout_json": row[1]}
+                return None
+
+    def save_ocr_cache(
+        self,
+        file_hash: str,
+        ocr_text: str,
+        filename: str,
+        model_name: str,
+        layout_json: str | None = None,
+    ) -> None:
+        """Save OCR text to cache."""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """INSERT INTO ocr_reader (file_hash, filename, ocr_text, layout_json, model_name)
+                       VALUES (%s, %s, %s, %s, %s)
+                       ON CONFLICT (file_hash) DO UPDATE SET
+                       filename = EXCLUDED.filename,
+                       ocr_text = EXCLUDED.ocr_text,
+                       layout_json = EXCLUDED.layout_json,
+                       model_name = EXCLUDED.model_name,
+                       created_at = CURRENT_TIMESTAMP""",
+                    (file_hash, filename, ocr_text, layout_json, model_name),
                 )
             conn.commit()

@@ -52,12 +52,41 @@ async def lifespan(app: FastAPI):
     from src.logger import logger
     from src.providers import get_storage_provider
 
+    async def _prewarm_models():
+        try:
+            from src.services.local_translator import get_local_translator
+            from src.services.nlp_service import NLPService
+
+            # Prewarm Local Translator (M2M100)
+            lt = get_local_translator()
+            await lt.prewarm()
+
+            # Prewarm NLP (spaCy) - internal buffers
+            NLPService.lemmatize("warmup")
+            logger.info("Pre-warmed NLP (spaCy)")
+
+            # Jamdict prewarm if enabled
+            from src.providers.dictionary_provider import get_dictionary_provider
+
+            dp = get_dictionary_provider()
+            if dp.use_jamdict:
+                dp.lookup("apple")
+                logger.info("Pre-warmed Jamdict")
+
+        except Exception as e:
+            logger.warning(f"Failed to pre-warm models: {e}")
+
     logger.info("Starting up...")
     try:
         storage = get_storage_provider()
         if hasattr(storage, "init_tables"):
             storage.init_tables()
             logger.info("Database tables initialized")
+
+        # Pre-warm models before server starts (Blocking)
+        logger.info("Pre-warming models before accepting requests...")
+        await _prewarm_models()
+        logger.info("All models loaded. Server is ready.")
     except Exception as e:
         logger.error(f"Failed to initialize database: {e}")
 

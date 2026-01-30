@@ -29,6 +29,10 @@ class ImageStorageStrategy(ABC):
     def delete(self, file_hash: str) -> bool:
         pass
 
+    @abstractmethod
+    def get_image_bytes(self, image_url: str) -> bytes:
+        pass
+
 
 class LocalImageStorage(ImageStorageStrategy):
     def __init__(self):
@@ -84,14 +88,25 @@ class LocalImageStorage(ImageStorageStrategy):
             return True
         return False
 
+    def get_image_bytes(self, image_url: str) -> bytes:
+        # e.g., /static/paper_images/HASH/page_1.png
+        if image_url.startswith("/static/paper_images/"):
+            relative_path = image_url.replace("/static/paper_images/", "")
+            full_path = self.images_dir / relative_path
+            if full_path.exists():
+                return full_path.read_bytes()
+        raise FileNotFoundError(f"Local image not found: {image_url}")
+
 
 class GCSImageStorage(ImageStorageStrategy):
     def __init__(self):
         from google.cloud import storage
 
-        self.bucket_name = os.getenv("GCS_BUCKET_NAME")
+        self.bucket_name = os.getenv("GCS_BUCKET_NAME") or os.getenv("STORAGE_BUCKET")
         if not self.bucket_name:
-            raise ValueError("GCS_BUCKET_NAME env var is required for GCS storage type")
+            raise ValueError(
+                "Either GCS_BUCKET_NAME or STORAGE_BUCKET env var is required for GCS storage"
+            )
         self.client = storage.Client()
         self.bucket = self.client.bucket(self.bucket_name)
 
@@ -178,6 +193,15 @@ class GCSImageStorage(ImageStorageStrategy):
             logger.info(f"Deleted images (GCS) for hash: {file_hash}")
         return deleted
 
+    def get_image_bytes(self, image_url: str) -> bytes:
+        # GCSの場合、URLから直接取得するか、URLをパースしてBlobとして取得する
+        # ここではシンプルにrequestsでURLから取得する（署名付きURLならアクセス可能）
+        import requests
+
+        response = requests.get(image_url)
+        response.raise_for_status()
+        return response.content
+
 
 # Factory
 def get_image_storage() -> ImageStorageStrategy:
@@ -209,3 +233,7 @@ def get_page_images(file_hash: str) -> List[str]:
 
 def delete_page_images(file_hash: str) -> bool:
     return _get_instance().delete(file_hash)
+
+
+def get_image_bytes(image_url: str) -> bytes:
+    return _get_instance().get_image_bytes(image_url)

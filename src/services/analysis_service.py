@@ -24,7 +24,7 @@ class EnglishAnalysisService:
         self.tokenization = TokenizationService()
 
         # Initialize OCR service
-        self.model = os.getenv("OCR_MODEL", "gemini-1.5-flash")
+        self.model = os.getenv("MODEL_OCR", "gemini-2.5-flash-lite")
         self.ocr_service = PDFOCRService(self.model)
 
         # Maintain public properties if they were used outside

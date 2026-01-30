@@ -50,14 +50,16 @@ class VisionOCRService:
         try:
             image = vision.Image(content=image_bytes)
             # Use DOCUMENT_TEXT_DETECTION for better density handling in documents
+            logger.info("[VisionOCR] Sending request to Google Cloud Vision API")
             response = self.client.document_text_detection(image=image)
 
             if response.error.message:
-                logger.error(f"Vision API Error: {response.error.message}")
+                logger.error(f"[VisionOCR] API Error: {response.error.message}")
                 return f"Error: {response.error.message}", None
 
             # 1. Build full text
             full_text = response.full_text_annotation.text
+            logger.info(f"[VisionOCR] Received response (text length: {len(full_text)})")
 
             # 2. Build layout data
             # Vision API returns bounds in pixels relative to the image size.

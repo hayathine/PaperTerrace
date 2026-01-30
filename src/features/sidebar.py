@@ -31,6 +31,7 @@ class SidebarNoteService:
         y: float | None = None,
         user_id: str | None = None,
         note_id: str | None = None,
+        paper_id: str | None = None,
     ) -> dict:
         """
         Add a note to the sidebar.
@@ -46,6 +47,7 @@ class SidebarNoteService:
             y: Y coordinate (relative %)
             user_id: Optional user identifier (if logged in)
             note_id: Optional existing note ID for update
+            paper_id: Optional paper identifier
 
         Returns:
             The created/updated note with its ID
@@ -53,15 +55,25 @@ class SidebarNoteService:
         try:
             if not note_id:
                 note_id = str(uuid6.uuid7())
-            
+
             self.storage.save_note(
-                note_id, session_id, term, note, image_url, page_number, x, y, user_id
+                note_id,
+                session_id,
+                term,
+                note,
+                image_url,
+                page_number,
+                x,
+                y,
+                user_id,
+                paper_id,
             )
             logger.info(
                 "Note added/updated",
                 extra={
                     "note_id": note_id,
                     "session_id": session_id,
+                    "paper_id": paper_id,
                     "term": term,
                     "user_id": user_id,
                     "page": page_number,
@@ -70,6 +82,7 @@ class SidebarNoteService:
             return {
                 "note_id": note_id,
                 "session_id": session_id,
+                "paper_id": paper_id,
                 "term": term,
                 "note": note,
                 "image_url": image_url,
@@ -81,33 +94,41 @@ class SidebarNoteService:
         except Exception as e:
             logger.exception(
                 "Failed to add note",
-                extra={"session_id": session_id, "error": str(e)},
+                extra={"session_id": session_id, "paper_id": paper_id, "error": str(e)},
             )
             raise NoteError(f"ノートの保存に失敗しました: {e}") from e
 
-    def get_notes(self, session_id: str, user_id: str | None = None) -> list[dict]:
+    def get_notes(
+        self, session_id: str, paper_id: str | None = None, user_id: str | None = None
+    ) -> list[dict]:
         """
         Get all notes for a session or user.
 
         Args:
             session_id: The session identifier
+            paper_id: Optional paper identifier
             user_id: Optional user identifier
 
         Returns:
             List of notes
         """
         try:
-            notes = self.storage.get_notes(session_id, user_id)
+            notes = self.storage.get_notes(session_id, paper_id=paper_id, user_id=user_id)
             logger.info(
                 "Notes retrieved",
-                extra={"session_id": session_id, "user_id": user_id, "count": len(notes)},
+                extra={
+                    "session_id": session_id,
+                    "paper_id": paper_id,
+                    "user_id": user_id,
+                    "count": len(notes),
+                },
             )
 
             return notes
         except Exception as e:
             logger.exception(
                 "Failed to retrieve notes",
-                extra={"session_id": session_id, "error": str(e)},
+                extra={"session_id": session_id, "paper_id": paper_id, "error": str(e)},
             )
             return []
 

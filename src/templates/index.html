@@ -1,6 +1,4 @@
-{% extends "base.html" %}
-
-{% block content %}
+{% extends "base.html" %} {% block content %}
 <div class="flex flex-col h-screen">
   <!-- Navigation -->
   {% include "components/header.html" %}
@@ -16,9 +14,7 @@
     </main>
 
     <!-- Sidebar -->
-    <aside
-      class="w-96 glass-morphism border-l border-slate-200 flex flex-col"
-    >
+    <aside class="w-96 glass-morphism border-l border-slate-200 flex flex-col">
       <!-- Tabs -->
       <div class="flex p-2 bg-slate-100/50 m-4 rounded-xl">
         <button
@@ -60,11 +56,11 @@
 
       <div class="flex-1 overflow-y-auto px-6 py-2">
         <!-- Sidebar Tabs Content -->
-        {% include "partials/sidebar/tab_dict.html" %}
-        {% include "partials/sidebar/tab_summary.html" %}
-        {% include "partials/sidebar/tab_chat.html" %}
-        {% include "partials/sidebar/tab_note.html" %}
-        {% include "partials/sidebar/tab_figures.html" %}
+        {% include "partials/sidebar/tab_dict.html" %} {% include
+        "partials/sidebar/tab_summary.html" %} {% include
+        "partials/sidebar/tab_chat.html" %} {% include
+        "partials/sidebar/tab_note.html" %} {% include
+        "partials/sidebar/tab_figures.html" %}
       </div>
 
       <!-- Footer -->
@@ -99,28 +95,27 @@
     </aside>
   </div>
 </div>
-{% endblock %}
-
-{% block scripts %}
+{% endblock %} {% block scripts %}
 <script>
   // Session & Language management
   const sessionId = crypto.randomUUID();
   document.getElementById("session-id").value = sessionId;
-  
+
   // Browser language detection
   const getBrowserLang = () => {
-    const lang = navigator.language.split('-')[0];
-    const supported = ['ja', 'en', 'zh', 'ko', 'es', 'fr', 'de'];
-    return supported.includes(lang) ? lang : 'ja';
+    const lang = navigator.language.split("-")[0];
+    const supported = ["ja", "en", "zh", "ko", "es", "fr", "de"];
+    return supported.includes(lang) ? lang : "ja";
   };
 
-  let currentLanguage = localStorage.getItem('user-language') || getBrowserLang();
-  
+  let currentLanguage =
+    localStorage.getItem("user-language") || getBrowserLang();
+
   // Initialize language selector and hidden inputs
   function initLanguage() {
-    const langSelector = document.getElementById('language-selector');
+    const langSelector = document.getElementById("language-selector");
     if (langSelector) langSelector.value = currentLanguage;
-    document.querySelectorAll('.current-lang-input').forEach(input => {
+    document.querySelectorAll(".current-lang-input").forEach((input) => {
       input.value = currentLanguage;
     });
   }
@@ -156,18 +151,18 @@
       }
     });
 
-    if (tab === 'figures') {
-        document.body.dispatchEvent(new CustomEvent('tab-figures-active'));
+    if (tab === "figures") {
+      document.body.dispatchEvent(new CustomEvent("tab-figures-active"));
     }
   }
 
   function jumpToElement(id) {
     const el = document.getElementById(id);
     if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      el.classList.remove('highlight-jump');
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.classList.remove("highlight-jump");
       void el.offsetWidth; // trigger reflow
-      el.classList.add('highlight-jump');
+      el.classList.add("highlight-jump");
     } else {
       console.warn("Element not found:", id);
     }
@@ -175,8 +170,8 @@
 
   function setLanguage(lang) {
     currentLanguage = lang;
-    localStorage.setItem('user-language', lang);
-    document.querySelectorAll('.current-lang-input').forEach(input => {
+    localStorage.setItem("user-language", lang);
+    document.querySelectorAll(".current-lang-input").forEach((input) => {
       input.value = lang;
     });
     fetch("/settings/language", {
@@ -379,10 +374,10 @@
               <span class="font-bold text-xs text-indigo-600">${m.term}</span>
               <button onclick="deleteNote('${m.note_id}')" class="text-slate-300 hover:text-red-500 text-xs">×</button>
             </div>
-            ${m.image_url ? `<div class="mt-2 rounded-lg overflow-hidden border border-slate-50"><img src="${m.image_url}" class="w-full h-auto object-cover max-h-40" loading="lazy"></div>` : ''}
+            ${m.image_url ? `<div class="mt-2 rounded-lg overflow-hidden border border-slate-50"><img src="${m.image_url}" class="w-full h-auto object-cover max-h-40" loading="lazy"></div>` : ""}
             <p class="text-[10px] text-slate-500 mt-1">${m.note}</p>
           </div>
-        `
+        `,
           )
           .join("");
       } else {
@@ -411,20 +406,20 @@
           session_id: sessionId,
           term: term,
           note: note,
-          image_url: imageUrl
+          image_url: imageUrl,
         }),
       });
       await response.json();
-      
+
       // Feedback
-      const statusBtn = document.getElementById('tab-note');
+      const statusBtn = document.getElementById("tab-note");
       const originalText = statusBtn.innerText;
       statusBtn.innerText = "✓ Saved!";
-      statusBtn.classList.add('bg-indigo-50');
-      
+      statusBtn.classList.add("bg-indigo-50");
+
       setTimeout(() => {
         statusBtn.innerText = originalText;
-        statusBtn.classList.remove('bg-indigo-50');
+        statusBtn.classList.remove("bg-indigo-50");
       }, 2000);
 
       loadNotes();
@@ -438,78 +433,8 @@
 
   // User dropdown toggle
   function toggleUserDropdown() {
-    const dropdown = document.getElementById('user-dropdown');
-    dropdown.classList.toggle('active');
-  }
-
-  // Paragraph Explanation functionality
-  async function explainParagraph(btn) {
-    const container = btn.closest('.paragraph-container');
-    const pTag = container.querySelector('p');
-    // textContentで生のテキストを取得（HTMLタグ除去）
-    const text = pTag.textContent.trim();
-    if (!text) return;
-
-    switchTab('dict');
-    const outputBox = document.getElementById("dict-stack");
-    const statusContainer = document.getElementById('dict-status-container');
-    if (statusContainer) statusContainer.innerHTML = ''; // Keep cards, clear status
-
-    // 一時的なローディングカードを追加
-    const loadingId = "loading-" + Date.now();
-    const loadingHtml = `
-      <div id="${loadingId}" class="p-4 bg-indigo-50 border border-indigo-100 rounded-xl shadow-sm animate-pulse">
-        <div class="flex items-center gap-2 mb-2">
-            <svg class="w-4 h-4 text-indigo-400 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-            <span class="text-xs font-bold text-indigo-500">Analyzing Paragraph...</span>
-        </div>
-        <p class="text-[10px] text-indigo-300 line-clamp-2">${text}</p>
-      </div>`;
-    outputBox.insertAdjacentHTML('afterbegin', loadingHtml);
-
-    try {
-      const formData = new FormData();
-      formData.append("paragraph", text);
-      formData.append("session_id", sessionId);
-      formData.append("lang", currentLanguage);
-
-      const response = await fetch("/explain-paragraph", {
-        method: "POST",
-        body: formData,
-      });
-      const data = await response.json();
-      
-      // ローディング削除
-      document.getElementById(loadingId)?.remove();
-
-      if (data.explanation) {
-        const resultHtml = `
-          <div class="dict-card p-4 bg-white border border-slate-100 rounded-xl shadow-sm animate-fade-in group hover:shadow-md transition-all">
-            <div class="flex items-start justify-between gap-2 mb-3 pb-2 border-b border-slate-50">
-                <div class="flex items-center gap-2">
-                    <span class="p-1 bg-indigo-100 text-indigo-600 rounded-md"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg></span>
-                    <span class="text-xs font-bold text-slate-700">Paragraph Insight</span>
-                </div>
-                <div class="flex items-center gap-1">
-                    <button onclick="saveWordToNote('Paragraph Insight', \`${data.explanation.replace(/`/g, '\\`').replace(/\$/g, '\\$')}\`)" title="Save to Note" class="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded transition-all">
-                        <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
-                    </button>
-                    <button onclick="this.closest('.dict-card').remove()" class="text-slate-300 hover:text-slate-500">×</button>
-                </div>
-            </div>
-            <div class="prose prose-sm prose-slate max-w-none text-xs leading-relaxed">
-                ${data.explanation.replace(/\*\*(.*?)\*\*/g, '<strong class="text-indigo-600">$1</strong>').replace(/\n/g, '<br>')}
-            </div>
-          </div>
-        `;
-        outputBox.insertAdjacentHTML('afterbegin', resultHtml);
-      } else {
-         // エラー表示など
-      }
-    } catch (error) {
-      document.getElementById(loadingId)?.remove();
-      console.error("Paragraph explanation failed:", error);
-    }
+    const dropdown = document.getElementById("user-dropdown");
+    dropdown.classList.toggle("active");
   }
 
   // Explain word with context
@@ -518,7 +443,7 @@
     let context = "";
     if (el) {
       // Find sentence context. Use the paragraph container text.
-      const container = el.closest('.paragraph-container') || el.parentElement;
+      const container = el.closest(".paragraph-container") || el.parentElement;
       context = container.textContent.trim();
     }
 
@@ -533,7 +458,7 @@
             <span class="text-xs font-bold text-emerald-500">AI分析中...</span>
         </div>
       </div>`;
-    outputBox.insertAdjacentHTML('afterbegin', loadingHtml);
+    outputBox.insertAdjacentHTML("afterbegin", loadingHtml);
 
     try {
       const response = await fetch("/explain/context", {
@@ -543,7 +468,7 @@
           word: lemma,
           context: context,
           session_id: sessionId,
-          lang: lang
+          lang: lang,
         }),
       });
       const data = await response.json();
@@ -551,8 +476,10 @@
 
       if (data.translation) {
         const safeLemma = lemma.replace(/'/g, "\\'");
-        const safeTranslation = data.translation.replace(/`/g, "\\`").replace(/\$/g, "\\$");
-        
+        const safeTranslation = data.translation
+          .replace(/`/g, "\\`")
+          .replace(/\$/g, "\\$");
+
         const resultHtml = `
           <div class="dict-card p-4 bg-white border border-emerald-100 rounded-2xl shadow-sm animate-fade-in group hover:shadow-md transition-all">
             <div class="flex items-start justify-between mb-3">
@@ -571,11 +498,11 @@
                 </div>
             </div>
             <div class="text-[11px] font-medium text-emerald-800 leading-relaxed bg-emerald-50/50 p-3 rounded-xl border border-emerald-100/30">
-                ${data.translation.replace(/\n/g, '<br>')}
+                ${data.translation.replace(/\n/g, "<br>")}
             </div>
           </div>
         `;
-        outputBox.insertAdjacentHTML('afterbegin', resultHtml);
+        outputBox.insertAdjacentHTML("afterbegin", resultHtml);
       }
     } catch (e) {
       document.getElementById(loadingId)?.remove();
@@ -585,18 +512,19 @@
 
   // Claim Verification functionality
   async function verifyClaims(btn) {
-    const container = btn.closest('.paragraph-container');
-    const pTag = container.querySelector('p');
+    const container = btn.closest(".paragraph-container");
+    const pTag = container.querySelector("p");
     const text = pTag.textContent.trim();
     if (!text) return;
 
     // Loading state
     const originalContent = btn.innerHTML;
-    btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+    btn.innerHTML =
+      '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
     btn.disabled = true;
 
     // Clear previous reports
-    container.querySelectorAll('.claim-report').forEach(el => el.remove());
+    container.querySelectorAll(".claim-report").forEach((el) => el.remove());
 
     try {
       const formData = new FormData();
@@ -611,16 +539,16 @@
       });
       const data = await response.json();
       const report = data.report;
-      
+
       let colorClass = "bg-slate-50 border-slate-200 text-slate-700";
       let icon = "🧐";
-      
+
       if (report.status === "warning") {
-          colorClass = "bg-red-50 border-red-200 text-red-800";
-          icon = "⚠️";
+        colorClass = "bg-red-50 border-red-200 text-red-800";
+        icon = "⚠️";
       } else if (report.status === "verified") {
-          colorClass = "bg-emerald-50 border-emerald-200 text-emerald-800";
-          icon = "✅";
+        colorClass = "bg-emerald-50 border-emerald-200 text-emerald-800";
+        icon = "✅";
       }
 
       const html = `
@@ -632,34 +560,39 @@
             </div>
             <p class="font-bold mb-1">${report.summary}</p>
             <div class="opacity-90 leading-relaxed whitespace-pre-wrap">${report.details}</div>
-            ${ report.sources && report.sources.length ? 
-               `<div class="mt-3 pt-2 border-t border-black/5 opacity-70 text-[10px] break-all"><strong>Sources:</strong> ${report.sources.join(", ")}</div>` : '' }
+            ${
+              report.sources && report.sources.length
+                ? `<div class="mt-3 pt-2 border-t border-black/5 opacity-70 text-[10px] break-all"><strong>Sources:</strong> ${report.sources.join(", ")}</div>`
+                : ""
+            }
         </div>
       `;
-      
-      pTag.insertAdjacentHTML('afterend', html);
 
+      pTag.insertAdjacentHTML("afterend", html);
     } catch (error) {
       console.error("Claim verification failed:", error);
       alert("Verification failed. Please try again.");
     } finally {
-        btn.innerHTML = originalContent;
-        btn.disabled = false;
+      btn.innerHTML = originalContent;
+      btn.disabled = false;
     }
   }
 
   // Cite Intent functionality
   async function analyzeCiteIntent(btn) {
-    const container = btn.closest('.paragraph-container');
-    const pTag = container.querySelector('p');
+    const container = btn.closest(".paragraph-container");
+    const pTag = container.querySelector("p");
     const text = pTag.textContent.trim();
     if (!text) return;
 
     const originalContent = btn.innerHTML;
-    btn.innerHTML = '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
+    btn.innerHTML =
+      '<svg class="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>';
     btn.disabled = true;
 
-    container.querySelectorAll('.cite-intent-report').forEach(el => el.remove());
+    container
+      .querySelectorAll(".cite-intent-report")
+      .forEach((el) => el.remove());
 
     try {
       const formData = new FormData();
@@ -671,17 +604,19 @@
         body: formData,
       });
       const data = await response.json();
-      
+
       if (!data.citations || data.citations.length === 0) {
         const noCiteHtml = `
           <div class="cite-intent-report mt-2 p-2 rounded-lg bg-slate-50 text-[10px] text-slate-400 text-center animate-fade-in border border-slate-100">
             引用は見つかりませんでした
           </div>`;
-        pTag.insertAdjacentHTML('afterend', noCiteHtml);
+        pTag.insertAdjacentHTML("afterend", noCiteHtml);
         return;
       }
 
-      let citationsHtml = data.citations.map(c => `
+      let citationsHtml = data.citations
+        .map(
+          (c) => `
         <div class="flex items-start gap-2 p-2 rounded-lg ${c.bg} border ${c.border} transition-all hover:shadow-sm">
           <span class="text-sm">${c.icon}</span>
           <div class="flex-1">
@@ -692,7 +627,9 @@
             <p class="text-[10px] text-slate-600 mt-0.5 leading-relaxed">${c.reason}</p>
           </div>
         </div>
-      `).join('');
+      `,
+        )
+        .join("");
 
       const html = `
         <div class="cite-intent-report mt-4 p-3 rounded-xl bg-white border border-slate-100 shadow-sm animate-fade-in relative">
@@ -706,8 +643,8 @@
           </div>
         </div>
       `;
-      
-      pTag.insertAdjacentHTML('afterend', html);
+
+      pTag.insertAdjacentHTML("afterend", html);
     } catch (error) {
       console.error("Cite intent analysis failed:", error);
     } finally {
@@ -716,11 +653,11 @@
     }
   }
   // Close dropdown when clicking outside
-  document.addEventListener('click', (e) => {
-    const userMenu = document.getElementById('user-menu');
-    const dropdown = document.getElementById('user-dropdown');
+  document.addEventListener("click", (e) => {
+    const userMenu = document.getElementById("user-menu");
+    const dropdown = document.getElementById("user-dropdown");
     if (userMenu && dropdown && !userMenu.contains(e.target)) {
-      dropdown.classList.remove('active');
+      dropdown.classList.remove("active");
     }
   });
 </script>

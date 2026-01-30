@@ -7,8 +7,11 @@ import os
 
 from src.logger import logger
 from src.prompts import (
+    CHAT_AUTHOR_FROM_PDF_PROMPT,
     CHAT_AUTHOR_PERSONA_PROMPT,
+    CHAT_GENERAL_FROM_PDF_PROMPT,
     CHAT_GENERAL_RESPONSE_PROMPT,
+    CHAT_WITH_FIGURE_PROMPT,
     CORE_SYSTEM_PROMPT,
 )
 from src.providers import get_ai_provider
@@ -26,67 +29,97 @@ class ChatService:
     def __init__(self):
         self.ai_provider = get_ai_provider()
         self.model = os.getenv("MODEL_CHAT", "gemini-2.0-flash")
-        self.history: list[dict] = []
+        # History is now managed by the router/caller via Redis
 
     async def chat(
-        self, user_message: str, document_context: str = "", target_lang: str = "ja"
+        self,
+        user_message: str,
+        history: list[dict],
+        document_context: str = "",
+        target_lang: str = "ja",
+        pdf_bytes: bytes | None = None,
+        image_bytes: bytes | None = None,
     ) -> str:
         """
         Generate a chat response based on user message and document context.
 
         Args:
             user_message: The user's question or message
+            history: Conversation history (list of role/content dicts)
             document_context: The paper text for context
+            target_lang: Output language
+            pdf_bytes: PDFバイナリデータ (PDF直接入力方式)
 
         Returns:
             AI-generated response
         """
-        # Build conversation history for context
-        # The user message is added to history *after* a successful response is generated.
-        # For prompt generation, we use the current history + the new user message.
-        current_conversation = self.history + [{"role": "user", "content": user_message}]
-        history_text = "\n".join(
-            [f"{msg['role']}: {msg['content']}" for msg in current_conversation[-5:]]
-        )
-        history_str = "\n".join(
+        # Build conversation context
+        recent_history = history[-10:] if len(history) > 10 else history
+        current_conversation = recent_history + [{"role": "user", "content": user_message}]
+        history_text_for_prompt = "\n".join(
             [f"{msg['role']}: {msg['content']}" for msg in current_conversation]
-        )  # This will be passed as context to the AI provider
+        )
 
         from ..translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
-        context = document_context if document_context else "No paper loaded."
-
-        prompt = CHAT_GENERAL_RESPONSE_PROMPT.format(
-            lang_name=lang_name, document_context=context[:20000], history_text=history_text
-        )
 
         try:
-            logger.debug(
-                "Processing chat request",
-                extra={"message_length": len(user_message), "history_size": len(self.history)},
-            )
-            response = await self.ai_provider.generate(
-                prompt, model=self.model, system_instruction=CORE_SYSTEM_PROMPT
-            )
+            # PDF直接入力方式
+            if pdf_bytes:
+                logger.debug(
+                    "Processing chat request with PDF",
+                    extra={"message_length": len(user_message), "pdf_size": len(pdf_bytes)},
+                )
+                prompt = CHAT_GENERAL_FROM_PDF_PROMPT.format(
+                    lang_name=lang_name,
+                    history_text=history_text_for_prompt,
+                    user_message=user_message,
+                )
+                response = await self.ai_provider.generate_with_pdf(
+                    prompt, pdf_bytes, model=self.model
+                )
+            elif image_bytes:
+                # 画像付きチャット
+                logger.debug(
+                    "Processing chat request with image",
+                    extra={"message_length": len(user_message), "image_size": len(image_bytes)},
+                )
+                context = document_context if document_context else "No paper context."
+                prompt = CHAT_WITH_FIGURE_PROMPT.format(
+                    lang_name=lang_name,
+                    document_context=context[:10000],
+                    history_text=history_text_for_prompt,
+                    user_message=user_message,
+                )
+                response = await self.ai_provider.generate_with_image(
+                    prompt, image_bytes, "image/png", model=self.model
+                )
+            else:
+                # 従来のテキストベース方式
+                logger.debug(
+                    "Processing chat request with text",
+                    extra={"message_length": len(user_message), "history_size": len(history)},
+                )
+                context = document_context if document_context else "No paper loaded."
+                prompt = CHAT_GENERAL_RESPONSE_PROMPT.format(
+                    lang_name=lang_name,
+                    document_context=context[:20000],
+                    history_text=history_text_for_prompt,
+                )
+                response = await self.ai_provider.generate(
+                    prompt, model=self.model, system_instruction=CORE_SYSTEM_PROMPT
+                )
+
             response = response.strip()
 
             if not response:
                 logger.warning("Empty chat response received")
                 raise ChatError("Empty response from AI")
 
-            # Add to history
-            self.history.append({"role": "user", "content": user_message})
-            self.history.append({"role": "assistant", "content": response})
-
-            # Keep history manageable (last 20 exchanges)
-            if len(self.history) > 40:
-                self.history = self.history[-40:]
-                logger.debug("Chat history trimmed to 40 messages")
-
             logger.info(
                 "Chat response generated",
-                extra={"response_length": len(response), "history_size": len(self.history)},
+                extra={"response_length": len(response)},
             )
             return response
         except ChatError:
@@ -99,14 +132,20 @@ class ChatService:
             return f"エラーが発生しました: {str(e)}"
 
     async def author_agent_response(
-        self, question: str, paper_text: str, target_lang: str = "ja"
+        self,
+        question: str,
+        paper_text: str = "",
+        target_lang: str = "ja",
+        pdf_bytes: bytes | None = None,
     ) -> str:
         """
         Simulate the author's perspective to answer questions.
 
         Args:
             question: The user's question
-            paper_text: The full paper text
+            paper_text: The full paper text (従来のテキストベース)
+            target_lang: Output language
+            pdf_bytes: PDFバイナリデータ (PDF直接入力方式)
 
         Returns:
             Response simulating the author's viewpoint
@@ -115,16 +154,28 @@ class ChatService:
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = CHAT_AUTHOR_PERSONA_PROMPT.format(
-            lang_name=lang_name, paper_text=paper_text[:20000], question=question
-        )
-
         try:
-            logger.debug(
-                "Generating author agent response",
-                extra={"question_length": len(question), "paper_length": len(paper_text)},
-            )
-            response = await self.ai_provider.generate(prompt, model=self.model)
+            # PDF直接入力方式
+            if pdf_bytes:
+                logger.debug(
+                    "Generating author agent response from PDF",
+                    extra={"question_length": len(question), "pdf_size": len(pdf_bytes)},
+                )
+                prompt = CHAT_AUTHOR_FROM_PDF_PROMPT.format(lang_name=lang_name, question=question)
+                response = await self.ai_provider.generate_with_pdf(
+                    prompt, pdf_bytes, model=self.model
+                )
+            else:
+                # 従来のテキストベース方式
+                logger.debug(
+                    "Generating author agent response from text",
+                    extra={"question_length": len(question), "paper_length": len(paper_text)},
+                )
+                prompt = CHAT_AUTHOR_PERSONA_PROMPT.format(
+                    lang_name=lang_name, paper_text=paper_text[:20000], question=question
+                )
+                response = await self.ai_provider.generate(prompt, model=self.model)
+
             response = response.strip()
 
             if not response:
@@ -144,8 +195,3 @@ class ChatService:
                 extra={"error": str(e)},
             )
             return f"著者としての回答生成に失敗しました: {str(e)}"
-
-    def clear_history(self) -> None:
-        """Clear conversation history."""
-        self.history.clear()
-        logger.info("Chat history cleared")

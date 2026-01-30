@@ -370,7 +370,7 @@ async def stream(task_id: str):
                             f"Saving {len(collected_figures)} extracted figures for paper {new_paper_id}"
                         )
                         for fig in collected_figures:
-                            fid = save_figure_to_db(
+                            save_figure_to_db(
                                 paper_id=new_paper_id,
                                 page_number=fig["page_num"],
                                 bbox=fig["bbox"],
@@ -378,8 +378,8 @@ async def stream(task_id: str):
                                 caption="",  # Can't easily extract yet
                                 explanation="",  # Initially empty
                             )
-                            # Trigger background explanation
-                            asyncio.create_task(process_figure_auto_analysis(fid, fig["image_url"]))
+                            # Auto-explanation disabled to save tokens. Done on-demand via button.
+                            # asyncio.create_task(process_figure_auto_analysis(fid, fig["image_url"]))
 
                 except Exception as e:
                     logger.error(f"Failed to save paper: {e}")
@@ -395,7 +395,9 @@ async def stream(task_id: str):
                 # --- Auto-Summarization for Abstract ---
                 # Generate a full summary and save it to 'abstract' column
                 try:
-                    summary_full = await summary_service.summarize_full(full_text, target_lang=lang)
+                    summary_full = await summary_service.summarize_full(
+                        target_lang=lang, pdf_bytes=pdf_content
+                    )
                     if summary_full:
                         storage.update_paper_abstract(new_paper_id, summary_full)
                         logger.info(f"Full summary saved as abstract for paper {new_paper_id}")
@@ -606,7 +608,7 @@ async def stream(task_id: str):
                         f"Saving {len(collected_figures)} extracted figures for paper {paper_id}"
                     )
                     for fig in collected_figures:
-                        fid = save_figure_to_db(
+                        save_figure_to_db(
                             paper_id=paper_id,
                             page_number=fig["page_num"],
                             bbox=fig["bbox"],
@@ -616,12 +618,13 @@ async def stream(task_id: str):
                             label=fig.get("label", "figure"),
                             latex=fig.get("latex", ""),
                         )
-                        label = fig.get("label", "figure")
-                        asyncio.create_task(
-                            process_figure_auto_analysis(
-                                fid, fig["image_url"], label, target_lang=lang
-                            )
-                        )
+                        # Auto-explanation disabled to save tokens. Done on-demand via button.
+                        # label = fig.get("label", "figure")
+                        # asyncio.create_task(
+                        #     process_figure_auto_analysis(
+                        #         fid, fig["image_url"], label, target_lang=lang
+                        #     )
+                        # )
 
             except Exception as e:
                 logger.error(f"Failed to save paper: {e}")
@@ -637,7 +640,9 @@ async def stream(task_id: str):
                 # Extract raw abstract first
                 raw_abstract = service.ocr_service.extract_abstract_text(pdf_content)
 
-                summary_full = await summary_service.summarize_full(full_text, target_lang=lang)
+                summary_full = await summary_service.summarize_full(
+                    target_lang=lang, pdf_bytes=pdf_content
+                )
                 if summary_full:
                     storage.update_paper_abstract(paper_id, summary_full)
                     logger.info(f"Full summary saved as abstract for paper {paper_id}")
