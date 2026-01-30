@@ -13,6 +13,7 @@
   "license": "ISC",
   "type": "module",
   "devDependencies": {
+    "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^25.0.10",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",

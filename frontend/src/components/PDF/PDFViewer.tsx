@@ -4,6 +4,7 @@ import PDFPage from './PDFPage';
 import StampPalette from '../Stamps/StampPalette';
 import { Stamp, StampType } from '../Stamps/types';
 import { useAuth } from '../../contexts/AuthContext';
+import TextModeViewer from './TextModeViewer';
 
 interface PDFViewerProps {
     taskId?: string;
@@ -27,9 +28,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
     const [paperId, setPaperId] = useState<string | null>(null);
     // const containerRef = useRef<HTMLDivElement>(null); // Unused now
 
+    // const containerRef = useRef<HTMLDivElement>(null); // Unused now
+
+
     // Stamp State
-    // Modes: 'text' (default), 'stamp', 'area'
-    const [mode, setMode] = useState<'text' | 'stamp' | 'area'>('text');
+    // Modes: 'text' (default), 'stamp', 'area', 'plaintext'
+    const [mode, setMode] = useState<'text' | 'stamp' | 'area' | 'plaintext'>('text');
     const [stamps, setStamps] = useState<Stamp[]>([]);
     const [selectedStamp, setSelectedStamp] = useState<StampType>('👍');
 
@@ -60,6 +64,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
         }
     }, [paperId]);
 
+
+
     const fetchStamps = async (id: string) => {
         try {
             const headers: HeadersInit = {};
@@ -74,6 +80,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
             console.error('Failed to fetch stamps', e);
         }
     };
+    
+
 
     // Scroll to jump target when it changes
     useEffect(() => {
@@ -338,6 +346,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                         onClick={() => setMode('text')}
                         className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'text' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
                     >
+                        <span>📄 PDF</span>
+                    </button>
+                    <button
+                        onClick={() => setMode('plaintext')}
+                        className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'plaintext' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
+                    >
                         <span>📝 Text</span>
                     </button>
                     <button
@@ -355,21 +369,26 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                 </div>
             )}
 
-            <div className={`space-y-6 ${(mode === 'stamp' || mode === 'area') ? 'cursor-crosshair' : ''}`}>
-                {pages.map((page) => (
-                    <PDFPage
-                        key={page.page_num}
-                        page={page}
-                        onWordClick={handleWordClick}
-                        onTextSelect={handleTextSelect}
-                        stamps={stamps}
-                        isStampMode={mode === 'stamp'}
-                        onAddStamp={handleAddStamp}
-                        isAreaMode={mode === 'area'}
-                        onAreaSelect={handleAreaSelect}
-                    />
-                ))}
-            </div>
+            {/* Content Area */}
+            {mode === 'plaintext' ? (
+                <TextModeViewer paperId={paperId} />
+            ) : (
+                <div className={`space-y-6 ${(mode === 'stamp' || mode === 'area') ? 'cursor-crosshair' : ''}`}>
+                    {pages.map((page) => (
+                        <PDFPage
+                            key={page.page_num}
+                            page={page}
+                            onWordClick={handleWordClick}
+                            onTextSelect={handleTextSelect}
+                            stamps={stamps}
+                            isStampMode={mode === 'stamp'}
+                            onAddStamp={handleAddStamp}
+                            isAreaMode={mode === 'area'}
+                            onAreaSelect={handleAreaSelect}
+                        />
+                    ))}
+                </div>
+            )}
 
             {status === 'processing' && (
                 <div className="flex justify-center py-4">
@@ -391,5 +410,3 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
 };
 
 export default PDFViewer;
-
-
