@@ -89,7 +89,10 @@ async def summarize(session_id: str = Form(...), mode: str = Form("full"), lang:
         )
     logger.info(f"[summarize] session_id={session_id}, context_len={len(context)}")
 
-    if mode == "abstract":
+    if mode == "sections":
+        sections = await summary_service.summarize_sections(context, target_lang=lang)
+        return JSONResponse({"sections": sections})
+    elif mode == "abstract":
         # Check DB first
         paper_id = storage.get_session_paper_id(session_id)
         if paper_id:

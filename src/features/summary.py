@@ -3,12 +3,13 @@ import os
 from src.logger import logger
 from src.prompts import (
     CORE_SYSTEM_PROMPT,
-    PAPER_SUMMARY_ABSTRACT_PROMPT,
     PAPER_SUMMARY_AI_CONTEXT_PROMPT,
     PAPER_SUMMARY_FULL_PROMPT,
+    PAPER_SUMMARY_SECTIONS_PROMPT,
 )
 from src.providers import get_ai_provider
 from src.schemas.summary import FullSummaryResponse
+from src.schemas.summary import SectionSummaryList as SectionSummariesResponse
 
 from .translate import SUPPORTED_LANGUAGES
 
@@ -105,32 +106,87 @@ class SummaryService:
             )
             return f"要約の生成に失敗しました: {str(e)}"
 
-    async def summarize_abstract(self, text: str, target_lang: str = "ja") -> str:
+    async def summarize_sections(self, text: str, target_lang: str = "ja") -> list[dict]:
         """
-        アブストラクト形式の要約を生成する。
+        セクションごとの要約を生成する。
 
         Args:
-            text: 論文テキスト
+            text: 論文全文
             target_lang: 出力言語
 
         Returns:
-            簡潔な要旨
+            セクションタイトルと要約の辞書リスト
         """
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        # 処理速度のため冒頭5万文字のみ使用
-        safe_text = await self._truncate_to_token_limit(text[:50000])
-        prompt = PAPER_SUMMARY_ABSTRACT_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
+        safe_text = await self._truncate_to_token_limit(text)
+        prompt = PAPER_SUMMARY_SECTIONS_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
 
         try:
-            abstract = await self.ai_provider.generate(
-                prompt, model=self.model, system_instruction=CORE_SYSTEM_PROMPT
+            logger.debug(
+                "Generating section summary",
+                extra={"text_length": len(text)},
             )
-            logger.info("Abstract summary generated")
-            return abstract
+            response: SectionSummariesResponse = await self.ai_provider.generate(
+                prompt,
+                model=self.model,
+                response_model=SectionSummariesResponse,
+                system_instruction=CORE_SYSTEM_PROMPT,
+            )
+
+            logger.info(
+                "Section summary generated",
+                extra={"section_count": len(response.sections)},
+            )
+            return [s.model_dump() for s in response.sections]
         except Exception as e:
-            logger.error(f"Abstract generation failed: {e}")
-            return f"要旨の生成に失敗しました: {str(e)}"
+            logger.exception(
+                "Section summary failed",
+                extra={"error": str(e)},
+            )
+            return [{"section": "Error", "summary": f"要約生成に失敗: {e}"}]
+
+    async def summarize_abstract(self, text: str, target_lang: str = "ja") -> str:
+        """
+        Extract the actual abstract from the text instead of generating it with AI.
+        (Substitutes PAPER_SUMMARY_ABSTRACT_PROMPT as requested)
+
+        Args:
+            text: Paper text
+            target_lang: Output language (ignored here as we extract verbatim)
+
+        Returns:
+            Extracted abstract text
+        """
+        import re
+
+        logger.info("Extracting abstract from text (substituting AI generation)")
+
+        # Normalization: clean up excessive whitespace/newlines
+        clean_text = re.sub(r"\s+", " ", text[:10000])
+
+        # Search for "Abstract" (case-insensitive)
+        match = re.search(r"(?i)\babstract\b\s*[:\.]?\s*(.*)", clean_text)
+
+        if match:
+            abstract_text = match.group(1).strip()
+            # Stop at common next section headings
+            end_patterns = [
+                r"(?i)\bintroduction\b",
+                r"(?i)\bindex terms\b",
+                r"(?i)\bkeywords\b",
+                r"(?i)\bcontents\b",
+            ]
+
+            earliest_end = 2000  # Default limit
+            for pattern in end_patterns:
+                end_match = re.search(pattern, abstract_text)
+                if end_match and end_match.start() < earliest_end:
+                    earliest_end = end_match.start()
+
+            return abstract_text[:earliest_end].strip()
+
+        return "Abstract heading not found in text."
 
     async def summarize_context(self, text: str, max_length: int = 500) -> str:
         """

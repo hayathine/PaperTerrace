@@ -69,6 +69,11 @@ class StorageInterface(ABC):
         ...
 
     @abstractmethod
+    def update_paper_raw_abstract(self, paper_id: str, raw_abstract: str) -> bool:
+        """Update the raw extracted abstract of a paper."""
+        ...
+
+    @abstractmethod
     def delete_paper(self, paper_id: str) -> bool:
         """Delete a paper by ID."""
         ...
@@ -307,7 +312,7 @@ class SQLiteStorage(StorageInterface):
                 ("like_count", "INTEGER DEFAULT 0"),
                 ("layout_json", "TEXT"),
                 ("updated_at", "TIMESTAMP"),
-                ("updated_at", "TIMESTAMP"),
+                ("raw_abstract", "TEXT"),
             ]
 
             # Session table migration
@@ -419,6 +424,7 @@ class SQLiteStorage(StorageInterface):
                     view_count INTEGER DEFAULT 0,
                     like_count INTEGER DEFAULT 0,
                     layout_json TEXT,
+                    raw_abstract TEXT,
                     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                 )
@@ -600,6 +606,17 @@ class SQLiteStorage(StorageInterface):
             cursor = conn.execute(
                 "UPDATE papers SET abstract = ?, updated_at = ? WHERE paper_id = ?",
                 (abstract, now, paper_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def update_paper_raw_abstract(self, paper_id: str, raw_abstract: str) -> bool:
+        """Update the raw extracted abstract of a paper."""
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE papers SET raw_abstract = ?, updated_at = ? WHERE paper_id = ?",
+                (raw_abstract, now, paper_id),
             )
             conn.commit()
             return cursor.rowcount > 0

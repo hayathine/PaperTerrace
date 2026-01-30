@@ -282,6 +282,9 @@ async def stream(task_id: str):
                     if user_data:
                         user_plan = user_data.get("plan", "free")
 
+                # Extract raw abstract using pdfplumber logic
+                raw_abstract = service.ocr_service.extract_abstract_text(pdf_content)
+
                 # Collect figures to save later
                 collected_figures = []
 
@@ -377,15 +380,17 @@ async def stream(task_id: str):
                 if s_id:
                     storage.save_session_context(s_id, new_paper_id)
 
-                # --- Auto-Summarization for Context ---
-                # Generate a short summary and save it to 'abstract' column for context usage
+                # --- Auto-Summarization for Abstract ---
+                # Generate a full summary and save it to 'abstract' column
                 try:
-                    summary_context = await summary_service.summarize_context(
-                        full_text, max_length=500
-                    )
-                    if summary_context:
-                        storage.update_paper_abstract(new_paper_id, summary_context)
-                        logger.info(f"Auto-summary saved for paper {new_paper_id}")
+                    summary_full = await summary_service.summarize_full(full_text, target_lang=lang)
+                    if summary_full:
+                        storage.update_paper_abstract(new_paper_id, summary_full)
+                        logger.info(f"Full summary saved as abstract for paper {new_paper_id}")
+
+                    if raw_abstract:
+                        storage.update_paper_raw_abstract(new_paper_id, raw_abstract)
+                        logger.info(f"Raw abstract extracted and saved for paper {new_paper_id}")
                 except Exception as e:
                     logger.error(f"Auto-summary generation failed: {e}")
 
@@ -608,12 +613,19 @@ async def stream(task_id: str):
                 # DBにも保存
                 storage.save_session_context(session_id, paper_id)
 
-            # --- Auto-Summarization for Context ---
+            # --- Auto-Summarization for Abstract ---
             try:
-                summary_context = await summary_service.summarize_context(full_text, max_length=500)
-                if summary_context:
-                    storage.update_paper_abstract(paper_id, summary_context)
-                    logger.info(f"Auto-summary saved for paper {paper_id}")
+                # Extract raw abstract first
+                raw_abstract = service.ocr_service.extract_abstract_text(pdf_content)
+
+                summary_full = await summary_service.summarize_full(full_text, target_lang=lang)
+                if summary_full:
+                    storage.update_paper_abstract(paper_id, summary_full)
+                    logger.info(f"Full summary saved as abstract for paper {paper_id}")
+
+                if raw_abstract:
+                    storage.update_paper_raw_abstract(paper_id, raw_abstract)
+                    logger.info(f"Raw abstract extracted and saved for paper {paper_id}")
             except Exception as e:
                 logger.error(f"Auto-summary generation failed: {e}")
 

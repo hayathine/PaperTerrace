@@ -65,7 +65,7 @@ Translation only in {lang_name}.
 # ==========================================
 # Paper Summary Prompts
 # ==========================================
-# 論文全体の要約、アブストラクト生成に使用
+# 論文全体の要約、セクション別要約、アブストラクト生成に使用
 
 PAPER_SUMMARY_FULL_PROMPT = """Summarize the following paper in {lang_name}.
 
@@ -87,6 +87,18 @@ Format the summary as follows in {lang_name}:
 (Key findings and implications)
 """
 
+PAPER_SUMMARY_SECTIONS_PROMPT = """Summarize the following paper section by section in {lang_name}.
+
+[Paper Text]
+{paper_text}
+
+For each section, output the result in the following JSON format:
+[
+  {"section": "Section Title", "summary": "Summary (2-3 sentences) in {lang_name}"}
+]
+
+Output ONLY valid JSON.
+"""
 
 PAPER_SUMMARY_ABSTRACT_PROMPT = """Create an abstract of the following paper in {lang_name}.
 (Length: approx. 100-200 words or equivalent characters)
