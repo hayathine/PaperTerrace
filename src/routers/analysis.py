@@ -153,10 +153,15 @@ async def explain_paragraph(
     return JSONResponse({"explanation": explanation})
 
 
-@router.post("/explain-terms")
-async def explain_terms(paragraph: str = Form(...), lang: str = Form("ja")):
-    terms = await paragraph_explain_service.explain_terminology(paragraph, lang=lang)
-    return JSONResponse({"terms": terms})
+@router.post("/translate-paragraph")
+async def translate_paragraph_endpoint(
+    paragraph: str = Form(...), session_id: str = Form(...), lang: str = Form("ja")
+):
+    context = _get_context(session_id)
+    translation = await paragraph_explain_service.translate_paragraph(
+        paragraph, context or "", lang=lang
+    )
+    return JSONResponse({"translation": translation})
 
 
 # ============================================================================

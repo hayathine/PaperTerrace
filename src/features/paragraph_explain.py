@@ -7,15 +7,12 @@ import os
 from src.logger import logger
 from src.prompts import (
     EXPLAIN_PARAGRAPH_PROMPT,
-    EXPLAIN_TERMINOLOGY_PROMPT,
     SYSTEM_PROMPT,
+    TRANSLATE_PARAGRAPH_PROMPT,
 )
 from src.providers import get_ai_provider
 from src.schemas.paragraph_analysis import (
     ParagraphExplanationResponse,
-)
-from src.schemas.paragraph_analysis import (
-    TerminologyList as TerminologyResponse,
 )
 
 from .translate import SUPPORTED_LANGUAGES
@@ -93,39 +90,44 @@ class ParagraphExplainService:
             )
             return f"解説の生成に失敗しました: {e}"
 
-    async def explain_terminology(
-        self, paragraph: str, terms: list[str] | None = None, lang: str = "ja"
-    ) -> list[dict]:
+    async def translate_paragraph(
+        self, paragraph: str, full_context: str = "", lang: str = "ja"
+    ) -> str:
         """
-        Extract and explain technical terms in a paragraph.
+        Translate the paragraph directly.
 
         Args:
-            paragraph: The paragraph to analyze
-            terms: Optional list of specific terms to explain
-            lang: Target language for explanation
+            paragraph: The paragraph to translate
+            full_context: Context for better translation accuracy
+            lang: Target language
 
         Returns:
-            List of term explanations
+            Translated text
         """
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
-        terms_hint = ""
-        if terms:
-            terms_hint = f"Specifically explain these terms if found: {', '.join(terms)}"
+        context_hint = ""
+        if full_context:
+            context_hint = f"\n[Full Paper Context (Excerpt)]\n{full_context[:5000]}\n"
 
-        prompt = EXPLAIN_TERMINOLOGY_PROMPT.format(
-            paragraph=paragraph, terms_hint=terms_hint, lang_name=lang_name
+        prompt = TRANSLATE_PARAGRAPH_PROMPT.format(
+            context_hint=context_hint, paragraph=paragraph, lang_name=lang_name
         )
 
         try:
-            response: TerminologyResponse = await self.ai_provider.generate(
+            logger.debug(
+                "Translating paragraph",
+                extra={"paragraph_length": len(paragraph)},
+            )
+            translation = await self.ai_provider.generate(
                 prompt,
                 model=self.model,
-                response_model=TerminologyResponse,
                 system_instruction=SYSTEM_PROMPT,
             )
-            logger.info(f"Explained {len(response.terms)} terms")
-            return [t.model_dump() for t in response.terms]
+            return translation.strip()
         except Exception as e:
-            logger.error(f"Terminology explanation failed: {e}")
-            return []
+            logger.exception(
+                "Paragraph translation failed",
+                extra={"error": str(e)},
+            )
+            return f"翻訳に失敗しました: {e}"

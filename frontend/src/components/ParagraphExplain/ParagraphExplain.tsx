@@ -7,23 +7,23 @@ interface ParagraphExplainProps {
 const ParagraphExplain: React.FC<ParagraphExplainProps> = ({ sessionId }) => {
     const [paragraph, setParagraph] = useState('');
     const [explanation, setExplanation] = useState<string | null>(null);
-    const [terms, setTerms] = useState<Record<string, string> | null>(null);
+    const [translation, setTranslation] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
-    const [mode, setMode] = useState<'explain' | 'terms'>('explain');
+    const [mode, setMode] = useState<'explain' | 'translate'>('explain');
 
     const handleAnalyze = async () => {
         if (!paragraph) return;
         setLoading(true);
         setExplanation(null);
-        setTerms(null);
+        setTranslation(null);
 
         try {
             const formData = new FormData();
             formData.append('paragraph', paragraph);
             formData.append('session_id', sessionId);
-            formData.append('lang', 'ja');
+            formData.append('lang', 'ja'); // Could be dynamic if needed
 
-            const endpoint = mode === 'explain' ? '/explain-paragraph' : '/explain-terms';
+            const endpoint = mode === 'explain' ? '/explain-paragraph' : '/translate-paragraph';
             const res = await fetch(endpoint, {
                 method: 'POST',
                 body: formData,
@@ -34,7 +34,7 @@ const ParagraphExplain: React.FC<ParagraphExplainProps> = ({ sessionId }) => {
                 if (mode === 'explain') {
                     setExplanation(data.explanation);
                 } else {
-                    setTerms(data.terms);
+                    setTranslation(data.translation);
                 }
             }
         } catch (e) {
@@ -51,7 +51,7 @@ const ParagraphExplain: React.FC<ParagraphExplainProps> = ({ sessionId }) => {
             <div className="mb-4 space-y-3">
                 <textarea
                     className="w-full p-3 text-xs border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-100 min-h-[150px]"
-                    placeholder="Paste a paragraph here to analyze..."
+                    placeholder={mode === 'explain' ? "Paste a paragraph to analyze..." : "Paste a paragraph to translate..."}
                     value={paragraph}
                     onChange={(e) => setParagraph(e.target.value)}
                 />
@@ -60,20 +60,20 @@ const ParagraphExplain: React.FC<ParagraphExplainProps> = ({ sessionId }) => {
                     <button
                         onClick={() => setMode('explain')}
                         className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${mode === 'explain'
-                                ? 'bg-indigo-600 text-white shadow-sm'
-                                : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
                             }`}
                     >
                         Explain
                     </button>
                     <button
-                        onClick={() => setMode('terms')}
-                        className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${mode === 'terms'
-                                ? 'bg-indigo-600 text-white shadow-sm'
-                                : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
+                        onClick={() => setMode('translate')}
+                        className={`flex-1 py-1.5 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${mode === 'translate'
+                            ? 'bg-indigo-600 text-white shadow-sm'
+                            : 'bg-slate-100 text-slate-400 hover:bg-slate-200'
                             }`}
                     >
-                        Terms
+                        Translate
                     </button>
                 </div>
 
@@ -82,7 +82,7 @@ const ParagraphExplain: React.FC<ParagraphExplainProps> = ({ sessionId }) => {
                     disabled={!paragraph || loading}
                     className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors disabled:opacity-50"
                 >
-                    {loading ? 'Analyzing...' : 'Analyze Paragraph'}
+                    {loading ? 'Processing...' : (mode === 'explain' ? 'Analyze Paragraph' : 'Translate Paragraph')}
                 </button>
             </div>
 
@@ -95,15 +95,20 @@ const ParagraphExplain: React.FC<ParagraphExplainProps> = ({ sessionId }) => {
                 </div>
             )}
 
-            {terms && (
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 animate-fade-in space-y-3">
-                    <h4 className="text-xs font-bold text-slate-700 mb-2">Technical Terms</h4>
-                    {Object.entries(terms).map(([term, def]) => (
-                        <div key={term} className="bg-white p-3 rounded-lg shadow-sm border border-slate-100">
-                            <span className="block text-xs font-bold text-indigo-600 mb-1">{term}</span>
-                            <span className="block text-[10px] text-slate-500">{def}</span>
+            {translation && (
+                <div className="space-y-4 animate-fade-in">
+                     <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
+                        <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">Original</h4>
+                        <div className="text-xs text-slate-600 leading-relaxed">
+                            {paragraph}
                         </div>
-                    ))}
+                    </div>
+                    <div className="bg-indigo-50 p-4 rounded-xl border border-indigo-100 shadow-sm">
+                        <h4 className="text-[10px] font-bold text-indigo-400 uppercase tracking-wider mb-2">Translation</h4>
+                        <div className="text-xs text-slate-700 leading-relaxed font-medium">
+                            {translation}
+                        </div>
+                    </div>
                 </div>
             )}
         </div>

@@ -156,7 +156,18 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                     const eventData = JSON.parse(event.data);
 
                     if (eventData.type === 'page') {
-                        setPages(prev => [...prev, eventData.data]);
+                        setPages(prev => {
+                            const newData = eventData.data;
+                            const index = prev.findIndex(p => p.page_num === newData.page_num);
+                            if (index !== -1) {
+                                // Replace existing page data (update)
+                                const newPages = [...prev];
+                                newPages[index] = newData;
+                                return newPages;
+                            }
+                            // Append new page
+                            return [...prev, newData];
+                        });
                     } else if (eventData.type === 'done') {
                         setStatus('done');
                         if (eventData.paper_id) {

@@ -142,34 +142,18 @@ Even if the content is highly technical, please explain it at a level understand
 Ensure the output is in {lang_name}.
 """
 
-TRANSLATE_PROMPT = """Please translate the following to {lang_name}.
+TRANSLATE_PARAGRAPH_PROMPT = """Translate the following academic paragraph into naturally flowing {lang_name}.
+Do not summarize or explain; provide a direct translation.
+Maintain the original tone and nuance.
 
-[context]
-{context}
+{context_hint}
 
-Output the translation in the following JSON format:
-[
-  {{"term": "Term", "translation": "Translation (1-2 words) in {lang_name}"}}
-]
-
-Output JSON only.
-"""
-
-EXPLAIN_TERMINOLOGY_PROMPT = """Please extract technical terms from the paragraph below and provide concise explanations for each.
-
-[Paragraph]
+[Target Paragraph]
 {paragraph}
 
-{terms_hint}
-
-Please output the explanations in {lang_name}.
-Return the result strictly in the following JSON format:
-[
-  {{"term": "Term", "explanation": "Concise explanation (1-2 sentences) in {lang_name}", "importance": "high/medium/low"}}
-]
-
-Limit to at most 10 terms. Output JSON only.
+Output ONLY the translation.
 """
+
 
 # ==========================================
 # Figure Insight Prompts
