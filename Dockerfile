@@ -22,14 +22,36 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # Copy dependency files
 COPY pyproject.toml uv.lock ./
 
-# Install dependencies
+# Install ALL dependencies (including torch/transformers for model conversion)
 RUN uv sync --no-dev --frozen
 
 # Copy src for initialization
 COPY src/ ./src/
 
 # Convert M2M100 model to CTranslate2 format during build
+# This requires torch and transformers, but only at build time
 RUN mkdir -p models && PYTHONPATH=/app uv run python -m src.scripts.convert_m2m100
+
+# Create a minimal runtime environment WITHOUT torch/transformers
+FROM python:3.12-slim AS runtime-builder
+
+WORKDIR /app
+
+# Install build dependencies for some packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install uv
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+# Copy dependency files
+COPY pyproject.toml uv.lock ./
+
+# Install runtime dependencies, excluding torch and transformers
+# We use --no-deps for torch/transformers to skip them
+RUN uv sync --no-dev --frozen && \
+    uv pip uninstall torch transformers -y
 
 # Production stage
 FROM python:3.12-slim AS production
@@ -41,8 +63,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy virtual environment from builder
-COPY --from=builder /app/.venv /app/.venv
+# Copy virtual environment from runtime-builder (without torch/transformers)
+COPY --from=runtime-builder /app/.venv /app/.venv
 COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
 
 # Copy initialized models
