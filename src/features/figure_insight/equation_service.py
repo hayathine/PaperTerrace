@@ -127,7 +127,7 @@ class EquationService:
 
                 # 2. Look for large gaps (whitespace analysis)
                 # Group text into lines
-                text_objects = page.extract_words(use_text_flow=True)
+                text_objects = page.extract_words()
                 if len(text_objects) > 1:
                     text_objects.sort(key=lambda x: x["top"])
                     for i in range(len(text_objects) - 1):

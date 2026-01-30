@@ -32,7 +32,7 @@ class LanguageService:
                 )
                 if len(pdf.pages) > 0:
                     page = pdf.pages[0]
-                    text = page.extract_text(use_text_flow=True) or ""
+                    text = page.extract_text() or ""
                     text = text.strip()
                     if text:
                         logger.debug(

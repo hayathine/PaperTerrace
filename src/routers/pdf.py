@@ -377,6 +377,8 @@ async def stream(task_id: str):
                                 image_url=fig["image_url"],
                                 caption="",  # Can't easily extract yet
                                 explanation="",  # Initially empty
+                                label=fig.get("label", "figure"),
+                                latex=fig.get("latex", ""),
                             )
                             # Auto-explanation disabled to save tokens. Done on-demand via button.
                             # asyncio.create_task(process_figure_auto_analysis(fid, fig["image_url"]))

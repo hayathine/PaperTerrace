@@ -161,7 +161,7 @@ class PDFOCRService:
         page_num = page.page_number
         logger.debug(f"[OCR] p.{page_num}: Attempting native word extraction")
 
-        words = page.extract_words(use_text_flow=True)
+        words = page.extract_words()
         if words:
             logger.info(
                 f"[OCR] p.{page_num}: Native word extraction successful ({len(words)} words)"
@@ -179,7 +179,7 @@ class PDFOCRService:
 
         # Try secondary native extraction if words is empty but text exists
         logger.info(f"[OCR] p.{page_num}: Native words empty, trying extract_text()")
-        text_fallback = page.extract_text(use_text_flow=True)
+        text_fallback = page.extract_text()
         if text_fallback and text_fallback.strip():
             logger.info(
                 f"[OCR] p.{page_num}: Native extract_text succeeded (length: {len(text_fallback)})"

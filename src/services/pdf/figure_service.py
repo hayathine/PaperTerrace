@@ -26,53 +26,34 @@ class FigureService:
         pypdf_page: Any = None,
     ) -> List[Dict[str, Any]]:
         """
-        Detect figures/tables using AI and extract them as separate images.
-        Also uses pdfplumber.images and pypdf.images to extract native images directly if available.
+        Detect figures/tables and extract them as separate images.
         """
         figures_data = []
 
-        # 1. Native extraction (using pypdf with requested filtering)
+        # 1. Native extraction (using pypdf with size/aspect ratio filtering)
         if pypdf_page and hasattr(pypdf_page, "images"):
-            logger.debug(
-                f"[FigureService] p.{page_num}: Attempting native image extraction with filtering"
-            )
+            logger.debug(f"[FigureService] p.{page_num}: Checking native images")
             try:
-                # Step 3: Caption check
-                # Note: 'page' is a pdfplumber Page object, extract_text() is efficient
-                page_text = page.extract_text(use_text_flow=True) or ""
-                caption_keywords = ["Figure", "Fig.", "FIG.", "図"]
-                has_caption = any(k in page_text for k in caption_keywords)
-
-                if not has_caption:
-                    logger.debug(
-                        f"[FigureService] p.{page_num}: No caption keyword found. Skipping native images."
-                    )
-                    return []
-
                 found_count = 0
                 for i, image_file in enumerate(pypdf_page.images):
                     img_data = image_file.data
                     if len(img_data) < 1000:
                         continue
 
-                    # Step 1 & 2: Detect dimensions and filter (fast)
                     try:
-                        # Using PIL to get dimensions from header
                         with Image.open(io.BytesIO(img_data)) as img:
                             width, height = img.size
                     except Exception:
                         continue
 
-                    # 極端に小さい or バナーっぽい
+                    # Filtering small/weird images (noise reduction)
                     if width < 100 or height < 100:
                         continue
                     if height > 0 and width / height > 5:
                         continue
-                    # 1ページ目のバナー対策 (page_num 1-indexed)
-                    if page_num == 1 and width < 300:
+                    if page_num == 1 and width < 300:  # Banner on first page
                         continue
 
-                    # Save if passed filtering
                     img_b64 = base64.b64encode(img_data).decode("utf-8")
                     figure_img_name = f"native_img_{page_num}_{i}_{image_file.name}"
                     figure_url = save_page_image(file_hash, figure_img_name, img_b64)
@@ -90,86 +71,49 @@ class FigureService:
 
                 if found_count > 0:
                     logger.info(
-                        f"[FigureService] p.{page_num}: Extracted {found_count} filtered native images"
+                        f"[FigureService] p.{page_num}: Extracted {found_count} native images"
                     )
             except Exception as e:
                 logger.warning(f"[FigureService] p.{page_num}: Native extraction failed: {e}")
 
-        # Phase 2 & 3 (AI Detection) are skipped during initial processing.
-
-        # 2. AI-based detection (finds composite figures, charts, and captions)
-        # DEPRECATED: skipping during initial extraction to save costs/time.
-        # Figure analysis is now on-demand via explain button.
-        """
+        # 2. Table detection using pdfplumber (for text-based tables)
+        logger.debug(f"[FigureService] p.{page_num}: Attempting table detection")
         try:
-            detection_result: FigureDetectionResponse = await self.ai_provider.generate_with_image(
-                VISION_DETECT_ITEMS_PROMPT,
-                img_bytes,
-                "image/png",
-                response_model=FigureDetectionResponse,
-                model=self.model,
-            )
+            tables = page.find_tables()
+            if tables:
+                logger.info(f"[FigureService] p.{page_num}: Found {len(tables)} tables")
+                for i, table in enumerate(tables):
+                    bbox = table.bbox  # (x0, top, x1, bottom)
 
-            found_figures = detection_result.figures if detection_result else []
-            if not found_figures:
-                return figures_data
+                    # Expand bbox slightly
+                    margin = 5
+                    p_xmin = max(0, bbox[0] - margin)
+                    p_ymin = max(0, bbox[1] - margin)
+                    p_xmax = min(page.width, bbox[2] + margin)
+                    p_ymax = min(page.height, bbox[3] + margin)
 
-            logger.info(
-                f"[FigureService] AI Detected {len(found_figures)} items on page {page_num}"
-            )
-
-            page_w, page_h = page.width, page.height
-
-            for i, fig in enumerate(found_figures):
-                try:
-                    # box_2d is [ymin, xmin, ymax, xmax] normalized 0-1
-                    ymin, xmin, ymax, xmax = fig.box_2d
-
-                    # Convert normalized to page points
-                    p_xmin = xmin * page_w
-                    p_ymin = ymin * page_h
-                    p_xmax = xmax * page_w
-                    p_ymax = ymax * page_h
-
-                    # Clip to page bounds
-                    p_xmin = max(0, p_xmin)
-                    p_ymin = max(0, p_ymin)
-                    p_xmax = min(page_w, p_xmax)
-                    p_ymax = min(page_h, p_ymax)
-
-                    # Use page.crop() and then to_image()
-                    # This is more robust than manual PIL cropping
                     cropped_page = page.crop((p_xmin, p_ymin, p_xmax, p_ymax))
-                    crop_img_obj = cropped_page.to_image(resolution=150)
+                    crop_img_obj = cropped_page.to_image(resolution=300)
                     crop_pil = crop_img_obj.original
 
                     buffer = io.BytesIO()
                     crop_pil.save(buffer, format="PNG")
                     crop_bytes = buffer.getvalue()
 
-                    if len(crop_bytes) < 500:
-                        continue
-
                     crop_b64 = base64.b64encode(crop_bytes).decode("utf-8")
-                    figure_img_name = f"figure_{page_num}_{i}_{fig.label}"
-                    figure_url = save_page_image(file_hash, figure_img_name, crop_b64)
+                    table_img_name = f"table_{page_num}_{i}"
+                    table_url = save_page_image(file_hash, table_img_name, crop_b64)
 
                     figures_data.append(
                         {
-                            "image_url": figure_url,
+                            "image_url": table_url,
                             "bbox": [p_xmin, p_ymin, p_xmax, p_ymax],
                             "explanation": "",
                             "page_num": page_num,
-                            "label": fig.label,
+                            "label": "table",
                         }
                     )
-                except Exception as e:
-                    logger.warning(
-                        f"[FigureService] AI Crop failed for item {i} on p.{page_num}: {e}"
-                    )
-
         except Exception as e:
-            logger.warning(f"[FigureService] AI Detection failed on p.{page_num}: {e}")
-        """
+            logger.warning(f"[FigureService] p.{page_num}: Table detection failed: {e}")
 
         return figures_data
