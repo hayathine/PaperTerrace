@@ -110,7 +110,7 @@ class GeminiProvider(AIProviderInterface):
                 config_params["tools"] = tools
             if response_model:
                 config_params["response_mime_type"] = "application/json"
-                config_params["response_schema"] = response_model
+                config_params["response_json_schema"] = response_model.model_json_schema()
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction
@@ -129,10 +129,12 @@ class GeminiProvider(AIProviderInterface):
                 try:
                     # google-genai SDK 1.0.0+ supports .parsed for structured output
                     if hasattr(response, "parsed") and response.parsed is not None:
+                        if isinstance(response.parsed, response_model):
+                            return response.parsed
+                        # If it's a dict (common when using response_json_schema), validate it
+                        if isinstance(response.parsed, dict):
+                            return response_model.model_validate(response.parsed)
                         return response.parsed
-
-                    # Fallback to manual parsing if .parsed is not what we expect
-                    return response_model.model_validate_json(response.text or "")
                 except Exception as parse_err:
                     logger.error(f"Failed to parse structured output: {parse_err}")
                     # If it's wrapped in markdown, try to strip
@@ -182,9 +184,7 @@ class GeminiProvider(AIProviderInterface):
             config_params: dict[str, Any] = {}
             if response_model:
                 config_params["response_mime_type"] = "application/json"
-                # For google-genai SDK, use response_schema directly if supported, or rely on auto-conversion
-                # If using google-genai, the field is 'response_schema' in GenerateContentConfig
-                config_params["response_schema"] = response_model
+                config_params["response_json_schema"] = response_model.model_json_schema()
 
             config = types.GenerateContentConfig(**config_params) if config_params else None
 
@@ -201,11 +201,10 @@ class GeminiProvider(AIProviderInterface):
                 try:
                     # Method 1: Use .parsed if available (google-genai SDK 1.0+)
                     if hasattr(response, "parsed") and response.parsed is not None:
-                        # SDK might return a dict or object depending on config.
-                        # If response_schema was passed as Pydantic class, parsed should be instance of that class.
                         if isinstance(response.parsed, response_model):
                             return response.parsed
-                        # If it's something else but compatible?
+                        if isinstance(response.parsed, dict):
+                            return response_model.model_validate(response.parsed)
                         return response.parsed
 
                     # Method 2: Manual Parse
@@ -342,7 +341,7 @@ class VertexAIProvider(AIProviderInterface):
                 config_params["tools"] = tools
             if response_model:
                 config_params["response_mime_type"] = "application/json"
-                config_params["response_schema"] = response_model
+                config_params["response_json_schema"] = response_model.model_json_schema()
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction
@@ -363,6 +362,10 @@ class VertexAIProvider(AIProviderInterface):
             if response_model:
                 try:
                     if hasattr(response, "parsed") and response.parsed is not None:
+                        if isinstance(response.parsed, response_model):
+                            return response.parsed
+                        if isinstance(response.parsed, dict):
+                            return response_model.model_validate(response.parsed)
                         return response.parsed
                     text_to_parse = response.text or ""
                     return response_model.model_validate_json(text_to_parse)
@@ -400,7 +403,7 @@ class VertexAIProvider(AIProviderInterface):
             config_params: dict[str, Any] = {"temperature": 0.2, "max_output_tokens": 8192}
             if response_model:
                 config_params["response_mime_type"] = "application/json"
-                config_params["response_schema"] = response_model
+                config_params["response_json_schema"] = response_model.model_json_schema()
 
             config = types.GenerateContentConfig(**config_params)
 
@@ -413,6 +416,10 @@ class VertexAIProvider(AIProviderInterface):
             if response_model:
                 try:
                     if hasattr(response, "parsed") and response.parsed is not None:
+                        if isinstance(response.parsed, response_model):
+                            return response.parsed
+                        if isinstance(response.parsed, dict):
+                            return response_model.model_validate(response.parsed)
                         return response.parsed
                     text_to_parse = response.text or ""
                     return response_model.model_validate_json(text_to_parse)
