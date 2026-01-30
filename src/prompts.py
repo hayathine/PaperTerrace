@@ -216,6 +216,24 @@ Comparison Points:
 Output in {lang_name}.
 """
 
+VISION_ANALYZE_EQUATION_PROMPT = """Analyze this area of the research paper and determine if it contains a mathematical equation.
+If it is an equation, convert it to valid LaTeX format.
+
+Input: Image or crop from a PDF page.
+
+Output only valid JSON in the following format:
+{{
+    "is_equation": boolean,
+    "confidence": float (0-1),
+    "latex": "The LaTeX representation of the equation",
+    "explanation": "Brief explanation of what the equation represents in {lang_name}"
+}}
+
+Notes:
+- If multiple equations are present, include them in a single block or multiple lines in the 'latex' field.
+- If it is not an equation (e.g., just random text or an image), set "is_equation" to false.
+"""
+
 # ==========================================
 # Review & Analysis Agents Prompts
 # ==========================================

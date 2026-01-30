@@ -1,4 +1,4 @@
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
@@ -193,3 +193,14 @@ class FigureInsightService:
         except Exception as e:
             logger.error(f"Figure comparison failed: {e}")
             return f"図の比較に失敗しました: {str(e)}"
+
+    async def extract_equations(
+        self, file_bytes: bytes, page_num: int, target_lang: str = "ja"
+    ) -> List[Dict[str, Any]]:
+        """
+        PDFページ内の数式を抽出してLaTeX化する。
+        """
+        from .equation_service import EquationService
+
+        service = EquationService()
+        return await service.detect_and_convert_equations(file_bytes, page_num, target_lang)

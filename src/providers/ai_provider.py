@@ -48,6 +48,7 @@ class AIProviderInterface(ABC):
         mime_type: str = "image/png",
         model: str | None = None,
         response_model: Type[BaseModel] | None = None,
+        system_instruction: str | None = None,
     ) -> Any:
         """Generate text or structured response from prompt with image input."""
         ...
@@ -166,6 +167,7 @@ class GeminiProvider(AIProviderInterface):
         mime_type: str = "image/png",
         model: str | None = None,
         response_model: Type[BaseModel] | None = None,
+        system_instruction: str | None = None,
     ) -> Any:
         """Generate text response from prompt with image input."""
         target_model = model or self.model
@@ -185,6 +187,9 @@ class GeminiProvider(AIProviderInterface):
             if response_model:
                 config_params["response_mime_type"] = "application/json"
                 config_params["response_json_schema"] = response_model.model_json_schema()
+
+            if system_instruction:
+                config_params["system_instruction"] = system_instruction
 
             config = types.GenerateContentConfig(**config_params) if config_params else None
 
@@ -391,6 +396,7 @@ class VertexAIProvider(AIProviderInterface):
         mime_type: str = "image/png",
         model: str | None = None,
         response_model: Type[BaseModel] | None = None,
+        system_instruction: str | None = None,
     ) -> Any:
         """Generate text response from prompt with image input."""
         target_model = model or self.model
@@ -404,6 +410,9 @@ class VertexAIProvider(AIProviderInterface):
             if response_model:
                 config_params["response_mime_type"] = "application/json"
                 config_params["response_json_schema"] = response_model.model_json_schema()
+
+            if system_instruction:
+                config_params["system_instruction"] = system_instruction
 
             config = types.GenerateContentConfig(**config_params)
 
