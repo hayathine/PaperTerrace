@@ -8,6 +8,7 @@ from typing import Dict, List
 
 from src.features.research_radar import ResearchRadarService
 from src.logger import logger
+from src.prompts import AGENT_AUTHOR_PERSONA_PROMPT, CORE_SYSTEM_PROMPT
 from src.providers import get_ai_provider
 
 
@@ -15,6 +16,7 @@ class AuthorAgentService:
     def __init__(self):
         self.ai_provider = get_ai_provider()
         self.research_service = ResearchRadarService()
+        self.model = "gemini-1.5-flash"  # Explicitly set or get from env
 
     async def generate_author_persona(self, author_name: str, current_paper_title: str) -> str:
         """
@@ -25,11 +27,7 @@ class AuthorAgentService:
         # 1. Consensus APIを使って著者の情報を検索
         author_data = await self.research_service.get_author_profile_and_papers(author_name)
 
-        _ = author_data.get("profile", {})
         papers = author_data.get("papers", [])
-
-        # 論文リストがなければ、シミュレーション用に空リストで進める
-        # (AIが名前からある程度推測できる場合もあるため)
 
         papers_text = ""
         if papers:
@@ -40,15 +38,15 @@ class AuthorAgentService:
             papers_text = "（著者の詳細な論文リストはAPIから取得できませんでした。一般的なこの分野の研究者として振る舞ってください）"
 
         # 2. Geminiにペルソナ生成を依頼
-        from src.prompts import AUTHOR_PERSONA_PROMPT
-
-        prompt = AUTHOR_PERSONA_PROMPT.format(
+        prompt = AGENT_AUTHOR_PERSONA_PROMPT.format(
             author_name=author_name,
             current_paper_title=current_paper_title,
             papers_text=papers_text,
         )
 
-        persona_instruction = await self.ai_provider.generate(prompt)
+        persona_instruction = await self.ai_provider.generate(
+            prompt, system_instruction=CORE_SYSTEM_PROMPT
+        )
         return persona_instruction.strip()
 
     async def chat_with_author(
@@ -57,14 +55,9 @@ class AuthorAgentService:
         """
         Chat with the generated author persona.
         """
-        # 単発呼び出しか、履歴付き呼び出しかは AIProvider の実装による
-        # ここでは簡易的に直近のやり取りを含めたプロンプトを構築するか、
-        # AIProviderがチャットモードを持っていればそれを使う。
-        # 現状の PaperTerrace の AIProvider は generate(prompt) なので、
-        # コンテキストにシステムプロンプトを含めて送信する。
-
+        # Create prompt with history and persona
         conversation = f"System: {system_instruction}\n\n"
-        for msg in history[-5:]:  # 直近5件
+        for msg in history[-5:]:  # Recent 5 messages
             role = msg.get("role", "User")
             content = msg.get("content", "")
             conversation += f"{role}: {content}\n"

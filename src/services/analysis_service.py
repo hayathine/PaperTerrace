@@ -6,7 +6,11 @@ from concurrent.futures import ThreadPoolExecutor
 import spacy
 
 from src.logger import logger
-from src.prompts import SYSTEM_PROMPT
+from src.prompts import (
+    ANALYSIS_BATCH_TRANSLATE_PROMPT,
+    ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT,
+    CORE_SYSTEM_PROMPT,
+)
 from src.providers import RedisService, get_ai_provider, get_storage_provider
 from src.providers.dictionary_provider import get_dictionary_provider
 from src.utils import clean_text_for_tokenization, truncate_context
@@ -213,16 +217,14 @@ class EnglishAnalysisService:
         if not words_to_translate:
             return result
 
-        # Create batch prompt in English
-        words_list = "\n".join(f"- {w}" for w in words_to_translate)
-        from src.prompts import TRANSLATE_BATCH_PROMPT
-
-        prompt = TRANSLATE_BATCH_PROMPT.format(lang_name=lang_name, words_list=words_list)
+        prompt = ANALYSIS_BATCH_TRANSLATE_PROMPT.format(
+            lang_name=lang_name, words_list="\n".join(words_to_translate)
+        )
 
         try:
             # Simple wrapper around async generate
             response_text = await self.ai_provider.generate(
-                prompt, model=self.translate_model, system_instruction=SYSTEM_PROMPT
+                prompt, model=self.translate_model, system_instruction=CORE_SYSTEM_PROMPT
             )
 
             # レスポンスをパース
@@ -302,15 +304,13 @@ class EnglishAnalysisService:
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
-        from src.prompts import TRANSLATE_CONTEXT_AWARE_SIMPLE_PROMPT
-
-        prompt = TRANSLATE_CONTEXT_AWARE_SIMPLE_PROMPT.format(
-            word=word, lang_name=lang_name, context=context
+        prompt = ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT.format(
+            word=word, context=context, lang_name=lang_name
         )
 
         try:
             translation = await self.ai_provider.generate(
-                prompt, model=self.translate_model, system_instruction=SYSTEM_PROMPT
+                prompt, model=self.translate_model, system_instruction=CORE_SYSTEM_PROMPT
             )
             translation = translation.strip()
 

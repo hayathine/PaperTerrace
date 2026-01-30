@@ -4,6 +4,7 @@ from typing import Any, Dict, List
 from pydantic import BaseModel, Field
 
 from src.logger import logger
+from src.prompts import AGENT_CITE_INTENT_PROMPT, CORE_SYSTEM_PROMPT
 from src.providers import get_ai_provider
 
 
@@ -76,19 +77,20 @@ class CiteIntentService:
         """
         段落内の引用を特定し、その意図を分類して詳細情報を付与する。
         """
-        from src.prompts import CITATION_INTENT_PROMPT
-
         from .translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
-        prompt = CITATION_INTENT_PROMPT.format(paragraph=paragraph, lang_name=lang_name)
+        prompt = AGENT_CITE_INTENT_PROMPT.format(paragraph=paragraph, lang_name=lang_name)
         try:
             logger.info(f"Analyzing citation intent for paragraph with model: {self.model}")
 
             # 使用するモデルを指定して構造化出力を依頼
             analysis: CitationAnalysisResponse = await self.ai_provider.generate(
-                prompt, model=self.model, response_model=CitationAnalysisResponse
+                prompt,
+                model=self.model,
+                response_model=CitationAnalysisResponse,
+                system_instruction=CORE_SYSTEM_PROMPT,
             )
 
             # メタデータのマージ

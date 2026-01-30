@@ -6,7 +6,11 @@ AIチャットアシスタント機能を提供するモジュール
 import os
 
 from src.logger import logger
-from src.prompts import CHAT_AUTHOR_AGENT_PROMPT, CHAT_RESPONSE_PROMPT
+from src.prompts import (
+    CHAT_AUTHOR_PERSONA_PROMPT,
+    CHAT_GENERAL_RESPONSE_PROMPT,
+    CORE_SYSTEM_PROMPT,
+)
 from src.providers import get_ai_provider
 
 
@@ -51,10 +55,10 @@ class ChatService:
         from .translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
-        doc_context = document_context[:8000] if document_context else "No paper loaded."
+        context = document_context if document_context else "No paper loaded."
 
-        prompt = CHAT_RESPONSE_PROMPT.format(
-            lang_name=lang_name, document_context=doc_context, history_text=history_text
+        prompt = CHAT_GENERAL_RESPONSE_PROMPT.format(
+            lang_name=lang_name, document_context=context[:20000], history_text=history_text
         )
 
         try:
@@ -63,7 +67,7 @@ class ChatService:
                 extra={"message_length": len(user_message), "history_size": len(self.history)},
             )
             response = await self.ai_provider.generate(
-                prompt, context=history_str, model=self.model
+                prompt, model=self.model, system_instruction=CORE_SYSTEM_PROMPT
             )
             response = response.strip()
 
@@ -111,8 +115,8 @@ class ChatService:
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = CHAT_AUTHOR_AGENT_PROMPT.format(
-            lang_name=lang_name, paper_text=paper_text[:10000], question=question
+        prompt = CHAT_AUTHOR_PERSONA_PROMPT.format(
+            lang_name=lang_name, paper_text=paper_text[:20000], question=question
         )
 
         try:

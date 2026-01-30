@@ -4,9 +4,9 @@ from pydantic import BaseModel, Field
 
 from src.logger import logger
 from src.prompts import (
-    FIGURE_ANALYSIS_PROMPT,
-    FIGURE_COMPARISON_PROMPT,
-    TABLE_ANALYSIS_PROMPT,
+    VISION_ANALYZE_FIGURE_PROMPT,
+    VISION_ANALYZE_TABLE_PROMPT,
+    VISION_COMPARE_FIGURES_PROMPT,
 )
 from src.providers import get_ai_provider
 
@@ -69,7 +69,7 @@ class FigureInsightService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
         caption_hint = f"\n[Caption]\n{caption}" if caption else ""
 
-        prompt = FIGURE_ANALYSIS_PROMPT.format(lang_name=lang_name, caption_hint=caption_hint)
+        prompt = VISION_ANALYZE_FIGURE_PROMPT.format(lang_name=lang_name, caption_hint=caption_hint)
 
         try:
             logger.debug(
@@ -123,8 +123,8 @@ class FigureInsightService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
         context_hint = f"\n[Context]\n{context[:1000]}" if context else ""
 
-        prompt = TABLE_ANALYSIS_PROMPT.format(
-            lang_name=lang_name, context_hint=context_hint, table_text=table_text
+        prompt = VISION_ANALYZE_TABLE_PROMPT.format(
+            context_hint=context_hint, table_text=table_text, lang_name=lang_name
         )
 
         try:
@@ -166,8 +166,8 @@ class FigureInsightService:
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = FIGURE_COMPARISON_PROMPT.format(
-            lang_name=lang_name, description1=description1, description2=description2
+        prompt = VISION_COMPARE_FIGURES_PROMPT.format(
+            description1=description1, description2=description2, lang_name=lang_name
         )
 
         try:

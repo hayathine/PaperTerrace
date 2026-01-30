@@ -6,9 +6,9 @@ import os
 
 from src.logger import logger
 from src.prompts import (
-    EXPLAIN_PARAGRAPH_PROMPT,
-    SYSTEM_PROMPT,
-    TRANSLATE_PARAGRAPH_PROMPT,
+    CORE_SYSTEM_PROMPT,
+    PARAGRAPH_EXPLAIN_PROMPT,
+    PARAGRAPH_TRANSLATE_PROMPT,
 )
 from src.providers import get_ai_provider
 from src.schemas.paragraph_analysis import (
@@ -52,7 +52,7 @@ class ParagraphExplainService:
 {full_context[:5000]}
 """
 
-        prompt = EXPLAIN_PARAGRAPH_PROMPT.format(
+        prompt = PARAGRAPH_EXPLAIN_PROMPT.format(
             context_hint=context_hint, paragraph=paragraph, lang_name=lang_name
         )
 
@@ -65,7 +65,7 @@ class ParagraphExplainService:
                 prompt,
                 model=self.model,
                 response_model=ParagraphExplanationResponse,
-                system_instruction=SYSTEM_PROMPT,
+                system_instruction=CORE_SYSTEM_PROMPT,
             )
 
             # 整形された文字列として返す（後方互換性のため）
@@ -110,7 +110,7 @@ class ParagraphExplainService:
         if full_context:
             context_hint = f"\n[Full Paper Context (Excerpt)]\n{full_context[:5000]}\n"
 
-        prompt = TRANSLATE_PARAGRAPH_PROMPT.format(
+        prompt = PARAGRAPH_TRANSLATE_PROMPT.format(
             context_hint=context_hint, paragraph=paragraph, lang_name=lang_name
         )
 
@@ -122,7 +122,7 @@ class ParagraphExplainService:
             translation = await self.ai_provider.generate(
                 prompt,
                 model=self.model,
-                system_instruction=SYSTEM_PROMPT,
+                system_instruction=CORE_SYSTEM_PROMPT,
             )
             return translation.strip()
         except Exception as e:

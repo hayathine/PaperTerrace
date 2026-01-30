@@ -5,7 +5,11 @@ import fitz  # PyMuPDF
 
 from src.crud import get_ocr_from_db, save_ocr_to_db
 from src.logger import logger
-from src.prompts import DETECT_FIGURES_PROMPT, PDF_FALLBACK_OCR_PROMPT, PDF_LANG_DETECT_PROMPT
+from src.prompts import (
+    PDF_DETECT_LANGUAGE_PROMPT,
+    PDF_EXTRACT_TEXT_OCR_PROMPT,
+    VISION_DETECT_ITEMS_PROMPT,
+)
 from src.providers import get_ai_provider
 from src.providers.image_storage import get_page_images, save_page_image
 from src.schemas.figure import FigureDetectionResponse
@@ -39,7 +43,7 @@ class PDFOCRService:
             if len(doc) > 0:
                 text = doc[0].get_text()[:1000]
                 if text.strip():
-                    prompt = PDF_LANG_DETECT_PROMPT.format(text=text)
+                    prompt = PDF_DETECT_LANGUAGE_PROMPT.format(text=text[:5000])
                     detected = await self.ai_provider.generate(prompt, model=self.model)
                     detected = detected.strip().lower()
                     if len(detected) == 2:
@@ -168,13 +172,14 @@ class PDFOCRService:
                         logger.info(f"[OCR] Falling back to Gemini for page {page_num + 1}")
                         single_page_pdf = fitz.open()
                         single_page_pdf.insert_pdf(pdf_doc, from_page=page_num, to_page=page_num)
-                        page_bytes = single_page_pdf.tobytes()
                         single_page_pdf.close()
 
                         try:
-                            prompt = PDF_FALLBACK_OCR_PROMPT
-                            page_text = await self.ai_provider.generate_with_pdf(
-                                prompt, page_bytes, model=self.model
+                            page_text = await self.ai_provider.generate_with_image(
+                                PDF_EXTRACT_TEXT_OCR_PROMPT,
+                                img_bytes,
+                                "image/png",
+                                model=self.model,
                             )
                         except Exception as e:
                             logger.error(f"Gemini OCR failed for page {page_num + 1}: {e}")
@@ -198,11 +203,14 @@ class PDFOCRService:
                 # --- Figure Extraction (AI-Based) ---
                 try:
                     # Detect figures/tables/equations using AI (Gemini) with structured output
-                    detection_result = await self.ai_provider.generate_with_image(
-                        prompt=DETECT_FIGURES_PROMPT,
-                        image_bytes=img_bytes,
-                        response_model=FigureDetectionResponse,
-                        model=self.model,
+                    detection_result: FigureDetectionResponse = (
+                        await self.ai_provider.generate_with_image(
+                            VISION_DETECT_ITEMS_PROMPT,
+                            img_bytes,
+                            "image/png",
+                            response_model=FigureDetectionResponse,
+                            model=self.model,
+                        )
                     )
 
                     found_figures = detection_result.figures if detection_result else []

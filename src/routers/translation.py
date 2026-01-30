@@ -11,10 +11,10 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from src.prompts import (
-    SYSTEM_PROMPT,
-    TRANSLATE_PHRASE_WITH_CONTEXT_PROMPT,
-    TRANSLATE_WORD_SIMPLE_PROMPT,
-    TRANSLATE_WORD_WITH_CONTEXT_EXPLAIN_PROMPT,
+    CORE_SYSTEM_PROMPT,
+    DICT_EXPLAIN_WORD_CONTEXT_PROMPT,
+    DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT,
+    DICT_TRANSLATE_WORD_SIMPLE_PROMPT,
 )
 
 from ..features.translate import SUPPORTED_LANGUAGES
@@ -308,11 +308,11 @@ async def explain_deep(
 
         is_phrase = " " in lemma.strip()
         if is_phrase:
-            prompt = TRANSLATE_PHRASE_WITH_CONTEXT_PROMPT.format(
+            prompt = DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT.format(
                 paper_context=paper_context, lang_name=lang_name, original_word=original_word
             )
         else:
-            prompt = TRANSLATE_WORD_SIMPLE_PROMPT.format(
+            prompt = DICT_TRANSLATE_WORD_SIMPLE_PROMPT.format(
                 paper_context=paper_context, lemma=lemma, lang_name=lang_name
             )
 
@@ -320,7 +320,7 @@ async def explain_deep(
         translation = (
             (
                 await provider.generate(
-                    prompt, model=translate_model, system_instruction=SYSTEM_PROMPT
+                    prompt, model=translate_model, system_instruction=CORE_SYSTEM_PROMPT
                 )
             )
             .strip()
@@ -401,14 +401,14 @@ async def explain_with_context(req: ExplainContextRequest):
             if paper and paper.get("abstract"):
                 summary_context = f"\n[Document Summary]\n{paper['abstract']}\n"
 
-    prompt = TRANSLATE_WORD_WITH_CONTEXT_EXPLAIN_PROMPT.format(
+    prompt = DICT_EXPLAIN_WORD_CONTEXT_PROMPT.format(
         word=req.word, lang_name=lang_name, summary_context=summary_context, context=req.context
     )
     translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.0-flash-lite")
 
     try:
         explanation = await provider.generate(
-            prompt, model=translate_model, system_instruction=SYSTEM_PROMPT
+            prompt, model=translate_model, system_instruction=CORE_SYSTEM_PROMPT
         )
         return JSONResponse(
             {

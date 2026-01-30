@@ -8,7 +8,8 @@
 
 from src.logger import logger
 from src.prompts import (
-    ADVERSARIAL_CRITIQUE_PROMPT,
+    AGENT_ADVERSARIAL_CRITIQUE_PROMPT,
+    CORE_SYSTEM_PROMPT,
 )
 from src.providers import get_ai_provider
 from src.schemas.adversarial import (
@@ -43,14 +44,16 @@ class AdversarialReviewService:
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        prompt = ADVERSARIAL_CRITIQUE_PROMPT.format(text=text[:12000], lang_name=lang_name)
+        prompt = AGENT_ADVERSARIAL_CRITIQUE_PROMPT.format(text=text[:12000], lang_name=lang_name)
 
         try:
             logger.debug(
                 "Generating adversarial critique",
                 extra={"text_length": len(text)},
             )
-            critique = await self.ai_provider.generate(prompt, response_model=CritiqueResponse)
+            critique = await self.ai_provider.generate(
+                prompt, response_model=CritiqueResponse, system_instruction=CORE_SYSTEM_PROMPT
+            )
 
             issue_count = (
                 len(critique.hidden_assumptions)

@@ -1,13 +1,13 @@
 """
-Prompts configuration file.
-Centralized location for all AI prompts used in PaperTerrace.
+AIプロンプト設定ファイル
+PaperTerraceで使用されるすべてのAIプロンプトを中央管理します。
 """
 
 # ==========================================
-# System Prompt
+# Core / System Prompts
 # ==========================================
 
-SYSTEM_PROMPT = """You are an expert academic research assistant.
+CORE_SYSTEM_PROMPT = """You are an expert academic research assistant.
 Your goal is to help users understand complex academic papers, translate technical terms accurately within context, and summarize research findings clearly.
 
 # Global Rules
@@ -20,19 +20,20 @@ Your goal is to help users understand complex academic papers, translate technic
 """
 
 # ==========================================
-# Translation & Dictionary Prompts
+# Dictionary & Translation Prompts
 # ==========================================
+# 単語やフレーズの翻訳、辞書的な説明に使用
 
-TRANSLATE_PHRASE_WITH_CONTEXT_PROMPT = """{paper_context}
+DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT = """{paper_context}
 Based on the context above, translate the following English text into {lang_name}.
 {original_word}
 Output the translation and intuitive explanation."""
 
-TRANSLATE_WORD_SIMPLE_PROMPT = """{paper_context}
+DICT_TRANSLATE_WORD_SIMPLE_PROMPT = """{paper_context}
 In the context of the paper above, what does the word "{lemma}" mean?
 Provide a concise translation in {lang_name} (1-3 words). Output ONLY the translation."""
 
-TRANSLATE_WORD_WITH_CONTEXT_EXPLAIN_PROMPT = """
+DICT_EXPLAIN_WORD_CONTEXT_PROMPT = """
 How is the word "{word}" used in the following context?
 Please explain it concisely in {lang_name}, taking the context into account.
 
@@ -40,14 +41,15 @@ Please explain it concisely in {lang_name}, taking the context into account.
 Context:
 {context}
 """
-TRANSLATE_BATCH_PROMPT = """Provide concise translations for the following English words in {lang_name}.
+
+ANALYSIS_BATCH_TRANSLATE_PROMPT = """Provide concise translations for the following English words in {lang_name}.
 Output format per line: "Word: Translation"
 Keep it very brief (1-2 words).
 
 Words:
 {words_list}"""
 
-TRANSLATE_CONTEXT_AWARE_SIMPLE_PROMPT = """Evaluate the meaning of the word "{word}" within the academic context below, and provide the most appropriate translation in {lang_name}.
+ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT = """Evaluate the meaning of the word "{word}" within the academic context below, and provide the most appropriate translation in {lang_name}.
 Keep it concise (1-3 words). Output ONLY the translation.
 
 [Academic Context]
@@ -61,10 +63,11 @@ Translation only in {lang_name}.
 """
 
 # ==========================================
-# Summary Prompts
+# Paper Summary Prompts
 # ==========================================
+# 論文全体の要約、セクション別要約、アブストラクト生成に使用
 
-SUMMARY_FULL_PROMPT = """Summarize the following paper in {lang_name}.
+PAPER_SUMMARY_FULL_PROMPT = """Summarize the following paper in {lang_name}.
 
 [Paper Text]
 {paper_text}
@@ -84,20 +87,20 @@ Format the summary as follows in {lang_name}:
 (Key findings and implications)
 """
 
-SUMMARY_SECTIONS_PROMPT = """Summarize the following paper section by section in {lang_name}.
+PAPER_SUMMARY_SECTIONS_PROMPT = """Summarize the following paper section by section in {lang_name}.
 
 [Paper Text]
 {paper_text}
 
 For each section, output the result in the following JSON format:
 [
-  {{"section": "Section Title", "summary": "Summary (2-3 sentences) in {lang_name}"}}
+  {"section": "Section Title", "summary": "Summary (2-3 sentences) in {lang_name}"}
 ]
 
 Output ONLY valid JSON.
 """
 
-SUMMARY_ABSTRACT_PROMPT = """Create an abstract of the following paper in {lang_name}.
+PAPER_SUMMARY_ABSTRACT_PROMPT = """Create an abstract of the following paper in {lang_name}.
 (Length: approx. 100-200 words or equivalent characters)
 
 {paper_text}
@@ -105,7 +108,7 @@ SUMMARY_ABSTRACT_PROMPT = """Create an abstract of the following paper in {lang_
 Write in a concise, academic style in {lang_name}.
 """
 
-SUMMARY_CONTEXT_PROMPT = """
+PAPER_SUMMARY_AI_CONTEXT_PROMPT = """
 Summarize the following paper text in Japanese within {max_length} characters.
 Focus on key terminology and the main research topic to serve as context for technical term translation.
 
@@ -114,10 +117,11 @@ Focus on key terminology and the main research topic to serve as context for tec
 """
 
 # ==========================================
-# Paragraph Explanation Prompts
+# Paragraph Analysis Prompts
 # ==========================================
+# 特定の段落の詳細解説や翻訳に使用
 
-EXPLAIN_PARAGRAPH_PROMPT = """Please analyze and explain the following paragraph in detail.
+PARAGRAPH_EXPLAIN_PROMPT = """Please analyze and explain the following paragraph in detail.
 {context_hint}
 [Target Paragraph]
 {paragraph}
@@ -133,7 +137,7 @@ Even if the content is highly technical, please explain it at a level understand
 Ensure the output is in {lang_name}.
 """
 
-TRANSLATE_PARAGRAPH_PROMPT = """Translate the following academic paragraph into naturally flowing {lang_name}.
+PARAGRAPH_TRANSLATE_PROMPT = """Translate the following academic paragraph into naturally flowing {lang_name}.
 Do not summarize or explain; provide a direct translation.
 Maintain the original tone and nuance.
 
@@ -145,12 +149,12 @@ Maintain the original tone and nuance.
 Output ONLY the translation.
 """
 
-
 # ==========================================
-# Figure Insight Prompts
+# Vision & Figure Insight Prompts
 # ==========================================
+# 図表の検出、分析、比較に使用
 
-DETECT_FIGURES_PROMPT = """Analyze the following image of a document page and identify all figures, tables, and independent mathematical equations.
+VISION_DETECT_ITEMS_PROMPT = """Analyze the following image of a document page and identify all figures, tables, and independent mathematical equations.
 
 Return a JSON list of bounding boxes for each detected item:
 [
@@ -167,7 +171,7 @@ Return a JSON list of bounding boxes for each detected item:
 - If no items are found, return an empty list [].
 """
 
-FIGURE_ANALYSIS_PROMPT = """Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.
+VISION_ANALYZE_FIGURE_PROMPT = """Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.
 {caption_hint}
 
 1. **Type & Overview**: What this figure represents.
@@ -180,7 +184,7 @@ Verbalize visual information so it can be understood without seeing the figure.
 Output in {lang_name}.
 """
 
-TABLE_ANALYSIS_PROMPT = """Analyze the following table and explain it in {lang_name}.
+VISION_ANALYZE_TABLE_PROMPT = """Analyze the following table and explain it in {lang_name}.
 {context_hint}
 
 [Table Content]
@@ -195,7 +199,7 @@ Please explain:
 Output in {lang_name}.
 """
 
-FIGURE_COMPARISON_PROMPT = """Compare the following two figures and analyze their relationship or differences in {lang_name}.
+VISION_COMPARE_FIGURES_PROMPT = """Compare the following two figures and analyze their relationship or differences in {lang_name}.
 
 [Figure 1]
 {description1}
@@ -213,10 +217,11 @@ Output in {lang_name}.
 """
 
 # ==========================================
-# Adversarial Review Prompts
+# Review & Analysis Agents Prompts
 # ==========================================
+# 批判的レビュー、引用意図分析、著者ペルソナ作成、主張検証に使用
 
-ADVERSARIAL_CRITIQUE_PROMPT = """You are a rigorous reviewer. Analyze the following paper from a critical perspective and identify potential issues.
+AGENT_ADVERSARIAL_CRITIQUE_PROMPT = """You are a rigorous reviewer. Analyze the following paper from a critical perspective and identify potential issues.
 
 [Paper Text]
 {text}
@@ -241,57 +246,7 @@ Please output in the following JSON format in {lang_name}:
 Be constructive but critical. Output ONLY valid JSON.
 """
 
-# ==========================================
-# Research Radar Prompts
-# ==========================================
-
-RADAR_SIMULATE_SEARCH_PROMPT = """Since the paper search API is unavailable, simulate a search result for the following query.
-List 5 real, highly relevant academic papers.
-
-Search Query: {query}
-"""
-
-RADAR_QUERY_FROM_ABSTRACT_PROMPT = "Generate a single optimal English search query to find related papers based on the following abstract.\n\n{abstract}"
-
-RADAR_QUERY_FROM_CONTEXT_PROMPT = """Based on the following paper context, generate 3-5 search queries to find related research papers.
-Context:
-{context}
-"""
-
-# ==========================================
-# Chat Prompts
-# ==========================================
-
-CHAT_RESPONSE_PROMPT = """You are an AI assistant helping a researcher read this academic paper.
-Based on the paper context below, answer the user's question in {lang_name}.
-
-[Paper Context]
-{document_context}
-
-[Chat History]
-{history_text}
-
-Please provide a clear and concise answer in {lang_name}.
-"""
-
-CHAT_AUTHOR_AGENT_PROMPT = """You are the author of this paper. Answer the reader's question from the author's perspective in {lang_name}.
-
-[Paper Content]
-{paper_text}
-
-[Reader's Question]
-{question}
-
-Answer as if you are the author (using "I", "we", "our team").
-Explain the background, motivation, and methodology rationale where appropriate.
-Ensure the response is in {lang_name}.
-"""
-
-# ==========================================
-# Citation Intent Prompts
-# ==========================================
-
-CITATION_INTENT_PROMPT = """Identify and analyze all "citations" (references to other works) in the following academic text, and classify the intent of each citation.
+AGENT_CITE_INTENT_PROMPT = """Identify and analyze all "citations" (references to other works) in the following academic text, and classify the intent of each citation.
 
 [Text]
 {paragraph}
@@ -309,11 +264,7 @@ CITATION_INTENT_PROMPT = """Identify and analyze all "citations" (references to 
 3. Write a brief reason for the classification in {lang_name}.
 """
 
-# ==========================================
-# Author Agent Prompts
-# ==========================================
-
-AUTHOR_PERSONA_PROMPT = """
+AGENT_AUTHOR_PERSONA_PROMPT = """
 あなたは著名な研究者である {author_name} のペルソナを作成するAIです。
 以下の情報と、現在読まれている論文「{current_paper_title}」を元に、
 この著者がチャットボットとして振る舞うための「システムプロンプト」を作成してください。
@@ -328,11 +279,7 @@ AUTHOR_PERSONA_PROMPT = """
 - 出力はシステムプロンプトのテキストのみにしてください。
 """
 
-# ==========================================
-# Claim Verification Prompts
-# ==========================================
-
-CLAIM_VERIFICATION_PROMPT = """You are an autonomous "Evidence Checker".
+AGENT_CLAIM_VERIFY_PROMPT = """You are an autonomous "Evidence Checker".
 Your task is to critically verify the claims made in the following text by cross-referencing with external information (Web Search).
 
 [Target Text]
@@ -348,14 +295,63 @@ Your task is to critically verify the claims made in the following text by cross
 """
 
 # ==========================================
+# Research Radar Prompts
+# ==========================================
+# 関連論文の検索クエリ生成やシミュレーションに使用
+
+RADAR_SIMULATE_SEARCH_PROMPT = """Since the paper search API is unavailable, simulate a search result for the following query.
+List 5 real, highly relevant academic papers.
+
+Search Query: {query}
+"""
+
+RADAR_GENERATE_QUERY_ABSTRACT_PROMPT = "Generate a single optimal English search query to find related papers based on the following abstract.\n\n{abstract}"
+
+RADAR_GENERATE_QUERY_CONTEXT_PROMPT = """Based on the following paper context, generate 3-5 search queries to find related research papers.
+Context:
+{context}
+"""
+
+# ==========================================
+# Chat & Author Agent Prompts
+# ==========================================
+# 一般チャット応答や著者になりきった応答に使用
+
+CHAT_GENERAL_RESPONSE_PROMPT = """You are an AI assistant helping a researcher read this academic paper.
+Based on the paper context below, answer the user's question in {lang_name}.
+
+[Paper Context]
+{document_context}
+
+[Chat History]
+{history_text}
+
+Please provide a clear and concise answer in {lang_name}.
+"""
+
+CHAT_AUTHOR_PERSONA_PROMPT = """You are the author of this paper. Answer the reader's question from the author's perspective in {lang_name}.
+
+[Paper Content]
+{paper_text}
+
+[Reader's Question]
+{question}
+
+Answer as if you are the author (using "I", "we", "our team").
+Explain the background, motivation, and methodology rationale where appropriate.
+Ensure the response is in {lang_name}.
+"""
+
+# ==========================================
 # PDF Processing & OCR Prompts
 # ==========================================
+# PDFの言語判定やテキスト抽出の補助に使用
 
-PDF_LANG_DETECT_PROMPT = """Identify the primary language of the following text and return ONLY the ISO 639-1 code (e.g., 'en', 'ja', 'fr').
+PDF_DETECT_LANGUAGE_PROMPT = """Identify the primary language of the following text and return ONLY the ISO 639-1 code (e.g., 'en', 'ja', 'fr').
 Text Sample:
 {text}
 """
 
-PDF_FALLBACK_OCR_PROMPT = (
+PDF_EXTRACT_TEXT_OCR_PROMPT = (
     "Transcribe the text from this PDF page preserving the structure as much as possible."
 )

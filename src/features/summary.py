@@ -2,11 +2,11 @@ import os
 
 from src.logger import logger
 from src.prompts import (
-    SUMMARY_ABSTRACT_PROMPT,
-    SUMMARY_CONTEXT_PROMPT,
-    SUMMARY_FULL_PROMPT,
-    SUMMARY_SECTIONS_PROMPT,
-    SYSTEM_PROMPT,
+    CORE_SYSTEM_PROMPT,
+    PAPER_SUMMARY_ABSTRACT_PROMPT,
+    PAPER_SUMMARY_AI_CONTEXT_PROMPT,
+    PAPER_SUMMARY_FULL_PROMPT,
+    PAPER_SUMMARY_SECTIONS_PROMPT,
 )
 from src.providers import get_ai_provider
 from src.schemas.summary import FullSummaryResponse
@@ -71,7 +71,7 @@ class SummaryService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         safe_text = await self._truncate_to_token_limit(text)
-        prompt = SUMMARY_FULL_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
+        prompt = PAPER_SUMMARY_FULL_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
 
         try:
             logger.debug(
@@ -82,7 +82,7 @@ class SummaryService:
                 prompt,
                 model=self.model,
                 response_model=FullSummaryResponse,
-                system_instruction=SYSTEM_PROMPT,
+                system_instruction=CORE_SYSTEM_PROMPT,
             )
 
             # 後方互換性のため整形済みテキストを返す
@@ -121,7 +121,7 @@ class SummaryService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         safe_text = await self._truncate_to_token_limit(text)
-        prompt = SUMMARY_SECTIONS_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
+        prompt = PAPER_SUMMARY_SECTIONS_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
 
         try:
             logger.debug(
@@ -132,7 +132,7 @@ class SummaryService:
                 prompt,
                 model=self.model,
                 response_model=SectionSummariesResponse,
-                system_instruction=SYSTEM_PROMPT,
+                system_instruction=CORE_SYSTEM_PROMPT,
             )
 
             logger.info(
@@ -162,11 +162,11 @@ class SummaryService:
 
         # 処理速度のため冒頭5万文字のみ使用
         safe_text = await self._truncate_to_token_limit(text[:50000])
-        prompt = SUMMARY_ABSTRACT_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
+        prompt = PAPER_SUMMARY_ABSTRACT_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
 
         try:
             abstract = await self.ai_provider.generate(
-                prompt, model=self.model, system_instruction=SYSTEM_PROMPT
+                prompt, model=self.model, system_instruction=CORE_SYSTEM_PROMPT
             )
             logger.info("Abstract summary generated")
             return abstract
@@ -180,9 +180,11 @@ class SummaryService:
         """
         try:
             # コンテキスト生成には冒頭部分のみ使用
-            prompt = SUMMARY_CONTEXT_PROMPT.format(max_length=max_length, paper_text=text[:20000])
+            prompt = PAPER_SUMMARY_AI_CONTEXT_PROMPT.format(
+                max_length=max_length, paper_text=text[:20000]
+            )
             summary = await self.ai_provider.generate(
-                prompt, model=self.model, system_instruction=SYSTEM_PROMPT
+                prompt, model=self.model, system_instruction=CORE_SYSTEM_PROMPT
             )
             logger.info(f"Context summary generated (length: {len(summary)})")
             return summary[:max_length]

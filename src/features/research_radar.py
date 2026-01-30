@@ -6,8 +6,8 @@ from pydantic import BaseModel, Field
 
 from src.logger import logger
 from src.prompts import (
-    RADAR_QUERY_FROM_ABSTRACT_PROMPT,
-    RADAR_QUERY_FROM_CONTEXT_PROMPT,
+    RADAR_GENERATE_QUERY_ABSTRACT_PROMPT,
+    RADAR_GENERATE_QUERY_CONTEXT_PROMPT,
     RADAR_SIMULATE_SEARCH_PROMPT,
 )
 from src.providers import get_ai_provider
@@ -132,8 +132,8 @@ class ResearchRadarService:
         アブストラクトからクエリを生成して関連論文を検索する。
         """
         # 1. AIを使用して検索クエリを生成
-        query_prompt = RADAR_QUERY_FROM_ABSTRACT_PROMPT.format(abstract=abstract[:1000])
-        search_query = await self.ai_provider.generate(query_prompt)
+        prompt = RADAR_GENERATE_QUERY_ABSTRACT_PROMPT.format(abstract=abstract[:4000])
+        search_query = await self.ai_provider.generate(prompt)
         search_query = search_query.strip().strip('"')
 
         # 2. 検索実行
@@ -157,7 +157,7 @@ class ResearchRadarService:
                     f"/authors/{author_id}/papers", params={"limit": 10}
                 )
                 papers = response.json().get("papers", [])
-                return {"profile": authors[0], "papers": papers}
+                return {"profile": authors[0], "papers": []}
             except Exception:
                 return {"profile": authors[0], "papers": []}
 
@@ -165,7 +165,7 @@ class ResearchRadarService:
 
     async def generate_search_queries(self, context: str) -> List[str]:
         """関連研究探索用の検索クエリを生成する。"""
-        prompt = RADAR_QUERY_FROM_CONTEXT_PROMPT.format(context=context[:2000])
+        prompt = RADAR_GENERATE_QUERY_CONTEXT_PROMPT.format(context=context[:6000])
         try:
             response: SearchQueriesResponse = await self.ai_provider.generate(
                 prompt, response_model=SearchQueriesResponse

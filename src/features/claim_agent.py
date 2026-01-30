@@ -34,25 +34,28 @@ class ClaimVerificationService:
         """
         Verify claims in a paragraph using Web Search.
         """
-        from src.prompts import CLAIM_VERIFICATION_PROMPT
+        from src.prompts import (
+            AGENT_CLAIM_VERIFY_PROMPT,
+            CORE_SYSTEM_PROMPT,
+        )
 
         from .translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
-        prompt = CLAIM_VERIFICATION_PROMPT.format(paragraph=paragraph, lang_name=lang_name)
+        prompt = AGENT_CLAIM_VERIFY_PROMPT.format(paragraph=paragraph, lang_name=lang_name)
         try:
             logger.info(f"Verifying paragraph claims with model: {self.model}")
 
             # Call AI with search enabled and structured output
-            data: ClaimVerificationResponse = await self.ai_provider.generate(
+            verification: ClaimVerificationResponse = await self.ai_provider.generate(
                 prompt,
                 model=self.model,
-                enable_search=True,
                 response_model=ClaimVerificationResponse,
+                system_instruction=CORE_SYSTEM_PROMPT,
             )
 
-            return data.model_dump()
+            return verification.model_dump()
 
         except Exception as e:
             logger.error(f"Claim verification failed: {e}")
