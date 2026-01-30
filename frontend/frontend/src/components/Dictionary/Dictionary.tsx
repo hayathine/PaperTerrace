@@ -5,16 +5,35 @@ import { useAuth } from '../../contexts/AuthContext';
 interface DictionaryProps {
     term?: string;
     sessionId: string;
+    paperId?: string | null;
     context?: string;
     coordinates?: { page: number, x: number, y: number };
+    onAskAI?: (prompt: string) => void;
 }
 
-const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context, coordinates }) => {
+const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, context, coordinates, onAskAI }) => {
     const { token } = useAuth();
     // Maintain a list of entries instead of a single one
     const [entries, setEntries] = useState<DictionaryEntry[]>([]);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
+
+    // Reset when paperId changes (but not when transitioning from null to a real ID)
+    const prevPaperIdRef = React.useRef<string | null | undefined>(paperId);
+
+    useEffect(() => {
+        if (prevPaperIdRef.current !== undefined && paperId !== prevPaperIdRef.current) {
+            // If we're transitioning from null to a real ID, it means processing finished for the SAME paper.
+            // In this case, we don't want to clear the entries the user might have already made.
+            const isProcessingFinished = prevPaperIdRef.current === null && paperId !== null;
+            
+            if (!isProcessingFinished) {
+                setEntries([]);
+                setSavedItems(new Set());
+            }
+        }
+        prevPaperIdRef.current = paperId;
+    }, [paperId]);
 
     useEffect(() => {
         if (!term) return;
@@ -69,6 +88,7 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context, coord
                 headers,
                 body: JSON.stringify({
                     session_id: sessionId,
+                    paper_id: paperId,
                     term: entry.word,
                     note: entry.translation,
                     page_number: coordinates?.page,
@@ -94,40 +114,6 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context, coord
         }
     };
 
-    const handleRethink = async () => {
-        if (!term || !context) {
-            alert("No context available for this word.");
-            return;
-        }
-        setLoading(true);
-        try {
-            const headers: HeadersInit = { 'Content-Type': 'application/json' };
-            if (token) headers['Authorization'] = `Bearer ${token}`;
-
-            const res = await fetch('/explain/context', {
-                method: 'POST',
-                headers,
-                body: JSON.stringify({
-                    word: term,
-                    context: context.substring(0, 500), // Limit context length just in case
-                    session_id: sessionId,
-                    lang: 'ja'
-                })
-            });
-
-            if (res.ok) {
-                const data: DictionaryEntry = await res.json();
-                setEntries(prev => [data, ...prev]);
-            } else {
-                alert("Failed to rethink with context.");
-            }
-        } catch (e) {
-            console.error(e);
-            alert("Error Rethinking.");
-        } finally {
-            setLoading(false);
-        }
-    };
 
     if (entries.length === 0 && !loading && !error) {
         return (
@@ -156,23 +142,6 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context, coord
                 </div>
             )}
 
-            {!loading && context && term && (
-                <div className="mb-4">
-                    <button
-                        onClick={handleRethink}
-                        className="w-full py-2 bg-gradient-to-r from-indigo-500 to-purple-600 hover:from-indigo-600 hover:to-purple-700 text-white text-xs font-bold rounded-lg shadow-sm transition-all flex items-center justify-center gap-2"
-                    >
-                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                        </svg>
-                        Ask AI with Context
-                    </button>
-                    <p className="text-[9px] text-slate-400 mt-1 px-1 truncate">
-                        Context: {context.substring(0, 40)}...
-                    </p>
-                </div>
-            )}
-
             {error && <div className="text-xs text-red-400 bg-red-50 p-3 rounded-lg border border-red-100 mb-4">{error}</div>}
 
             <div className="space-y-4">
@@ -198,29 +167,44 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context, coord
                             {entry.translation}
                         </p>
 
-                        <button
-                            onClick={() => handleSaveToNote(entry)}
-                            className={`w-full py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 border ${savedItems.has(entry.word)
-                                ? 'bg-green-50 text-green-600 border-green-200 cursor-default'
-                                : 'bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 border-transparent group-hover:border-indigo-100'
-                                }`}
-                        >
-                            {savedItems.has(entry.word) ? (
-                                <>
-                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => handleSaveToNote(entry)}
+                                className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 border ${savedItems.has(entry.word)
+                                    ? 'bg-green-50 text-green-600 border-green-200 cursor-default'
+                                    : 'bg-slate-50 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 border-transparent group-hover:border-indigo-100'
+                                    }`}
+                            >
+                                {savedItems.has(entry.word) ? (
+                                    <>
+                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                        </svg>
+                                        Saved
+                                    </>
+                                ) : (
+                                    <>
+                                        <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                        </svg>
+                                        Save Note
+                                    </>
+                                )}
+                            </button>
+
+                            {onAskAI && (
+                                <button
+                                    onClick={() => onAskAI(`${entry.word}について、この論文の文脈（${context?.substring(0, 200)}...）を踏まえて詳しくチャットで教えてください。`)}
+                                    className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
+                                >
+                                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
+                                        <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
                                     </svg>
-                                    Saved
-                                </>
-                            ) : (
-                                <>
-                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-                                    </svg>
-                                    Save to Notes
-                                </>
+                                    <span>チャットで聞く</span>
+                                </button>
                             )}
-                        </button>
+                        </div>
                     </div>
                 ))}
             </div>

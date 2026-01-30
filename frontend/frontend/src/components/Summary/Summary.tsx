@@ -1,14 +1,15 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { CritiqueResponse, RadarResponse } from './types';
 
 interface SummaryProps {
     sessionId: string;
+    paperId?: string | null;
     isAnalyzing?: boolean;
 }
 
 type Mode = 'summary' | 'critique' | 'radar';
 
-const Summary: React.FC<SummaryProps> = ({ sessionId, isAnalyzing = false }) => {
+const Summary: React.FC<SummaryProps> = ({ sessionId, paperId, isAnalyzing = false }) => {
     const [mode, setMode] = useState<Mode>('summary');
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
@@ -17,7 +18,15 @@ const Summary: React.FC<SummaryProps> = ({ sessionId, isAnalyzing = false }) => 
     const [critiqueData, setCritiqueData] = useState<CritiqueResponse | null>(null);
     const [radarData, setRadarData] = useState<RadarResponse | null>(null);
 
-    const handleSummarize = async () => {
+    // Reset data when paperId changes
+    React.useEffect(() => {
+        setSummaryData(null);
+        setCritiqueData(null);
+        setRadarData(null);
+        setError(null);
+    }, [paperId]);
+
+    const handleSummarize = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
@@ -25,6 +34,7 @@ const Summary: React.FC<SummaryProps> = ({ sessionId, isAnalyzing = false }) => 
             formData.append('session_id', sessionId);
             formData.append('mode', 'abstract');
             formData.append('lang', 'ja');
+            if (paperId) formData.append('paper_id', paperId);
 
             const res = await fetch('/summarize', { method: 'POST', body: formData });
             if (!res.ok) {
@@ -45,9 +55,9 @@ const Summary: React.FC<SummaryProps> = ({ sessionId, isAnalyzing = false }) => 
         } finally {
             setLoading(false);
         }
-    };
+    }, [sessionId]);
 
-    const handleCritique = async () => {
+    const handleCritique = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
@@ -67,9 +77,9 @@ const Summary: React.FC<SummaryProps> = ({ sessionId, isAnalyzing = false }) => 
         } finally {
             setLoading(false);
         }
-    };
+    }, [sessionId]);
 
-    const handleRadar = async () => {
+    const handleRadar = useCallback(async () => {
         setLoading(true);
         setError(null);
         try {
@@ -89,14 +99,14 @@ const Summary: React.FC<SummaryProps> = ({ sessionId, isAnalyzing = false }) => 
         } finally {
             setLoading(false);
         }
-    };
+    }, [sessionId]);
 
-    // Auto-fetch summary on mount
+    // Auto-fetch summary on mount or paper change
     React.useEffect(() => {
         if (sessionId) {
             handleSummarize();
         }
-    }, [sessionId]);
+    }, [sessionId, paperId, handleSummarize]);
 
     return (
         <div className="flex flex-col h-full bg-slate-50">

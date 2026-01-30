@@ -6,6 +6,7 @@ import { useAuth } from '../../contexts/AuthContext';
 
 interface NoteListProps {
     sessionId: string;
+    paperId?: string | null;
     coordinates?: { page: number, x: number, y: number };
     onJump?: (page: number, x: number, y: number) => void;
     selectedContext?: string;
@@ -13,7 +14,7 @@ interface NoteListProps {
     selectedImage?: string; // New prop for selected image URL
 }
 
-const NoteList: React.FC<NoteListProps> = ({ sessionId, coordinates, onJump, selectedContext, selectedTerm, selectedImage }) => {
+const NoteList: React.FC<NoteListProps> = ({ sessionId, paperId, coordinates, onJump, selectedContext, selectedTerm, selectedImage }) => {
     const { token } = useAuth();
     const [notes, setNotes] = useState<Note[]>([]);
     const [loading, setLoading] = useState(false);
@@ -30,11 +31,15 @@ const NoteList: React.FC<NoteListProps> = ({ sessionId, coordinates, onJump, sel
 
     const fetchNotes = useCallback(async () => {
         setLoading(true);
+        setError(null);
         try {
             const headers: HeadersInit = {};
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
-            const res = await fetch(`/note/${sessionId}`, { headers });
+            const url = new URL(`/note/${sessionId}`, window.location.origin);
+            if (paperId) url.searchParams.append('paper_id', paperId);
+
+            const res = await fetch(url.toString(), { headers });
             if (res.ok) {
                 const data = await res.json();
                 setNotes(data.notes || []);
@@ -46,13 +51,14 @@ const NoteList: React.FC<NoteListProps> = ({ sessionId, coordinates, onJump, sel
         } finally {
             setLoading(false);
         }
-    }, [sessionId, token]);
+    }, [sessionId, paperId, token]);
 
     useEffect(() => {
+        setNotes([]); // Clear notes when session or paper changes
         if (sessionId) {
             fetchNotes();
         }
-    }, [sessionId, fetchNotes]);
+    }, [sessionId, paperId, fetchNotes]);
 
     const handleAddNote = async (term: string, noteContent: string, coords?: { page: number, x: number, y: number }, imageUrl?: string) => {
         try {
@@ -64,6 +70,7 @@ const NoteList: React.FC<NoteListProps> = ({ sessionId, coordinates, onJump, sel
                 headers,
                 body: JSON.stringify({
                     session_id: sessionId,
+                    paper_id: paperId,
                     term,
                     note: noteContent,
                     page_number: coords?.page,
@@ -91,6 +98,7 @@ const NoteList: React.FC<NoteListProps> = ({ sessionId, coordinates, onJump, sel
                 headers,
                 body: JSON.stringify({
                     session_id: sessionId,
+                    paper_id: paperId,
                     term,
                     note: noteContent,
                     page_number: coords?.page,

@@ -26,6 +26,14 @@ function App() {
     const [showLoginModal, setShowLoginModal] = useState(false)
     const [currentPaperId, setCurrentPaperId] = useState<string | null>(null)
     const [isAnalyzing, setIsAnalyzing] = useState(false)
+    const [pendingFigureId, setPendingFigureId] = useState<string | null>(null)
+    const [pendingChatPrompt, setPendingChatPrompt] = useState<string | null>(null)
+    const [sidebarWidth, setSidebarWidth] = useState(384)
+    const [isResizing, setIsResizing] = useState(false)
+    const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true)
+
+    // Developer settings
+    const SHOW_DEV_TOOLS = true;
 
     useEffect(() => {
         if (user) {
@@ -36,6 +44,36 @@ function App() {
                 .catch(err => console.error(err))
         }
     }, [user])
+
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isResizing) return;
+            // Calculate new width from right side
+            const newWidth = window.innerWidth - e.clientX;
+            // Constrain width between 200px and half the screen
+            if (newWidth > 200 && newWidth < window.innerWidth * 0.7) {
+                setSidebarWidth(newWidth);
+            }
+        };
+
+        const handleMouseUp = () => {
+            setIsResizing(false);
+            document.body.style.cursor = 'default';
+            document.body.style.userSelect = 'auto';
+        };
+
+        if (isResizing) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+            document.body.style.cursor = 'col-resize';
+            document.body.style.userSelect = 'none';
+        }
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [isResizing]);
 
     const handlePaperLoaded = (paperId: string | null) => {
         setCurrentPaperId(paperId);
@@ -82,11 +120,22 @@ function App() {
         setIsAnalyzing(status === 'uploading' || status === 'processing');
     }
 
+    const handleExplainFigure = (figureId: string) => {
+        setPendingFigureId(figureId);
+        setActiveTab('chat');
+    }
+
+    const handleAskAI = (prompt: string) => {
+        setPendingChatPrompt(prompt);
+        setActiveTab('chat');
+    }
+
     return (
         <div className="flex h-screen w-full bg-gray-100 overflow-hidden">
             {/* Sidebar Placeholder */}
-            <div className="w-64 bg-gray-900 text-white p-4 hidden md:flex flex-col">
-                <h1 className="text-xl font-bold mb-8">PaperTerrace</h1>
+            <div className={`bg-gray-900 text-white transition-all duration-300 ease-in-out hidden md:flex flex-col shrink-0 ${isLeftSidebarOpen ? 'w-64 opacity-100' : 'w-0 opacity-0 overflow-hidden'}`}>
+                <div className="w-64 p-4 flex flex-col h-full">
+                    <h1 className="text-xl font-bold mb-8">PaperTerrace</h1>
                 <div className="flex-1">
                     <p className="text-gray-400 text-sm">Validating React Migration...</p>
                     {config && <p className="text-green-400 text-xs mt-2">● API Connected</p>}
@@ -143,13 +192,51 @@ function App() {
                   cursor-pointer
                 "
                     />
+
+                    {SHOW_DEV_TOOLS && (
+                        <div className="mt-4 pt-4 border-t border-gray-700">
+                            <button
+                                onClick={() => {
+                                    fetch('/test.pdf')
+                                        .then(res => res.blob())
+                                        .then(blob => {
+                                            const file = new File([blob], "test.pdf", { type: "application/pdf" });
+                                            setUploadFile(file);
+                                            setCurrentPaperId(null);
+                                        })
+                                        .catch(e => console.error("Failed to load test PDF:", e));
+                                }}
+                                id="dev-load-pdf-btn"
+                                className="w-full py-1 px-3 bg-indigo-900/50 hover:bg-indigo-900 text-indigo-200 text-xs rounded border border-indigo-800 transition-colors"
+                            >
+                                [DEV] Load Test.pdf
+                            </button>
+                        </div>
+                    )}
                 </div>
             </div>
+        </div>
 
             {/* Main Content Area */}
-            <div className="flex-1 flex flex-col h-full relative">
-                <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 shadow-sm justify-between">
+            <div className="flex-1 flex flex-col h-full relative transition-all duration-300">
+                <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 shadow-sm">
+                    <button
+                        onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)}
+                        className="mr-3 p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"
+                        title={isLeftSidebarOpen ? "メニューを閉じる" : "メニューを開く"}
+                    >
+                        {isLeftSidebarOpen ? (
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                            </svg>
+                        ) : (
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                            </svg>
+                        )}
+                    </button>
                     <span className="font-semibold text-gray-700">Reading Mode</span>
+                    <div className="flex-1" />
                     {uploadFile && <span className="text-sm text-gray-500">{uploadFile.name}</span>}
                 </header>
 
@@ -176,8 +263,22 @@ function App() {
                         )}
                     </div>
 
+                    {/* Resizer Handle */}
+                    <div
+                        className={`w-1.5 h-full cursor-col-resize hover:bg-indigo-500/30 transition-colors z-30 shrink-0 ${isResizing ? 'bg-indigo-500/50' : 'bg-transparent'}`}
+                        onMouseDown={(e) => {
+                            e.preventDefault();
+                            setIsResizing(true);
+                        }}
+                    >
+                        <div className="w-[1px] h-full bg-gray-200 mx-auto" />
+                    </div>
+
                     {/* Right Sidebar */}
-                    <div className="w-96 h-full shadow-xl z-20 border-l border-gray-200 bg-white">
+                    <div 
+                        style={{ width: sidebarWidth }}
+                        className="h-full shadow-xl z-20 bg-white overflow-hidden shrink-0"
+                    >
                         <Sidebar
                             sessionId={sessionId}
                             activeTab={activeTab}
@@ -189,6 +290,12 @@ function App() {
                             onJump={handleJumpToLocation}
                             isAnalyzing={isAnalyzing}
                             paperId={currentPaperId}
+                            pendingFigureId={pendingFigureId}
+                            onExplainFigure={handleExplainFigure}
+                            onPendingFigureConsumed={() => setPendingFigureId(null)}
+                            pendingChatPrompt={pendingChatPrompt}
+                            onAskAI={handleAskAI}
+                            onPendingChatConsumed={() => setPendingChatPrompt(null)}
                         />
                     </div>
                 </div>

@@ -371,7 +371,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
 
             {/* Content Area */}
             {mode === 'plaintext' ? (
-                <TextModeViewer paperId={paperId} />
+                <TextModeViewer 
+                    pages={pages}
+                    onWordClick={handleWordClick}
+                    onTextSelect={handleTextSelect}
+                />
             ) : (
                 <div className={`space-y-6 ${(mode === 'stamp' || mode === 'area') ? 'cursor-crosshair' : ''}`}>
                     {pages.map((page) => (

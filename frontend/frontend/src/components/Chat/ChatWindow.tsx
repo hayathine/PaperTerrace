@@ -6,14 +6,80 @@ import InputArea from './InputArea';
 
 interface ChatWindowProps {
     sessionId?: string;
+    paperId?: string | null;
     initialMessages?: Message[];
+    initialFigureId?: string | null;
+    onInitialChatSent?: () => void;
+    initialPrompt?: string | null;
+    onInitialPromptSent?: () => void;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ sessionId = 'default', initialMessages = [] }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ 
+    sessionId = 'default', 
+    paperId, 
+    initialMessages = [],
+    initialFigureId,
+    onInitialChatSent,
+    initialPrompt,
+    onInitialPromptSent
+}) => {
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [isLoading, setIsLoading] = useState(false);
 
-    const handleSendMessage = async (text: string) => {
+    // Load messages when paperId changes
+    React.useEffect(() => {
+        const fetchHistory = async () => {
+            setMessages([]);
+            
+            // Initial messages prop might be useful, but usually we want server history if available
+            // If paperId is not set, we might be in global context?
+            
+            setIsLoading(true);
+            try {
+                const url = new URL('/chat/history', window.location.origin);
+                url.searchParams.append('session_id', sessionId);
+                if (paperId) url.searchParams.append('paper_id', paperId);
+
+                const res = await fetch(url.toString());
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.history && Array.isArray(data.history)) {
+                         const loadedMessages: Message[] = data.history.map((h: any) => ({
+                             id: uuidv4(), // We generate ID as it's not persisted in simple history (role/content)
+                             role: h.role,
+                             content: h.content,
+                             timestamp: Date.now()
+                         }));
+                         setMessages(loadedMessages);
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to load chat history", e);
+            } finally {
+                setIsLoading(false);
+            }
+        };
+
+        fetchHistory();
+    }, [sessionId, paperId]);
+
+    // Handle initial figure chat trigger
+    React.useEffect(() => {
+        if (initialFigureId && onInitialChatSent) {
+            handleSendMessage("この図について詳しく教えてください。", initialFigureId);
+            onInitialChatSent();
+        }
+    }, [initialFigureId, onInitialChatSent]);
+
+    // Handle initial prompt chat trigger
+    React.useEffect(() => {
+        if (initialPrompt && onInitialPromptSent) {
+            handleSendMessage(initialPrompt);
+            onInitialPromptSent();
+        }
+    }, [initialPrompt, onInitialPromptSent]);
+
+    const handleSendMessage = async (text: string, figureId?: string) => {
         // Add user message immediately
         const userMsg: Message = {
             id: uuidv4(),
@@ -34,6 +100,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ sessionId = 'default', initialM
                 body: JSON.stringify({
                     message: text,
                     session_id: sessionId,
+                    paper_id: paperId,
+                    figure_id: figureId,
                     author_mode: false,
                     lang: 'ja', // Defaulting to Japanese as per project goals
                 }),
