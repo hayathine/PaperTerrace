@@ -38,6 +38,7 @@ dependencies = [
     "uvicorn>=0.40.0",
     "pypdf>=6.6.2",
     "Pillow>=11.1.0",
+    "layoutparser>=0.3.4",
 ]
 
 [dependency-groups]

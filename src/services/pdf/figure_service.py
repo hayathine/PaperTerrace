@@ -33,29 +33,42 @@ class FigureService:
         # 1. Native extraction (using pypdf with size/aspect ratio filtering)
         if pypdf_page and hasattr(pypdf_page, "images"):
             logger.debug(f"[FigureService] p.{page_num}: Checking native images")
-            try:
-                found_count = 0
-                for i, image_file in enumerate(pypdf_page.images):
+            found_count = 0
+            for i, image_file in enumerate(pypdf_page.images):
+                try:
                     img_data = image_file.data
-                    if len(img_data) < 1000:
-                        continue
-
+                    # Use PIL to normalize to PNG and check size
                     try:
                         with Image.open(io.BytesIO(img_data)) as img:
                             width, height = img.size
-                    except Exception:
+
+                            # Filtering icons and small noise
+                            if width < 150 or height < 150:
+                                continue
+                            if height > 0 and width / height > 5:
+                                continue
+
+                            # Normalize to PNG to ensure browser compatibility
+                            # Some PDF images are in CMYK or exotic formats (JPX)
+                            img = img.convert("RGB")
+                            buffer = io.BytesIO()
+                            img.save(buffer, format="PNG")
+                            png_bytes = buffer.getvalue()
+
+                            if len(png_bytes) < 2000:
+                                continue
+
+                            img_b64 = base64.b64encode(png_bytes).decode("utf-8")
+                    except Exception as e:
+                        logger.warning(
+                            f"[FigureService] p.{page_num}: PIL processing failed for native image {i}: {e}"
+                        )
                         continue
 
-                    # Filtering small/weird images (noise reduction)
-                    if width < 100 or height < 100:
-                        continue
-                    if height > 0 and width / height > 5:
-                        continue
-                    if page_num == 1 and width < 300:  # Banner on first page
-                        continue
+                    # Sanitize name to avoid directory escape or invalid paths
+                    safe_name = "".join([c if c.isalnum() else "_" for c in image_file.name])
+                    figure_img_name = f"native_img_{page_num}_{i}_{safe_name}"
 
-                    img_b64 = base64.b64encode(img_data).decode("utf-8")
-                    figure_img_name = f"native_img_{page_num}_{i}_{image_file.name}"
                     figure_url = save_page_image(file_hash, figure_img_name, img_b64)
 
                     figures_data.append(
@@ -68,22 +81,27 @@ class FigureService:
                         }
                     )
                     found_count += 1
+                except Exception as e:
+                    logger.warning(f"[FigureService] p.{page_num}: Native image {i} failed: {e}")
+                    continue
 
-                if found_count > 0:
-                    logger.info(
-                        f"[FigureService] p.{page_num}: Extracted {found_count} native images"
-                    )
-            except Exception as e:
-                logger.warning(f"[FigureService] p.{page_num}: Native extraction failed: {e}")
+            if found_count > 0:
+                logger.info(f"[FigureService] p.{page_num}: Extracted {found_count} native images")
 
         # 2. Table detection using pdfplumber (for text-based tables)
         logger.debug(f"[FigureService] p.{page_num}: Attempting table detection")
         try:
             tables = page.find_tables()
             if tables:
-                logger.info(f"[FigureService] p.{page_num}: Found {len(tables)} tables")
+                logger.debug(f"[FigureService] p.{page_num}: Found {len(tables)} potential tables")
                 for i, table in enumerate(tables):
                     bbox = table.bbox  # (x0, top, x1, bottom)
+
+                    # Filtering very small tables/lines (likely icons or structural noise)
+                    width = bbox[2] - bbox[0]
+                    height = bbox[3] - bbox[1]
+                    if width < 120 or height < 60:
+                        continue
 
                     # Expand bbox slightly
                     margin = 5
@@ -94,7 +112,7 @@ class FigureService:
 
                     cropped_page = page.crop((p_xmin, p_ymin, p_xmax, p_ymax))
                     crop_img_obj = cropped_page.to_image(resolution=300)
-                    crop_pil = crop_img_obj.original
+                    crop_pil = crop_img_obj.original.convert("RGB")
 
                     buffer = io.BytesIO()
                     crop_pil.save(buffer, format="PNG")

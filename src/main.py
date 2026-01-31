@@ -65,14 +65,6 @@ async def lifespan(app: FastAPI):
             NLPService.lemmatize("warmup")
             logger.info("Pre-warmed NLP (spaCy)")
 
-            # Jamdict prewarm if enabled
-            from src.providers.dictionary_provider import get_dictionary_provider
-
-            dp = get_dictionary_provider()
-            if dp.use_jamdict:
-                dp.lookup("apple")
-                logger.info("Pre-warmed Jamdict")
-
         except Exception as e:
             logger.warning(f"Failed to pre-warm models: {e}")
 

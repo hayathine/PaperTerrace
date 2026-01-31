@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
-import { auth, googleProvider } from '../lib/firebase';
+import { auth, googleProvider, githubProvider } from '../lib/firebase';
 
 interface AuthContextType {
     user: User | null;
@@ -73,8 +73,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const signInWithGithub = async () => {
         try {
-            // Need to import githubProvider from firebase
-            const { githubProvider } = await import('../lib/firebase');
             await signInWithPopup(auth, githubProvider);
             setIsGuest(false);
         } catch (error) {

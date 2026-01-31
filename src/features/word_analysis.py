@@ -1,4 +1,6 @@
+import asyncio
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 from src.logger import logger
 from src.prompts import (
@@ -8,6 +10,7 @@ from src.prompts import (
 )
 from src.providers import RedisService, get_ai_provider
 from src.providers.dictionary_provider import get_dictionary_provider
+from src.services.local_translator import get_local_translator
 from src.utils import truncate_context
 
 from .translate import SUPPORTED_LANGUAGES
@@ -17,8 +20,10 @@ class WordAnalysisService:
     def __init__(self):
         self.ai_provider = get_ai_provider()
         self.dict_provider = get_dictionary_provider()
+        self.local_translator = get_local_translator()
         self.redis = RedisService()
         self.translate_model = os.getenv("MODEL_TRANSLATE", "gemini-1.5-flash")
+        self.executor = ThreadPoolExecutor(max_workers=4)
 
         self.word_cache = {}  # lemma -> bool (exists in dictionary)
         self.translation_cache = {}  # lemma -> translation
@@ -29,6 +34,8 @@ class WordAnalysisService:
         """
         Lookup word in dictionary or translate it using AI.
         """
+        loop = asyncio.get_event_loop()
+
         # 1. Local Memory Cache
         if lemma in self.translation_cache:
             return {
@@ -47,16 +54,19 @@ class WordAnalysisService:
                 "source": "Redis Cache",
             }
 
-        # 3. Dictionary Lookup (Jamdict)
-        if lang == "ja":
-            definition = self.dict_provider.lookup(lemma)
-            if definition:
-                self.word_cache[lemma] = True
-                return {
-                    "word": lemma,
-                    "translation": definition[:500],
-                    "source": "Jamdict",
-                }
+        # 3.5 Local Machine Translation (M2M100)
+        local_translation = await loop.run_in_executor(
+            self.executor, self.local_translator.translate, lemma
+        )
+        if local_translation:
+            self.word_cache[lemma] = False
+            self.translation_cache[lemma] = local_translation
+            self.redis.set(f"trans:{lang}:{lemma}", local_translation, expire=604800)
+            return {
+                "word": lemma,
+                "translation": local_translation,
+                "source": "Local-MT",
+            }
 
         # 4. AI Translation (Context-aware if context provided)
         if context:

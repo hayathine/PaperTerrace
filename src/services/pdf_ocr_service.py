@@ -161,7 +161,7 @@ class PDFOCRService:
         page_num = page.page_number
         logger.debug(f"[OCR] p.{page_num}: Attempting native word extraction")
 
-        words = page.extract_words()
+        words = page.extract_words(use_text_flow=True, x_tolerance=1, y_tolerance=3)
         if words:
             logger.info(
                 f"[OCR] p.{page_num}: Native word extraction successful ({len(words)} words)"

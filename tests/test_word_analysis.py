@@ -59,7 +59,6 @@ async def test_lookup_or_translate_dictionary(word_analysis_service):
 
     result = await service.lookup_or_translate("apple", "ja")
     assert result["translation"] == "Dict Definition"[:500]
-    assert result["source"] == "Jamdict"
 
 
 @pytest.mark.asyncio

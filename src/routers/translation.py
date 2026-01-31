@@ -21,9 +21,8 @@ from ..features.translate import SUPPORTED_LANGUAGES
 from ..logger import logger
 from ..logic import executor
 from ..providers import get_ai_provider, get_storage_provider
-from ..providers.dictionary_provider import get_dictionary_provider
+from ..services import local_translator
 from ..services.analysis_service import EnglishAnalysisService
-from ..services.local_translator import get_local_translator
 
 router = APIRouter(tags=["Translation"])
 
@@ -146,7 +145,7 @@ async def explain(
     paper_id: str | None = None,
     element_id: str | None = None,
 ):
-    """単語の解説 (Local: Cache -> Jamdict -> local-MT)"""
+    """単語の解説 (Local: Cache -> local-MT)"""
     # Robust element_id detection: Try query param, then fallback to HTMX header
     element_id = element_id or req.headers.get("HX-Trigger")
 
@@ -166,13 +165,14 @@ async def explain(
     # 1. Cache Check
     cached = await service.get_translation(lemma, lang=lang)
     if cached:
+        source = cached.get("source", "Cache")
         if not is_htmx:
             return JSONResponse(
                 {
                     "word": original_word,
                     "lemma": lemma,
                     "translation": cached["translation"],
-                    "source": "Cache",
+                    "source": source,
                     "element_id": element_id,
                 }
             )
@@ -181,69 +181,40 @@ async def explain(
                 original_word,
                 lemma,
                 cached["translation"],
-                "Cache",
+                source,
                 lang,
                 paper_id,
                 element_id=element_id,
             )
         )
 
-    is_phrase = " " in lemma.strip()
-
-    # Stage 1: Local Dictionary (Jamdict)
-    if lang == "ja" and not is_phrase:
-        dict_provider = get_dictionary_provider()
-        definition = await loop.run_in_executor(executor, dict_provider.lookup, lemma)
-        if definition:
-            translation = definition[:100] + "..." if len(definition) > 100 else definition
-            if not is_htmx:
-                return JSONResponse(
-                    {
-                        "word": original_word,
-                        "lemma": lemma,
-                        "translation": translation,
-                        "source": "Jamdict",
-                    }
-                )
-            return HTMLResponse(
-                build_dict_card_html(
-                    original_word,
-                    lemma,
-                    translation,
-                    "Jamdict",
-                    lang,
-                    paper_id,
-                    element_id=element_id,
-                )
-            )
-
     # Stage 2: Local Machine Translation (M2M100)
-    if lang == "ja":
-        local_translator = get_local_translator()
-        local_translation = await loop.run_in_executor(executor, local_translator.translate, lemma)
-        if local_translation:
-            service.translation_cache[lemma] = local_translation
-            service.word_cache[lemma] = False
-            if not is_htmx:
-                return JSONResponse(
-                    {
-                        "word": original_word,
-                        "lemma": lemma,
-                        "translation": local_translation,
-                        "source": "Local-MT",
-                    }
-                )
-            return HTMLResponse(
-                build_dict_card_html(
-                    original_word,
-                    lemma,
-                    local_translation,
-                    "Local-MT",
-                    lang,
-                    paper_id,
-                    element_id=element_id,
-                )
+    local_translation = await loop.run_in_executor(
+        executor, local_translator.get_local_translator, lemma
+    )
+    if local_translation:
+        service.translation_cache[lemma] = local_translation
+        service.word_cache[lemma] = False
+        if not is_htmx:
+            return JSONResponse(
+                {
+                    "word": original_word,
+                    "lemma": lemma,
+                    "translation": local_translation,
+                    "source": "Local-MT",
+                }
             )
+        return HTMLResponse(
+            build_dict_card_html(
+                original_word,
+                lemma,
+                local_translation,
+                "Local-MT",
+                lang,
+                paper_id,
+                element_id=element_id,
+            )
+        )
 
     # 見つからない場合もローカル翻訳の枠組みで「未発見」として返し、AIボタンを表示
     if not is_htmx:

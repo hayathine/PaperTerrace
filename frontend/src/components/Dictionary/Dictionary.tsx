@@ -6,12 +6,11 @@ interface DictionaryProps {
     term?: string;
     sessionId: string;
     paperId?: string | null;
-    context?: string;
     coordinates?: { page: number, x: number, y: number };
     onAskAI?: (prompt: string) => void;
 }
 
-const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, context, coordinates, onAskAI }) => {
+const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, coordinates, onAskAI }) => {
     const { token } = useAuth();
     // Maintain a list of entries instead of a single one
     const [entries, setEntries] = useState<DictionaryEntry[]>([]);
@@ -155,7 +154,7 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, conte
                             <div className="flex items-center gap-2">
                                 <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide
                                     ${entry.source === 'Cache' ? 'bg-purple-100 text-purple-600' :
-                                        entry.source === 'Jamdict' ? 'bg-blue-100 text-blue-600' :
+                                        entry.source === 'LocalLM' ? 'bg-blue-100 text-blue-600' :
                                             entry.source === 'Gemini' ? 'bg-amber-100 text-amber-600' : 'bg-gray-100'
                                     }`}>
                                     {entry.source}

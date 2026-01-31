@@ -102,7 +102,6 @@ const Sidebar: React.FC<SidebarProps> = ({
                             sessionId={sessionId} 
                             paperId={paperId} 
                             term={selectedWord} 
-                            context={context} 
                             coordinates={coordinates}
                             onAskAI={onAskAI}
                         />
