@@ -17,6 +17,8 @@ interface PDFPageProps {
     isAreaMode?: boolean;
     onAreaSelect?: (coords: { page: number, x: number, y: number, width: number, height: number }) => void;
     onAskAI?: (prompt: string) => void;
+    onStackPaper?: (url: string, title?: string) => void;
+    jumpTarget?: { page: number, x: number, y: number, term?: string } | null;
 }
 
 const PDFPage: React.FC<PDFPageProps> = ({
@@ -28,7 +30,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
     onAddStamp,
     isAreaMode = false,
     onAreaSelect,
-    onAskAI
+    onAskAI,
+    onStackPaper,
+    jumpTarget
 }) => {
     const { width, height, words, figures, image_url, page_num } = page;
 
@@ -191,12 +195,23 @@ const PDFPage: React.FC<PDFPageProps> = ({
                         const isSelected = selectionStart !== null && selectionEnd !== null &&
                             ((idx >= selectionStart && idx <= selectionEnd) || (idx >= selectionEnd && idx <= selectionStart));
 
+                        const centerX = (x1 + x2) / 2 / width;
+                        const centerY = (y1 + y2) / 2 / height;
+                        const cleanWord = w.word.replace(/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g, '');
+
+                        const isJumpHighlight = jumpTarget && jumpTarget.page === page_num && (
+                            // Use a small epsilon for coordinate matching
+                            Math.abs(centerX - jumpTarget.x) < 0.005 && 
+                            Math.abs(centerY - jumpTarget.y) < 0.005
+                        );
+
                         return (
                             <div
                                 key={`${idx}`}
                                 className={`absolute rounded-sm group ${!isStampMode ? 'cursor-pointer' : 'pointer-events-none'} 
-                                    ${!isStampMode && !isSelected ? 'hover:bg-yellow-300/30' : ''} 
-                                    ${isSelected ? 'bg-indigo-500/30 border border-indigo-500/50' : ''}`}
+                                    ${!isStampMode && !isSelected && !isJumpHighlight ? 'hover:bg-yellow-300/30' : ''} 
+                                    ${isSelected ? 'bg-indigo-500/30 border border-indigo-500/50' : ''}
+                                    ${isJumpHighlight ? 'bg-yellow-400/60 border-2 border-yellow-600 shadow-[0_0_15px_rgba(250,204,21,0.5)] z-20 animate-bounce-subtle' : ''}`}
                                 style={{
                                     left: `${left}%`,
                                     top: `${top}%`,
@@ -225,11 +240,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
                                             const end = Math.min(words.length, idx + 50);
                                             const context = words.slice(start, end).map(w => w.word).join(' ');
 
-                                            const centerX = (x1 + x2) / 2 / width;
-                                            const centerY = (y1 + y2) / 2 / height;
+                                            const wordCenterX = (x1 + x2) / 2 / width;
+                                            const wordCenterY = (y1 + y2) / 2 / height;
 
-                                            const cleanWord = w.word.replace(/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g, '');
-                                            onWordClick(cleanWord, context, { page: page_num, x: centerX, y: centerY });
+                                            onWordClick(cleanWord, context, { page: page_num, x: wordCenterX, y: wordCenterY });
                                         }
                                     }
                                 }}
@@ -315,6 +329,19 @@ const PDFPage: React.FC<PDFPageProps> = ({
                             className="px-3 py-1.5 hover:bg-gray-700 rounded text-xs font-bold flex items-center gap-1 transition-colors"
                         >
                             <span>📝</span> Note
+                        </button>
+                        <div className="w-px bg-gray-700 mx-1"></div>
+                        <button
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (onStackPaper) onStackPaper(selectionMenu.text);
+                                setSelectionMenu(null);
+                                setSelectionStart(null);
+                                setSelectionEnd(null);
+                            }}
+                            className="px-3 py-1.5 hover:bg-gray-700 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                        >
+                            <span>📚</span> Stack
                         </button>
 
                         {/* Triangle arrow */}

@@ -14,13 +14,14 @@ interface PDFViewerProps {
     onWordClick?: (word: string, context?: string, coords?: { page: number, x: number, y: number }) => void;
     onTextSelect?: (text: string, coords: { page: number, x: number, y: number }) => void;
     onAreaSelect?: (imageUrl: string, coords: { page: number, x: number, y: number }) => void; // New prop
-    jumpTarget?: { page: number, x: number, y: number } | null;
+    jumpTarget?: { page: number, x: number, y: number, term?: string } | null;
     onStatusChange?: (status: 'idle' | 'uploading' | 'processing' | 'done' | 'error') => void;
     onPaperLoaded?: (paperId: string | null) => void;
     onAskAI?: (prompt: string) => void;
+    onStackPaper?: (url: string, title?: string) => void;
 }
 
-const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSelect, onAreaSelect, sessionId, jumpTarget, onStatusChange, onPaperLoaded, onAskAI }) => {
+const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSelect, onAreaSelect, sessionId, jumpTarget, onStatusChange, onPaperLoaded, onAskAI, onStackPaper }) => {
     const { token } = useAuth();
     const [pages, setPages] = useState<PageData[]>([]);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle');
@@ -163,6 +164,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
             es.onmessage = (event) => {
                 try {
                     const eventData = JSON.parse(event.data);
+                    console.debug('[PDFViewer] SSE Message:', eventData.type, eventData);
 
                     if (eventData.type === 'page') {
                         setPages(prev => {
@@ -342,31 +344,54 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
 
             {/* Toolbar */}
             {pages.length > 0 && (
-                <div className="sticky top-0 z-40 bg-white/90 backdrop-blur shadow-sm rounded-lg mb-4 p-2 flex items-center gap-2 justify-center">
-                    <button
-                        onClick={() => setMode('text')}
-                        className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'text' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    >
-                        <span>📄 PDF</span>
-                    </button>
-                    <button
-                        onClick={() => setMode('plaintext')}
-                        className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'plaintext' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    >
-                        <span>📝 Text</span>
-                    </button>
-                    <button
-                        onClick={() => setMode('area')}
-                        className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'area' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    >
-                        <span>✂️ Crop</span>
-                    </button>
-                    <button
-                        onClick={() => setMode('stamp')}
-                        className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'stamp' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    >
-                        <span>👍 Stamp</span>
-                    </button>
+                <div className="sticky top-4 z-40 flex justify-center mb-8">
+                    <div className="bg-white/80 backdrop-blur-md p-1.5 rounded-2xl shadow-lg border border-slate-200/50 flex items-center gap-1">
+                        <button
+                            onClick={() => setMode('text')}
+                            className={`px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200 ${
+                                mode === 'text' 
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 scale-105' 
+                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                            }`}
+                        >
+                            <span className="text-base truncate">📄</span>
+                            <span className="hidden sm:inline">PDFモード</span>
+                        </button>
+                        <button
+                            onClick={() => setMode('plaintext')}
+                            className={`px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200 ${
+                                mode === 'plaintext' 
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 scale-105' 
+                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                            }`}
+                        >
+                            <span className="text-base truncate">📝</span>
+                            <span className="hidden sm:inline">テキストモード</span>
+                        </button>
+                        <div className="w-[1px] h-6 bg-slate-200 mx-1 hidden sm:block" />
+                        <button
+                            onClick={() => setMode('area')}
+                            className={`px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200 ${
+                                mode === 'area' 
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 scale-105' 
+                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                            }`}
+                        >
+                            <span className="text-base truncate">✂️</span>
+                            <span className="hidden sm:inline">切り抜き</span>
+                        </button>
+                        <button
+                            onClick={() => setMode('stamp')}
+                            className={`px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200 ${
+                                mode === 'stamp' 
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 scale-105' 
+                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                            }`}
+                        >
+                            <span className="text-base truncate">👍</span>
+                            <span className="hidden sm:inline">スタンプ</span>
+                        </button>
+                    </div>
                 </div>
             )}
 
@@ -376,6 +401,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                     pages={pages}
                     onWordClick={handleWordClick}
                     onTextSelect={handleTextSelect}
+                    jumpTarget={jumpTarget}
                 />
             ) : (
                 <div className={`space-y-6 ${(mode === 'stamp' || mode === 'area') ? 'cursor-crosshair' : ''}`}>
@@ -391,10 +417,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                             isAreaMode={mode === 'area'}
                             onAreaSelect={handleAreaSelect}
                             onAskAI={onAskAI}
+                            onStackPaper={onStackPaper}
+                            jumpTarget={jumpTarget}
                         />
                     ))}
                 </div>
             )}
+
 
             {status === 'processing' && (
                 <div className="flex justify-center py-4">

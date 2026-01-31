@@ -4,7 +4,7 @@ import { Note } from './types';
 interface NoteItemProps {
     note: Note;
     onDelete: (id: string) => void;
-    onJump?: (page: number, x: number, y: number) => void;
+    onJump?: (page: number, x: number, y: number, term?: string) => void;
 }
 
 const NoteItem: React.FC<NoteItemProps> = ({ note, onDelete, onJump }) => {
@@ -32,7 +32,7 @@ const NoteItem: React.FC<NoteItemProps> = ({ note, onDelete, onJump }) => {
             {(note.page_number !== undefined && note.page_number !== null) && (
                 <div className="mt-2 flex justify-start">
                     <button
-                        onClick={() => onJump && note.page_number !== undefined && onJump(note.page_number, note.x || 0.5, note.y || 0.5)}
+                        onClick={() => onJump && note.page_number !== undefined && onJump(note.page_number, note.x || 0.5, note.y || 0.5, note.term)}
                         className="flex items-center gap-1.5 text-[10px] py-1 px-2 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors"
                     >
                         <svg xmlns="http://www.w3.org/2000/svg" className="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">

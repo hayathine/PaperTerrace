@@ -3,6 +3,7 @@ import ChatWindow from '../Chat/ChatWindow';
 import NoteList from '../Notes/NoteList';
 import Dictionary from '../Dictionary/Dictionary';
 import Summary from '../Summary/Summary';
+import PaperStack from './PaperStack';
 
 interface SidebarProps {
     sessionId: string;
@@ -12,7 +13,7 @@ interface SidebarProps {
     context?: string;
     coordinates?: { page: number, x: number, y: number };
     selectedImage?: string;
-    onJump?: (page: number, x: number, y: number) => void;
+    onJump?: (page: number, x: number, y: number, term?: string) => void;
     isAnalyzing?: boolean;
     paperId?: string | null;
     pendingFigureId?: string | null;
@@ -20,6 +21,9 @@ interface SidebarProps {
     pendingChatPrompt?: string | null;
     onAskAI?: (prompt: string) => void;
     onPendingChatConsumed?: () => void;
+    stackedPapers: { url: string, title?: string, addedAt: number }[];
+    onStackPaper: (url: string, title?: string) => void;
+    onRemoveFromStack: (url: string) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({ 
@@ -37,7 +41,10 @@ const Sidebar: React.FC<SidebarProps> = ({
     onPendingFigureConsumed,
     pendingChatPrompt,
     onAskAI,
-    onPendingChatConsumed
+    onPendingChatConsumed,
+    stackedPapers,
+    onStackPaper,
+    onRemoveFromStack
 }) => {
 
     return (
@@ -81,6 +88,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                 >
                     Notes
                 </button>
+                <button
+                    onClick={() => onTabChange('stack')}
+                    className={`flex-1 min-w-[50px] py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${activeTab === 'stack'
+                        ? 'bg-white text-indigo-600 shadow-sm border border-slate-100'
+                        : 'text-slate-400 hover:text-slate-600'
+                        }`}
+                >
+                    Stack
+                </button>
             </div>
 
             {/* Tab Content */}
@@ -93,6 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             term={selectedWord} 
                             coordinates={coordinates}
                             onAskAI={onAskAI}
+                            onJump={onJump}
                         />
                     </div>
                 )}
@@ -111,6 +128,7 @@ const Sidebar: React.FC<SidebarProps> = ({
                             onInitialChatSent={onPendingFigureConsumed}
                             initialPrompt={pendingChatPrompt}
                             onInitialPromptSent={onPendingChatConsumed}
+                            onStackPaper={onStackPaper}
                         />
                     </div>
                 )}
@@ -125,6 +143,15 @@ const Sidebar: React.FC<SidebarProps> = ({
                             selectedContext={context} // Use the shared context prop which now also holds selected text
                             selectedTerm={selectedWord} // Word click sets this
                             selectedImage={selectedImage}
+                        />
+                    </div>
+                )}
+
+                {activeTab === 'stack' && (
+                    <div className="absolute inset-0">
+                        <PaperStack 
+                            papers={stackedPapers} 
+                            onRemove={onRemoveFromStack} 
                         />
                     </div>
                 )}

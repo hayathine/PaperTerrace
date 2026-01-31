@@ -28,7 +28,7 @@ const StampOverlay: React.FC<StampOverlayProps> = ({ stamps, isStampMode, onAddS
             {stamps.map((stamp) => (
                 <div
                     key={stamp.id}
-                    className="absolute text-2xl animate-bounce-short select-none transform -translate-x-1/2 -translate-y-1/2 drop-shadow-md hover:scale-125 transition-transform cursor-pointer pointer-events-auto"
+                    className="absolute text-2xl animate-stamp-pop select-none transform -translate-x-1/2 -translate-y-1/2 drop-shadow-md hover:scale-125 transition-transform cursor-pointer pointer-events-auto"
                     style={{
                         left: `${stamp.x}%`,
                         top: `${stamp.y}%`

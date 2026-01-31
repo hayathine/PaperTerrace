@@ -12,6 +12,7 @@ interface ChatWindowProps {
     onInitialChatSent?: () => void;
     initialPrompt?: string | null;
     onInitialPromptSent?: () => void;
+    onStackPaper?: (url: string, title?: string) => void;
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({ 
@@ -21,7 +22,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
     initialFigureId,
     onInitialChatSent,
     initialPrompt,
-    onInitialPromptSent
+    onInitialPromptSent,
+    onStackPaper
 }) => {
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [isLoading, setIsLoading] = useState(false);
@@ -146,7 +148,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
                 </h2>
             </div>
 
-            <MessageList messages={messages} isLoading={isLoading} />
+            <MessageList messages={messages} isLoading={isLoading} onStackPaper={onStackPaper} />
             <InputArea onSendMessage={handleSendMessage} isLoading={isLoading} />
         </div>
     );

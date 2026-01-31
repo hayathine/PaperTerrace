@@ -325,9 +325,11 @@ async def stream(task_id: str):
                         "height": 0,
                         "words": [],
                         "figures": [],
+                        "content": "",
                     }
 
                     if page_text is not None:
+                        page_payload["content"] = page_text
                         full_text_fragments.append(page_text)
 
                         if layout_data:
@@ -344,7 +346,8 @@ async def stream(task_id: str):
                         else:
                             all_layout_data.append(None)
 
-                    yield f"data: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
+                    yield f"event: message\ndata: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
+                    await asyncio.sleep(0.01)
 
                 # End of OCR
                 full_text = "\n\n---\n\n".join(full_text_fragments)
@@ -415,7 +418,8 @@ async def stream(task_id: str):
                     f"Saved session context for: {s_id} (result: {res}, length: {len(full_text)})"
                 )
 
-                yield f"data: {json.dumps({'type': 'done', 'paper_id': new_paper_id})}\n\n"
+                yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': new_paper_id})}\n\n"
+                await asyncio.sleep(0.01)
 
             else:
                 # Cached content
@@ -423,11 +427,15 @@ async def stream(task_id: str):
 
                 paper_data = storage.get_paper(paper_id)
                 layout_list = []
-                if paper_data and paper_data.get("layout_json"):
-                    try:
-                        layout_list = json.loads(paper_data["layout_json"])
-                    except Exception as e:
-                        logger.error(f"Failed to parse layout_json: {e}")
+                pages_text = []
+                if paper_data:
+                    if paper_data.get("layout_json"):
+                        try:
+                            layout_list = json.loads(paper_data["layout_json"])
+                        except Exception as e:
+                            logger.error(f"Failed to parse layout_json: {e}")
+                    if paper_data.get("ocr_text"):
+                        pages_text = paper_data["ocr_text"].split("\n\n---\n\n")
 
                 f_hash = data.get("file_hash")
                 if f_hash:
@@ -440,6 +448,7 @@ async def stream(task_id: str):
                             "height": 0,
                             "words": [],
                             "figures": [],
+                            "content": pages_text[i] if i < len(pages_text) else "",
                         }
                         if len(layout_list) > i and layout_list[i]:
                             page_payload["width"] = layout_list[i].get("width", 0)
@@ -447,7 +456,8 @@ async def stream(task_id: str):
                             page_payload["words"] = layout_list[i].get("words", [])
                             page_payload["figures"] = layout_list[i].get("figures", [])
 
-                        yield f"data: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
+                        yield f"event: message\ndata: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
+                        await asyncio.sleep(0.01)
 
                 # キャッシュ時もセッションコンテキストを保存（Summary等のため）
                 s_id = session_id or paper_id
@@ -461,7 +471,8 @@ async def stream(task_id: str):
                         f"Failed to restore session context: session_id={session_id}, paper_data={paper_data is not None}"
                     )
 
-                yield f"data: {json.dumps({'type': 'done', 'paper_id': paper_id, 'cached': True})}\n\n"
+                yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': paper_id, 'cached': True})}\n\n"
+                await asyncio.sleep(0.01)
 
             redis_service.delete(f"task:{task_id}")
 

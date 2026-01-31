@@ -5,9 +5,10 @@ import MessageBubble from './MessageBubble';
 interface MessageListProps {
     messages: Message[];
     isLoading: boolean;
+    onStackPaper?: (url: string, title?: string) => void;
 }
 
-const MessageList: React.FC<MessageListProps> = ({ messages, isLoading }) => {
+const MessageList: React.FC<MessageListProps> = ({ messages, isLoading, onStackPaper }) => {
     const bottomRef = useRef<HTMLDivElement>(null);
 
     useEffect(() => {
@@ -23,7 +24,7 @@ const MessageList: React.FC<MessageListProps> = ({ messages, isLoading }) => {
             )}
 
             {messages.map((msg) => (
-                <MessageBubble key={msg.id} message={msg} />
+                <MessageBubble key={msg.id} message={msg} onStackPaper={onStackPaper} />
             ))}
 
             {isLoading && (

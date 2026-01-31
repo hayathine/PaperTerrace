@@ -8,9 +8,10 @@ interface DictionaryProps {
     paperId?: string | null;
     coordinates?: { page: number, x: number, y: number };
     onAskAI?: (prompt: string) => void;
+    onJump?: (page: number, x: number, y: number, term?: string) => void;
 }
 
-const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, coordinates, onAskAI }) => {
+const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, coordinates, onAskAI, onJump }) => {
     const { token } = useAuth();
     // Maintain a list of entries instead of a single one
     const [entries, setEntries] = useState<DictionaryEntry[]>([]);
@@ -201,6 +202,18 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, coord
                                         <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
                                     </svg>
                                     <span>チャットで聞く</span>
+                                </button>
+                            )}
+
+                            {onJump && coordinates && (
+                                <button
+                                    onClick={() => onJump(coordinates.page, coordinates.x, coordinates.y, entry.word)}
+                                    className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg transition-all flex items-center justify-center"
+                                    title="Jump to Location"
+                                >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 5l7 7-7 7M5 5l7 7-7 7" />
+                                    </svg>
                                 </button>
                             )}
                         </div>

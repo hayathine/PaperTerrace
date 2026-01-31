@@ -8,7 +8,7 @@ interface NoteListProps {
     sessionId: string;
     paperId?: string | null;
     coordinates?: { page: number, x: number, y: number };
-    onJump?: (page: number, x: number, y: number) => void;
+    onJump?: (page: number, x: number, y: number, term?: string) => void;
     selectedContext?: string;
     selectedTerm?: string;
     selectedImage?: string; // New prop for selected image URL

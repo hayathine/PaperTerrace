@@ -10,6 +10,7 @@ export interface PageData {
     height: number;
     words: PageWord[];
     figures?: Figure[];
+    content?: string;
 }
 
 export interface PageWord {

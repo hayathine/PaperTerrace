@@ -22,7 +22,7 @@ function App() {
     const [selectedContext, setSelectedContext] = useState<string | undefined>(undefined)
     const [selectedCoordinates, setSelectedCoordinates] = useState<{ page: number, x: number, y: number } | undefined>(undefined)
     const [selectedImage, setSelectedImage] = useState<string | undefined>(undefined)
-    const [jumpTarget, setJumpTarget] = useState<{ page: number, x: number, y: number } | null>(null)
+    const [jumpTarget, setJumpTarget] = useState<{ page: number, x: number, y: number, term?: string } | null>(null)
     const [showLoginModal, setShowLoginModal] = useState(false)
     const [currentPaperId, setCurrentPaperId] = useState<string | null>(null)
     const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -31,11 +31,19 @@ function App() {
     const [sidebarWidth, setSidebarWidth] = useState(384)
     const [isResizing, setIsResizing] = useState(false)
     const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true)
+    const [stackedPapers, setStackedPapers] = useState<{ url: string, title?: string, addedAt: number }[]>(() => {
+        const saved = localStorage.getItem('paper_terrace_stack');
+        return saved ? JSON.parse(saved) : [];
+    })
 
     const prevPaperIdRef = useRef<string | null>(null);
 
     // Developer settings
     const SHOW_DEV_TOOLS = true;
+
+    useEffect(() => {
+        localStorage.setItem('paper_terrace_stack', JSON.stringify(stackedPapers));
+    }, [stackedPapers]);
 
     useEffect(() => {
         if (user) {
@@ -162,9 +170,12 @@ function App() {
         setActiveTab('notes')
     }
 
-    const handleJumpToLocation = (page: number, x: number, y: number) => {
-        setJumpTarget({ page, x, y })
+    const handleJumpToLocation = (page: number, x: number, y: number, term?: string) => {
+        setJumpTarget({ page, x, y, term })
+        // Clear jump target after a short delay so highlight doesn't stay forever if desired, 
+        // but for now let's keep it until next jump.
     }
+
 
     const handleAnalysisStatusChange = (status: string) => {
         setIsAnalyzing(status === 'uploading' || status === 'processing');
@@ -175,6 +186,21 @@ function App() {
     const handleAskAI = (prompt: string) => {
         setPendingChatPrompt(prompt);
         setActiveTab('chat');
+    }
+
+    const handleStackPaper = (url: string, title?: string) => {
+        // Heal URL if it looks like one (remove internal spaces/newlines from OCR/layout split)
+        const cleanedUrl = url.trim().startsWith('http') ? url.replace(/\s+/g, '') : url.trim();
+        
+        setStackedPapers(prev => {
+            if (prev.some(p => p.url === cleanedUrl)) return prev;
+            return [...prev, { url: cleanedUrl, title, addedAt: Date.now() }];
+        });
+        setActiveTab('stack');
+    }
+
+    const handleRemoveFromStack = (url: string) => {
+        setStackedPapers(prev => prev.filter(p => p.url !== url));
     }
 
     return (
@@ -269,16 +295,20 @@ function App() {
                 <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 shadow-sm">
                     <button
                         onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)}
-                        className="mr-3 p-1.5 hover:bg-slate-100 rounded-lg transition-colors text-slate-500"
+                        className={`mr-4 p-2 rounded-xl transition-all duration-300 flex items-center justify-center shadow-sm border ${
+                            isLeftSidebarOpen 
+                            ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100' 
+                            : 'bg-indigo-600 text-white border-indigo-500 hover:bg-indigo-700 hover:shadow-indigo-200 hover:scale-105'
+                        }`}
                         title={isLeftSidebarOpen ? "メニューを閉じる" : "メニューを開く"}
                     >
                         {isLeftSidebarOpen ? (
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                             </svg>
                         ) : (
                             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 6h16M4 12h16M4 18h16" />
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16" />
                             </svg>
                         )}
                     </button>
@@ -302,6 +332,7 @@ function App() {
                                     onStatusChange={handleAnalysisStatusChange}
                                     onPaperLoaded={handlePaperLoaded}
                                     onAskAI={handleAskAI}
+                                    onStackPaper={handleStackPaper}
                                 />
                             </div>
                         ) : (
@@ -343,6 +374,9 @@ function App() {
                             pendingChatPrompt={pendingChatPrompt}
                             onAskAI={handleAskAI}
                             onPendingChatConsumed={() => setPendingChatPrompt(null)}
+                            stackedPapers={stackedPapers}
+                            onStackPaper={handleStackPaper}
+                            onRemoveFromStack={handleRemoveFromStack}
                         />
                     </div>
                 </div>
