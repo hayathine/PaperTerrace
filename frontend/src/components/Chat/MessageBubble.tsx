@@ -10,8 +10,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onStackPaper }) 
     const isUser = message.role === 'user';
 
     const renderContent = (content: string) => {
-        // Regex for Markdown links [text](url), raw URLs (http/https/www), and DOIs
-        const urlRegex = /(\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\))|(https?:\/\/[^\s\n]+|www\.[^\s\n]+)|(10\.\d{4,9}\/[-._;()/:A-Z0-9]+)/gi;
+        // Regex for Markdown links [text](url), raw URLs (http/https/www/protocol-relative), and DOIs
+        const urlRegex = /(\[([^\]]+)\]\(((?:https?:\/\/|\/\/)[^\s\)]+)\))|((?:https?:\/\/|\/\/)[^\s\n]+|www\.[^\s\n]+)|(10\.\d{4,9}\/[-._;()/:A-Z0-9]+)/gi;
         
         const elements: React.ReactNode[] = [];
         let lastIndex = 0;

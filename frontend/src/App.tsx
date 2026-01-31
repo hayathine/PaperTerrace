@@ -147,9 +147,10 @@ function App() {
 
     const isLink = (text: string) => {
         const clean = text.trim();
-        return clean.match(/^https?:\/\//i) || 
+        return clean.match(/^(https?:\/\/|\/\/)/i) || 
                clean.startsWith('www.') || 
                clean.includes('doi.org/') ||
+               clean.match(/[a-zA-Z0-9.-]+\.(com|org|net|io|edu|gov|io|github\.io)\//i) ||
                clean.match(/^10\.\d{4,9}\/[-._;()/:A-Z0-9]+$/i); // DOI pattern
     };
 

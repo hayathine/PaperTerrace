@@ -39,6 +39,18 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, conte
     useEffect(() => {
         if (!term) return;
 
+        const isLink = (s: string) => {
+            const clean = s.trim();
+            return /^(https?:\/\/|\/\/|www\.)/i.test(clean) || 
+                   clean.includes('doi.org/') ||
+                   /\.[a-z]{2,}\//i.test(clean);
+        };
+
+        if (isLink(term)) {
+            setEntries([]);
+            return;
+        }
+
         // Ignore if the very last (top) entry is already this term
         if (entries.length > 0 && entries[0].word === term) {
             return;
@@ -121,6 +133,30 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, conte
 
 
     if (entries.length === 0 && !loading && !error) {
+        const isUrl = term && (/^(https?:\/\/|\/\/|www\.)/i.test(term) || term.includes('doi.org/'));
+
+        if (isUrl) {
+            return (
+                <div className="flex flex-col items-center justify-center h-full p-8 text-slate-300">
+                    <div className="bg-indigo-50 p-4 rounded-xl mb-4 text-indigo-400">
+                        <svg className="w-8 h-8" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                        </svg>
+                    </div>
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-400">External Link</p>
+                    <p className="text-[10px] mt-2 text-center text-slate-400 break-all max-w-[200px]">{term}</p>
+                    <div className="flex flex-col gap-2 mt-6 w-full">
+                        <button
+                            onClick={() => window.open(term.startsWith('//') ? `https:${term}` : (term.startsWith('www') ? `https://${term}` : term), '_blank')}
+                            className="w-full py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-all"
+                        >
+                            Open Link
+                        </button>
+                    </div>
+                </div>
+            );
+        }
+
         return (
             <div className="flex flex-col items-center justify-center h-full p-8 text-slate-300">
                 <div className="bg-slate-50 p-4 rounded-xl mb-4">
