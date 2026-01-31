@@ -9,11 +9,21 @@ export interface PageData {
     width: number;
     height: number;
     words: PageWord[];
+    figures?: Figure[];
 }
 
 export interface PageWord {
     word: string;
     bbox: number[]; // [x1, y1, x2, y2]
+}
+
+export interface Figure {
+    bbox: [number, number, number, number]; // [x1, y1, x2, y2]
+    image_url: string;
+    page_num: number;
+    label?: string; // 'figure', 'table', 'equation'
+    explanation?: string;
+    latex?: string;
 }
 
 export interface ViewerState {

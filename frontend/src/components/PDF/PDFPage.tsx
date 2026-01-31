@@ -16,6 +16,7 @@ interface PDFPageProps {
     // Area selection props
     isAreaMode?: boolean;
     onAreaSelect?: (coords: { page: number, x: number, y: number, width: number, height: number }) => void;
+    onAskAI?: (prompt: string) => void;
 }
 
 const PDFPage: React.FC<PDFPageProps> = ({
@@ -26,9 +27,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
     isStampMode = false,
     onAddStamp,
     isAreaMode = false,
-    onAreaSelect
+    onAreaSelect,
+    onAskAI
 }) => {
-    const { width, height, words, image_url, page_num } = page;
+    const { width, height, words, figures, image_url, page_num } = page;
 
     // Text Selection State
     const [isDragging, setIsDragging] = React.useState(false);
@@ -233,6 +235,51 @@ const PDFPage: React.FC<PDFPageProps> = ({
                                 }}
                                 title={w.word}
                             />
+                        );
+                    })}
+                </div>
+                
+                {/* Figure/Equation Overlays */}
+                <div className="absolute inset-0 w-full h-full z-20 pointer-events-none">
+                    {figures?.map((fig, idx) => {
+                        const [x1, y1, x2, y2] = fig.bbox;
+                        // Avoid rendering empty bboxes (like [0,0,0,0] from some native extractions)
+                        if (x1 === 0 && y1 === 0 && x2 === 0 && y2 === 0) return null;
+
+                        const f_width = x2 - x1;
+                        const f_height = y2 - y1;
+
+                        const left = (x1 / width) * 100;
+                        const top = (y1 / height) * 100;
+                        const styleW = (f_width / width) * 100;
+                        const styleH = (f_height / height) * 100;
+
+                        return (
+                            <div
+                                key={`fig-${idx}`}
+                                className="absolute cursor-pointer pointer-events-auto border-2 border-transparent hover:border-indigo-500/40 hover:bg-indigo-500/5 transition-all rounded-lg group flex items-start justify-end p-2"
+                                style={{
+                                    left: `${left}%`,
+                                    top: `${top}%`,
+                                    width: `${styleW}%`,
+                                    height: `${styleH}%`,
+                                }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onAskAI) {
+                                        const type = fig.label === 'equation' ? '数式' : '図表';
+                                        onAskAI(`${type}の解説をお願いします。`);
+                                    }
+                                }}
+                                title={`${fig.label || 'figure'} click to explain`}
+                            >
+                                <div className="hidden group-hover:flex items-center gap-1.5 bg-indigo-600 text-white text-[10px] px-2.5 py-1.5 rounded-lg shadow-xl font-bold transform -translate-y-2 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200">
+                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                    </svg>
+                                    AIで解説
+                                </div>
+                            </div>
                         );
                     })}
                 </div>

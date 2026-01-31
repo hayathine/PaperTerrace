@@ -128,10 +128,7 @@ function App() {
         setIsAnalyzing(status === 'uploading' || status === 'processing');
     }
 
-    const handleExplainFigure = (figureId: string) => {
-        setPendingFigureId(figureId);
-        setActiveTab('chat');
-    }
+
 
     const handleAskAI = (prompt: string) => {
         setPendingChatPrompt(prompt);
@@ -262,6 +259,7 @@ function App() {
                                     jumpTarget={jumpTarget}
                                     onStatusChange={handleAnalysisStatusChange}
                                     onPaperLoaded={handlePaperLoaded}
+                                    onAskAI={handleAskAI}
                                 />
                             </div>
                         ) : (
@@ -299,7 +297,6 @@ function App() {
                             isAnalyzing={isAnalyzing}
                             paperId={currentPaperId}
                             pendingFigureId={pendingFigureId}
-                            onExplainFigure={handleExplainFigure}
                             onPendingFigureConsumed={() => setPendingFigureId(null)}
                             pendingChatPrompt={pendingChatPrompt}
                             onAskAI={handleAskAI}

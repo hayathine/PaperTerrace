@@ -326,6 +326,7 @@ async def stream(task_id: str):
                         "width": 0,
                         "height": 0,
                         "words": [],
+                        "figures": [],
                     }
 
                     if layout_data:
@@ -334,6 +335,7 @@ async def stream(task_id: str):
                         # Convert words to frontend format if needed, or pass as is
                         # Backend layout_data['words'] has {bbox, word}
                         page_payload["words"] = layout_data.get("words", [])
+                        page_payload["figures"] = layout_data.get("figures", [])
 
                         # Collect figures if present
                         if "figures" in layout_data:
@@ -438,11 +440,13 @@ async def stream(task_id: str):
                             "width": 0,
                             "height": 0,
                             "words": [],
+                            "figures": [],
                         }
                         if len(layout_list) > i and layout_list[i]:
                             page_payload["width"] = layout_list[i].get("width", 0)
                             page_payload["height"] = layout_list[i].get("height", 0)
                             page_payload["words"] = layout_list[i].get("words", [])
+                            page_payload["figures"] = layout_list[i].get("figures", [])
 
                         yield f"data: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
 
