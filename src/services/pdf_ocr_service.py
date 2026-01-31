@@ -61,15 +61,17 @@ class PDFOCRService:
                     pypdf_page = (
                         pypdf_reader.pages[page_num] if page_num < len(pypdf_reader.pages) else None
                     )
-                    result = await self._process_page(
+
+                    async for result in self._process_page_incremental(
                         pdf.pages[page_num], page_num, total_pages, file_hash, pypdf_page=pypdf_page
-                    )
-                    # result is (page_num+1, total_pages, page_text, is_last, file_hash, img_url, layout_data)
-                    page_text = result[2]
-                    layout_data = result[6]
-                    all_text_parts.append(page_text)
-                    all_layout_parts.append(layout_data)
-                    yield result
+                    ):
+                        # result is (page_num+1, total_pages, page_text, is_last, file_hash, img_url, layout_data)
+                        if result[2] is not None:  # Final result per page
+                            page_text = result[2]
+                            layout_data = result[6]
+                            all_text_parts.append(page_text)
+                            all_layout_parts.append(layout_data)
+                        yield result
 
             # 2. Finalize and save to DB
             self._finalize_ocr(file_hash, filename, all_text_parts, all_layout_parts)
@@ -117,11 +119,13 @@ class PDFOCRService:
             )
         return pages
 
-    async def _process_page(self, page, page_idx, total_pages, file_hash, pypdf_page=None):
+    async def _process_page_incremental(
+        self, page, page_idx, total_pages, file_hash, pypdf_page=None
+    ):
         """Process a single page: render image, OCR, detect layout/figures."""
         page_num = page_idx + 1
 
-        # Render image
+        # 1. Render image (FAST)
         resolution = 300  # Standard high-quality DPI
         zoom = resolution / 72.0
         page_img = page.to_image(resolution=resolution, antialias=True)
@@ -134,12 +138,18 @@ class PDFOCRService:
         page_image_b64 = base64.b64encode(img_bytes).decode("utf-8")
         image_url = save_page_image(file_hash, page_num, page_image_b64)
 
-        # Extract native text/layout
+        is_last = page_idx == total_pages - 1
+
+        # Yield PHASE 1: Image Ready
+        logger.debug(f"[OCR] Page {page_num}: Image ready, yielding partial result")
+        yield (page_num, total_pages, None, is_last, file_hash, image_url, None)
+
+        # 2. Extract Text (SLOW)
         page_text, layout_data = await self._extract_native_or_vision_text(
             page, img_bytes, img_pil, zoom
         )
 
-        # Figure extraction
+        # 3. Figure extraction (SLOW)
         figures = await self.figure_service.detect_and_extract_figures(
             img_bytes, page_img, page, file_hash, page_num, pypdf_page=pypdf_page
         )
@@ -153,8 +163,9 @@ class PDFOCRService:
         else:
             logger.debug(f"[OCR] Page {page_num}: No figures detected")
 
-        is_last = page_idx == total_pages - 1
-        return (page_num, total_pages, page_text, is_last, file_hash, image_url, layout_data)
+        # Yield PHASE 2: Full analysis complete
+        logger.debug(f"[OCR] Page {page_num}: Full analysis complete")
+        yield (page_num, total_pages, page_text, is_last, file_hash, image_url, layout_data)
 
     async def _extract_native_or_vision_text(self, page, img_bytes, img_pil, zoom):
         """Try to extract text from PDF directly, fallback to Vision API or Gemini."""

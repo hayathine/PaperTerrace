@@ -311,13 +311,11 @@ async def stream(task_id: str):
                 ) in service.ocr_service.extract_text_streaming(
                     pdf_content, filename, user_plan=user_plan
                 ):
-                    if page_text.startswith("ERROR_API_FAILED:"):
+                    if page_text and page_text.startswith("ERROR_API_FAILED:"):
                         error_msg = page_text.replace("ERROR_API_FAILED: ", "")
                         yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
                         yield "event: close\ndata: done\n\n"
                         return
-
-                    full_text_fragments.append(page_text)
 
                     # Prepare Page Data
                     page_payload = {
@@ -329,21 +327,22 @@ async def stream(task_id: str):
                         "figures": [],
                     }
 
-                    if layout_data:
-                        page_payload["width"] = layout_data["width"]
-                        page_payload["height"] = layout_data["height"]
-                        # Convert words to frontend format if needed, or pass as is
-                        # Backend layout_data['words'] has {bbox, word}
-                        page_payload["words"] = layout_data.get("words", [])
-                        page_payload["figures"] = layout_data.get("figures", [])
+                    if page_text is not None:
+                        full_text_fragments.append(page_text)
 
-                        # Collect figures if present
-                        if "figures" in layout_data:
-                            collected_figures.extend(layout_data["figures"])
+                        if layout_data:
+                            page_payload["width"] = layout_data["width"]
+                            page_payload["height"] = layout_data["height"]
+                            page_payload["words"] = layout_data.get("words", [])
+                            page_payload["figures"] = layout_data.get("figures", [])
 
-                        all_layout_data.append(layout_data)
-                    else:
-                        all_layout_data.append(None)
+                            # Collect figures if present
+                            if "figures" in layout_data:
+                                collected_figures.extend(layout_data["figures"])
+
+                            all_layout_data.append(layout_data)
+                        else:
+                            all_layout_data.append(None)
 
                     yield f"data: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
 
@@ -503,7 +502,7 @@ async def stream(task_id: str):
                 layout_data,
             ) in service.ocr_service.extract_text_streaming(pdf_content, filename):
                 # APIエラーチェック
-                if page_text.startswith("ERROR_API_FAILED:"):
+                if page_text and page_text.startswith("ERROR_API_FAILED:"):
                     error_detail = page_text.replace("ERROR_API_FAILED: ", "")
                     yield (
                         f"event: message\ndata: <div id='paper-content' hx-swap-oob='innerHTML'>"
@@ -524,14 +523,22 @@ async def stream(task_id: str):
                 if layout_data and "figures" in layout_data:
                     collected_figures.extend(layout_data["figures"])
 
-                # 初回（1ページ目）はローディング表示をクリア
-                if page_num == 1:
-                    yield 'event: message\ndata: <div id="paper-content" hx-swap-oob="innerHTML"></div>\n\n'
-
-                # ページコンテナ作成
+                # ページコンテナID
                 page_container_id = f"page-{page_num}"
                 content_id = f"content-{page_container_id}"
 
+                # 1. 部分更新（初回：画像のみ）の処理
+                if page_text is None:
+                    # 初回（1ページ目）はローディング表示をクリア
+                    if page_num == 1:
+                        yield 'event: message\ndata: <div id="paper-content" hx-swap-oob="innerHTML"></div>\n\n'
+
+                    # コンテナ作成（画像のみ）
+                    save_page_btn = f' <button onclick="saveWordToNote(\'Page {page_num}\', \'Saved from {filename}\', \'{page_image_url}\')" title="Save page to Note" class="p-1 hover:bg-white rounded transition-all opacity-50 hover:opacity-100"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg></button>'
+                    yield f'event: message\ndata: <div id="{page_container_id}" hx-swap-oob="beforeend:#paper-content" class="mb-10 bg-white shadow-sm rounded-2xl animate-fade-in overflow-hidden max-w-6xl mx-auto"><div class="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50"><div class="flex items-center gap-2"><span class="text-xs text-slate-400 font-bold uppercase tracking-wide">Page {page_num}/{total_pages}</span>{save_page_btn}</div><span class="text-[10px] text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full font-medium italic">Loading text...</span></div><div class="relative w-full"><img src="{page_image_url}" alt="Page {page_num}" class="w-full h-auto block select-none" loading="lazy"></div></div>\n\n'
+                    continue
+
+                # 2. 完全更新（2回目：テキスト・オーバーレイ付）
                 # レイアウトデータがある場合は「PDFそのまま表示モード」
                 if layout_data and page_image_url:
                     img_w = layout_data["width"]
@@ -561,25 +568,17 @@ async def stream(task_id: str):
 
                     full_words_html = "".join(words_html)
 
-                    # コンテナ出力
-                    # ページ全体を画像としてノートに保存するボタンを追加
+                    # コンテナ全体を置換 (hx-swap-oob="outerHTML")
                     save_page_btn = f' <button onclick="saveWordToNote(\'Page {page_num}\', \'Saved from {filename}\', \'{page_image_url}\')" title="Save page to Note" class="p-1 hover:bg-white rounded transition-all opacity-50 hover:opacity-100"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg></button>'
-                    yield f'event: message\ndata: <div id="{page_container_id}" hx-swap-oob="beforeend:#paper-content" class="mb-10 bg-white shadow-sm rounded-2xl animate-fade-in overflow-hidden max-w-6xl mx-auto"><div class="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50"><div class="flex items-center gap-2"><span class="text-xs text-slate-400 font-bold uppercase tracking-wide">Page {page_num}/{total_pages}</span>{save_page_btn}</div><span class="text-[10px] text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full font-medium">Interactive PDF</span></div><div class="relative w-full"><img src="{page_image_url}" alt="Page {page_num}" class="w-full h-auto block select-none" loading="lazy"><div class="absolute inset-0 w-full h-full">{full_words_html}</div></div></div>\n\n'
+                    yield f'event: message\ndata: <div id="{page_container_id}" hx-swap-oob="outerHTML" class="mb-10 bg-white shadow-sm rounded-2xl animate-fade-in overflow-hidden max-w-6xl mx-auto"><div class="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50"><div class="flex items-center gap-2"><span class="text-xs text-slate-400 font-bold uppercase tracking-wide">Page {page_num}/{total_pages}</span>{save_page_btn}</div><span class="text-[10px] text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded-full font-medium">Interactive PDF</span></div><div class="relative w-full"><img src="{page_image_url}" alt="Page {page_num}" class="w-full h-auto block select-none" loading="lazy"><div class="absolute inset-0 w-full h-full">{full_words_html}</div></div></div>\n\n'
 
-                # レイアウトデータがない場合（OCRフォールバック）は既存の表示モード
+                # レイアウトデータがない場合（OCRフォールバック）
                 else:
-                    # ページの枠を #paper-content に追記（2カラムレイアウト：画像 + テキスト）
-                    if page_image_url:
-                        # 画像がある場合（URLパス）：2カラムレイアウト
-                        save_page_btn = f' <button onclick="saveWordToNote(\'Page {page_num} OCR\', \'Saved from {filename}\', \'{page_image_url}\')" title="Save page to Note" class="p-1 hover:bg-white rounded transition-all opacity-50 hover:opacity-100"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg></button>'
-                        yield f'event: message\ndata: <div id="{page_container_id}" hx-swap-oob="beforeend:#paper-content" class="mb-10 bg-white shadow-sm rounded-2xl animate-fade-in overflow-hidden"><div class="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50"><div class="flex items-center gap-2"><span class="text-xs text-slate-400 font-bold uppercase tracking-wide">Page {page_num}/{total_pages}</span>{save_page_btn}</div><span class="text-[10px] text-green-500 bg-green-50 px-2 py-0.5 rounded-full font-medium">Ready</span></div><div class="grid grid-cols-1 lg:grid-cols-2 gap-0"><div class="p-4 bg-slate-50 border-r border-slate-100 flex items-start justify-center"><img src="{page_image_url}" alt="Page {page_num}" class="max-w-full h-auto rounded-lg shadow-sm border border-slate-200" loading="lazy"></div><div id="{content_id}" class="p-6 overflow-y-auto max-h-[800px]"></div></div></div>\n\n'
-                    else:
-                        # 画像がない場合（キャッシュ）：テキストのみ
-                        yield f'event: message\ndata: <div id="{page_container_id}" hx-swap-oob="beforeend:#paper-content" class="mb-10 p-6 md:p-8 bg-white shadow-sm rounded-2xl animate-fade-in"><div class="flex justify-between items-center mb-6 border-b border-slate-100 pb-3"><span class="text-xs text-slate-300 font-bold uppercase tracking-wide">Page {page_num}/{total_pages}</span><span class="text-[10px] text-green-500 bg-green-50 px-2 py-0.5 rounded-full font-medium">Cached</span></div><div id="{content_id}" class="max-w-prose"></div></div>\n\n'
+                    save_page_btn = f' <button onclick="saveWordToNote(\'Page {page_num} OCR\', \'Saved from {filename}\', \'{page_image_url}\')" title="Save page to Note" class="p-1 hover:bg-white rounded transition-all opacity-50 hover:opacity-100"><svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg></button>'
+                    yield f'event: message\ndata: <div id="{page_container_id}" hx-swap-oob="outerHTML" class="mb-10 bg-white shadow-sm rounded-2xl animate-fade-in overflow-hidden"><div class="flex justify-between items-center px-6 py-4 border-b border-slate-100 bg-slate-50/50"><div class="flex items-center gap-2"><span class="text-xs text-slate-400 font-bold uppercase tracking-wide">Page {page_num}/{total_pages}</span>{save_page_btn}</div><span class="text-[10px] text-green-500 bg-green-50 px-2 py-0.5 rounded-full font-medium">Ready</span></div><div class="grid grid-cols-1 lg:grid-cols-2 gap-0"><div class="p-4 bg-slate-50 border-r border-slate-100 flex items-start justify-center"><img src="{page_image_url}" alt="Page {page_num}" class="max-w-full h-auto rounded-lg shadow-sm border border-slate-200" loading="lazy"></div><div id="{content_id}" class="p-6 overflow-y-auto max-h-[800px]"></div></div></div>\n\n'
 
-                    # ページ内のテキストを即座にトークン化してクリック可能なHTMLをストリーム表示
+                    # テキストトークン化ストリーム
                     page_prefix = f"p-pg{page_num}"
-
                     async for chunk in service.tokenize_stream(
                         page_text,
                         paper_id=None,
