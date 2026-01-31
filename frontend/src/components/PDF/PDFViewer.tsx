@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { PageData } from './types';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { PageData, PageWithLines } from './types';
 import PDFPage from './PDFPage';
 import StampPalette from '../Stamps/StampPalette';
 import { Stamp, StampType } from '../Stamps/types';
 import { useAuth } from '../../contexts/AuthContext';
 import TextModeViewer from './TextModeViewer';
+import { groupWordsIntoLines } from './utils';
 
 interface PDFViewerProps {
     taskId?: string;
@@ -18,10 +19,9 @@ interface PDFViewerProps {
     onStatusChange?: (status: 'idle' | 'uploading' | 'processing' | 'done' | 'error') => void;
     onPaperLoaded?: (paperId: string | null) => void;
     onAskAI?: (prompt: string) => void;
-    onStackPaper?: (url: string, title?: string) => void;
 }
 
-const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSelect, onAreaSelect, sessionId, jumpTarget, onStatusChange, onPaperLoaded, onAskAI, onStackPaper }) => {
+const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSelect, onAreaSelect, sessionId, jumpTarget, onStatusChange, onPaperLoaded, onAskAI }) => {
     const { token } = useAuth();
     const [pages, setPages] = useState<PageData[]>([]);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle');
@@ -206,19 +206,19 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
         }
     };
 
-    const handleWordClick = (word: string, context?: string, coords?: { page: number, x: number, y: number }) => {
+    const handleWordClick = useCallback((word: string, context?: string, coords?: { page: number, x: number, y: number }) => {
         if (onWordClick) {
             onWordClick(word, context, coords);
         }
-    };
+    }, [onWordClick]);
 
-    const handleTextSelect = (text: string, coords: { page: number, x: number, y: number }) => {
+    const handleTextSelect = useCallback((text: string, coords: { page: number, x: number, y: number }) => {
         if (onTextSelect) {
             onTextSelect(text, coords);
         }
-    };
+    }, [onTextSelect]);
 
-    const handleAreaSelect = async (coords: { page: number, x: number, y: number, width: number, height: number }) => {
+    const handleAreaSelect = useCallback(async (coords: { page: number, x: number, y: number, width: number, height: number }) => {
         // Find page data
         const page = pages.find(p => p.page_num === coords.page);
         if (!page || !onAreaSelect) return;
@@ -272,9 +272,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
         } catch (e) {
             console.error('Failed to crop/upload image', e);
         }
-    };
+    }, [pages, onAreaSelect, token]);
 
-    const handleAddStamp = async (page: number, x: number, y: number) => {
+    const handleAddStamp = useCallback(async (page: number, x: number, y: number) => {
         if (!paperId) {
             alert('Paper ID not found. Please wait for analysis to complete.');
             return;
@@ -320,7 +320,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
             console.error('Error saving stamp', e);
             setStamps(prev => prev.filter(s => s.id !== newStamp.id));
         }
-    };
+    }, [paperId, selectedStamp, token]);
+
+    const pagesWithLines: PageWithLines[] = useMemo(() => groupWordsIntoLines(pages), [pages]);
 
     return (
         <div className="w-full max-w-5xl mx-auto p-2 md:p-4 relative min-h-full pb-20">
@@ -396,15 +398,16 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
             )}
 
             {/* Content Area */}
-            {mode === 'plaintext' ? (
+            <div className={mode === 'plaintext' ? 'block' : 'hidden'}>
                 <TextModeViewer 
-                    pages={pages}
+                    pages={pagesWithLines}
                     onWordClick={handleWordClick}
                     onTextSelect={handleTextSelect}
                     jumpTarget={jumpTarget}
-                    onStackPaper={onStackPaper}
                 />
-            ) : (
+            </div>
+            
+            <div className={mode !== 'plaintext' ? 'block' : 'hidden'}>
                 <div className={`space-y-6 ${(mode === 'stamp' || mode === 'area') ? 'cursor-crosshair' : ''}`}>
                     {pages.map((page) => (
                         <PDFPage
@@ -418,12 +421,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                             isAreaMode={mode === 'area'}
                             onAreaSelect={handleAreaSelect}
                             onAskAI={onAskAI}
-                            onStackPaper={onStackPaper}
                             jumpTarget={jumpTarget}
                         />
                     ))}
                 </div>
-            )}
+            </div>
 
 
             {status === 'processing' && (

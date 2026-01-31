@@ -53,20 +53,24 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, coord
 
                 const res = await fetch(`/explain/${encodeURIComponent(term)}`, { headers });
                 if (res.ok) {
-                    const data: DictionaryEntry = await res.json();
-
-                    setEntries(prev => {
-                        // Remove existing entry for this word if it exists anywhere in the list
-                        // so we can move it to the top (or add it fresh)
-                        const filtered = prev.filter(e => e.word !== data.word);
-                        return [data, ...filtered];
-                    });
+                    const contentType = res.headers.get('content-type');
+                    if (contentType && contentType.includes('application/json')) {
+                        const data: DictionaryEntry = await res.json();
+                        setEntries(prev => {
+                            const filtered = prev.filter(e => e.word !== data.word);
+                            return [data, ...filtered];
+                        });
+                    } else {
+                        // Probably returned HTML or something else
+                        setError(`Could not explain "${term}". It may be a URL or special term.`);
+                    }
                 } else {
                     const errorText = await res.text();
-                    setError(`Definition not found: ${res.status} ${errorText}`);
+                    setError(`Definition not found: ${res.status} ${errorText.substring(0, 50)}`);
                 }
             } catch (e: any) {
-                setError(`Failed to fetch definition: ${e.message}`);
+                console.error('Dictionary fetch error:', e);
+                setError(`Failed to fetch definition for "${term}".`);
             } finally {
                 setLoading(false);
             }

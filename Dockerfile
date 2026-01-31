@@ -25,12 +25,16 @@ COPY pyproject.toml uv.lock ./
 # Install ALL dependencies (including dev deps like torch/transformers for model conversion)
 RUN uv sync --frozen
 
-# Copy src for initialization
-COPY src/ ./src/
+# Copy only necessary files for model conversion
+COPY src/__init__.py ./src/__init__.py
+COPY src/scripts/ ./src/scripts/
 
 # Convert M2M100 model to CTranslate2 format during build
-# This requires torch and transformers, but only at build time
+# This layer is cached as long as the conversion script and dependencies don't change
 RUN mkdir -p models && PYTHONPATH=/app uv run python -m src.scripts.convert_m2m100
+
+# Copy the rest of application code (this will change frequently)
+COPY src/ ./src/
 
 # Create a minimal runtime environment WITHOUT dev dependencies (no torch/transformers)
 FROM python:3.12-slim AS runtime-builder

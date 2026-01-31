@@ -145,7 +145,20 @@ function App() {
     }
 
 
+    const isLink = (text: string) => {
+        const clean = text.trim();
+        return clean.match(/^https?:\/\//i) || 
+               clean.startsWith('www.') || 
+               clean.includes('doi.org/') ||
+               clean.match(/^10\.\d{4,9}\/[-._;()/:A-Z0-9]+$/i); // DOI pattern
+    };
+
     const handleWordClick = (word: string, context?: string, coords?: { page: number, x: number, y: number }) => {
+        if (isLink(word)) {
+            handleStackPaper(word);
+            return;
+        }
+
         setSelectedWord(word)
         setSelectedContext(context)
         setSelectedCoordinates(coords)
@@ -153,6 +166,11 @@ function App() {
     }
 
     const handleTextSelect = (text: string, coords: { page: number, x: number, y: number }) => {
+        if (isLink(text)) {
+            handleStackPaper(text);
+            return;
+        }
+
         // When text is selected, we want to maybe open notes?
         // Let's set selected context as the text
         setSelectedWord(undefined)
@@ -190,8 +208,13 @@ function App() {
 
     const handleStackPaper = (url: string, title?: string) => {
         // Heal URL if it looks like one (remove internal spaces/newlines from OCR/layout split)
-        const cleanedUrl = url.trim().startsWith('http') ? url.replace(/\s+/g, '') : url.trim();
+        let cleanedUrl = url.trim().replace(/\s+/g, '');
         
+        // Handle raw DOI
+        if (cleanedUrl.match(/^10\.\d{4,9}\//) && !cleanedUrl.startsWith('http')) {
+            cleanedUrl = `https://doi.org/${cleanedUrl}`;
+        }
+
         setStackedPapers(prev => {
             if (prev.some(p => p.url === cleanedUrl)) return prev;
             return [...prev, { url: cleanedUrl, title, addedAt: Date.now() }];
@@ -332,7 +355,6 @@ function App() {
                                     onStatusChange={handleAnalysisStatusChange}
                                     onPaperLoaded={handlePaperLoaded}
                                     onAskAI={handleAskAI}
-                                    onStackPaper={handleStackPaper}
                                 />
                             </div>
                         ) : (

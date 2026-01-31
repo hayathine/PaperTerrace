@@ -17,7 +17,6 @@ interface PDFPageProps {
     isAreaMode?: boolean;
     onAreaSelect?: (coords: { page: number, x: number, y: number, width: number, height: number }) => void;
     onAskAI?: (prompt: string) => void;
-    onStackPaper?: (url: string, title?: string) => void;
     jumpTarget?: { page: number, x: number, y: number, term?: string } | null;
 }
 
@@ -31,7 +30,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
     isAreaMode = false,
     onAreaSelect,
     onAskAI,
-    onStackPaper,
     jumpTarget
 }) => {
     const { width, height, words, figures, image_url, page_num } = page;
@@ -313,11 +311,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
                                 setSelectionStart(null);
                                 setSelectionEnd(null);
                             }}
-                            className="px-3 py-1.5 hover:bg-gray-700 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                            className="px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-700"
                         >
                             <span>文A</span> Translate
                         </button>
-                        <div className="w-px bg-gray-700 mx-1"></div>
                         <button
                             onClick={(e) => {
                                 e.stopPropagation();
@@ -326,22 +323,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
                                 setSelectionStart(null);
                                 setSelectionEnd(null);
                             }}
-                            className="px-3 py-1.5 hover:bg-gray-700 rounded text-xs font-bold flex items-center gap-1 transition-colors"
+                            className="px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors"
                         >
                             <span>📝</span> Note
-                        </button>
-                        <div className="w-px bg-gray-700 mx-1"></div>
-                        <button
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                if (onStackPaper) onStackPaper(selectionMenu.text);
-                                setSelectionMenu(null);
-                                setSelectionStart(null);
-                                setSelectionEnd(null);
-                            }}
-                            className="px-3 py-1.5 hover:bg-gray-700 rounded text-xs font-bold flex items-center gap-1 transition-colors"
-                        >
-                            <span>📚</span> Stack
                         </button>
 
                         {/* Triangle arrow */}
@@ -354,4 +338,4 @@ const PDFPage: React.FC<PDFPageProps> = ({
     );
 };
 
-export default PDFPage;
+export default React.memo(PDFPage);

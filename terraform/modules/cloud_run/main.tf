@@ -7,6 +7,7 @@ resource "google_cloud_run_v2_service" "main" {
 
   template {
     service_account = var.service_account_email
+    startup_cpu_boost = true
 
     containers {
       image = var.image_url

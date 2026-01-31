@@ -71,9 +71,13 @@ tasks:
     deps: [remove_all_users, db:stop]
 
   deploy:
-    desc: start:build deploy
+    desc: Full deploy including infra checks
     cmds:
       - ./deploy.sh
+  deploy:fast:
+    desc: Deploy application code fast (skips infra checks)
+    cmds:
+      - ./deploy.sh --skip-infra
 
   db:wait:
     desc: Wait for Cloud SQL to be RUNNABLE

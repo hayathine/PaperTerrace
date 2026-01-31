@@ -27,6 +27,15 @@ export interface Figure {
     latex?: string;
 }
 
+export interface LineData {
+    words: PageWord[];
+    bbox: number[];
+}
+
+export interface PageWithLines extends PageData {
+    lines: LineData[];
+}
+
 export interface ViewerState {
     pages: PageData[];
     isLoading: boolean;
