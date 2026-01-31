@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef } from 'react';
 import { PageData } from './types';
 
 interface TextModeViewerProps {
@@ -15,30 +15,41 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
 
     const handleMouseUp = (e: React.MouseEvent, page: PageData) => {
         const selection = window.getSelection();
-        if (selection && selection.toString().trim().length > 0) {
-            const text = selection.toString().trim();
-            
+        const selectionText = selection?.toString().trim();
+        
+        if (selection && selectionText && selectionText.length > 0) {
             // Get selection coordinates relative to the page container
             const rect = e.currentTarget.getBoundingClientRect();
-            const x = ((e.clientX - rect.left) / rect.width) * 100;
-            const y = ((e.clientY - rect.top) / rect.height) * 100;
+            
+            // Selection bounding box for precise menu positioning
+            const range = selection.getRangeAt(0);
+            const rangeRect = range.getBoundingClientRect();
+            
+            // Position menu above the center of the selection
+            const menuX = ((rangeRect.left + rangeRect.right) / 2 - rect.left) / rect.width * 100;
+            const menuY = (rangeRect.top - rect.top) / rect.height * 100;
 
-            const centerX = (e.clientX - rect.left) / rect.width;
-            const centerY = (e.clientY - rect.top) / rect.height;
+            const centerX = ((rangeRect.left + rangeRect.right) / 2 - rect.left) / rect.width;
+            const centerY = ((rangeRect.top + rangeRect.bottom) / 2 - rect.top) / rect.height;
 
             setSelectionMenu({
-                x,
-                y,
-                text,
+                x: menuX,
+                y: menuY,
+                text: selectionText,
                 coords: { page: page.page_num, x: centerX, y: centerY }
             });
         } else {
+            // If it's a simple click (no text selected), hide the menu
             setSelectionMenu(null);
         }
     };
 
     React.useEffect(() => {
-        const handleClickOutside = () => setSelectionMenu(null);
+        const handleClickOutside = (e: MouseEvent) => {
+            // Don't close if clicking inside the menu
+            if ((e.target as HTMLElement).closest('.selection-menu')) return;
+            setSelectionMenu(null);
+        };
         if (selectionMenu) document.addEventListener('mousedown', handleClickOutside);
         return () => document.removeEventListener('mousedown', handleClickOutside);
     }, [selectionMenu]);
@@ -57,9 +68,9 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
             <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md px-4 py-3 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between mb-8">
                 <div className="flex items-center gap-2">
                     <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                        Native Selection Mode
+                        Native Selection Mode (Beta)
                     </span>
-                    <p className="text-xs text-slate-500 hidden sm:block">PDFの見た目そのままに、テキストの自由な選択が可能です。</p>
+                    <p className="text-xs text-slate-500 hidden sm:block">テキストを自由に選択して、翻訳やスタックへの追加が可能です。</p>
                 </div>
             </div>
 
@@ -68,28 +79,28 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
                     key={page.page_num}
                     id={`text-page-${page.page_num}`}
                     className="relative shadow-2xl rounded-2xl overflow-hidden bg-white border border-slate-200 group mx-auto"
-                    style={{ maxWidth: '100%' }}
+                    style={{ maxWidth: '100%', userSelect: 'none' }} 
                     onMouseUp={(e) => handleMouseUp(e, page)}
                 >
                     {/* Header */}
-                    <div className="bg-slate-50 border-b border-slate-100 px-6 py-2 flex justify-between items-center">
+                    <div className="bg-slate-50 border-b border-slate-100 px-6 py-2 flex justify-between items-center select-none">
                         <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
                             Page {page.page_num}
                         </span>
                     </div>
 
                     {/* Content Container */}
-                    <div className="relative w-full">
+                    <div className="relative w-full overflow-hidden">
                         {/* PDF Image (Base Layer) */}
                         <img 
                             src={page.image_url} 
                             alt={`Page ${page.page_num}`} 
-                            className="w-full h-auto block select-none"
+                            className="w-full h-auto block select-none pointer-events-none"
                             loading="lazy"
                         />
 
                         {/* Transparent Text Layer (Overlay Layer) */}
-                        <div className="absolute inset-0 z-10 w-full h-full cursor-text selection:bg-indigo-500/30">
+                        <div className="absolute inset-0 z-10 w-full h-full cursor-text selection:bg-indigo-500/40" style={{ userSelect: 'text' }}>
                             {page.words.map((w, idx) => {
                                 const [x1, y1, x2, y2] = w.bbox;
                                 const left = (x1 / page.width) * 100;
@@ -106,33 +117,37 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
                                 return (
                                     <span 
                                         key={idx}
-                                        className={`absolute text-transparent transition-all overflow-hidden whitespace-nowrap
+                                        className={`absolute text-transparent overflow-hidden whitespace-pre transition-all
                                             ${isJumpHighlight ? 'bg-yellow-400/40 border-b-2 border-yellow-600' : ''}`}
                                         style={{
                                             left: `${left}%`,
                                             top: `${top}%`,
                                             width: `${styleW}%`,
                                             height: `${styleH}%`,
-                                            fontSize: `${styleH * 0.8}cqh`, // Adaptive font size roughly matching box height
-                                            display: 'flex',
-                                            alignItems: 'center'
+                                            // Scale font size based on bbox height. 
+                                            // Using 70% of the styleH as a safe bet for browser selection boxes.
+                                            fontSize: `${styleH * 0.8}cqw`, // Typos: cqw actually depends on container. 
+                                            // Let's use a simpler approach: very large line-height to fill the box
+                                            lineHeight: 1,
+                                            pointerEvents: 'auto'
                                         }}
                                     >
-                                        {w.word}
+                                        {/* IMPORTANT: Add space for natural selection/copying */}
+                                        {w.word}{' '}
                                     </span>
                                 );
                             })}
                         </div>
                     </div>
 
-                    {/* Selection Menu (Portal-like within page) */}
+                    {/* Selection Menu */}
                     {selectionMenu && (
                         <div
-                            className="absolute z-50 flex gap-1 bg-slate-900 text-white p-1.5 rounded-xl shadow-2xl transform -translate-x-1/2 -translate-y-full"
+                            className="selection-menu absolute z-50 flex gap-1 bg-slate-900 text-white p-1.5 rounded-xl shadow-2xl transform -translate-x-1/2 -translate-y-full"
                             style={{ 
                                 left: `${selectionMenu.x}%`, 
                                 top: `${selectionMenu.y}%`, 
-                                marginTop: '-10px' 
+                                marginTop: '-12px' 
                             }}
                             onMouseDown={(e) => e.stopPropagation()}
                         >
