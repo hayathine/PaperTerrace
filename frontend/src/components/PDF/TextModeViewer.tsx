@@ -13,6 +13,40 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
     
     const [selectionMenu, setSelectionMenu] = React.useState<{ x: number, y: number, text: string, coords: any } | null>(null);
 
+    // Group words into lines for better selection behavior
+    const pagesWithLines = React.useMemo(() => {
+        return pages.map(page => {
+            const lines: { words: typeof page.words, bbox: number[] }[] = [];
+            // Sort words primarily by top position, secondarily by left
+            const sortedWords = [...page.words].sort((a, b) => (a.bbox[1] - b.bbox[1]) || (a.bbox[0] - b.bbox[0]));
+            
+            sortedWords.forEach(word => {
+                const wordY1 = word.bbox[1];
+                const wordHeight = word.bbox[3] - word.bbox[1];
+                
+                // Find a line that this word might belong to (similar Y coordinate)
+                const line = lines.find(l => Math.abs(wordY1 - l.bbox[1]) < wordHeight * 0.5);
+                
+                if (line) {
+                    line.words.push(word);
+                    line.bbox[0] = Math.min(line.bbox[0], word.bbox[0]);
+                    line.bbox[1] = Math.min(line.bbox[1], word.bbox[1]);
+                    line.bbox[2] = Math.max(line.bbox[2], word.bbox[2]);
+                    line.bbox[3] = Math.max(line.bbox[3], word.bbox[3]);
+                } else {
+                    lines.push({
+                        words: [word],
+                        bbox: [...word.bbox]
+                    });
+                }
+            });
+
+            // Sort words within each line by X coordinate
+            lines.forEach(line => line.words.sort((a, b) => a.bbox[0] - b.bbox[0]));
+            return { ...page, lines };
+        });
+    }, [pages]);
+
     const handleMouseUp = (e: React.MouseEvent, page: PageData) => {
         const selection = window.getSelection();
         const selectionText = selection?.toString().trim();
@@ -65,16 +99,8 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
 
     return (
         <div className="w-full max-w-5xl mx-auto p-4 space-y-12 pb-32">
-            <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md px-4 py-3 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between mb-8">
-                <div className="flex items-center gap-2">
-                    <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
-                        Native Selection Mode (Beta)
-                    </span>
-                    <p className="text-xs text-slate-500 hidden sm:block">テキストを自由に選択して、翻訳やスタックへの追加が可能です。</p>
-                </div>
-            </div>
 
-            {pages.map((page) => (
+            {pagesWithLines.map((page) => (
                 <div 
                     key={page.page_num}
                     id={`text-page-${page.page_num}`}
@@ -101,40 +127,46 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
 
                         {/* Transparent Text Layer (Overlay Layer) */}
                         <div className="absolute inset-0 z-10 w-full h-full cursor-text selection:bg-indigo-500/40" style={{ userSelect: 'text' }}>
-                            {page.words.map((w, idx) => {
-                                const [x1, y1, x2, y2] = w.bbox;
-                                const left = (x1 / page.width) * 100;
-                                const top = (y1 / page.height) * 100;
-                                const styleW = ((x2 - x1) / page.width) * 100;
-                                const styleH = ((y2 - y1) / page.height) * 100;
-
-                                // Check for jump highlight
-                                const isJumpHighlight = jumpTarget && 
-                                    jumpTarget.page === page.page_num && 
-                                    jumpTarget.term && 
-                                    w.word.toLowerCase().includes(jumpTarget.term.toLowerCase());
+                            {page.lines.map((line, lIdx) => {
+                                const [lx1, ly1, lx2, ly2] = line.bbox;
+                                const lTop = (ly1 / page.height) * 100;
+                                const lLeft = (lx1 / page.width) * 100;
+                                const lWidth = ((lx2 - lx1) / page.width) * 100;
+                                const lHeight = ((ly2 - ly1) / page.height) * 100;
 
                                 return (
-                                    <span 
-                                        key={idx}
-                                        className={`absolute text-transparent overflow-hidden whitespace-pre transition-all
-                                            ${isJumpHighlight ? 'bg-yellow-400/40 border-b-2 border-yellow-600' : ''}`}
+                                    <div
+                                        key={lIdx}
+                                        className="absolute text-transparent whitespace-pre flex items-center"
                                         style={{
-                                            left: `${left}%`,
-                                            top: `${top}%`,
-                                            width: `${styleW}%`,
-                                            height: `${styleH}%`,
-                                            // Scale font size based on bbox height. 
-                                            // Using 70% of the styleH as a safe bet for browser selection boxes.
-                                            fontSize: `${styleH * 0.8}cqw`, // Typos: cqw actually depends on container. 
-                                            // Let's use a simpler approach: very large line-height to fill the box
-                                            lineHeight: 1,
-                                            pointerEvents: 'auto'
+                                            top: `${lTop}%`,
+                                            left: `${lLeft}%`,
+                                            width: `${lWidth}%`,
+                                            height: `${lHeight}%`,
+                                            // Font size scales with line height
+                                            fontSize: `${lHeight * 0.8}cqw`, 
+                                            // Avoid gaps between words in selection
+                                            letterSpacing: '-0.05em'
                                         }}
                                     >
-                                        {/* IMPORTANT: Add space for natural selection/copying */}
-                                        {w.word}{' '}
-                                    </span>
+                                        {line.words.map((w, wIdx) => {
+                                            // Check for jump highlight
+                                            const isJumpHighlight = jumpTarget && 
+                                                jumpTarget.page === page.page_num && 
+                                                jumpTarget.term && 
+                                                w.word.toLowerCase().includes(jumpTarget.term.toLowerCase());
+
+                                            return (
+                                                <span 
+                                                    key={wIdx}
+                                                    className={`transition-all ${isJumpHighlight ? 'bg-yellow-400/40 border-b-2 border-yellow-600' : ''}`}
+                                                    style={{ pointerEvents: 'auto' }}
+                                                >
+                                                    {w.word}{' '}
+                                                </span>
+                                            );
+                                        })}
+                                    </div>
                                 );
                             })}
                         </div>

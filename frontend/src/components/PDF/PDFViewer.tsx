@@ -347,17 +347,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                 <div className="sticky top-4 z-40 flex justify-center mb-8">
                     <div className="bg-white/80 backdrop-blur-md p-1.5 rounded-2xl shadow-lg border border-slate-200/50 flex items-center gap-1">
                         <button
-                            onClick={() => setMode('text')}
-                            className={`px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200 ${
-                                mode === 'text' 
-                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 scale-105' 
-                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
-                            }`}
-                        >
-                            <span className="text-base truncate">📄</span>
-                            <span className="hidden sm:inline">PDFモード</span>
-                        </button>
-                        <button
                             onClick={() => setMode('plaintext')}
                             className={`px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200 ${
                                 mode === 'plaintext' 
@@ -367,6 +356,17 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                         >
                             <span className="text-base truncate">📝</span>
                             <span className="hidden sm:inline">テキストモード</span>
+                        </button>
+                        <button
+                            onClick={() => setMode('text')}
+                            className={`px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200 ${
+                                mode === 'text' 
+                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 scale-105' 
+                                : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
+                            }`}
+                        >
+                            <span className="text-base truncate">📄</span>
+                            <span className="hidden sm:inline">PDFモード</span>
                         </button>
                         <div className="w-[1px] h-6 bg-slate-200 mx-1 hidden sm:block" />
                         <button
