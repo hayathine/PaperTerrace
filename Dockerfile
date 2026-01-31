@@ -26,11 +26,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 COPY src/scripts/ ./src/scripts/
 COPY src/__init__.py ./src/__init__.py
 
-# 修正: AutoLayoutModel ではなく PaddleDetectionLayoutModel を直接使用してモデルをDL
-# ダウンロード先を確実にするため HOME を指定し、後で production へコピー可能にする
-RUN mkdir -p models && \
-    PYTHONPATH=/app uv run python -c "import layoutparser as lp; model = lp.PaddleDetectionLayoutModel('lp://PubLayNet/ppyolov2_r50vd_dcn_365e_publaynet/config'); print('Model loaded successfully')" && \
-    PYTHONPATH=/app uv run python -m src.scripts.convert_m2m100
+# M2M100モデルの変換のみ実行 (LayoutParserモデルは不要になったため削除)
+RUN PYTHONPATH=/app uv run python -m src.scripts.convert_m2m100
+
 
 # --- Stage 3: Runtime Builder ---
 FROM python:3.12-slim AS runtime-builder
@@ -52,9 +50,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY --from=runtime-builder /app/.venv /app/.venv
 COPY --from=builder /app/models ./models
-# builder 側でダウンロードされた LayoutParser のモデルをコピー
-COPY --from=builder /root/.layoutparser /root/.layoutparser
 COPY --from=frontend-builder /app/frontend/dist ./src/static/dist
+
 COPY src/ ./src/
 
 ENV PATH="/app/.venv/bin:$PATH" \

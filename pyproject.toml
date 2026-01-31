@@ -34,12 +34,9 @@ dependencies = [
     "tiktoken>=0.12.0",
     "uuid6>=2025.0.1",
     "uvicorn>=0.40.0",
-    "pypdf>=6.6.2",
     "Pillow>=11.1.0",
-    "layoutparser[paddle]>=0.3.4",
-    "paddlepaddle>=2.6.0",
-    "opencv-python-headless>=4.10.0.84",
 ]
+
 
 [dependency-groups]
 dev = [

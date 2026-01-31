@@ -14,7 +14,6 @@ from src.utils import _get_file_hash
 from .pdf.abstract_service import AbstractService
 from .pdf.figure_service import FigureService
 from .pdf.language_service import LanguageService
-from .pdf.layout_analysis_service import LayoutAnalysisService
 
 
 class PDFOCRService:
@@ -23,7 +22,6 @@ class PDFOCRService:
         self.model = model
         self.figure_service = FigureService(self.ai_provider, self.model)
         self.language_service = LanguageService(self.ai_provider, self.model)
-        self.layout_analysis_service = LayoutAnalysisService()
 
     def extract_abstract_text(self, file_bytes: bytes) -> Optional[str]:
         """Extract abstract using specialized service."""
@@ -49,10 +47,6 @@ class PDFOCRService:
         logger.info(f"--- AI OCR Streaming: {filename} ---")
 
         try:
-            from pypdf import PdfReader
-
-            pypdf_reader = PdfReader(io.BytesIO(file_bytes))
-
             with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
                 total_pages = len(pdf.pages)
                 all_text_parts = []
@@ -60,12 +54,9 @@ class PDFOCRService:
 
                 for page_num in range(total_pages):
                     logger.debug(f"[OCR] Starting processing page {page_num + 1}/{total_pages}")
-                    pypdf_page = (
-                        pypdf_reader.pages[page_num] if page_num < len(pypdf_reader.pages) else None
-                    )
 
                     async for result in self._process_page_incremental(
-                        pdf.pages[page_num], page_num, total_pages, file_hash, pypdf_page=pypdf_page
+                        pdf.pages[page_num], page_num, total_pages, file_hash
                     ):
                         # result is (page_num+1, total_pages, page_text, is_last, file_hash, img_url, layout_data)
                         if result[2] is not None:  # Final result per page
@@ -121,9 +112,7 @@ class PDFOCRService:
             )
         return pages
 
-    async def _process_page_incremental(
-        self, page, page_idx, total_pages, file_hash, pypdf_page=None
-    ):
+    async def _process_page_incremental(self, page, page_idx, total_pages, file_hash):
         """Process a single page: render image, OCR, detect layout/figures."""
         page_num = page_idx + 1
 
@@ -146,9 +135,6 @@ class PDFOCRService:
         logger.debug(f"[OCR] Page {page_num}: Image ready, yielding partial result")
         yield (page_num, total_pages, None, is_last, file_hash, image_url, None)
 
-        # 1.5 Layout Analysis (FAST with GPU/CPU)
-        layout_blocks = self.layout_analysis_service.analyze_layout(img_pil)
-
         # 2. Extract Text (SLOW)
         page_text, layout_data = await self._extract_native_or_vision_text(
             page, img_bytes, img_pil, zoom
@@ -156,18 +142,13 @@ class PDFOCRService:
         if not layout_data:
             layout_data = {"width": img_pil.width, "height": img_pil.height, "words": []}
 
-        # Add detected blocks to layout_data for frontend use
-        layout_data["blocks"] = layout_blocks
-
-        # 3. Figure extraction (SLOW) - passing layout_blocks to focus extraction
+        # 3. Figure extraction (SLOW)
         figures = await self.figure_service.detect_and_extract_figures(
             img_bytes,
             page_img,
             page,
             file_hash,
             page_num,
-            pypdf_page=pypdf_page,
-            layout_blocks=layout_blocks,
             zoom=zoom,
         )
         if figures:
