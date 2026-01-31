@@ -12,7 +12,7 @@ Your goal is to help users understand complex academic papers, translate technic
 
 # Global Rules
 1. Always output in the requested language (e.g., if asked for Japanese, answer in Japanese).
-2.. When translating, prioritize accuracy and academic context over literal translation.
+2. When translating, prioritize accuracy and academic context. For specific terms, provide both a translation and a brief context-aware explanation.
 3. For summaries, capture the core essence, methods, and contributions.
 4. If the user asks for JSON, output ONLY valid JSON without Markdown formatting.
 """
@@ -61,8 +61,21 @@ Translation only in {lang_name}.
 """
 
 # ==========================================
-# Paper Summary Prompts
+# Chat Specialized Prompts
 # ==========================================
+
+DICT_AI_CHAT_TRANSLATE_PROMPT = """You are an academic translation expert.
+The user wants to understand a specific term/phrase in the context of this research paper.
+Please provide:
+1. An accurate Japanese translation that fits the academic context.
+2. A very brief (1-2 sentences) explanation of why this term is used or what it implies in this specific context.
+
+[Term/Phrase]
+{word}
+
+[Paper Context]
+{document_context}
+"""
 # 論文全体の要約、セクション別要約、アブストラクト生成に使用
 
 PAPER_SUMMARY_FULL_PROMPT = """TASK: Summarize the following paper

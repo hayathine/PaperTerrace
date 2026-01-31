@@ -6,12 +6,13 @@ interface DictionaryProps {
     term?: string;
     sessionId: string;
     paperId?: string | null;
+    context?: string;
     coordinates?: { page: number, x: number, y: number };
     onAskAI?: (prompt: string) => void;
     onJump?: (page: number, x: number, y: number, term?: string) => void;
 }
 
-const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, coordinates, onAskAI, onJump }) => {
+const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, context, coordinates, onAskAI, onJump }) => {
     const { token } = useAuth();
     // Maintain a list of entries instead of a single one
     const [entries, setEntries] = useState<DictionaryEntry[]>([]);
@@ -198,16 +199,21 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, paperId, coord
 
                             {onAskAI && (
                                 <button
-                                    onClick={() => onAskAI('EXPLAIN THIS WORD')}
+                                    onClick={() => {
+                                        const prompt = context 
+                                            ? `以下の文脈における「${entry.word}」の意味を翻訳し、1-2文で短く解説してください。\n\n【文脈】\n${context}`
+                                            : `論文の文脈を踏まえて、この単語「${entry.word}」を翻訳し、1-2文で短く解説してください。`;
+                                        onAskAI(prompt);
+                                    }}
                                     className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
                                 >
-                                    <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
-                                        <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
-                                        <path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
+                                    <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129" />
                                     </svg>
-                                    <span>チャットで聞く</span>
+                                    <span>AIで翻訳</span>
                                 </button>
                             )}
+
 
                             {onJump && coordinates && (
                                 <button

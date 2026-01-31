@@ -6,7 +6,6 @@ from typing import Any, Dict, List
 from pdfplumber.display import PageImage
 from pdfplumber.page import Page
 
-from src.logger import logger
 from src.providers.image_storage import save_page_image
 
 
@@ -26,218 +25,124 @@ class FigureService:
     ) -> List[Dict[str, Any]]:
         """
         Detect figures/tables/equations using pdfplumber coordinates and extract them.
-        Since we no longer use layoutparser, we rely on pdfplumber's object detection.
         """
-        figures_data = []
+        candidates = []
+        page_area = page.width * page.height
 
-        # 1. Extract Native Images from pdfplumber
-        # pdfplumber provides coordinates for each image object in the PDF
-        logger.debug(f"[FigureService] p.{page_num}: Checking pdfplumber images")
-        for i, img_obj in enumerate(page.images):
+        # 1. Native Images from pdfplumber
+        for img in page.images:
+            bbox = [img["x0"], img["top"], img["x1"], img["bottom"]]
+            w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+            # Ignore small icons and full-page backgrounds (scans)
+            if w < 20 or h < 20:
+                continue
+            if (w * h) > page_area * 0.85:
+                continue
+            candidates.append({"bbox": bbox, "label": "figure"})
+
+        # 2. Tables from pdfplumber
+        # Scientific papers often have horizontal-only lines or text-aligned cells
+        strategies = [
+            {"vertical_strategy": "lines", "horizontal_strategy": "lines"},
+            {"vertical_strategy": "text", "horizontal_strategy": "lines"},
+        ]
+        for settings in strategies:
             try:
-                # bbox is (x0, top, x1, bottom) in PDF points
-                bbox = (img_obj["x0"], img_obj["top"], img_obj["x1"], img_obj["bottom"])
+                tables = page.find_tables(table_settings=settings)
+                for table in tables:
+                    bbox = list(table.bbox)
+                    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                    if w > 40 and h > 20:
+                        candidates.append({"bbox": bbox, "label": "table"})
+            except Exception:
+                continue
 
-                # Filtering very small icons/noise
-                width = bbox[2] - bbox[0]
-                height = bbox[3] - bbox[1]
-                if width < 20 or height < 20:  # Icons are often tiny
+        # 3. Vector Graphics (Clustering)
+        # Groups lines/curves into logical blocks (Equations/Plots)
+        visual_objs = page.rects + page.curves
+        if visual_objs:
+            clusters = self._cluster_objects(visual_objs, threshold=25.0)
+            for cluster_bbox in clusters:
+                w, h = cluster_bbox[2] - cluster_bbox[0], cluster_bbox[3] - cluster_bbox[1]
+                if w < 30 or h < 10:
                     continue
+                if (w * h) > page_area * 0.8:
+                    continue
+                label = "equation" if h < 60 and w > 100 else "figure"
+                candidates.append({"bbox": cluster_bbox, "label": label})
 
-                # Crop the region from the page
-                # We use page.crop to get the vector/image content of that area
-                # then convert to image for extraction
-                margin = 2
-                c_bbox = (
-                    max(0, bbox[0] - margin),
-                    max(0, bbox[1] - margin),
-                    min(page.width, bbox[2] + margin),
-                    min(page.height, bbox[3] + margin),
-                )
+        if not candidates:
+            return []
 
+        # 4. Merge and Deduplicate
+        # Sort by area descending to handle containment
+        candidates.sort(
+            key=lambda x: (x["bbox"][2] - x["bbox"][0]) * (x["bbox"][3] - x["bbox"][1]),
+            reverse=True,
+        )
+        final_areas = []
+
+        for cand in candidates:
+            bbox = cand["bbox"]
+            margin = 5
+            # Apply margin in PDF points
+            # Ensure c_bbox is a tuple for page.crop()
+            c_bbox = (
+                max(0, bbox[0] - margin),
+                max(0, bbox[1] - margin),
+                min(page.width, bbox[2] + margin),
+                min(page.height, bbox[3] + margin),
+            )
+
+            # Skip if this area is largely covered by a larger area already accepted
+            is_redundant = False
+            for accepted in final_areas:
+                a_bbox = accepted["bbox_pt"]
+                # Intersection
+                ix0 = max(c_bbox[0], a_bbox[0])
+                iy0 = max(c_bbox[1], a_bbox[1])
+                ix1 = min(c_bbox[2], a_bbox[2])
+                iy1 = min(c_bbox[3], a_bbox[3])
+
+                if ix1 > ix0 and iy1 > iy0:
+                    inter_area = (ix1 - ix0) * (iy1 - iy0)
+                    cand_area = (c_bbox[2] - c_bbox[0]) * (c_bbox[3] - c_bbox[1])
+                    if inter_area / cand_area > 0.8:
+                        is_redundant = True
+                        break
+
+            if is_redundant:
+                continue
+
+            try:
+                # Save crop
                 cropped = page.crop(c_bbox)
-                # Render at high resolution
+                # Use high resolution for extraction
                 crop_img = cropped.to_image(resolution=300)
                 crop_pil = crop_img.original.convert("RGB")
 
                 buffer = io.BytesIO()
                 crop_pil.save(buffer, format="PNG")
-                png_bytes = buffer.getvalue()
+                img_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-                img_b64 = base64.b64encode(png_bytes).decode("utf-8")
-                figure_img_name = f"plumber_img_{page_num}_{i}"
+                img_name = f"p{page_num}_{cand['label']}_{len(final_areas)}"
+                url = save_page_image(file_hash, img_name, img_b64)
 
-                figure_url = save_page_image(file_hash, figure_img_name, img_b64)
-
-                figures_data.append(
+                final_areas.append(
                     {
-                        "image_url": figure_url,
-                        "bbox": [
-                            c_bbox[0] * zoom,
-                            c_bbox[1] * zoom,
-                            c_bbox[2] * zoom,
-                            c_bbox[3] * zoom,
-                        ],
+                        "image_url": url,
+                        "bbox": [b * zoom for b in c_bbox],  # Convert to zoom pixels
+                        "bbox_pt": c_bbox,  # Keep PDF points for redundancy check
                         "explanation": "",
                         "page_num": page_num,
-                        "label": "figure",
+                        "label": cand["label"],
                     }
                 )
-            except Exception as e:
-                logger.warning(f"[FigureService] p.{page_num}: Image {i} extraction failed: {e}")
+            except Exception:
+                continue
 
-        # 2. Extract Tables using pdfplumber
-        logger.debug(f"[FigureService] p.{page_num}: Attempting table detection")
-        try:
-            # Table settings can be tuned
-            table_settings = {
-                "vertical_strategy": "lines",
-                "horizontal_strategy": "lines",
-                "intersection_tolerance": 3,
-            }
-            tables = page.find_tables(table_settings=table_settings)
-
-            # If no line-based tables, try text-based (more aggressive)
-            if not tables:
-                tables = page.find_tables(
-                    table_settings={"vertical_strategy": "text", "horizontal_strategy": "text"}
-                )
-
-            for i, table in enumerate(tables):
-                bbox = table.bbox  # (x0, top, x1, bottom)
-                width = bbox[2] - bbox[0]
-                height = bbox[3] - bbox[1]
-                if width < 40 or height < 20:
-                    continue
-
-                # Avoid duplicates
-                is_duplicate = False
-                for fig in figures_data:
-                    fb = fig["bbox"]
-                    cx, cy = (bbox[0] + bbox[2]) / 2 * zoom, (bbox[1] + bbox[3]) / 2 * zoom
-                    if fb[0] < cx < fb[2] and fb[1] < cy < fb[3]:
-                        is_duplicate = True
-                        break
-                if is_duplicate:
-                    continue
-
-                margin = 5
-                c_bbox = (
-                    max(0, bbox[0] - margin),
-                    max(0, bbox[1] - margin),
-                    min(page.width, bbox[2] + margin),
-                    min(page.height, bbox[3] + margin),
-                )
-
-                try:
-                    cropped = page.crop(c_bbox)
-                    crop_img = cropped.to_image(resolution=300)
-                    crop_pil = crop_img.original.convert("RGB")
-
-                    buffer = io.BytesIO()
-                    crop_pil.save(buffer, format="PNG")
-                    crop_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-                    table_img_name = f"plumber_table_{page_num}_{i}"
-                    table_url = save_page_image(file_hash, table_img_name, crop_b64)
-
-                    figures_data.append(
-                        {
-                            "image_url": table_url,
-                            "bbox": [
-                                c_bbox[0] * zoom,
-                                c_bbox[1] * zoom,
-                                c_bbox[2] * zoom,
-                                c_bbox[3] * zoom,
-                            ],
-                            "explanation": "",
-                            "page_num": page_num,
-                            "label": "table",
-                        }
-                    )
-                except Exception:
-                    continue
-        except Exception as e:
-            logger.warning(f"[FigureService] p.{page_num}: Table detection failed: {e}")
-
-        # 3. Detect Equations and Vector Graphics
-        # High char density or many curves in a small vertical band often means equations
-        logger.debug(
-            f"[FigureService] p.{page_num}: Checking for vector graphics and potential equations"
-        )
-        try:
-            visual_objs = page.rects + page.curves + page.images
-            if visual_objs:
-                clusters = self._cluster_objects(visual_objs, threshold=15.0)
-                for i, cluster_bbox in enumerate(clusters):
-                    width = cluster_bbox[2] - cluster_bbox[0]
-                    height = cluster_bbox[3] - cluster_bbox[1]
-
-                    if width < 20 or height < 10:
-                        continue
-                    if width > page.width * 0.95 and height > page.height * 0.95:
-                        continue
-
-                    # Overlap check
-                    is_duplicate = False
-                    for fig in figures_data:
-                        fb = fig["bbox"]
-                        cx, cy = (
-                            (cluster_bbox[0] + cluster_bbox[2]) / 2 * zoom,
-                            (cluster_bbox[1] + cluster_bbox[3]) / 2 * zoom,
-                        )
-                        if fb[0] < cx < fb[2] and fb[1] < cy < fb[3]:
-                            is_duplicate = True
-                            break
-                    if is_duplicate:
-                        continue
-
-                    # Label heuristic: thin wide clusters are often equations
-                    # Deep clusters are often figures
-                    label = "figure"
-                    if height < 50 and width > 100:
-                        label = "equation"
-
-                    margin = 5
-                    c_bbox = (
-                        max(0, cluster_bbox[0] - margin),
-                        max(0, cluster_bbox[1] - margin),
-                        min(page.width, cluster_bbox[2] + margin),
-                        min(page.height, cluster_bbox[3] + margin),
-                    )
-
-                    try:
-                        cropped = page.crop(c_bbox)
-                        crop_img = cropped.to_image(resolution=300)
-                        crop_pil = crop_img.original.convert("RGB")
-
-                        buffer = io.BytesIO()
-                        crop_pil.save(buffer, format="PNG")
-                        crop_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
-
-                        vector_img_name = f"plumber_vis_{label}_{page_num}_{i}"
-                        vector_url = save_page_image(file_hash, vector_img_name, crop_b64)
-
-                        figures_data.append(
-                            {
-                                "image_url": vector_url,
-                                "bbox": [
-                                    c_bbox[0] * zoom,
-                                    c_bbox[1] * zoom,
-                                    c_bbox[2] * zoom,
-                                    c_bbox[3] * zoom,
-                                ],
-                                "explanation": "",
-                                "page_num": page_num,
-                                "label": label,
-                            }
-                        )
-                    except Exception:
-                        continue
-        except Exception as e:
-            logger.warning(f"[FigureService] p.{page_num}: Vector detection failed: {e}")
-
-        return figures_data
+        # Clean output
+        return [{k: v for k, v in f.items() if k != "bbox_pt"} for f in final_areas]
 
     def _cluster_objects(self, objs: List[Dict], threshold: float = 10.0) -> List[List[float]]:
         """Simple clustering of objects based on proximity of their bboxes."""

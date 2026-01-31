@@ -275,6 +275,10 @@ function App() {
 
                 <div className="mt-4">
                     <label className="block text-xs font-bold mb-2 text-gray-400">UPLOAD PDF</label>
+                    <p className="text-[10px] text-amber-400/80 mb-2 leading-tight">
+                        *現在、英語の論文のみサポートしています。<br/>
+                        (Only English papers are supported)
+                    </p>
                     <input
                         type="file"
                         accept="application/pdf"

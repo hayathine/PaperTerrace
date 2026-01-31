@@ -38,7 +38,7 @@ class LanguageService:
                         logger.debug(
                             f"[LanguageService] Analyzing first 1000 chars: {text[:100]}..."
                         )
-                        prompt = PDF_DETECT_LANGUAGE_PROMPT.format(text=text[:5000])
+                        prompt = PDF_DETECT_LANGUAGE_PROMPT.format(text=text[:1000])
                         detected = await self.ai_provider.generate(prompt, model=self.model)
                         detected = detected.strip().lower()
                         # Expecting 2-letter code (en, ja, etc)

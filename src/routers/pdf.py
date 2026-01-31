@@ -56,6 +56,12 @@ async def analyze_pdf(
 
     # Language detection
     detected_lang = await service.ocr_service.detect_language_from_pdf(content)
+    if detected_lang and detected_lang != "en":
+        logger.warning(f"Unsupported language detected: {detected_lang}")
+        return Response(
+            "Error: Currently, only English papers are supported. / 現在、英語の論文のみサポートしています。",
+            status_code=400,
+        )
     if detected_lang:
         lang = detected_lang
 
@@ -135,6 +141,14 @@ async def analyze_pdf_json(
 
     # Detect PDF language
     detected_lang = await service.ocr_service.detect_language_from_pdf(content)
+    if detected_lang and detected_lang != "en":
+        logger.warning(f"Unsupported language detected: {detected_lang}")
+        return JSONResponse(
+            {
+                "error": "Currently, only English papers are supported. / 現在、英語の論文のみサポートしています。"
+            },
+            status_code=400,
+        )
     if detected_lang:
         lang = detected_lang
 

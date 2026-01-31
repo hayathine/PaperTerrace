@@ -81,6 +81,20 @@ class AIProviderInterface(ABC):
         ...
 
     @abstractmethod
+    async def generate_with_images(
+        self,
+        prompt: str,
+        images_list: list[bytes],
+        mime_type: str = "image/png",
+        model: str | None = None,
+        response_model: Type[BaseModel] | None = None,
+        system_instruction: str | None = None,
+        cached_content_name: str | None = None,
+    ) -> Any:
+        """Generate text response from prompt with multiple images."""
+        pass
+
+    @abstractmethod
     async def count_tokens(self, contents: Any, model: str | None = None) -> int:
         """Count tokens for the given contents."""
         ...
@@ -299,6 +313,80 @@ class GeminiProvider(AIProviderInterface):
                 extra={"error": str(e), "mime_type": mime_type},
             )
             raise AIGenerationError(f"Image analysis failed: {e}") from e
+
+    async def generate_with_images(
+        self,
+        prompt: str,
+        images_list: list[bytes],
+        mime_type: str = "image/png",
+        model: str | None = None,
+        response_model: Type[BaseModel] | None = None,
+        system_instruction: str | None = None,
+        cached_content_name: str | None = None,
+    ) -> Any:
+        """Generate text response from prompt with multiple images."""
+        target_model = model or self.model
+        try:
+            logger.debug(
+                "Gemini multi-image request",
+                extra={
+                    "image_count": len(images_list),
+                    "model": target_model,
+                    "structured": response_model is not None,
+                },
+            )
+
+            # Configure generation config
+            config_params: GenConfig = {
+                "temperature": 0.1,
+                "max_output_tokens": 1024,
+            }
+            if response_model:
+                config_params["response_mime_type"] = "application/json"
+                config_params["response_json_schema"] = response_model.model_json_schema()
+
+            if system_instruction:
+                config_params["system_instruction"] = system_instruction
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
+
+            config = types.GenerateContentConfig(**config_params)
+
+            if cached_content_name:
+                contents = [prompt]
+            else:
+                contents = []
+                for img_bytes in images_list:
+                    contents.append(types.Part.from_bytes(data=img_bytes, mime_type=mime_type))
+                contents.append(prompt)
+
+            response = await self.client.aio.models.generate_content(
+                model=target_model,
+                contents=contents,
+                config=config,
+            )
+
+            if response_model:
+                try:
+                    if hasattr(response, "parsed") and response.parsed is not None:
+                        if isinstance(response.parsed, response_model):
+                            return response.parsed
+                        if isinstance(response.parsed, dict):
+                            return response_model.model_validate(response.parsed)
+                        return response.parsed
+                    text_to_parse = response.text or ""
+                    text_to_parse = text_to_parse.strip()
+                    if text_to_parse.startswith("```json"):
+                        text_to_parse = text_to_parse[7:].strip("` \n")
+                    return response_model.model_validate_json(text_to_parse)
+                except Exception as parse_err:
+                    logger.error(f"Failed to parse structured multi-image output: {parse_err}")
+                    return response_model.model_validate_json(response.text or "{}")
+
+            return (response.text or "").strip()
+        except Exception as e:
+            logger.exception("Gemini multi-image generation failed")
+            raise AIGenerationError(f"Multi-image analysis failed: {e}") from e
 
     async def generate_with_pdf(
         self,
@@ -581,6 +669,68 @@ class VertexAIProvider(AIProviderInterface):
         except Exception as e:
             logger.exception("Vertex AI image generation failed", extra={"error": str(e)})
             raise AIGenerationError(f"Vertex image analysis failed: {e}") from e
+
+    async def generate_with_images(
+        self,
+        prompt: str,
+        images_list: list[bytes],
+        mime_type: str = "image/png",
+        model: str | None = None,
+        response_model: Type[BaseModel] | None = None,
+        system_instruction: str | None = None,
+        cached_content_name: str | None = None,
+    ) -> Any:
+        """Generate text response from prompt with multiple images."""
+        target_model = model or self.model
+        try:
+            if cached_content_name:
+                contents = [prompt]
+            else:
+                contents = []
+                for img_bytes in images_list:
+                    contents.append(types.Part.from_bytes(data=img_bytes, mime_type=mime_type))
+                contents.append(prompt)
+
+            config_params: GenConfig = {"temperature": 0.1, "max_output_tokens": 1024}
+            if response_model:
+                config_params["response_mime_type"] = "application/json"
+                config_params["response_json_schema"] = response_model.model_json_schema()
+
+            if system_instruction:
+                config_params["system_instruction"] = system_instruction
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
+
+            config = types.GenerateContentConfig(**config_params)
+
+            response = await self.client.aio.models.generate_content(
+                model=target_model,
+                contents=contents,
+                config=config,
+            )
+
+            if response_model:
+                try:
+                    if hasattr(response, "parsed") and response.parsed is not None:
+                        if isinstance(response.parsed, response_model):
+                            return response.parsed
+                        if isinstance(response.parsed, dict):
+                            return response_model.model_validate(response.parsed)
+                        return response.parsed
+                    text_to_parse = (response.text or "").strip()
+                    if text_to_parse.startswith("```json"):
+                        text_to_parse = text_to_parse[7:].strip("` \n")
+                    return response_model.model_validate_json(text_to_parse)
+                except Exception as parse_err:
+                    logger.error(
+                        f"Failed to parse structured multi-image output from Vertex: {parse_err}"
+                    )
+                    return response_model.model_validate_json(response.text or "{}")
+
+            return (response.text or "").strip()
+        except Exception as e:
+            logger.exception("Vertex multi-image generation failed")
+            raise AIGenerationError(f"Vertex multi-image analysis failed: {e}") from e
 
     async def generate_with_pdf(
         self,

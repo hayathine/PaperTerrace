@@ -80,23 +80,50 @@ class SummaryService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         try:
-            # PDF直接入力方式
+            # PDF直接入力方式 (画像ベース)
             if pdf_bytes:
+                import io
+
+                import pdfplumber
+
                 logger.debug(
-                    "Generating full summary from PDF",
+                    "Generating full summary from PDF images",
                     extra={"pdf_size": len(pdf_bytes)},
                 )
+
+                images = []
+                try:
+                    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+                        # 全ページか、多い場合は制限するか検討。とりあえず全ページ試行。
+                        # ただし、極端に多い場合は件数を絞る（例: 最初の20ページ）
+                        max_pages = 25
+                        pages_to_process = pdf.pages[:max_pages]
+
+                        for i, page in enumerate(pages_to_process):
+                            # 解像度を抑えてトークンと処理時間を節約 (100 DPI)
+                            page_img = page.to_image(resolution=100)
+                            buf = io.BytesIO()
+                            page_img.original.save(buf, format="PNG")
+                            images.append(buf.getvalue())
+
+                        logger.info(f"Converted {len(images)} PDF pages to images for summary")
+                except Exception as ex:
+                    logger.error(f"Failed to convert PDF to images: {ex}")
+                    # 失敗した場合はテキストベースにフォールバック... はここでは難しいのでエラー
+                    raise SummaryError(f"PDFの解析（画像化）に失敗しました: {ex}")
+
                 prompt = PAPER_SUMMARY_FROM_PDF_PROMPT.format(lang_name=lang_name)
-                raw_response = await self.ai_provider.generate_with_pdf(
-                    prompt, pdf_bytes, model=self.model
+                # 新しく追加した generate_with_images を使用
+                raw_response = await self.ai_provider.generate_with_images(
+                    prompt, images, model=self.model
                 )
 
                 # Parse the response to extract sections
                 formatted_text = raw_response.strip()
 
                 logger.info(
-                    "Full summary generated from PDF",
-                    extra={"pdf_size": len(pdf_bytes), "output_length": len(formatted_text)},
+                    "Full summary generated from PDF images",
+                    extra={"image_count": len(images), "output_length": len(formatted_text)},
                 )
             else:
                 # 従来のテキストベース方式
