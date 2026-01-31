@@ -1,11 +1,12 @@
 import base64
 import io
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 # pdfplumber related imports for type hinting and functionality
 from pdfplumber.display import PageImage
 from pdfplumber.page import Page
 
+from src.logger import logger
 from src.providers.image_storage import save_page_image
 
 
@@ -22,6 +23,7 @@ class FigureService:
         file_hash: str,
         page_num: int,
         zoom: float = 1.0,
+        pdf_path: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
         Detect figures/tables/equations using pdfplumber coordinates and extract them.
@@ -40,26 +42,60 @@ class FigureService:
                 continue
             candidates.append({"bbox": bbox, "label": "figure"})
 
-        # 2. Tables from pdfplumber
-        # Scientific papers often have horizontal-only lines or text-aligned cells
-        strategies = [
-            {"vertical_strategy": "lines", "horizontal_strategy": "lines"},
-            {"vertical_strategy": "text", "horizontal_strategy": "lines"},
-        ]
-        for settings in strategies:
+        # 2. Tables from Camelot (if available) or pdfplumber
+        has_camelot_tables = False
+        if pdf_path:
             try:
-                tables = page.find_tables(table_settings=settings)
-                for table in tables:
-                    bbox = list(table.bbox)
-                    w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-                    if w > 40 and h > 20:
-                        candidates.append({"bbox": bbox, "label": "table"})
-            except Exception:
-                continue
+                import camelot
 
-        # 3. Vector Graphics (Clustering)
-        # Groups lines/curves into logical blocks (Equations/Plots)
-        visual_objs = page.rects + page.curves
+                # Try lattice first (tables with lines)
+                tables = camelot.read_pdf(pdf_path, pages=str(page_num), flavor="lattice")
+                # If no tables found, try stream (tables with whitespace)
+                if len(tables) == 0:
+                    tables = camelot.read_pdf(pdf_path, pages=str(page_num), flavor="stream")
+
+                if len(tables) > 0:
+                    has_camelot_tables = True
+                    for table in tables:
+                        x1, y1, x2, y2 = table._bbox
+                        # Camelot uses bottom-left origin, pdfplumber uses top-left origin
+                        bbox = [x1, page.height - y2, x2, page.height - y1]
+                        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                        if w > 40 and h > 20:
+                            candidates.append({"bbox": bbox, "label": "table"})
+            except Exception as e:
+                logger.warning(f"Camelot table extraction failed on page {page_num}: {e}")
+
+        if not has_camelot_tables:
+            # Fallback to pdfplumber table detection
+            strategies = [
+                {"vertical_strategy": "lines", "horizontal_strategy": "lines"},
+                {"vertical_strategy": "text", "horizontal_strategy": "lines"},
+            ]
+            for settings in strategies:
+                try:
+                    tables = page.find_tables(table_settings=settings)
+                    for table in tables:
+                        bbox = list(table.bbox)
+                        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                        if w > 40 and h > 20:
+                            candidates.append({"bbox": bbox, "label": "table"})
+                except Exception:
+                    continue
+
+        # 3. Equations and Vector Graphics (Clustering)
+        # Identify characters with mathematical fonts
+        math_chars = [
+            c
+            for c in page.chars
+            if any(
+                s in c.get("fontname", "").lower()
+                for s in ["math", "symbol", "cmsy", "msam", "it-"]
+            )
+        ]
+
+        # Groups lines, curves, and math chars into logical blocks (Equations/Plots)
+        visual_objs = page.rects + page.curves + math_chars
         if visual_objs:
             clusters = self._cluster_objects(visual_objs, threshold=25.0)
             for cluster_bbox in clusters:

@@ -1,6 +1,8 @@
 import base64
 import io
 import json
+import os
+import tempfile
 from typing import AsyncGenerator, Optional
 
 import pdfplumber
@@ -46,6 +48,11 @@ class PDFOCRService:
 
         logger.info(f"--- AI OCR Streaming: {filename} ---")
 
+        # Save PDF to temporary file for libraries that need a path (like Camelot)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(file_bytes)
+            tmp_path = tmp.name
+
         try:
             with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
                 total_pages = len(pdf.pages)
@@ -56,7 +63,7 @@ class PDFOCRService:
                     logger.debug(f"[OCR] Starting processing page {page_num + 1}/{total_pages}")
 
                     async for result in self._process_page_incremental(
-                        pdf.pages[page_num], page_num, total_pages, file_hash
+                        pdf.pages[page_num], page_num, total_pages, file_hash, pdf_path=tmp_path
                     ):
                         # result is (page_num+1, total_pages, page_text, is_last, file_hash, img_url, layout_data)
                         if result[2] is not None:  # Final result per page
@@ -72,6 +79,9 @@ class PDFOCRService:
         except Exception as e:
             logger.error(f"OCR streaming failed: {e}")
             yield (0, 0, f"ERROR_API_FAILED: {str(e)}", True, file_hash, None, None)
+        finally:
+            if "tmp_path" in locals() and os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
     async def _handle_cache(self, file_hash: str) -> Optional[list]:
         """Check if OCR is cached and return formatted pages if so."""
@@ -112,7 +122,9 @@ class PDFOCRService:
             )
         return pages
 
-    async def _process_page_incremental(self, page, page_idx, total_pages, file_hash):
+    async def _process_page_incremental(
+        self, page, page_idx, total_pages, file_hash, pdf_path: Optional[str] = None
+    ):
         """Process a single page: render image, OCR, detect layout/figures."""
         page_num = page_idx + 1
 
@@ -144,6 +156,7 @@ class PDFOCRService:
             file_hash,
             page_num,
             zoom=zoom,
+            pdf_path=pdf_path,
         )
 
         # 3. Extract Text (Filtered by figure regions)

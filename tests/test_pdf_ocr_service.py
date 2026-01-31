@@ -130,8 +130,8 @@ async def test_extract_text_streaming_cache_miss(ocr_service, mock_dependencies)
         async for page in ocr_service.extract_text_streaming(b"pdf_bytes", "test.pdf"):
             results.append(page)
 
-        assert len(results) == 1
-        page_num, total, text, is_last, hash, url, layout = results[0]
+        assert len(results) == 2  # One partial (image only), one full
+        page_num, total, text, is_last, hash, url, layout = results[1]  # Check the final result
 
         assert page_num == 1
         assert total == 1
@@ -186,5 +186,5 @@ async def test_extract_text_streaming_ocr_fallback(ocr_service, mock_dependencie
         async for page in ocr_service.extract_text_streaming(b"pdf_bytes", "test.pdf"):
             results.append(page)
 
-        assert len(results) == 1
-        assert results[0][2] == "Vision Text"
+        assert len(results) == 2  # One partial, one full
+        assert results[1][2] == "Vision Text"

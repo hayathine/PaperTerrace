@@ -35,6 +35,8 @@ dependencies = [
     "uuid6>=2025.0.1",
     "uvicorn>=0.40.0",
     "Pillow>=11.1.0",
+    "camelot-py[cv]>=1.0.9",
+    "opencv-python-headless>=4.13.0.90",
 ]
 
 
