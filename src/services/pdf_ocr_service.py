@@ -14,6 +14,7 @@ from src.utils import _get_file_hash
 from .pdf.abstract_service import AbstractService
 from .pdf.figure_service import FigureService
 from .pdf.language_service import LanguageService
+from .pdf.layout_analysis_service import LayoutAnalysisService
 
 
 class PDFOCRService:
@@ -22,6 +23,7 @@ class PDFOCRService:
         self.model = model
         self.figure_service = FigureService(self.ai_provider, self.model)
         self.language_service = LanguageService(self.ai_provider, self.model)
+        self.layout_analysis_service = LayoutAnalysisService()
 
     def extract_abstract_text(self, file_bytes: bytes) -> Optional[str]:
         """Extract abstract using specialized service."""
@@ -144,19 +146,32 @@ class PDFOCRService:
         logger.debug(f"[OCR] Page {page_num}: Image ready, yielding partial result")
         yield (page_num, total_pages, None, is_last, file_hash, image_url, None)
 
+        # 1.5 Layout Analysis (FAST with GPU/CPU)
+        layout_blocks = self.layout_analysis_service.analyze_layout(img_pil)
+
         # 2. Extract Text (SLOW)
         page_text, layout_data = await self._extract_native_or_vision_text(
             page, img_bytes, img_pil, zoom
         )
+        if not layout_data:
+            layout_data = {"width": img_pil.width, "height": img_pil.height, "words": []}
 
-        # 3. Figure extraction (SLOW)
+        # Add detected blocks to layout_data for frontend use
+        layout_data["blocks"] = layout_blocks
+
+        # 3. Figure extraction (SLOW) - passing layout_blocks to focus extraction
         figures = await self.figure_service.detect_and_extract_figures(
-            img_bytes, page_img, page, file_hash, page_num, pypdf_page=pypdf_page
+            img_bytes,
+            page_img,
+            page,
+            file_hash,
+            page_num,
+            pypdf_page=pypdf_page,
+            layout_blocks=layout_blocks,
+            zoom=zoom,
         )
         if figures:
             logger.info(f"[OCR] Page {page_num}: Detected {len(figures)} figures/images")
-            if not layout_data:
-                layout_data = {"width": img_pil.width, "height": img_pil.height, "words": []}
             if "figures" not in layout_data:
                 layout_data["figures"] = []
             layout_data["figures"].extend(figures)

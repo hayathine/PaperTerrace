@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { User, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged } from 'firebase/auth';
+import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import { User, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, getIdToken } from 'firebase/auth';
 import { auth, googleProvider, githubProvider } from '../lib/firebase';
 
 interface AuthContextType {
@@ -10,6 +10,7 @@ interface AuthContextType {
     loginAsGuest: () => void;
     logout: () => Promise<void>;
     token: string | null;
+    getToken: (forceRefresh?: boolean) => Promise<string | null>;
     isGuest: boolean;
 }
 
@@ -27,6 +28,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [token, setToken] = useState<string | null>(null);
     const [isGuest, setIsGuest] = useState(true);
 
+    const syncWithBackend = useCallback(async (idToken: string) => {
+        try {
+            const response = await fetch('/auth/register', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${idToken}`,
+                    'Content-Type': 'application/json'
+                }
+            });
+            if (!response.ok) {
+                console.warn("Backend sync returned status:", response.status);
+            }
+        } catch (error) {
+            console.error("Failed to sync user with backend:", error);
+        }
+    }, []);
+
+    const getToken = useCallback(async (forceRefresh = false): Promise<string | null> => {
+        if (!auth.currentUser) return null;
+        try {
+            const idToken = await getIdToken(auth.currentUser, forceRefresh);
+            setToken(idToken);
+            return idToken;
+        } catch (error) {
+            console.error("Error getting token:", error);
+            return null;
+        }
+    }, []);
+
     useEffect(() => {
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
@@ -34,37 +64,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     const idToken = await currentUser.getIdToken();
                     setToken(idToken);
                     setIsGuest(false);
-
-                    // Sync with backend - ensure user exists in DB
-                    // We don't block the UI update on this, but we log errors
-                    await fetch('/auth/register', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${idToken}`,
-                            'Content-Type': 'application/json'
-                        }
-                    });
+                    await syncWithBackend(idToken);
                 } catch (error) {
-                    console.error("Failed to sync user with backend:", error);
-                    // If backend sync fails, we might still want to let them be "logged in" on frontend 
-                    // or force logout. For now, we'll keep them logged in but log error.
+                    console.error("Error in auth state change:", error);
                 }
             } else {
                 setToken(null);
-                // Default to guest mode on logout
                 setIsGuest(true);
             }
             setUser(currentUser);
             setLoading(false);
         });
 
-        return () => unsubscribe();
-    }, []); // Run once
+        // Set up token refresh interval (every 50 minutes)
+        const refreshInterval = setInterval(() => {
+            if (auth.currentUser) {
+                getToken(true);
+            }
+        }, 50 * 60 * 1000);
+
+        return () => {
+            unsubscribe();
+            clearInterval(refreshInterval);
+        };
+    }, [syncWithBackend, getToken]);
 
     const signInWithGoogle = async () => {
         try {
             await signInWithPopup(auth, googleProvider);
-            setIsGuest(false);
         } catch (error) {
             console.error("Error signing in with Google", error);
             throw error;
@@ -74,7 +101,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const signInWithGithub = async () => {
         try {
             await signInWithPopup(auth, githubProvider);
-            setIsGuest(false);
         } catch (error) {
             console.error("Error signing in with Github", error);
             throw error;
@@ -98,7 +124,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, signInWithGoogle, signInWithGithub, loginAsGuest, logout, token, isGuest }}>
+        <AuthContext.Provider value={{ user, loading, signInWithGoogle, signInWithGithub, loginAsGuest, logout, token, getToken, isGuest }}>
             {!loading && children}
         </AuthContext.Provider>
     );

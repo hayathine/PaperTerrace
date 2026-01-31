@@ -1,6 +1,6 @@
 import base64
 import io
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 # pdfplumber related imports for type hinting and functionality
 from pdfplumber.display import PageImage
@@ -24,6 +24,8 @@ class FigureService:
         file_hash: str,
         page_num: int,
         pypdf_page: Any = None,
+        layout_blocks: Optional[List[Dict[str, Any]]] = None,
+        zoom: float = 1.0,
     ) -> List[Dict[str, Any]]:
         """
         Detect figures/tables and extract them as separate images.
@@ -125,7 +127,7 @@ class FigureService:
                     figures_data.append(
                         {
                             "image_url": table_url,
-                            "bbox": [p_xmin, p_ymin, p_xmax, p_ymax],
+                            "bbox": [p_xmin * zoom, p_ymin * zoom, p_xmax * zoom, p_ymax * zoom],
                             "explanation": "",
                             "page_num": page_num,
                             "label": "table",
@@ -133,5 +135,67 @@ class FigureService:
                     )
         except Exception as e:
             logger.warning(f"[FigureService] p.{page_num}: Table detection failed: {e}")
+
+        # 3. LayoutParser blocks extraction (High Quality)
+        if layout_blocks:
+            logger.debug(
+                f"[FigureService] p.{page_num}: Processing {len(layout_blocks)} layout blocks"
+            )
+            for i, block in enumerate(layout_blocks):
+                # Filter for useful types (Figure, Table, and potentially Equation)
+                # PubLayNet types: Text, Title, List, Table, Figure
+                if block["type"] not in ["Figure", "Table"]:
+                    continue
+
+                bbox_px = block["bbox"]  # [x1, y1, x2, y2] in pixels
+
+                # Convert to PDF points for cropping
+                p_xmin = bbox_px[0] / zoom
+                p_ymin = bbox_px[1] / zoom
+                p_xmax = bbox_px[2] / zoom
+                p_ymax = bbox_px[3] / zoom
+
+                # Check for duplicates or overlapping areas
+                is_overlap = False
+                for existing in figures_data:
+                    eb = existing["bbox"]
+                    if eb[0] == 0:
+                        continue  # Skip native images with no bbox
+
+                    # Convert eb back to center for check (eb is in pixels now)
+                    ecenter_x = (eb[0] + eb[2]) / 2
+                    ecenter_y = (eb[1] + eb[3]) / 2
+                    if bbox_px[0] < ecenter_x < bbox_px[2] and bbox_px[1] < ecenter_y < bbox_px[3]:
+                        is_overlap = True
+                        break
+
+                if is_overlap:
+                    continue
+
+                try:
+                    # Crop and save
+                    cropped_page = page.crop((p_xmin, p_ymin, p_xmax, p_ymax))
+                    crop_img_obj = cropped_page.to_image(resolution=300)
+                    crop_pil = crop_img_obj.original.convert("RGB")
+
+                    buffer = io.BytesIO()
+                    crop_pil.save(buffer, format="PNG")
+                    crop_bytes = buffer.getvalue()
+
+                    crop_b64 = base64.b64encode(crop_bytes).decode("utf-8")
+                    block_img_name = f"layout_{block['type'].lower()}_{page_num}_{i}"
+                    block_url = save_page_image(file_hash, block_img_name, crop_b64)
+
+                    figures_data.append(
+                        {
+                            "image_url": block_url,
+                            "bbox": [bbox_px[0], bbox_px[1], bbox_px[2], bbox_px[3]],
+                            "explanation": "",
+                            "page_num": page_num,
+                            "label": block["type"].lower(),
+                        }
+                    )
+                except Exception as e:
+                    logger.warning(f"[FigureService] p.{page_num}: Block extraction failed: {e}")
 
         return figures_data

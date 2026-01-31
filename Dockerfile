@@ -1,4 +1,4 @@
-# Production Dockerfile for PaperTerrace
+# --- Stage 1: Frontend Builder ---
 FROM node:18-slim AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
@@ -6,89 +6,63 @@ RUN npm ci
 COPY frontend ./
 RUN npm run build
 
+# --- Stage 2: Python Builder ---
 FROM python:3.12-slim AS builder
 
 WORKDIR /app
+ENV UV_COMPILE_BYTECODE=1 UV_LINK_MODE=copy
 
-# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    curl \
+    build-essential curl libgl1 libglib2.0-0 libxcb1 libx11-6 \
+    libxext6 libsm6 libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# Copy dependency files
 COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-install-project
 
-# Install ALL dependencies (including dev deps like torch/transformers for model conversion)
-RUN uv sync --frozen
-
-# Copy only necessary files for model conversion
-COPY src/__init__.py ./src/__init__.py
 COPY src/scripts/ ./src/scripts/
+COPY src/__init__.py ./src/__init__.py
 
-# Convert M2M100 model to CTranslate2 format during build
-# This layer is cached as long as the conversion script and dependencies don't change
-RUN mkdir -p models && PYTHONPATH=/app uv run python -m src.scripts.convert_m2m100
+# 修正: AutoLayoutModel ではなく PaddleDetectionLayoutModel を直接使用してモデルをDL
+# ダウンロード先を確実にするため HOME を指定し、後で production へコピー可能にする
+RUN mkdir -p models && \
+    PYTHONPATH=/app uv run python -c "import layoutparser as lp; model = lp.PaddleDetectionLayoutModel('lp://PubLayNet/ppyolov2_r50vd_dcn_365e_publaynet/config'); print('Model loaded successfully')" && \
+    PYTHONPATH=/app uv run python -m src.scripts.convert_m2m100
 
-# Copy the rest of application code (this will change frequently)
-COPY src/ ./src/
-
-# Create a minimal runtime environment WITHOUT dev dependencies (no torch/transformers)
+# --- Stage 3: Runtime Builder ---
 FROM python:3.12-slim AS runtime-builder
-
 WORKDIR /app
-
-# Install build dependencies for some packages
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
-
-# Copy dependency files
 COPY pyproject.toml uv.lock ./
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev --frozen --no-install-project
 
-# Install runtime dependencies only (no torch/transformers)
-RUN uv sync --no-dev --frozen
-
-# Production stage
+# --- Stage 4: Production Stage ---
 FROM python:3.12-slim AS production
-
 WORKDIR /app
 
-# Install runtime dependencies only
+# libxext6 libsm6 libxrender1 を追加 (OpenCV/Paddle用)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 \
+    libpq5 curl libgl1 libglib2.0-0 libxcb1 libx11-6 \
+    libxext6 libsm6 libxrender1 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy virtual environment from runtime-builder (without torch/transformers)
 COPY --from=runtime-builder /app/.venv /app/.venv
-COPY --from=builder /usr/local/bin/uv /usr/local/bin/uv
-
-# Copy initialized models
 COPY --from=builder /app/models ./models
-
-# Copy application code
+# builder 側でダウンロードされた LayoutParser のモデルをコピー
+COPY --from=builder /root/.layoutparser /root/.layoutparser
+COPY --from=frontend-builder /app/frontend/dist ./src/static/dist
 COPY src/ ./src/
 
-# Copy frontend build artifacts
-COPY --from=frontend-builder /app/frontend/dist ./src/static/dist
+ENV PATH="/app/.venv/bin:$PATH" \
+    PYTHONPATH="/app" \
+    PYTHONUNBUFFERED=1
 
-# Set environment variables
-ENV PATH="/app/.venv/bin:$PATH"
-ENV PYTHONPATH="/app"
-ENV PYTHONUNBUFFERED=1
-
-# Expose port
 EXPOSE 8000
-
-# Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:8000/api/health || exit 1
 
-# Run application
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]

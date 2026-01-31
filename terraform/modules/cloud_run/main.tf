@@ -7,8 +7,6 @@ resource "google_cloud_run_v2_service" "main" {
 
   template {
     service_account = var.service_account_email
-    startup_cpu_boost = true
-
     containers {
       image = var.image_url
 
@@ -116,6 +114,7 @@ resource "google_cloud_run_v2_service" "main" {
 
     annotations = {
       "run.googleapis.com/cloudsql-instances" = var.cloud_sql_connection
+      "run.googleapis.com/startup-cpu-boost" = "true"
     }
   }
 

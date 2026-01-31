@@ -4,6 +4,13 @@ import StampOverlay from '../Stamps/StampOverlay';
 import BoxOverlay from './BoxOverlay';
 import { Stamp } from '../Stamps/types';
 
+const FIG_TYPE_LABEL: Record<string, string> = {
+    'table': '表',
+    'figure': '図',
+    'equation': '数式',
+    'image': '画像'
+};
+
 interface PDFPageProps {
     page: PageData;
     scale?: number;
@@ -279,17 +286,19 @@ const PDFPage: React.FC<PDFPageProps> = ({
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     if (onAskAI) {
-                                        const type = fig.label === 'equation' ? '数式' : '図表';
-                                        onAskAI(`${type}の解説をお願いします。`);
+                                        const typeName = FIG_TYPE_LABEL[fig.label?.toLowerCase() || ''] || '図表';
+                                        onAskAI(`${typeName}の解説をお願いします。`);
                                     }
                                 }}
                                 title={`${fig.label || 'figure'} click to explain`}
                             >
-                                <div className="hidden group-hover:flex items-center gap-1.5 bg-indigo-600 text-white text-[10px] px-2.5 py-1.5 rounded-lg shadow-xl font-bold transform -translate-y-2 opacity-0 group-hover:opacity-100 group-hover:translate-y-0 transition-all duration-200">
-                                    <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                    </svg>
-                                    AIで解説
+                                <div className="hidden group-hover:flex items-center gap-2 bg-slate-900/90 backdrop-blur-md text-white text-[10px] px-3 py-2 rounded-xl shadow-2xl font-bold border border-white/20 transform scale-90 group-hover:scale-100 transition-all duration-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                                    <div className="w-5 h-5 bg-indigo-500 rounded-lg flex items-center justify-center">
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
+                                        </svg>
+                                    </div>
+                                    <span>AIで{FIG_TYPE_LABEL[fig.label?.toLowerCase() || ''] || '図表'}を解説</span>
                                 </div>
                             </div>
                         );
