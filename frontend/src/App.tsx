@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import Sidebar from './components/Sidebar/Sidebar'
 import PDFViewer from './components/PDF/PDFViewer'
 import { useAuth } from './contexts/AuthContext'
@@ -6,7 +6,6 @@ import Login from './components/Auth/Login'
 
 function App() {
     const { user, logout } = useAuth()
-    const [config, setConfig] = useState<any>(null)
     const [uploadFile, setUploadFile] = useState<File | null>(null)
 
     // Sidebar State
@@ -35,6 +34,7 @@ function App() {
         const saved = localStorage.getItem('paper_terrace_stack');
         return saved ? JSON.parse(saved) : [];
     })
+    const [uploadedPapers, setUploadedPapers] = useState<any[]>([])
 
     const prevPaperIdRef = useRef<string | null>(null);
 
@@ -48,9 +48,10 @@ function App() {
     useEffect(() => {
         if (user) {
             setShowLoginModal(false)
-            fetch('/api/config')
+            
+            fetch('/api/papers')
                 .then(res => res.json())
-                .then(data => setConfig(data))
+                .then(data => setUploadedPapers(data.papers || []))
                 .catch(err => console.error(err))
         }
     }, [user])
@@ -126,7 +127,22 @@ function App() {
     }, [isResizing]);
 
     const handlePaperLoaded = (paperId: string | null) => {
-        setCurrentPaperId(paperId);
+        if (paperId) {
+            setCurrentPaperId(paperId);
+            setUploadFile(null); // Clear the raw file after it's processed
+        }
+        // Refresh paper list if a new paper was loaded
+        if (paperId && !uploadedPapers.some(p => p.paper_id === paperId)) {
+            fetch('/api/papers')
+                .then(res => res.json())
+                .then(data => setUploadedPapers(data.papers || []))
+                .catch(err => console.error(err))
+        }
+    }
+    
+    const handlePaperSelect = (paper: any) => {
+        setUploadFile(null);
+        setCurrentPaperId(paper.paper_id);
     }
     
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -196,9 +212,9 @@ function App() {
     }
 
 
-    const handleAnalysisStatusChange = (status: string) => {
+    const handleAnalysisStatusChange = useCallback((status: string) => {
         setIsAnalyzing(status === 'uploading' || status === 'processing');
-    }
+    }, []);
 
 
 
@@ -232,10 +248,59 @@ function App() {
             {/* Sidebar Placeholder */}
             <div className={`bg-gray-900 text-white transition-all duration-300 ease-in-out hidden md:flex flex-col shrink-0 ${isLeftSidebarOpen ? 'w-64 opacity-100' : 'w-0 opacity-0 overflow-hidden'}`}>
                 <div className="w-64 p-4 flex flex-col h-full">
-                    <h1 className="text-xl font-bold mb-8">PaperTerrace</h1>
-                <div className="flex-1">
-                    <p className="text-gray-400 text-sm">Validating React Migration...</p>
-                    {config && <p className="text-green-400 text-xs mt-2">● API Connected</p>}
+                    <div className="flex items-center gap-3 mb-8">
+                        <button
+                            onClick={() => setIsLeftSidebarOpen(false)}
+                            className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
+                            title="メニューを閉じる"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
+                            </svg>
+                        </button>
+                        <h1 className="text-xl font-bold">PaperTerrace</h1>
+                    </div>
+                <div className="flex-1 overflow-y-auto px-2 mt-4 custom-scrollbar">
+                    <p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-4 px-2">Paper Library</p>
+                    
+                    <div className="space-y-1">
+                        {uploadedPapers.length === 0 ? (
+                            <div className="px-2 py-4 text-xs text-gray-500 italic">
+                                No papers uploaded yet
+                            </div>
+                        ) : (
+                            uploadedPapers.map((paper) => (
+                                <button
+                                    key={paper.paper_id}
+                                    onClick={() => handlePaperSelect(paper)}
+                                    className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-200 group relative ${
+                                        currentPaperId === paper.paper_id
+                                        ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-900/20'
+                                        : 'text-gray-400 hover:bg-gray-800 hover:text-gray-200'
+                                    }`}
+                                >
+                                    <div className="flex items-start gap-3">
+                                        <div className={`mt-0.5 shrink-0 w-1.5 h-1.5 rounded-full ${
+                                            currentPaperId === paper.paper_id ? 'bg-indigo-300' : 'bg-gray-700 group-hover:bg-gray-500'
+                                        }`} />
+                                        <div className="overflow-hidden">
+                                            <p className={`text-sm font-medium leading-tight truncate ${
+                                                currentPaperId === paper.paper_id ? 'text-white' : 'text-gray-300'
+                                            }`}>
+                                                {paper.title || paper.filename}
+                                            </p>
+                                            <p className="text-[10px] opacity-50 mt-1 uppercase tracking-wider">
+                                                {new Date(paper.created_at).toLocaleDateString()}
+                                            </p>
+                                        </div>
+                                    </div>
+                                    {currentPaperId === paper.paper_id && (
+                                        <div className="absolute left-0 top-2 bottom-2 w-1 bg-white rounded-r-full" />
+                                    )}
+                                </button>
+                            ))
+                        )}
+                    </div>
                 </div>
 
                 <div className="mt-auto mb-4">
@@ -321,25 +386,17 @@ function App() {
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col h-full relative transition-all duration-300">
                 <header className="h-12 bg-white border-b border-slate-200 flex items-center px-4">
-                    <button
-                        onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)}
-                        className={`mr-4 p-2 rounded-md transition-all duration-200 flex items-center justify-center border ${
-                            isLeftSidebarOpen 
-                            ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100' 
-                            : 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700'
-                        }`}
-                        title={isLeftSidebarOpen ? "メニューを閉じる" : "メニューを開く"}
-                    >
-                        {isLeftSidebarOpen ? (
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
-                            </svg>
-                        ) : (
+                    {!isLeftSidebarOpen && (
+                        <button
+                            onClick={() => setIsLeftSidebarOpen(true)}
+                            className="mr-4 p-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 transition-all duration-200 flex items-center justify-center shadow-sm"
+                            title="メニューを開く"
+                        >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16" />
                             </svg>
-                        )}
-                    </button>
+                        </button>
+                    )}
                     <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Reading Mode</span>
                     <div className="flex-1" />
                     {uploadFile && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{uploadFile.name}</span>}
@@ -348,11 +405,12 @@ function App() {
                 <div className="flex-1 flex overflow-hidden">
                     {/* PDF Viewer Area */}
                     <div className="flex-1 bg-slate-100 flex items-start justify-center relative overflow-hidden">
-                        {uploadFile ? (
+                        {(uploadFile || currentPaperId) ? (
                             <div className="w-full h-full p-4 md:p-8 overflow-y-auto custom-scrollbar">
                                 <PDFViewer
                                     sessionId={sessionId}
                                     uploadFile={uploadFile}
+                                    paperId={currentPaperId}
                                     onWordClick={handleWordClick}
                                     onTextSelect={handleTextSelect}
                                     onAreaSelect={handleAreaSelect}

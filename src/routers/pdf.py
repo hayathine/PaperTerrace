@@ -228,6 +228,50 @@ async def analyze_pdf_json(
     return JSONResponse({"task_id": task_id, "stream_url": f"/stream/{task_id}"})
 
 
+@router.post("/analyze-paper/{paper_id}")
+async def analyze_paper(
+    paper_id: str,
+    session_id: Optional[str] = Form(None),
+    user: OptionalUser = None,
+):
+    """
+    Start streaming for an already uploaded/processed paper.
+    """
+    paper = storage.get_paper(paper_id)
+    if not paper:
+        return JSONResponse({"error": "Paper not found"}, status_code=404)
+
+    file_hash = paper.get("file_hash")
+    if not file_hash:
+        return JSONResponse({"error": "Paper record is corrupt (missing hash)"}, status_code=400)
+
+    task_id = str(uuid.uuid4())
+    task_data = {
+        "format": "json",
+        "lang": paper.get("target_language", "ja"),
+        "session_id": session_id,
+        "filename": paper.get("filename", "unknown.pdf"),
+        "file_hash": file_hash,
+        "paper_id": paper_id,
+        "user_id": user.uid if user else None,
+    }
+
+    # If we already have HTML content or OCR text, we can skip reprocessing
+    if paper.get("html_content"):
+        task_data["text"] = "CACHED_HTML:" + paper["html_content"]
+    elif paper.get("ocr_text"):
+        task_data["text"] = paper["ocr_text"]
+    else:
+        # This shouldn't happen if it was saved correctly, but as a fallback
+        return JSONResponse(
+            {"error": "Paper content is missing, please re-upload"}, status_code=400
+        )
+
+    redis_service.set(f"task:{task_id}", task_data, expire=3600)
+
+    return JSONResponse({"task_id": task_id, "stream_url": f"/stream/{task_id}"})
+
+
 async def process_figure_auto_analysis(
     figure_id: str, image_url: str, label: str = "figure", target_lang: str = "ja"
 ):
@@ -310,10 +354,12 @@ async def stream(task_id: str):
 
                 # Extract raw abstract using pdfplumber logic
                 raw_abstract = service.ocr_service.extract_abstract_text(pdf_content)
+                logger.info(f"[stream] {task_id}: Starting OCR extraction for {filename}")
 
                 # Collect figures to save later
                 collected_figures = []
 
+                page_count = 0
                 async for (
                     page_num,
                     total_pages,
@@ -325,6 +371,7 @@ async def stream(task_id: str):
                 ) in service.ocr_service.extract_text_streaming(
                     pdf_content, filename, user_plan=user_plan
                 ):
+                    page_count += 1
                     if page_text and page_text.startswith("ERROR_API_FAILED:"):
                         error_msg = page_text.replace("ERROR_API_FAILED: ", "")
                         yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
@@ -364,6 +411,7 @@ async def stream(task_id: str):
                     await asyncio.sleep(0.01)
 
                 # End of OCR
+                logger.info(f"[stream] {task_id}: OCR complete. Pages processed: {page_count}")
                 full_text = "\n\n---\n\n".join(full_text_fragments)
                 new_paper_id = str(uuid6.uuid7())
 
@@ -452,8 +500,12 @@ async def stream(task_id: str):
                         pages_text = paper_data["ocr_text"].split("\n\n---\n\n")
 
                 f_hash = data.get("file_hash")
+                logger.info(
+                    f"[stream] {task_id}: Cache path for paper_id={paper_id}, f_hash={f_hash}"
+                )
                 if f_hash:
                     cached_images = get_page_images(f_hash)
+                    logger.info(f"[stream] {task_id}: Found {len(cached_images)} cached images")
                     for i, img_url in enumerate(cached_images):
                         page_payload = {
                             "page_num": i + 1,
@@ -488,6 +540,7 @@ async def stream(task_id: str):
                 yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': paper_id, 'cached': True})}\n\n"
                 await asyncio.sleep(0.01)
 
+            logger.info(f"[stream] {task_id}: json_generate finished")
             redis_service.delete(f"task:{task_id}")
 
         return StreamingResponse(json_generate(), media_type="text/event-stream")

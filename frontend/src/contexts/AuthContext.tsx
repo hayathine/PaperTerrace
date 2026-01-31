@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
-import { User, signInWithPopup, signOut as firebaseSignOut, onAuthStateChanged, getIdToken } from 'firebase/auth';
+import { User, signInWithPopup, signInWithRedirect, getRedirectResult, signOut as firebaseSignOut, onAuthStateChanged, getIdToken } from 'firebase/auth';
 import { auth, googleProvider, githubProvider } from '../lib/firebase';
 
 interface AuthContextType {
@@ -7,6 +7,8 @@ interface AuthContextType {
     loading: boolean;
     signInWithGoogle: () => Promise<void>;
     signInWithGithub: () => Promise<void>;
+    signInWithGoogleRedirect: () => Promise<void>;
+    signInWithGithubRedirect: () => Promise<void>;
     loginAsGuest: () => void;
     logout: () => Promise<void>;
     token: string | null;
@@ -58,6 +60,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }, []);
 
     useEffect(() => {
+        // Handle redirect results
+        getRedirectResult(auth).then((result) => {
+            if (result?.user) {
+                console.log("Logged in via redirect:", result.user.email);
+            }
+        }).catch((error) => {
+            console.error("Error handling redirect result:", error);
+        });
+
         const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
             if (currentUser) {
                 try {
@@ -98,11 +109,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
     };
 
+    const signInWithGoogleRedirect = async () => {
+        try {
+            await signInWithRedirect(auth, googleProvider);
+        } catch (error) {
+            console.error("Error signing in with Google Redirect", error);
+            throw error;
+        }
+    };
+
     const signInWithGithub = async () => {
         try {
             await signInWithPopup(auth, githubProvider);
         } catch (error) {
             console.error("Error signing in with Github", error);
+            throw error;
+        }
+    };
+
+    const signInWithGithubRedirect = async () => {
+        try {
+            await signInWithRedirect(auth, githubProvider);
+        } catch (error) {
+            console.error("Error signing in with Github Redirect", error);
             throw error;
         }
     };
@@ -124,7 +153,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     return (
-        <AuthContext.Provider value={{ user, loading, signInWithGoogle, signInWithGithub, loginAsGuest, logout, token, getToken, isGuest }}>
+        <AuthContext.Provider value={{ 
+            user, loading, signInWithGoogle, signInWithGithub, 
+            signInWithGoogleRedirect, signInWithGithubRedirect,
+            loginAsGuest, logout, token, getToken, isGuest 
+        }}>
             {!loading && children}
         </AuthContext.Provider>
     );

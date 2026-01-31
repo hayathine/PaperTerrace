@@ -1,6 +1,11 @@
 import base64
 import io
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence
+
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling_core.types.doc import DocItemLabel
 
 # pdfplumber related imports for type hinting and functionality
 from pdfplumber.display import PageImage
@@ -15,6 +20,19 @@ class FigureService:
         self.ai_provider = ai_provider
         self.model = model
 
+        # Initialize Docling Converter
+        pipeline_options = PdfPipelineOptions()
+        pipeline_options.do_ocr = False
+        pipeline_options.do_table_structure = True
+
+        self.doc_converter = DocumentConverter(
+            allowed_formats=[InputFormat.PDF],
+            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)},
+        )
+        # Cache for converted documents: {file_hash: DoclingDocument}
+        self._doc_cache: Dict[str, Any] = {}
+        self._cache_order: List[str] = []
+
     async def detect_and_extract_figures(
         self,
         img_bytes: bytes,
@@ -26,103 +44,39 @@ class FigureService:
         pdf_path: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Detect figures/tables/equations using pdfplumber coordinates and extract them.
+        Detect figures/tables/equations using Docling and pdfplumber coordinates.
         """
         candidates = []
-        page_area = page.width * page.height
+        page_height = page.height
 
-        # 1. Native Images from pdfplumber
+        # 1. Use Docling for structured items (Tables, Formulas, Pictures)
+        if pdf_path:
+            await self._add_docling_candidates(
+                pdf_path, file_hash, page_num, page_height, candidates
+            )
+
+        # 2. Add native pdfplumber images if not already covered by Docling
         for img in page.images:
             bbox = [img["x0"], img["top"], img["x1"], img["bottom"]]
-            w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-            # Ignore small icons and full-page backgrounds (scans)
-            if w < 20 or h < 20:
-                continue
-            if (w * h) > page_area * 0.85:
-                continue
-            candidates.append({"bbox": bbox, "label": "figure"})
-
-        # 2. Tables from Camelot (if available) or pdfplumber
-        has_camelot_tables = False
-        if pdf_path:
-            try:
-                import camelot
-
-                # Try lattice first (tables with lines)
-                tables = camelot.read_pdf(pdf_path, pages=str(page_num), flavor="lattice")
-                # If no tables found, try stream (tables with whitespace)
-                if len(tables) == 0:
-                    tables = camelot.read_pdf(pdf_path, pages=str(page_num), flavor="stream")
-
-                if len(tables) > 0:
-                    has_camelot_tables = True
-                    for table in tables:
-                        x1, y1, x2, y2 = table._bbox
-                        # Camelot uses bottom-left origin, pdfplumber uses top-left origin
-                        bbox = [x1, page.height - y2, x2, page.height - y1]
-                        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-                        if w > 40 and h > 20:
-                            candidates.append({"bbox": bbox, "label": "table"})
-            except Exception as e:
-                logger.warning(f"Camelot table extraction failed on page {page_num}: {e}")
-
-        if not has_camelot_tables:
-            # Fallback to pdfplumber table detection
-            strategies = [
-                {"vertical_strategy": "lines", "horizontal_strategy": "lines"},
-                {"vertical_strategy": "text", "horizontal_strategy": "lines"},
-            ]
-            for settings in strategies:
-                try:
-                    tables = page.find_tables(table_settings=settings)
-                    for table in tables:
-                        bbox = list(table.bbox)
-                        w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
-                        if w > 40 and h > 20:
-                            candidates.append({"bbox": bbox, "label": "table"})
-                except Exception:
-                    continue
-
-        # 3. Equations and Vector Graphics (Clustering)
-        # Identify characters with mathematical fonts
-        math_chars = [
-            c
-            for c in page.chars
-            if any(
-                s in c.get("fontname", "").lower()
-                for s in ["math", "symbol", "cmsy", "msam", "it-"]
-            )
-        ]
-
-        # Groups lines, curves, and math chars into logical blocks (Equations/Plots)
-        visual_objs = page.rects + page.curves + math_chars
-        if visual_objs:
-            clusters = self._cluster_objects(visual_objs, threshold=25.0)
-            for cluster_bbox in clusters:
-                w, h = cluster_bbox[2] - cluster_bbox[0], cluster_bbox[3] - cluster_bbox[1]
-                if w < 30 or h < 10:
-                    continue
-                if (w * h) > page_area * 0.8:
-                    continue
-                label = "equation" if h < 60 and w > 100 else "figure"
-                candidates.append({"bbox": cluster_bbox, "label": label})
+            if self._is_new_candidate(bbox, candidates):
+                w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
+                if 20 < w < page.width * 0.9 and 20 < h < page.height * 0.9:
+                    candidates.append({"bbox": bbox, "label": "figure"})
 
         if not candidates:
             return []
 
-        # 4. Merge and Deduplicate
-        # Sort by area descending to handle containment
+        # 3. Process candidates, Extract and Save images
+        final_areas = []
+        # Sort candidates to process larger ones first (handle containment)
         candidates.sort(
             key=lambda x: (x["bbox"][2] - x["bbox"][0]) * (x["bbox"][3] - x["bbox"][1]),
             reverse=True,
         )
-        final_areas = []
 
         for cand in candidates:
             bbox = cand["bbox"]
             margin = 5
-            # Apply margin in PDF points
-            # Ensure c_bbox is a tuple for page.crop()
             c_bbox = (
                 max(0, bbox[0] - margin),
                 max(0, bbox[1] - margin),
@@ -130,30 +84,13 @@ class FigureService:
                 min(page.height, bbox[3] + margin),
             )
 
-            # Skip if this area is largely covered by a larger area already accepted
-            is_redundant = False
-            for accepted in final_areas:
-                a_bbox = accepted["bbox_pt"]
-                # Intersection
-                ix0 = max(c_bbox[0], a_bbox[0])
-                iy0 = max(c_bbox[1], a_bbox[1])
-                ix1 = min(c_bbox[2], a_bbox[2])
-                iy1 = min(c_bbox[3], a_bbox[3])
-
-                if ix1 > ix0 and iy1 > iy0:
-                    inter_area = (ix1 - ix0) * (iy1 - iy0)
-                    cand_area = (c_bbox[2] - c_bbox[0]) * (c_bbox[3] - c_bbox[1])
-                    if inter_area / cand_area > 0.8:
-                        is_redundant = True
-                        break
-
-            if is_redundant:
+            if not self._is_new_candidate(
+                list(c_bbox), final_areas, key="bbox_pt", iou_threshold=0.8
+            ):
                 continue
 
             try:
-                # Save crop
                 cropped = page.crop(c_bbox)
-                # Use high resolution for extraction
                 crop_img = cropped.to_image(resolution=300)
                 crop_pil = crop_img.original.convert("RGB")
 
@@ -167,18 +104,96 @@ class FigureService:
                 final_areas.append(
                     {
                         "image_url": url,
-                        "bbox": [b * zoom for b in c_bbox],  # Convert to zoom pixels
-                        "bbox_pt": c_bbox,  # Keep PDF points for redundancy check
+                        "bbox": [b * zoom for b in c_bbox],
+                        "bbox_pt": list(c_bbox),
                         "explanation": "",
                         "page_num": page_num,
                         "label": cand["label"],
                     }
                 )
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Extraction failed for {cand['label']} on p.{page_num}: {e}")
                 continue
 
-        # Clean output
         return [{k: v for k, v in f.items() if k != "bbox_pt"} for f in final_areas]
+
+    async def _add_docling_candidates(
+        self,
+        pdf_path: str,
+        file_hash: str,
+        page_num: int,
+        page_height: float,
+        candidates: List[Dict],
+    ):
+        """Runs Docling (cached) and extracts candidates for the given page."""
+        try:
+            if file_hash not in self._doc_cache:
+                logger.info(f"[FigureService] Converting PDF with Docling: {file_hash}")
+                result = self.doc_converter.convert(pdf_path)
+
+                # Manage cache size (Limit to 5 recent documents)
+                if len(self._cache_order) >= 5:
+                    old_hash = self._cache_order.pop(0)
+                    self._doc_cache.pop(old_hash, None)
+
+                self._doc_cache[file_hash] = result.document
+                self._cache_order.append(file_hash)
+
+            doc = self._doc_cache[file_hash]
+
+            for item, level in doc.iterate_items():
+                if not hasattr(item, "prov") or not item.prov:
+                    continue
+
+                for p in item.prov:
+                    if p.page_no == page_num:
+                        # Convert bbox to top-left origin
+                        # Docling v2 BoundingBox has to_top_left_origin(page_height)
+                        tl_bbox = p.bbox.to_top_left_origin(page_height)
+                        bbox = [tl_bbox.l, tl_bbox.t, tl_bbox.r, tl_bbox.b]
+
+                        label_val = (
+                            item.label.value if hasattr(item.label, "value") else str(item.label)
+                        )
+
+                        if label_val in [
+                            DocItemLabel.TABLE,
+                            DocItemLabel.FORMULA,
+                            DocItemLabel.PICTURE,
+                            DocItemLabel.CHART,
+                        ]:
+                            our_label = "figure"
+                            if label_val == DocItemLabel.TABLE:
+                                our_label = "table"
+                            elif label_val == DocItemLabel.FORMULA:
+                                our_label = "equation"
+
+                            candidates.append({"bbox": bbox, "label": our_label})
+
+        except Exception as e:
+            logger.error(f"[FigureService] Docling candidate extraction failed: {e}")
+
+    def _is_new_candidate(
+        self,
+        bbox: Sequence[float],
+        existing: List[Dict],
+        key: str = "bbox",
+        iou_threshold: float = 0.8,
+    ) -> bool:
+        """Checks if a bbox is significantly new comparing to existing candidates."""
+        for other in existing:
+            o_bbox = other[key]
+            ix0 = max(bbox[0], o_bbox[0])
+            iy0 = max(bbox[1], o_bbox[1])
+            ix1 = min(bbox[2], o_bbox[2])
+            iy1 = min(bbox[3], o_bbox[3])
+
+            if ix1 > ix0 and iy1 > iy0:
+                inter_area = (ix1 - ix0) * (iy1 - iy0)
+                cand_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
+                if inter_area / cand_area > iou_threshold:
+                    return False
+        return True
 
     def _cluster_objects(self, objs: List[Dict], threshold: float = 10.0) -> List[List[float]]:
         """Simple clustering of objects based on proximity of their bboxes."""
@@ -186,19 +201,17 @@ class FigureService:
             return []
 
         bboxes = [(o["x0"], o["top"], o["x1"], o["bottom"]) for o in objs]
-        clusters = []
+        clusters: List[List[float]] = []
 
         for bbox in bboxes:
             merged = False
             for i, cluster in enumerate(clusters):
-                # Check if bbox is "close" to cluster (expand cluster by threshold)
                 if not (
                     bbox[0] > cluster[2] + threshold
                     or bbox[2] < cluster[0] - threshold
                     or bbox[1] > cluster[3] + threshold
                     or bbox[3] < cluster[1] - threshold
                 ):
-                    # Merge
                     clusters[i] = [
                         min(cluster[0], bbox[0]),
                         min(cluster[1], bbox[1]),
@@ -210,8 +223,7 @@ class FigureService:
             if not merged:
                 clusters.append(list(bbox))
 
-        # Second pass to merge overlapping clusters
-        final_clusters = []
+        final_clusters: List[List[float]] = []
         for cluster in clusters:
             merged = False
             for i, f_cluster in enumerate(final_clusters):

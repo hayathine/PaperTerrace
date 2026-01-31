@@ -353,7 +353,7 @@ class CloudSQLStorage(StorageInterface):
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
-                    """SELECT paper_id, filename, target_language, owner_id, visibility, created_at 
+                    """SELECT paper_id, filename, title, target_language, owner_id, visibility, created_at 
                        FROM papers ORDER BY created_at DESC LIMIT %s""",
                     (limit,),
                 )

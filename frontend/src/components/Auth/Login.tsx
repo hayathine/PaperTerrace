@@ -2,22 +2,26 @@ import React, { useState } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 
 const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
-    const { signInWithGoogle, signInWithGithub } = useAuth();
+    const { signInWithGoogle, signInWithGithub, signInWithGoogleRedirect, signInWithGithubRedirect } = useAuth();
     const [loading, setLoading] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
 
-    const handleSignIn = async (provider: 'google' | 'github') => {
+    const handleSignIn = async (provider: 'google' | 'github', method: 'popup' | 'redirect' = 'popup') => {
         setLoading(provider);
         setError(null);
         try {
             if (provider === 'google') {
-                await signInWithGoogle();
+                if (method === 'popup') await signInWithGoogle();
+                else await signInWithGoogleRedirect();
             } else {
-                await signInWithGithub();
+                if (method === 'popup') await signInWithGithub();
+                else await signInWithGithubRedirect();
             }
         } catch (err: any) {
-            console.error(`Error signing in with ${provider}:`, err);
-            setError(`${provider}でのログインに失敗しました。もう一度お試しください。`);
+            console.error(`Error signing in with ${provider} (${method}):`, err);
+            const errorCode = err.code || 'unknown';
+            const errorMessage = err.message || 'Error occurred';
+            setError(`${provider}でのログインに失敗しました。 (${errorCode}: ${errorMessage})`);
         } finally {
             setLoading(null);
         }
@@ -51,35 +55,40 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
                 )}
 
                 <div className="space-y-4">
-                    <button
-                        onClick={() => handleSignIn('google')}
-                        disabled={!!loading}
-                        className="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-semibold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                        {loading === 'google' ? (
-                            <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                        ) : (
-                            "Googleでログイン"
-                        )}
-                    </button>
+                    <div className="flex flex-col gap-2">
+                        <button
+                            onClick={() => handleSignIn('google', 'popup')}
+                            disabled={!!loading}
+                            className="group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-semibold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none transition-all disabled:opacity-70"
+                        >
+                            {loading === 'google' ? "..." : "Googleでログイン"}
+                        </button>
+                        <button
+                            onClick={() => handleSignIn('github', 'popup')}
+                            disabled={!!loading}
+                            className="group relative w-full flex justify-center py-2.5 px-4 border border-gray-300 text-sm font-semibold rounded-xl text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-all disabled:opacity-70"
+                        >
+                            {loading === 'github' ? "..." : "GitHubでログイン"}
+                        </button>
+                    </div>
 
-                    <button
-                        onClick={() => handleSignIn('github')}
-                        disabled={!!loading}
-                        className="group relative w-full flex justify-center py-3 px-4 border border-gray-300 text-sm font-semibold rounded-xl text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] disabled:opacity-70 disabled:cursor-not-allowed"
-                    >
-                        {loading === 'github' ? (
-                            <svg className="animate-spin h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                            </svg>
-                        ) : (
-                            "GitHubでログイン"
-                        )}
-                    </button>
+                    <div className="pt-2">
+                        <p className="text-[10px] text-gray-400 text-center mb-2">ポップアップが動かない場合はこちら:</p>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => handleSignIn('google', 'redirect')}
+                                className="flex-1 py-1.5 px-2 border border-black/10 rounded-lg text-[10px] text-gray-500 hover:bg-gray-50 transition-colors"
+                            >
+                                Google (Redirect)
+                            </button>
+                            <button
+                                onClick={() => handleSignIn('github', 'redirect')}
+                                className="flex-1 py-1.5 px-2 border border-black/10 rounded-lg text-[10px] text-gray-500 hover:bg-gray-50 transition-colors"
+                            >
+                                GitHub (Redirect)
+                            </button>
+                        </div>
+                    </div>
 
                     <div className="relative py-4">
                         <div className="absolute inset-0 flex items-center">

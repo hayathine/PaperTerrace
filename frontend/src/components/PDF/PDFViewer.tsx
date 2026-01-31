@@ -14,21 +14,23 @@ interface PDFViewerProps {
     sessionId?: string;
     onWordClick?: (word: string, context?: string, coords?: { page: number, x: number, y: number }) => void;
     onTextSelect?: (text: string, coords: { page: number, x: number, y: number }) => void;
-    onAreaSelect?: (imageUrl: string, coords: { page: number, x: number, y: number }) => void; // New prop
+    onAreaSelect?: (imageUrl: string, coords: { page: number, x: number, y: number }) => void;
     jumpTarget?: { page: number, x: number, y: number, term?: string } | null;
     onStatusChange?: (status: 'idle' | 'uploading' | 'processing' | 'done' | 'error') => void;
     onPaperLoaded?: (paperId: string | null) => void;
     onAskAI?: (prompt: string) => void;
+    paperId?: string | null;
 }
 
-const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSelect, onAreaSelect, sessionId, jumpTarget, onStatusChange, onPaperLoaded, onAskAI }) => {
+const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, paperId: propPaperId, onWordClick, onTextSelect, onAreaSelect, sessionId, jumpTarget, onStatusChange, onPaperLoaded, onAskAI }) => {
     const { token } = useAuth();
     const [pages, setPages] = useState<PageData[]>([]);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle');
     const [errorMsg, setErrorMsg] = useState<string>('');
     const eventSourceRef = useRef<EventSource | null>(null);
-    const [paperId, setPaperId] = useState<string | null>(null);
-    // const containerRef = useRef<HTMLDivElement>(null); // Unused now
+    const [loadedPaperId, setLoadedPaperId] = useState<string | null>(null);
+    const processingFileRef = useRef<File | null>(null);
+    const activeTaskIdRef = useRef<string | null>(null);
 
     // const containerRef = useRef<HTMLDivElement>(null); // Unused now
 
@@ -48,23 +50,25 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
     useEffect(() => {
         if (uploadFile) {
             startAnalysis(uploadFile);
+        } else if (propPaperId && propPaperId !== loadedPaperId) {
+            loadExistingPaper(propPaperId);
         }
         return () => {
             if (eventSourceRef.current) {
                 eventSourceRef.current.close();
             }
         };
-    }, [uploadFile]);
+    }, [uploadFile, propPaperId]);
 
-    // Fetch stamps when paperId is available
+    // Fetch stamps when loadedPaperId is available
     useEffect(() => {
-        if (paperId) {
-            fetchStamps(paperId);
+        if (loadedPaperId) {
+            fetchStamps(loadedPaperId);
         }
         if (onPaperLoaded) {
-            onPaperLoaded(paperId);
+            onPaperLoaded(loadedPaperId);
         }
-    }, [paperId]);
+    }, [loadedPaperId]);
 
 
 
@@ -129,9 +133,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
     }, [jumpTarget]);
 
     const startAnalysis = async (file: File) => {
+        if (processingFileRef.current === file) return;
+        processingFileRef.current = file;
+
         setStatus('uploading');
         setPages([]);
-        setPaperId(null);
+        setLoadedPaperId(null);
         setStamps([]);
 
         const formData = new FormData();
@@ -148,7 +155,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
 
             const response = await fetch('/analyze-pdf-json', {
                 method: 'POST',
-                headers, // FormData sets Content-Type boundary automatically, but we add Auth
+                headers,
                 body: formData,
             });
 
@@ -158,7 +165,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
             }
 
             const data = await response.json();
-            const { stream_url } = data;
+            const { task_id, stream_url } = data;
+            activeTaskIdRef.current = task_id;
+
+            // Close existing if any
+            if (eventSourceRef.current) {
+                eventSourceRef.current.close();
+            }
 
             setStatus('processing');
             const es = new EventSource(stream_url);
@@ -185,13 +198,15 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                     } else if (eventData.type === 'done') {
                         setStatus('done');
                         if (eventData.paper_id) {
-                            setPaperId(eventData.paper_id);
+                            setLoadedPaperId(eventData.paper_id);
                         }
                         es.close();
                     } else if (eventData.type === 'error') {
                         setStatus('error');
                         setErrorMsg(eventData.message);
                         es.close();
+                        processingFileRef.current = null;
+                        activeTaskIdRef.current = null;
                     }
                 } catch (e) {
                     // Ignore
@@ -201,6 +216,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
             es.onerror = (err) => {
                 console.error('SSE Error', err);
                 es.close();
+                // If it fails immediately or without any pages, show error
+                if (status === 'processing' && pages.length === 0) {
+                    setStatus('error');
+                    setErrorMsg('Network error while streaming analysis');
+                }
+                processingFileRef.current = null;
+                activeTaskIdRef.current = null;
             };
 
         } catch (err: any) {
@@ -278,7 +300,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
     }, [pages, onAreaSelect, token]);
 
     const handleAddStamp = useCallback(async (page: number, x: number, y: number) => {
-        if (!paperId) {
+        if (!loadedPaperId) {
             alert('Paper ID not found. Please wait for analysis to complete.');
             return;
         }
@@ -298,7 +320,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
             const headers: HeadersInit = { 'Content-Type': 'application/json' };
             if (token) headers['Authorization'] = `Bearer ${token}`;
 
-            const res = await fetch(`/stamps/paper/${paperId}`, {
+            const res = await fetch(`/stamps/paper/${loadedPaperId}`, {
                 method: 'POST',
                 headers,
                 body: JSON.stringify({
@@ -321,15 +343,112 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
 
         } catch (e) {
             console.error('Error saving stamp', e);
-            setStamps(prev => prev.filter(s => s.id !== newStamp.id));
         }
-    }, [paperId, selectedStamp, token]);
+    }, [loadedPaperId, selectedStamp, token]);
 
     const pagesWithLines: PageWithLines[] = useMemo(() => groupWordsIntoLines(pages), [pages]);
 
+    const loadExistingPaper = async (id: string) => {
+        setStatus('processing');
+        setLoadedPaperId(id);
+        setStamps([]);
+
+        try {
+            const headers: HeadersInit = {};
+            if (token) headers['Authorization'] = `Bearer ${token}`;
+
+            // 1. Try to fetch full paper data directly first (Fast Load)
+            const paperRes = await fetch(`/papers/${id}`, { headers });
+            if (paperRes.ok) {
+                const paperData = await paperRes.json();
+                if (paperData.layout_json && paperData.file_hash) {
+                    try {
+                        const layoutList = JSON.parse(paperData.layout_json);
+                        const ocrParts = (paperData.ocr_text || '').split('\n\n---\n\n');
+                        const fileHash = paperData.file_hash;
+
+                        const fullPages: PageData[] = layoutList.map((layout: any, i: number) => ({
+                            page_num: i + 1,
+                            image_url: `/static/paper_images/${fileHash}/page_${i + 1}.png`,
+                            width: layout?.width || 0,
+                            height: layout?.height || 0,
+                            words: layout?.words || [],
+                            figures: layout?.figures || [],
+                            content: ocrParts[i] || '',
+                        }));
+
+                        if (fullPages.length > 0) {
+                            setPages(fullPages);
+                            setStatus('done');
+                            return; // Success! No need to stream.
+                        }
+                    } catch (parseErr) {
+                        console.warn('Failed to parse cached layout, falling back to stream', parseErr);
+                    }
+                }
+            }
+
+            // 2. Fallback to streaming if not already processed/cached in a way we can use
+            // If we are already displaying some pages, don't clear them until we get the first chunk from the new stream
+            // to avoid a white flicker. 
+            // setPages([]); // Removed immediate clear
+            const formData = new FormData();
+            if (sessionId) formData.append('session_id', sessionId);
+            
+            const response = await fetch(`/analyze-paper/${id}`, {
+                method: 'POST',
+                headers,
+                body: formData
+            });
+
+            if (!response.ok) throw new Error('Failed to load paper');
+
+            const data = await response.json();
+            const { stream_url } = data;
+
+            const es = new EventSource(stream_url);
+            eventSourceRef.current = es;
+
+            es.onmessage = (event) => {
+                try {
+                    const eventData = JSON.parse(event.data);
+                    if (eventData.type === 'page') {
+                        setPages(prev => {
+                            const newData = eventData.data;
+                            const index = prev.findIndex(p => p.page_num === newData.page_num);
+                            if (index !== -1) {
+                                const newPages = [...prev];
+                                newPages[index] = newData;
+                                return newPages;
+                            }
+                            return [...prev, newData];
+                        });
+                    } else if (eventData.type === 'done') {
+                        setStatus('done');
+                        es.close();
+                    } else if (eventData.type === 'error') {
+                        setStatus('error');
+                        setErrorMsg(eventData.message);
+                        es.close();
+                    }
+                } catch (e) {}
+            };
+
+            es.onerror = (err) => {
+                console.error('SSE Error', err);
+                es.close();
+                if (pages.length === 0) setStatus('error'); // Only error if we got nothing
+            };
+
+        } catch (err: any) {
+            setStatus('error');
+            setErrorMsg(err.message);
+        }
+    };
+
     return (
         <div className="w-full max-w-5xl mx-auto p-2 md:p-4 relative min-h-full pb-20">
-            {status === 'idle' && !uploadFile && (
+            {status === 'idle' && !uploadFile && !propPaperId && (
                 <div className="text-center p-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
                     Waiting for PDF...
                 </div>
@@ -437,8 +556,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                 </div>
             )}
 
-            {/* Stamp Palette (Only show if we have pages/paperId) */}
-            {paperId && mode === 'stamp' && (
+            {/* Stamp Palette (Only show if we have pages/loadedPaperId) */}
+            {loadedPaperId && mode === 'stamp' && (
                 <StampPalette
                     isStampMode={true}
                     onToggleMode={() => setMode('text')}
