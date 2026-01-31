@@ -10,7 +10,13 @@ export interface PageData {
     height: number;
     words: PageWord[];
     figures?: Figure[];
+    links?: Link[];
     content?: string;
+}
+
+export interface Link {
+    url: string;
+    bbox: number[]; // [x1, y1, x2, y2]
 }
 
 export interface PageWord {

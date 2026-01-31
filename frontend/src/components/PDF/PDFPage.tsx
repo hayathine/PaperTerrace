@@ -305,6 +305,40 @@ const PDFPage: React.FC<PDFPageProps> = ({
                     })}
                 </div>
 
+                {/* Link Overlays */}
+                <div className="absolute inset-0 w-full h-full z-20 pointer-events-none">
+                    {page.links?.map((link, idx) => {
+                        const [x1, y1, x2, y2] = link.bbox;
+                        const l_width = x2 - x1;
+                        const l_height = y2 - y1;
+                        const left = (x1 / width) * 100;
+                        const top = (y1 / height) * 100;
+                        const styleW = (l_width / width) * 100;
+                        const styleH = (l_height / height) * 100;
+
+                        return (
+                            <button
+                                key={`link-${idx}`}
+                                className="absolute cursor-pointer pointer-events-auto border border-blue-400/0 hover:border-blue-400/50 hover:bg-blue-400/10 transition-all rounded-sm z-30"
+                                style={{
+                                    left: `${left}%`,
+                                    top: `${top}%`,
+                                    width: `${styleW}%`,
+                                    height: `${styleH}%`,
+                                }}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onWordClick) {
+                                        onWordClick(link.url);
+                                    }
+                                    window.open(link.url, '_blank', 'noopener,noreferrer');
+                                }}
+                                title={link.url}
+                            />
+                        );
+                    })}
+                </div>
+
                 {/* Selection Menu */}
                 {selectionMenu && (
                     <div

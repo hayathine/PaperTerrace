@@ -135,14 +135,8 @@ class PDFOCRService:
         logger.debug(f"[OCR] Page {page_num}: Image ready, yielding partial result")
         yield (page_num, total_pages, None, is_last, file_hash, image_url, None)
 
-        # 2. Extract Text (SLOW)
-        page_text, layout_data = await self._extract_native_or_vision_text(
-            page, img_bytes, img_pil, zoom
-        )
-        if not layout_data:
-            layout_data = {"width": img_pil.width, "height": img_pil.height, "words": []}
-
-        # 3. Figure extraction (SLOW)
+        # 2. Figure extraction (FIRST) - detect and extract figures/tables/equations
+        # This identifies regions that should NOT be treated as body text
         figures = await self.figure_service.detect_and_extract_figures(
             img_bytes,
             page_img,
@@ -151,25 +145,103 @@ class PDFOCRService:
             page_num,
             zoom=zoom,
         )
+
+        # 3. Extract Text (Filtered by figure regions)
+        # We pass figure bboxes (in zoom coordinates) to filter out their text
+        exclude_bboxes = [f["bbox"] for f in figures] if figures else []
+        page_text, layout_data = await self._extract_native_or_vision_text(
+            page, img_bytes, img_pil, zoom, exclude_bboxes=exclude_bboxes
+        )
+
+        if not layout_data:
+            layout_data = {"width": img_pil.width, "height": img_pil.height, "words": []}
+
         if figures:
             logger.info(f"[OCR] Page {page_num}: Detected {len(figures)} figures/images")
             if "figures" not in layout_data:
                 layout_data["figures"] = []
             layout_data["figures"].extend(figures)
-        else:
-            logger.debug(f"[OCR] Page {page_num}: No figures detected")
+
+        # 4. Extract hyperlinks from PDF metadata
+        links = self._extract_links(page, zoom)
+        if links:
+            logger.info(f"[OCR] Page {page_num}: Extracted {len(links)} hyperlinks from metadata")
+            layout_data["links"] = links
 
         # Yield PHASE 2: Full analysis complete
         logger.debug(f"[OCR] Page {page_num}: Full analysis complete")
         yield (page_num, total_pages, page_text, is_last, file_hash, image_url, layout_data)
 
-    async def _extract_native_or_vision_text(self, page, img_bytes, img_pil, zoom):
+    def _extract_links(self, page, zoom):
+        """Extract hyperlinks from the PDF page metadata using pdfplumber."""
+        links = []
+        try:
+            # pdfplumber >= 0.11.0 has .hyperlinks
+            # It already contains the URI and the bounding box
+            if hasattr(page, "hyperlinks"):
+                for link in page.hyperlinks:
+                    if link.get("uri"):
+                        links.append(
+                            {
+                                "url": link["uri"],
+                                "bbox": [
+                                    link["x0"] * zoom,
+                                    link["top"] * zoom,
+                                    link["x1"] * zoom,
+                                    link["bottom"] * zoom,
+                                ],
+                            }
+                        )
+            # Fallback to annots if hyperlinks is not populated or available
+            if not links and hasattr(page, "annots"):
+                for annot in page.annots:
+                    # Check for URI specifically in the annotation dictionary
+                    uri = annot.get("uri") or (
+                        annot.get("A", {}).get("URI") if "A" in annot else None
+                    )
+                    if uri:
+                        links.append(
+                            {
+                                "url": uri,
+                                "bbox": [
+                                    annot["x0"] * zoom,
+                                    annot["top"] * zoom,
+                                    annot["x1"] * zoom,
+                                    annot["bottom"] * zoom,
+                                ],
+                            }
+                        )
+        except Exception as e:
+            logger.warning(f"Link extraction failed on page {page.page_number}: {e}")
+        return links
+
+    async def _extract_native_or_vision_text(
+        self, page, img_bytes, img_pil, zoom, exclude_bboxes=None
+    ):
         """Try to extract text from PDF directly, fallback to Vision API or Gemini."""
         page_num = page.page_number
         logger.debug(f"[OCR] p.{page_num}: Attempting native word extraction")
 
         words = page.extract_words(use_text_flow=True, x_tolerance=1, y_tolerance=3)
         if words:
+            # Filter words that are inside any figure bbox
+            if exclude_bboxes:
+                filtered_words = []
+                for w in words:
+                    # Convert word coords to zoom coords for comparison
+                    wx_center = (w["x0"] + w["x1"]) / 2 * zoom
+                    wy_center = (w["top"] + w["bottom"]) / 2 * zoom
+
+                    is_inside = False
+                    for b in exclude_bboxes:
+                        # b is [x1, y1, x2, y2] in zoom/px coords
+                        if b[0] <= wx_center <= b[2] and b[1] <= wy_center <= b[3]:
+                            is_inside = True
+                            break
+                    if not is_inside:
+                        filtered_words.append(w)
+                words = filtered_words
+
             logger.info(
                 f"[OCR] p.{page_num}: Native word extraction successful ({len(words)} words)"
             )

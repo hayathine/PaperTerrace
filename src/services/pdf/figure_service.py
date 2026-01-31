@@ -89,19 +89,31 @@ class FigureService:
         # 2. Extract Tables using pdfplumber
         logger.debug(f"[FigureService] p.{page_num}: Attempting table detection")
         try:
-            tables = page.find_tables()
+            # Table settings can be tuned
+            table_settings = {
+                "vertical_strategy": "lines",
+                "horizontal_strategy": "lines",
+                "intersection_tolerance": 3,
+            }
+            tables = page.find_tables(table_settings=table_settings)
+
+            # If no line-based tables, try text-based (more aggressive)
+            if not tables:
+                tables = page.find_tables(
+                    table_settings={"vertical_strategy": "text", "horizontal_strategy": "text"}
+                )
+
             for i, table in enumerate(tables):
-                bbox = table.bbox
+                bbox = table.bbox  # (x0, top, x1, bottom)
                 width = bbox[2] - bbox[0]
                 height = bbox[3] - bbox[1]
-                if width < 50 or height < 30:
+                if width < 40 or height < 20:
                     continue
 
-                # Avoid duplicates if already covered by an image (some tables are images)
+                # Avoid duplicates
                 is_duplicate = False
                 for fig in figures_data:
                     fb = fig["bbox"]
-                    # If center of table is within a figure, skip
                     cx, cy = (bbox[0] + bbox[2]) / 2 * zoom, (bbox[1] + bbox[3]) / 2 * zoom
                     if fb[0] < cx < fb[2] and fb[1] < cy < fb[3]:
                         is_duplicate = True
@@ -117,59 +129,59 @@ class FigureService:
                     min(page.height, bbox[3] + margin),
                 )
 
-                cropped = page.crop(c_bbox)
-                crop_img = cropped.to_image(resolution=300)
-                crop_pil = crop_img.original.convert("RGB")
+                try:
+                    cropped = page.crop(c_bbox)
+                    crop_img = cropped.to_image(resolution=300)
+                    crop_pil = crop_img.original.convert("RGB")
 
-                buffer = io.BytesIO()
-                crop_pil.save(buffer, format="PNG")
-                crop_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+                    buffer = io.BytesIO()
+                    crop_pil.save(buffer, format="PNG")
+                    crop_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-                table_img_name = f"plumber_table_{page_num}_{i}"
-                table_url = save_page_image(file_hash, table_img_name, crop_b64)
+                    table_img_name = f"plumber_table_{page_num}_{i}"
+                    table_url = save_page_image(file_hash, table_img_name, crop_b64)
 
-                figures_data.append(
-                    {
-                        "image_url": table_url,
-                        "bbox": [
-                            c_bbox[0] * zoom,
-                            c_bbox[1] * zoom,
-                            c_bbox[2] * zoom,
-                            c_bbox[3] * zoom,
-                        ],
-                        "explanation": "",
-                        "page_num": page_num,
-                        "label": "table",
-                    }
-                )
+                    figures_data.append(
+                        {
+                            "image_url": table_url,
+                            "bbox": [
+                                c_bbox[0] * zoom,
+                                c_bbox[1] * zoom,
+                                c_bbox[2] * zoom,
+                                c_bbox[3] * zoom,
+                            ],
+                            "explanation": "",
+                            "page_num": page_num,
+                            "label": "table",
+                        }
+                    )
+                except Exception:
+                    continue
         except Exception as e:
             logger.warning(f"[FigureService] p.{page_num}: Table detection failed: {e}")
 
-        # 3. Detect Equations/Vector clusters
-        # Equations often appear as clusters of 'rects' or 'curves' without much text
-        logger.debug(f"[FigureService] p.{page_num}: Checking for vector graphics clusters")
+        # 3. Detect Equations and Vector Graphics
+        # High char density or many curves in a small vertical band often means equations
+        logger.debug(
+            f"[FigureService] p.{page_num}: Checking for vector graphics and potential equations"
+        )
         try:
-            # Get all non-text visual objects
-            visual_objs = page.rects + page.curves
+            visual_objs = page.rects + page.curves + page.images
             if visual_objs:
-                # Group objects that are very close to each other
-                clusters = self._cluster_objects(visual_objs)
+                clusters = self._cluster_objects(visual_objs, threshold=15.0)
                 for i, cluster_bbox in enumerate(clusters):
                     width = cluster_bbox[2] - cluster_bbox[0]
                     height = cluster_bbox[3] - cluster_bbox[1]
 
-                    # Filtering noise: too small or too thin
-                    if width < 30 or height < 10:
+                    if width < 20 or height < 10:
                         continue
-                    # Filtering background: too large
-                    if width > page.width * 0.9 and height > page.height * 0.9:
+                    if width > page.width * 0.95 and height > page.height * 0.95:
                         continue
 
-                    # Overlap check with existing figures/tables
+                    # Overlap check
                     is_duplicate = False
                     for fig in figures_data:
                         fb = fig["bbox"]
-                        # Point in cluster check (center of cluster)
                         cx, cy = (
                             (cluster_bbox[0] + cluster_bbox[2]) / 2 * zoom,
                             (cluster_bbox[1] + cluster_bbox[3]) / 2 * zoom,
@@ -180,7 +192,12 @@ class FigureService:
                     if is_duplicate:
                         continue
 
-                    # Crop and save
+                    # Label heuristic: thin wide clusters are often equations
+                    # Deep clusters are often figures
+                    label = "figure"
+                    if height < 50 and width > 100:
+                        label = "equation"
+
                     margin = 5
                     c_bbox = (
                         max(0, cluster_bbox[0] - margin),
@@ -198,7 +215,7 @@ class FigureService:
                         crop_pil.save(buffer, format="PNG")
                         crop_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
-                        vector_img_name = f"plumber_vector_{page_num}_{i}"
+                        vector_img_name = f"plumber_vis_{label}_{page_num}_{i}"
                         vector_url = save_page_image(file_hash, vector_img_name, crop_b64)
 
                         figures_data.append(
@@ -212,13 +229,13 @@ class FigureService:
                                 ],
                                 "explanation": "",
                                 "page_num": page_num,
-                                "label": "visual",  # General label
+                                "label": label,
                             }
                         )
                     except Exception:
                         continue
         except Exception as e:
-            logger.warning(f"[FigureService] p.{page_num}: Vector clustering failed: {e}")
+            logger.warning(f"[FigureService] p.{page_num}: Vector detection failed: {e}")
 
         return figures_data
 
