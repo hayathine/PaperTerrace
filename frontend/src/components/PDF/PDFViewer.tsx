@@ -402,6 +402,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                     onWordClick={handleWordClick}
                     onTextSelect={handleTextSelect}
                     jumpTarget={jumpTarget}
+                    onStackPaper={onStackPaper}
                 />
             ) : (
                 <div className={`space-y-6 ${(mode === 'stamp' || mode === 'area') ? 'cursor-crosshair' : ''}`}>

@@ -6,53 +6,60 @@ interface TextModeViewerProps {
     onWordClick?: (word: string, context?: string, coords?: { page: number, x: number, y: number }) => void;
     onTextSelect?: (text: string, coords: { page: number, x: number, y: number }) => void;
     jumpTarget?: { page: number, x: number, y: number, term?: string } | null;
+    onStackPaper?: (url: string, title?: string) => void;
 }
 
-const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onTextSelect, jumpTarget }) => {
+const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onTextSelect, jumpTarget, onStackPaper }) => {
     
-    const handleWordClick = (word: string, pageData: PageData, bbox: number[], context?: string) => {
-        if (onWordClick) {
-            const [x1, y1, x2, y2] = bbox;
-            const x = ((x1 + x2) / 2) / pageData.width;
-            const y = ((y1 + y2) / 2) / pageData.height;
+    const [selectionMenu, setSelectionMenu] = React.useState<{ x: number, y: number, text: string, coords: any } | null>(null);
 
-            const cleanWord = word.replace(/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g, '');
-            if (!cleanWord) return;
-
-            onWordClick(cleanWord, context, { page: pageData.page_num, x, y });
-        }
-    };
-
-    const handleMouseUp = (pageData: PageData) => {
+    const handleMouseUp = (e: React.MouseEvent, page: PageData) => {
         const selection = window.getSelection();
-        if (selection && selection.toString().trim().length > 0 && onTextSelect) {
+        if (selection && selection.toString().trim().length > 0) {
             const text = selection.toString().trim();
-            onTextSelect(text, { page: pageData.page_num, x: 0.5, y: 0.5 });
+            
+            // Get selection coordinates relative to the page container
+            const rect = e.currentTarget.getBoundingClientRect();
+            const x = ((e.clientX - rect.left) / rect.width) * 100;
+            const y = ((e.clientY - rect.top) / rect.height) * 100;
+
+            const centerX = (e.clientX - rect.left) / rect.width;
+            const centerY = (e.clientY - rect.top) / rect.height;
+
+            setSelectionMenu({
+                x,
+                y,
+                text,
+                coords: { page: page.page_num, x: centerX, y: centerY }
+            });
+        } else {
+            setSelectionMenu(null);
         }
     };
+
+    React.useEffect(() => {
+        const handleClickOutside = () => setSelectionMenu(null);
+        if (selectionMenu) document.addEventListener('mousedown', handleClickOutside);
+        return () => document.removeEventListener('mousedown', handleClickOutside);
+    }, [selectionMenu]);
 
     if (!pages || pages.length === 0) {
         return (
             <div className="flex flex-col items-center justify-center p-12 text-slate-400">
-                <p>Waiting for pages...</p>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mb-4"></div>
+                <p>読み込み中...</p>
             </div>
         );
     }
 
     return (
-        <div className="space-y-12 animate-fade-in w-full max-w-7xl mx-auto px-4 pb-32">
-            {/* Header / Mode Indicator */}
-            <div className="flex items-center justify-between bg-white/50 backdrop-blur p-4 rounded-2xl border border-slate-200 shadow-sm">
-                <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-lg shadow-indigo-200">
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-                        </svg>
-                    </div>
-                    <div>
-                        <h2 className="text-lg font-bold text-slate-800 tracking-tight">Reading Mode: Text & Image</h2>
-                        <p className="text-xs text-slate-500 font-medium">Comparing extracted text with original document.</p>
-                    </div>
+        <div className="w-full max-w-5xl mx-auto p-4 space-y-12 pb-32">
+            <div className="sticky top-0 z-40 bg-white/90 backdrop-blur-md px-4 py-3 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between mb-8">
+                <div className="flex items-center gap-2">
+                    <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider">
+                        Native Selection Mode
+                    </span>
+                    <p className="text-xs text-slate-500 hidden sm:block">PDFの見た目そのままに、テキストの自由な選択が可能です。</p>
                 </div>
             </div>
 
@@ -60,104 +67,111 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
                 <div 
                     key={page.page_num}
                     id={`text-page-${page.page_num}`}
-                    className="relative bg-white rounded-3xl border border-slate-200 shadow-xl overflow-hidden scroll-mt-20"
-                    onMouseUp={() => handleMouseUp(page)}
+                    className="relative shadow-2xl rounded-2xl overflow-hidden bg-white border border-slate-200 group mx-auto"
+                    style={{ maxWidth: '100%' }}
+                    onMouseUp={(e) => handleMouseUp(e, page)}
                 >
-                    {/* Page Bar */}
-                    <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                            <span className="px-3 py-1 bg-white rounded-full border border-slate-200 text-[10px] font-black text-indigo-600 shadow-sm">
-                                PAGE {page.page_num}
-                            </span>
+                    {/* Header */}
+                    <div className="bg-slate-50 border-b border-slate-100 px-6 py-2 flex justify-between items-center">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                            Page {page.page_num}
+                        </span>
+                    </div>
+
+                    {/* Content Container */}
+                    <div className="relative w-full">
+                        {/* PDF Image (Base Layer) */}
+                        <img 
+                            src={page.image_url} 
+                            alt={`Page ${page.page_num}`} 
+                            className="w-full h-auto block select-none"
+                            loading="lazy"
+                        />
+
+                        {/* Transparent Text Layer (Overlay Layer) */}
+                        <div className="absolute inset-0 z-10 w-full h-full cursor-text selection:bg-indigo-500/30">
+                            {page.words.map((w, idx) => {
+                                const [x1, y1, x2, y2] = w.bbox;
+                                const left = (x1 / page.width) * 100;
+                                const top = (y1 / page.height) * 100;
+                                const styleW = ((x2 - x1) / page.width) * 100;
+                                const styleH = ((y2 - y1) / page.height) * 100;
+
+                                // Check for jump highlight
+                                const isJumpHighlight = jumpTarget && 
+                                    jumpTarget.page === page.page_num && 
+                                    jumpTarget.term && 
+                                    w.word.toLowerCase().includes(jumpTarget.term.toLowerCase());
+
+                                return (
+                                    <span 
+                                        key={idx}
+                                        className={`absolute text-transparent transition-all overflow-hidden whitespace-nowrap
+                                            ${isJumpHighlight ? 'bg-yellow-400/40 border-b-2 border-yellow-600' : ''}`}
+                                        style={{
+                                            left: `${left}%`,
+                                            top: `${top}%`,
+                                            width: `${styleW}%`,
+                                            height: `${styleH}%`,
+                                            fontSize: `${styleH * 0.8}cqh`, // Adaptive font size roughly matching box height
+                                            display: 'flex',
+                                            alignItems: 'center'
+                                        }}
+                                    >
+                                        {w.word}
+                                    </span>
+                                );
+                            })}
                         </div>
-                        <button
-                            onClick={() => {
-                                const text = page.words.length > 0 
-                                    ? page.words.map(w => w.word).join(' ') 
-                                    : (page.content || '');
-                                navigator.clipboard.writeText(text);
+                    </div>
+
+                    {/* Selection Menu (Portal-like within page) */}
+                    {selectionMenu && (
+                        <div
+                            className="absolute z-50 flex gap-1 bg-slate-900 text-white p-1.5 rounded-xl shadow-2xl transform -translate-x-1/2 -translate-y-full"
+                            style={{ 
+                                left: `${selectionMenu.x}%`, 
+                                top: `${selectionMenu.y}%`, 
+                                marginTop: '-10px' 
                             }}
-                            className="p-2 hover:bg-white rounded-xl transition-all text-slate-400 hover:text-indigo-600 border border-transparent hover:border-slate-100 shadow-none hover:shadow-sm"
-                            title="Copy text"
+                            onMouseDown={(e) => e.stopPropagation()}
                         >
-                            <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
-                            </svg>
-                        </button>
-                    </div>
-
-                    {/* Split View */}
-                    <div className="grid grid-cols-1 lg:grid-cols-2">
-                        {/* Image Panel */}
-                        <div className="p-8 bg-slate-50/50 border-r border-slate-100 flex items-start justify-center group overflow-hidden">
-                            <div className="relative group-hover:scale-[1.03] transition-transform duration-700 ease-out">
-                                <img 
-                                    src={page.image_url} 
-                                    alt={`Original p.${page.page_num}`}
-                                    className="max-w-full h-auto rounded-lg shadow-2xl border border-white"
-                                />
-                                <div className="absolute inset-0 bg-indigo-600/5 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg pointer-events-none"></div>
-                            </div>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onWordClick) onWordClick(selectionMenu.text, undefined, selectionMenu.coords);
+                                    setSelectionMenu(null);
+                                }}
+                                className="px-3 py-1.5 hover:bg-slate-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                            >
+                                <span>文A</span> Translate
+                            </button>
+                            <div className="w-px bg-slate-700 mx-1"></div>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onTextSelect) onTextSelect(selectionMenu.text, selectionMenu.coords);
+                                    setSelectionMenu(null);
+                                }}
+                                className="px-3 py-1.5 hover:bg-slate-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                            >
+                                <span>📝</span> Note
+                            </button>
+                            <div className="w-px bg-slate-700 mx-1"></div>
+                            <button
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (onStackPaper) onStackPaper(selectionMenu.text);
+                                    setSelectionMenu(null);
+                                }}
+                                className="px-3 py-1.5 hover:bg-slate-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                            >
+                                <span>📚</span> Stack
+                            </button>
+                            {/* Triangle arrow */}
+                            <div className="absolute left-1/2 bottom-0 w-2 h-2 bg-slate-900 transform -translate-x-1/2 translate-y-1/2 rotate-45"></div>
                         </div>
-
-                        {/* Text Panel */}
-                        <div className="p-10 md:p-14 bg-white flex flex-col">
-                            <article className="prose prose-slate prose-lg max-w-none font-serif leading-relaxed text-slate-800 flex-1">
-                                {page.words.length > 0 ? (
-                                    <div className="relative">
-                                        {page.words.map((w, i) => {
-                                            const [x1, y1, x2, y2] = w.bbox;
-                                            const centerX = ((x1 + x2) / 2) / page.width;
-                                            const centerY = ((y1 + y2) / 2) / page.height;
-                                            const isJumpHighlight = jumpTarget && jumpTarget.page === page.page_num && (
-                                                Math.abs(centerX - jumpTarget.x) < 0.015 && 
-                                                Math.abs(centerY - jumpTarget.y) < 0.015
-                                            );
-
-                                            return (
-                                                <span 
-                                                    key={i}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        const start = Math.max(0, i - 20);
-                                                        const end = Math.min(page.words.length, i + 20);
-                                                        const context = page.words.slice(start, end).map(wd => wd.word).join(' ');
-                                                        handleWordClick(w.word, page, w.bbox, context);
-                                                    }}
-                                                    className={`inline-block mr-1 rounded-sm px-0.5 transition-all
-                                                        ${isJumpHighlight 
-                                                            ? 'bg-yellow-400 font-bold shadow-[0_0_15px_rgba(250,204,21,0.6)] scale-110 ring-4 ring-yellow-400/30 z-10' 
-                                                            : 'hover:bg-indigo-100 cursor-pointer text-slate-700 hover:text-indigo-900'}`}
-                                                >
-                                                    {w.word}
-                                                </span>
-                                            );
-                                        })}
-                                    </div>
-                                ) : (
-                                    <div className="whitespace-pre-wrap text-slate-500 leading-relaxed font-sans text-base animate-pulse">
-                                        {page.content || "Processing text recognition..."}
-                                    </div>
-                                )}
-                            </article>
-                            
-                            {page.words.length === 0 && page.content && (
-                                <div className="mt-12 p-5 bg-blue-50/50 rounded-2xl border border-blue-100 flex items-start gap-4">
-                                    <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 shrink-0">
-                                        <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                    </div>
-                                    <div>
-                                        <p className="text-[12px] text-blue-900 font-bold mb-1">Optical Character Recognition (OCR)</p>
-                                        <p className="text-[11px] text-blue-800/70 leading-relaxed">
-                                            Interactivity is limited on this page as it was processed via raw OCR. You can still select and copy text.
-                                        </p>
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    </div>
+                    )}
                 </div>
             ))}
         </div>
