@@ -366,7 +366,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                             }`}
                         >
                             <span className="text-base truncate">📄</span>
-                            <span className="hidden sm:inline">PDFモード</span>
+                            <span className="hidden sm:inline">クリックモード</span>
                         </button>
                         <div className="w-[1px] h-6 bg-slate-200 mx-1 hidden sm:block" />
                         <button
