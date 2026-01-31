@@ -48,23 +48,23 @@ const Sidebar: React.FC<SidebarProps> = ({
 }) => {
 
     return (
-        <div className="flex flex-col h-full bg-white border-l border-gray-200 shadow-xl overflow-hidden font-sans">
+        <div className="flex flex-col h-full bg-white border-l border-slate-200 shadow-sm overflow-hidden font-sans">
             {/* Tab Navigation */}
-            <div className="flex p-2 bg-slate-50 border-b border-slate-100 overflow-x-auto gap-1">
+            <div className="flex bg-slate-50 border-b border-slate-200 overflow-x-auto">
                 <button
                     onClick={() => onTabChange('dict')}
-                    className={`flex-1 min-w-[50px] py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${activeTab === 'dict'
-                        ? 'bg-white text-indigo-600 shadow-sm border border-slate-100'
-                        : 'text-slate-400 hover:text-slate-600'
+                    className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${activeTab === 'dict'
+                        ? 'bg-white text-indigo-600 border-indigo-600 shadow-none'
+                        : 'text-slate-400 border-transparent hover:text-slate-600'
                         }`}
                 >
                     Dict
                 </button>
                 <button
                     onClick={() => onTabChange('summary')}
-                    className={`flex-1 min-w-[50px] py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${activeTab === 'summary'
-                        ? 'bg-white text-indigo-600 shadow-sm border border-slate-100'
-                        : 'text-slate-400 hover:text-slate-600'
+                    className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${activeTab === 'summary'
+                        ? 'bg-white text-indigo-600 border-indigo-600 shadow-none'
+                        : 'text-slate-400 border-transparent hover:text-slate-600'
                         }`}
                 >
                     Summary
@@ -72,89 +72,80 @@ const Sidebar: React.FC<SidebarProps> = ({
 
                 <button
                     onClick={() => onTabChange('chat')}
-                    className={`flex-1 min-w-[50px] py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${activeTab === 'chat'
-                        ? 'bg-white text-indigo-600 shadow-sm border border-slate-100'
-                        : 'text-slate-400 hover:text-slate-600'
+                    className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${activeTab === 'chat'
+                        ? 'bg-white text-indigo-600 border-indigo-600 shadow-none'
+                        : 'text-slate-400 border-transparent hover:text-slate-600'
                         }`}
                 >
                     Chat
                 </button>
                 <button
                     onClick={() => onTabChange('notes')}
-                    className={`flex-1 min-w-[50px] py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${activeTab === 'notes'
-                        ? 'bg-white text-indigo-600 shadow-sm border border-slate-100'
-                        : 'text-slate-400 hover:text-slate-600'
+                    className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${activeTab === 'notes'
+                        ? 'bg-white text-indigo-600 border-indigo-600 shadow-none'
+                        : 'text-slate-400 border-transparent hover:text-slate-600'
                         }`}
                 >
                     Notes
                 </button>
                 <button
                     onClick={() => onTabChange('stack')}
-                    className={`flex-1 min-w-[50px] py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${activeTab === 'stack'
-                        ? 'bg-white text-indigo-600 shadow-sm border border-slate-100'
-                        : 'text-slate-400 hover:text-slate-600'
+                    className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${activeTab === 'stack'
+                        ? 'bg-white text-indigo-600 border-indigo-600 shadow-none'
+                        : 'text-slate-400 border-transparent hover:text-slate-600'
                         }`}
                 >
                     Stack
                 </button>
             </div>
 
-            {/* Tab Content */}
+            {/* Tab Content - All rendered but hidden when not active to preserve state */}
             <div className="flex-1 overflow-hidden relative">
-                {activeTab === 'dict' && (
-                    <div className="absolute inset-0">
-                        <Dictionary 
-                            sessionId={sessionId} 
-                            paperId={paperId} 
-                            term={selectedWord} 
-                            coordinates={coordinates}
-                            onAskAI={onAskAI}
-                            onJump={onJump}
-                        />
-                    </div>
-                )}
-                {activeTab === 'summary' && (
-                    <div className="absolute inset-0">
-                        <Summary sessionId={sessionId} isAnalyzing={isAnalyzing} paperId={paperId} />
-                    </div>
-                )}
+                <div className={`absolute inset-0 ${activeTab === 'dict' ? 'block' : 'hidden'}`}>
+                    <Dictionary 
+                        sessionId={sessionId} 
+                        paperId={paperId} 
+                        term={selectedWord} 
+                        coordinates={coordinates}
+                        onAskAI={onAskAI}
+                        onJump={onJump}
+                    />
+                </div>
+                
+                <div className={`absolute inset-0 ${activeTab === 'summary' ? 'block' : 'hidden'}`}>
+                    <Summary sessionId={sessionId} isAnalyzing={isAnalyzing} paperId={paperId} />
+                </div>
 
-                {activeTab === 'chat' && (
-                    <div className="absolute inset-0">
-                        <ChatWindow 
-                            sessionId={sessionId} 
-                            paperId={paperId} 
-                            initialFigureId={pendingFigureId}
-                            onInitialChatSent={onPendingFigureConsumed}
-                            initialPrompt={pendingChatPrompt}
-                            onInitialPromptSent={onPendingChatConsumed}
-                            onStackPaper={onStackPaper}
-                        />
-                    </div>
-                )}
+                <div className={`absolute inset-0 ${activeTab === 'chat' ? 'block' : 'hidden'}`}>
+                    <ChatWindow 
+                        sessionId={sessionId} 
+                        paperId={paperId} 
+                        initialFigureId={pendingFigureId}
+                        onInitialChatSent={onPendingFigureConsumed}
+                        initialPrompt={pendingChatPrompt}
+                        onInitialPromptSent={onPendingChatConsumed}
+                        onStackPaper={onStackPaper}
+                    />
+                </div>
 
-                {activeTab === 'notes' && (
-                    <div className="absolute inset-0">
-                        <NoteList
-                            sessionId={sessionId}
-                            paperId={paperId}
-                            coordinates={coordinates}
-                            onJump={onJump}
-                            selectedContext={context} // Use the shared context prop which now also holds selected text
-                            selectedTerm={selectedWord} // Word click sets this
-                            selectedImage={selectedImage}
-                        />
-                    </div>
-                )}
+                <div className={`absolute inset-0 ${activeTab === 'notes' ? 'block' : 'hidden'}`}>
+                    <NoteList
+                        sessionId={sessionId}
+                        paperId={paperId}
+                        coordinates={coordinates}
+                        onJump={onJump}
+                        selectedContext={context}
+                        selectedTerm={selectedWord}
+                        selectedImage={selectedImage}
+                    />
+                </div>
 
-                {activeTab === 'stack' && (
-                    <div className="absolute inset-0">
-                        <PaperStack 
-                            papers={stackedPapers} 
-                            onRemove={onRemoveFromStack} 
-                        />
-                    </div>
-                )}
+                <div className={`absolute inset-0 ${activeTab === 'stack' ? 'block' : 'hidden'}`}>
+                    <PaperStack 
+                        papers={stackedPapers} 
+                        onRemove={onRemoveFromStack} 
+                    />
+                </div>
             </div>
         </div>
     );

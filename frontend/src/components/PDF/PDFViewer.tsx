@@ -344,51 +344,51 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
 
             {/* Toolbar */}
             {pages.length > 0 && (
-                <div className="sticky top-4 z-40 flex justify-center mb-8">
-                    <div className="bg-white/80 backdrop-blur-md p-1.5 rounded-2xl shadow-lg border border-slate-200/50 flex items-center gap-1">
+                <div className="sticky top-4 z-[60] flex justify-center mb-6">
+                    <div className="bg-white p-1 rounded-lg shadow-sm border border-slate-200 flex items-center gap-1">
                         <button
                             onClick={() => setMode('plaintext')}
-                            className={`px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200 ${
+                            className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
                                 mode === 'plaintext' 
-                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 scale-105' 
+                                ? 'bg-indigo-600 text-white shadow-none' 
                                 : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
                             }`}
                         >
-                            <span className="text-base truncate">📝</span>
+                            <span className="text-sm">📝</span>
                             <span className="hidden sm:inline">テキストモード</span>
                         </button>
                         <button
                             onClick={() => setMode('text')}
-                            className={`px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200 ${
+                            className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
                                 mode === 'text' 
-                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 scale-105' 
+                                ? 'bg-indigo-600 text-white shadow-none' 
                                 : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
                             }`}
                         >
-                            <span className="text-base truncate">📄</span>
+                            <span className="text-sm">📄</span>
                             <span className="hidden sm:inline">クリックモード</span>
                         </button>
-                        <div className="w-[1px] h-6 bg-slate-200 mx-1 hidden sm:block" />
+                        <div className="w-[1px] h-4 bg-slate-200 mx-1 hidden sm:block" />
                         <button
                             onClick={() => setMode('area')}
-                            className={`px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200 ${
+                            className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
                                 mode === 'area' 
-                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 scale-105' 
+                                ? 'bg-indigo-600 text-white shadow-none' 
                                 : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
                             }`}
                         >
-                            <span className="text-base truncate">✂️</span>
+                            <span className="text-sm">✂️</span>
                             <span className="hidden sm:inline">切り抜き</span>
                         </button>
                         <button
                             onClick={() => setMode('stamp')}
-                            className={`px-4 py-2 rounded-xl flex items-center gap-2 text-xs font-bold transition-all duration-200 ${
+                            className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
                                 mode === 'stamp' 
-                                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200 scale-105' 
+                                ? 'bg-indigo-600 text-white shadow-none' 
                                 : 'text-slate-500 hover:bg-slate-50 hover:text-slate-700'
                             }`}
                         >
-                            <span className="text-base truncate">👍</span>
+                            <span className="text-sm">👍</span>
                             <span className="hidden sm:inline">スタンプ</span>
                         </button>
                     </div>

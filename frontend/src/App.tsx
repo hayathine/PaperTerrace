@@ -292,29 +292,29 @@ function App() {
 
             {/* Main Content Area */}
             <div className="flex-1 flex flex-col h-full relative transition-all duration-300">
-                <header className="h-14 bg-white border-b border-gray-200 flex items-center px-4 shadow-sm">
+                <header className="h-12 bg-white border-b border-slate-200 flex items-center px-4">
                     <button
                         onClick={() => setIsLeftSidebarOpen(!isLeftSidebarOpen)}
-                        className={`mr-4 p-2 rounded-xl transition-all duration-300 flex items-center justify-center shadow-sm border ${
+                        className={`mr-4 p-2 rounded-md transition-all duration-200 flex items-center justify-center border ${
                             isLeftSidebarOpen 
                             ? 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100' 
-                            : 'bg-indigo-600 text-white border-indigo-500 hover:bg-indigo-700 hover:shadow-indigo-200 hover:scale-105'
+                            : 'bg-indigo-600 text-white border-indigo-700 hover:bg-indigo-700'
                         }`}
                         title={isLeftSidebarOpen ? "メニューを閉じる" : "メニューを開く"}
                     >
                         {isLeftSidebarOpen ? (
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M11 19l-7-7 7-7m8 14l-7-7 7-7" />
                             </svg>
                         ) : (
-                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M4 6h16M4 12h16M4 18h16" />
                             </svg>
                         )}
                     </button>
-                    <span className="font-semibold text-gray-700">Reading Mode</span>
+                    <span className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">Reading Mode</span>
                     <div className="flex-1" />
-                    {uploadFile && <span className="text-sm text-gray-500">{uploadFile.name}</span>}
+                    {uploadFile && <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">{uploadFile.name}</span>}
                 </header>
 
                 <div className="flex-1 flex overflow-hidden">

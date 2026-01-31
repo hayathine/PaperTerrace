@@ -47,17 +47,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({ message, onStackPaper }) 
     return (
         <div className={`flex w-full mb-4 ${isUser ? 'justify-end' : 'justify-start'}`}>
             <div
-                className={`max-w-[80%] rounded-lg px-4 py-2 shadow-sm ${isUser
-                        ? 'bg-blue-600 text-white rounded-br-none'
-                        : 'bg-white text-gray-800 border border-gray-200 rounded-bl-none'
+                className={`max-w-[85%] rounded border px-3 py-2 ${isUser
+                        ? 'bg-slate-800 text-white border-slate-900'
+                        : 'bg-white text-slate-800 border-slate-200 shadow-sm'
                     }`}
             >
-                <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                <div className="whitespace-pre-wrap text-sm leading-relaxed font-medium">
                     {renderContent(message.content)}
                 </div>
-                <span className={`text-xs block mt-1 ${isUser ? 'text-blue-100' : 'text-gray-400'}`}>
+                <div className={`text-[9px] font-bold uppercase tracking-widest mt-1.5 opacity-50 ${isUser ? 'text-right' : 'text-left'}`}>
                     {new Date(message.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                </span>
+                </div>
             </div>
         </div>
     );

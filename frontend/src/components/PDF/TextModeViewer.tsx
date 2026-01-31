@@ -13,37 +13,63 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
     
     const [selectionMenu, setSelectionMenu] = React.useState<{ x: number, y: number, text: string, coords: any } | null>(null);
 
-    // Group words into lines for better selection behavior
+    // Group words into lines, aware of multi-column layouts
     const pagesWithLines = React.useMemo(() => {
         return pages.map(page => {
-            const lines: { words: typeof page.words, bbox: number[] }[] = [];
-            // Sort words primarily by top position, secondarily by left
-            const sortedWords = [...page.words].sort((a, b) => (a.bbox[1] - b.bbox[1]) || (a.bbox[0] - b.bbox[0]));
-            
-            sortedWords.forEach(word => {
-                const wordY1 = word.bbox[1];
-                const wordHeight = word.bbox[3] - word.bbox[1];
-                
-                // Find a line that this word might belong to (similar Y coordinate)
-                const line = lines.find(l => Math.abs(wordY1 - l.bbox[1]) < wordHeight * 0.5);
-                
-                if (line) {
-                    line.words.push(word);
-                    line.bbox[0] = Math.min(line.bbox[0], word.bbox[0]);
-                    line.bbox[1] = Math.min(line.bbox[1], word.bbox[1]);
-                    line.bbox[2] = Math.max(line.bbox[2], word.bbox[2]);
-                    line.bbox[3] = Math.max(line.bbox[3], word.bbox[3]);
+            const words = [...page.words];
+            if (words.length === 0) return { ...page, lines: [] };
+
+            // 1. Detect Columns (Simple heuristic: find if there's a large gap in X coordinates)
+            // Sort by X to find horizontal distribution
+            const sortedByX = [...words].sort((a, b) => a.bbox[0] - b.bbox[0]);
+            const columns: (typeof words)[] = [];
+            let currentColumn: typeof words = [];
+
+            // A gap of more than 10% of page width often indicates a new column
+            const columnGapThreshold = page.width * 0.1;
+
+            sortedByX.forEach((word, i) => {
+                if (i > 0 && word.bbox[0] - sortedByX[i-1].bbox[2] > columnGapThreshold) {
+                    columns.push(currentColumn);
+                    currentColumn = [word];
                 } else {
-                    lines.push({
-                        words: [word],
-                        bbox: [...word.bbox]
-                    });
+                    currentColumn.push(word);
                 }
             });
+            columns.push(currentColumn);
 
-            // Sort words within each line by X coordinate
-            lines.forEach(line => line.words.sort((a, b) => a.bbox[0] - b.bbox[0]));
-            return { ...page, lines };
+            // 2. For each column, group words into lines
+            const allLines: { words: typeof page.words, bbox: number[] }[] = [];
+
+            columns.forEach(colWords => {
+                // Sort by Y for line grouping within this column
+                const sortedByY = colWords.sort((a, b) => (a.bbox[1] - b.bbox[1]) || (a.bbox[0] - b.bbox[0]));
+                const colLines: { words: typeof page.words, bbox: number[] }[] = [];
+
+                sortedByY.forEach(word => {
+                    const wordY1 = word.bbox[1];
+                    const wordHeight = word.bbox[3] - word.bbox[1];
+                    
+                    // Find if word belongs to an existing line in this column
+                    const line = colLines.find(l => Math.abs(wordY1 - l.bbox[1]) < wordHeight * 0.4);
+                    
+                    if (line) {
+                        line.words.push(word);
+                        line.bbox[0] = Math.min(line.bbox[0], word.bbox[0]);
+                        line.bbox[1] = Math.min(line.bbox[1], word.bbox[1]);
+                        line.bbox[2] = Math.max(line.bbox[2], word.bbox[2]);
+                        line.bbox[3] = Math.max(line.bbox[3], word.bbox[3]);
+                    } else {
+                        colLines.push({ words: [word], bbox: [...word.bbox] });
+                    }
+                });
+
+                // Sort words within each line by X
+                colLines.forEach(line => line.words.sort((a, b) => a.bbox[0] - b.bbox[0]));
+                allLines.push(...colLines);
+            });
+
+            return { ...page, lines: allLines };
         });
     }, [pages]);
 
@@ -104,13 +130,13 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
                 <div 
                     key={page.page_num}
                     id={`text-page-${page.page_num}`}
-                    className="relative shadow-2xl rounded-2xl overflow-hidden bg-white border border-slate-200 group mx-auto"
+                    className="relative shadow-sm bg-white border border-slate-200 group mx-auto"
                     style={{ maxWidth: '100%', userSelect: 'none' }} 
                     onMouseUp={(e) => handleMouseUp(e, page)}
                 >
                     {/* Header */}
-                    <div className="bg-slate-50 border-b border-slate-100 px-6 py-2 flex justify-between items-center select-none">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <div className="bg-slate-50 border-b border-slate-200 px-4 py-1.5 flex justify-between items-center select-none">
+                        <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
                             Page {page.page_num}
                         </span>
                     </div>
@@ -126,7 +152,7 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
                         />
 
                         {/* Transparent Text Layer (Overlay Layer) */}
-                        <div className="absolute inset-0 z-10 w-full h-full cursor-text selection:bg-indigo-500/40" style={{ userSelect: 'text' }}>
+                        <div className="absolute inset-0 z-10 w-full h-full cursor-text selection:bg-indigo-600/30" style={{ userSelect: 'text' }}>
                             {page.lines.map((line, lIdx) => {
                                 const [lx1, ly1, lx2, ly2] = line.bbox;
                                 const lTop = (ly1 / page.height) * 100;
@@ -143,14 +169,11 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
                                             left: `${lLeft}%`,
                                             width: `${lWidth}%`,
                                             height: `${lHeight}%`,
-                                            // Font size scales with line height
                                             fontSize: `${lHeight * 0.8}cqw`, 
-                                            // Avoid gaps between words in selection
                                             letterSpacing: '-0.05em'
                                         }}
                                     >
                                         {line.words.map((w, wIdx) => {
-                                            // Check for jump highlight
                                             const isJumpHighlight = jumpTarget && 
                                                 jumpTarget.page === page.page_num && 
                                                 jumpTarget.term && 
@@ -159,7 +182,7 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
                                             return (
                                                 <span 
                                                     key={wIdx}
-                                                    className={`transition-all ${isJumpHighlight ? 'bg-yellow-400/40 border-b-2 border-yellow-600' : ''}`}
+                                                    className={`transition-all ${isJumpHighlight ? 'bg-yellow-400/40 border-b border-yellow-600' : ''}`}
                                                     style={{ pointerEvents: 'auto' }}
                                                 >
                                                     {w.word}{' '}
@@ -175,11 +198,11 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
                     {/* Selection Menu */}
                     {selectionMenu && (
                         <div
-                            className="selection-menu absolute z-50 flex gap-1 bg-slate-900 text-white p-1.5 rounded-xl shadow-2xl transform -translate-x-1/2 -translate-y-full"
+                            className="selection-menu absolute z-50 flex gap-0 bg-slate-900 text-white rounded shadow-lg overflow-hidden transform -translate-x-1/2 -translate-y-full border border-slate-800"
                             style={{ 
                                 left: `${selectionMenu.x}%`, 
                                 top: `${selectionMenu.y}%`, 
-                                marginTop: '-12px' 
+                                marginTop: '-10px' 
                             }}
                             onMouseDown={(e) => e.stopPropagation()}
                         >
@@ -189,34 +212,30 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({ pages, onWordClick, onT
                                     if (onWordClick) onWordClick(selectionMenu.text, undefined, selectionMenu.coords);
                                     setSelectionMenu(null);
                                 }}
-                                className="px-3 py-1.5 hover:bg-slate-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                                className="px-3 py-1.5 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors border-r border-slate-800"
                             >
                                 <span>文A</span> Translate
                             </button>
-                            <div className="w-px bg-slate-700 mx-1"></div>
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     if (onTextSelect) onTextSelect(selectionMenu.text, selectionMenu.coords);
                                     setSelectionMenu(null);
                                 }}
-                                className="px-3 py-1.5 hover:bg-slate-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                                className="px-3 py-1.5 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors border-r border-slate-800"
                             >
                                 <span>📝</span> Note
                             </button>
-                            <div className="w-px bg-slate-700 mx-1"></div>
                             <button
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     if (onStackPaper) onStackPaper(selectionMenu.text);
                                     setSelectionMenu(null);
                                 }}
-                                className="px-3 py-1.5 hover:bg-slate-700 rounded-lg text-xs font-bold flex items-center gap-1 transition-colors"
+                                className="px-3 py-1.5 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-1.5 transition-colors"
                             >
                                 <span>📚</span> Stack
                             </button>
-                            {/* Triangle arrow */}
-                            <div className="absolute left-1/2 bottom-0 w-2 h-2 bg-slate-900 transform -translate-x-1/2 translate-y-1/2 rotate-45"></div>
                         </div>
                     )}
                 </div>
