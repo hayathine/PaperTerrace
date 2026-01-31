@@ -1,6 +1,6 @@
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Type
+from typing import Any, Type, TypedDict
 
 from dotenv import load_dotenv
 from google import genai
@@ -24,6 +24,20 @@ class AIGenerationError(AIProviderError):
     pass
 
 
+class GenConfig(TypedDict, total=False):
+    """Configuration for AI generation."""
+
+    temperature: float
+    max_output_tokens: int
+    top_k: int
+    top_p: float
+    response_mime_type: str
+    response_json_schema: Any
+    system_instruction: str
+    cached_content: str
+    tools: list[Any]
+
+
 class AIProviderInterface(ABC):
     """Abstract interface for AI providers."""
 
@@ -36,6 +50,7 @@ class AIProviderInterface(ABC):
         enable_search: bool = False,
         response_model: Type[BaseModel] | None = None,
         system_instruction: str | None = None,
+        cached_content_name: str | None = None,
     ) -> Any:
         """Generate text or structured response from prompt."""
         ...
@@ -49,13 +64,18 @@ class AIProviderInterface(ABC):
         model: str | None = None,
         response_model: Type[BaseModel] | None = None,
         system_instruction: str | None = None,
+        cached_content_name: str | None = None,
     ) -> Any:
         """Generate text or structured response from prompt with image input."""
         ...
 
     @abstractmethod
     async def generate_with_pdf(
-        self, prompt: str, pdf_bytes: bytes, model: str | None = None
+        self,
+        prompt: str,
+        pdf_bytes: bytes,
+        model: str | None = None,
+        cached_content_name: str | None = None,
     ) -> str:
         """Generate text response from prompt with PDF input."""
         ...
@@ -63,6 +83,22 @@ class AIProviderInterface(ABC):
     @abstractmethod
     async def count_tokens(self, contents: Any, model: str | None = None) -> int:
         """Count tokens for the given contents."""
+        ...
+
+    @abstractmethod
+    async def create_context_cache(
+        self,
+        model: str,
+        contents: Any,
+        system_instruction: str | None = None,
+        ttl_minutes: int = 60,
+    ) -> str:
+        """Create a context cache and return its name."""
+        ...
+
+    @abstractmethod
+    async def delete_context_cache(self, cache_name: str) -> None:
+        """Delete a context cache by name."""
         ...
 
 
@@ -85,6 +121,7 @@ class GeminiProvider(AIProviderInterface):
         enable_search: bool = False,
         response_model: Type[BaseModel] | None = None,
         system_instruction: str | None = None,
+        cached_content_name: str | None = None,
     ) -> Any:
         """Generate text response from prompt, optionally as structured data."""
         target_model = model or self.model
@@ -106,7 +143,10 @@ class GeminiProvider(AIProviderInterface):
                 tools = [types.Tool(google_search=types.GoogleSearch())]
 
             # Configure generation config
-            config_params: dict[str, Any] = {}
+            config_params: GenConfig = {
+                "temperature": 0.1,
+                "max_output_tokens": 1024,
+            }
             if tools:
                 config_params["tools"] = tools
             if response_model:
@@ -115,12 +155,17 @@ class GeminiProvider(AIProviderInterface):
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
 
-            config = types.GenerateContentConfig(**config_params) if config_params else None
+            config = types.GenerateContentConfig(**config_params)
+
+            # If using cached content, contents should only be the new prompt
+            contents = prompt if cached_content_name else full_prompt
 
             response = await self.client.aio.models.generate_content(
                 model=target_model,
-                contents=full_prompt,
+                contents=contents,
                 config=config,
             )
 
@@ -147,7 +192,7 @@ class GeminiProvider(AIProviderInterface):
                         text_to_parse = text_to_parse[3:].strip("` \n")
                     return response_model.model_validate_json(text_to_parse)
 
-            result = (response.text or "").strip()
+            result = str(response.text or "").strip()
             logger.debug(
                 "Gemini generate response",
                 extra={"response_length": len(result)},
@@ -168,6 +213,7 @@ class GeminiProvider(AIProviderInterface):
         model: str | None = None,
         response_model: Type[BaseModel] | None = None,
         system_instruction: str | None = None,
+        cached_content_name: str | None = None,
     ) -> Any:
         """Generate text response from prompt with image input."""
         target_model = model or self.model
@@ -183,22 +229,33 @@ class GeminiProvider(AIProviderInterface):
             )
 
             # Configure generation config
-            config_params: dict[str, Any] = {}
+            config_params: GenConfig = {
+                "temperature": 0.1,
+                "max_output_tokens": 1024,
+            }
             if response_model:
                 config_params["response_mime_type"] = "application/json"
                 config_params["response_json_schema"] = response_model.model_json_schema()
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
 
-            config = types.GenerateContentConfig(**config_params) if config_params else None
+            config = types.GenerateContentConfig(**config_params)
+
+            contents = (
+                [prompt]
+                if cached_content_name
+                else [
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    prompt,
+                ]
+            )
 
             response = await self.client.aio.models.generate_content(
                 model=target_model,
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                    prompt,
-                ],
+                contents=contents,
                 config=config,
             )
 
@@ -244,23 +301,47 @@ class GeminiProvider(AIProviderInterface):
             raise AIGenerationError(f"Image analysis failed: {e}") from e
 
     async def generate_with_pdf(
-        self, prompt: str, pdf_bytes: bytes, model: str | None = None
+        self,
+        prompt: str,
+        pdf_bytes: bytes,
+        model: str | None = None,
+        cached_content_name: str | None = None,
     ) -> str:
         """Generate text response from prompt with PDF input."""
         target_model = model or self.model
         try:
             logger.debug(
                 "Gemini PDF request",
-                extra={"pdf_size": len(pdf_bytes), "model": target_model},
+                extra={
+                    "pdf_size": len(pdf_bytes) if pdf_bytes else 0,
+                    "model": target_model,
+                    "cached": cached_content_name is not None,
+                },
             )
-            response = await self.client.aio.models.generate_content(
-                model=target_model,
-                contents=[
+
+            config_params: GenConfig = {
+                "temperature": 0.1,
+                "max_output_tokens": 1024,
+            }
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
+            config = types.GenerateContentConfig(**config_params)
+
+            contents = (
+                [prompt]
+                if cached_content_name
+                else [
                     types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
                     prompt,
-                ],
+                ]
             )
-            result = (response.text or "").strip()
+
+            response = await self.client.aio.models.generate_content(
+                model=target_model,
+                contents=contents,
+                config=config,
+            )
+            result = str(response.text or "").strip()
             logger.debug(
                 "Gemini PDF response",
                 extra={"response_length": len(result)},
@@ -282,6 +363,48 @@ class GeminiProvider(AIProviderInterface):
         except Exception as e:
             logger.error(f"Token counting failed: {e}")
             return 0
+
+    async def create_context_cache(
+        self,
+        model: str,
+        contents: Any,
+        system_instruction: str | None = None,
+        ttl_minutes: int = 60,
+    ) -> str:
+        """Create a Gemini context cache."""
+        try:
+            logger.info(f"Creating Gemini context cache for model {model} (TTL: {ttl_minutes}m)")
+
+            # contents can be a list of parts or a single string
+            if isinstance(contents, str):
+                parts = [types.Part.from_text(text=contents)]
+            elif isinstance(contents, bytes):
+                # Assume PDF if bytes
+                parts = [types.Part.from_bytes(data=contents, mime_type="application/pdf")]
+            else:
+                parts = contents
+
+            cache = await self.client.aio.caches.create(
+                model=model,
+                config=types.CreateCachedContentConfig(
+                    contents=parts,
+                    system_instruction=system_instruction,
+                    ttl=f"{ttl_minutes * 60}s",
+                ),
+            )
+            logger.info(f"Created Gemini context cache: {cache.name}")
+            return cache.name or ""
+        except Exception as e:
+            logger.error(f"Failed to create Gemini context cache: {e}")
+            raise AIProviderError(f"Cache creation failed: {e}")
+
+    async def delete_context_cache(self, cache_name: str) -> None:
+        """Delete a Gemini context cache."""
+        try:
+            await self.client.aio.caches.delete(name=cache_name)
+            logger.info(f"Deleted Gemini context cache: {cache_name}")
+        except Exception as e:
+            logger.error(f"Failed to delete Gemini context cache {cache_name}: {e}")
 
 
 class VertexAIProvider(AIProviderInterface):
@@ -324,23 +447,25 @@ class VertexAIProvider(AIProviderInterface):
         enable_search: bool = False,
         response_model: Type[BaseModel] | None = None,
         system_instruction: str | None = None,
+        cached_content_name: str | None = None,
     ) -> Any:
         """Generate text response from prompt."""
         target_model = model or self.model
         try:
             # Construct content parts
             # Simplified content construction to fix type errors and match GeminiProvider style
-            contents = f"{context}\n\n{prompt}" if context else prompt
+            contents = (
+                prompt if cached_content_name else (f"{context}\n\n{prompt}" if context else prompt)
+            )
 
             # Configure tools
             tools = None
             if enable_search:
                 tools = [types.Tool(google_search=types.GoogleSearch())]
 
-            config_params: dict[str, Any] = {
-                "temperature": 0.2,
-                "top_k": 40,
-                "max_output_tokens": 8192,
+            config_params: GenConfig = {
+                "temperature": 0.1,
+                "max_output_tokens": 1024,
             }
             if tools:
                 config_params["tools"] = tools
@@ -350,6 +475,8 @@ class VertexAIProvider(AIProviderInterface):
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
 
             config = types.GenerateContentConfig(**config_params)
 
@@ -382,7 +509,7 @@ class VertexAIProvider(AIProviderInterface):
                         text_to_parse = text_to_parse[7:].strip("` \n")
                     return response_model.model_validate_json(text_to_parse)
 
-            result = (response.text or "").strip()
+            result = str(response.text or "").strip()
             return result
 
         except Exception as e:
@@ -397,22 +524,29 @@ class VertexAIProvider(AIProviderInterface):
         model: str | None = None,
         response_model: Type[BaseModel] | None = None,
         system_instruction: str | None = None,
+        cached_content_name: str | None = None,
     ) -> Any:
         """Generate text response from prompt with image input."""
         target_model = model or self.model
         try:
-            contents = [
-                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                prompt,
-            ]
+            contents = (
+                [prompt]
+                if cached_content_name
+                else [
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    prompt,
+                ]
+            )
 
-            config_params: dict[str, Any] = {"temperature": 0.2, "max_output_tokens": 8192}
+            config_params: GenConfig = {"temperature": 0.7, "max_output_tokens": 1024}
             if response_model:
                 config_params["response_mime_type"] = "application/json"
                 config_params["response_json_schema"] = response_model.model_json_schema()
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
 
             config = types.GenerateContentConfig(**config_params)
 
@@ -449,24 +583,36 @@ class VertexAIProvider(AIProviderInterface):
             raise AIGenerationError(f"Vertex image analysis failed: {e}") from e
 
     async def generate_with_pdf(
-        self, prompt: str, pdf_bytes: bytes, model: str | None = None
+        self,
+        prompt: str,
+        pdf_bytes: bytes,
+        model: str | None = None,
+        cached_content_name: str | None = None,
     ) -> str:
         """Generate text response from prompt with PDF input."""
         target_model = model or self.model
         try:
-            contents = [
-                types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
-                prompt,
-            ]
+            contents = (
+                [prompt]
+                if cached_content_name
+                else [
+                    types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+                    prompt,
+                ]
+            )
 
-            config = types.GenerateContentConfig(temperature=0.2, max_output_tokens=8192)
+            config_params: GenConfig = {"temperature": 0.7, "max_output_tokens": 1024}
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
+
+            config = types.GenerateContentConfig(**config_params)
 
             response = await self.client.aio.models.generate_content(
                 model=target_model,
                 contents=contents,
                 config=config,
             )
-            return (response.text or "").strip()
+            return str(response.text or "").strip()
 
         except Exception as e:
             logger.exception("Vertex AI PDF generation failed", extra={"error": str(e)})
@@ -481,6 +627,46 @@ class VertexAIProvider(AIProviderInterface):
         except Exception as e:
             logger.error(f"Token counting failed (Vertex): {e}")
             return 0
+
+    async def create_context_cache(
+        self,
+        model: str,
+        contents: Any,
+        system_instruction: str | None = None,
+        ttl_minutes: int = 60,
+    ) -> str:
+        """Create a Vertex AI context cache (placeholder)."""
+        # Vertex AI also supports caching but through slightly different API/params in genai SDK.
+        # For now, we implement it for Gemini direct API.
+        try:
+            logger.info(f"Creating Vertex context cache for model {model}")
+
+            if isinstance(contents, str):
+                parts = [types.Part.from_text(text=contents)]
+            elif isinstance(contents, bytes):
+                parts = [types.Part.from_bytes(data=contents, mime_type="application/pdf")]
+            else:
+                parts = contents
+
+            cache = await self.client.aio.caches.create(
+                model=model,
+                config=types.CreateCachedContentConfig(
+                    contents=parts,
+                    system_instruction=system_instruction,
+                    ttl=f"{ttl_minutes * 60}s",
+                ),
+            )
+            return str(cache.name or "")
+        except Exception as e:
+            logger.error(f"Vertex cache creation failed: {e}")
+            raise AIProviderError(f"Vertex cache creation failed: {e}")
+
+    async def delete_context_cache(self, cache_name: str) -> None:
+        """Delete a Vertex AI context cache."""
+        try:
+            await self.client.aio.caches.delete(name=cache_name)
+        except Exception as e:
+            logger.error(f"Vertex cache deletion failed: {e}")
 
 
 # Singleton instance cache

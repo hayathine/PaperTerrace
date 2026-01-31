@@ -68,6 +68,7 @@ async def chat(request: ChatRequest):
             history=history,
             document_context=context,
             target_lang=request.lang,
+            paper_id=paper_id,
             image_bytes=image_bytes,
         )
 
@@ -105,3 +106,16 @@ async def clear_chat(session_id: str = Form(...), paper_id: str | None = Form(No
     history_key = f"chat:{session_id}:{paper_id if paper_id else 'global'}"
     redis_service.delete(history_key)
     return JSONResponse({"status": "ok"})
+
+
+@router.post("/chat/cache/delete")
+async def delete_cache(session_id: str = Form(...), paper_id: str | None = Form(None)):
+    """Delete the AI context cache for the given paper."""
+    if not paper_id:
+        paper_id = storage.get_session_paper_id(session_id)
+
+    if paper_id:
+        await chat_service.delete_paper_cache(paper_id)
+        return JSONResponse({"status": "ok"})
+
+    return JSONResponse({"status": "error", "message": "No paper_id provided"}, status_code=400)

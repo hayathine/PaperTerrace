@@ -15,6 +15,7 @@ from src.prompts import (
     CORE_SYSTEM_PROMPT,
 )
 from src.providers import get_ai_provider
+from src.providers.redis_provider import RedisService
 
 
 class ChatError(Exception):
@@ -28,7 +29,9 @@ class ChatService:
 
     def __init__(self):
         self.ai_provider = get_ai_provider()
+        self.redis = RedisService()
         self.model = os.getenv("MODEL_CHAT", "gemini-2.0-flash")
+        self.cache_ttl_minutes = 60
         # History is now managed by the router/caller via Redis
 
     async def chat(
@@ -37,6 +40,7 @@ class ChatService:
         history: list[dict],
         document_context: str = "",
         target_lang: str = "ja",
+        paper_id: str | None = None,
         pdf_bytes: bytes | None = None,
         image_bytes: bytes | None = None,
     ) -> str:
@@ -48,7 +52,9 @@ class ChatService:
             history: Conversation history (list of role/content dicts)
             document_context: The paper text for context
             target_lang: Output language
+            paper_id: 論文ID (キャッシュ管理用)
             pdf_bytes: PDFバイナリデータ (PDF直接入力方式)
+            image_bytes: 図表等の画像データ
 
         Returns:
             AI-generated response
@@ -102,13 +108,40 @@ class ChatService:
                     extra={"message_length": len(user_message), "history_size": len(history)},
                 )
                 context = document_context if document_context else "No paper loaded."
+
+                # チャッシュの活用
+                cache_name = None
+                if paper_id:
+                    cache_key = f"paper_cache:{paper_id}"
+                    cache_name = self.redis.get(cache_key)
+
+                    if not cache_name and len(context) > 2000:
+                        # キャッシュを作成 (コンテキストがある程度大きい場合のみ)
+                        try:
+                            cache_name = await self.ai_provider.create_context_cache(
+                                model=self.model,
+                                contents=context,
+                                system_instruction=CORE_SYSTEM_PROMPT,
+                                ttl_minutes=self.cache_ttl_minutes,
+                            )
+                            self.redis.set(
+                                cache_key, cache_name, expire=self.cache_ttl_minutes * 60
+                            )
+                        except Exception as e:
+                            logger.warning(f"Failed to create context cache for {paper_id}: {e}")
+
                 prompt = CHAT_GENERAL_RESPONSE_PROMPT.format(
                     lang_name=lang_name,
-                    document_context=context[:20000],
+                    document_context=context[:20000] if not cache_name else "See Context Cache",
                     history_text=history_text_for_prompt,
+                    user_message=user_message,  # Added
                 )
+
                 response = await self.ai_provider.generate(
-                    prompt, model=self.model, system_instruction=CORE_SYSTEM_PROMPT
+                    prompt,
+                    model=self.model,
+                    system_instruction=CORE_SYSTEM_PROMPT,
+                    cached_content_name=cache_name,
                 )
 
             response = response.strip()
@@ -195,3 +228,15 @@ class ChatService:
                 extra={"error": str(e)},
             )
             return f"著者としての回答生成に失敗しました: {str(e)}"
+
+    async def delete_paper_cache(self, paper_id: str):
+        """Delete the context cache for a specific paper."""
+        cache_key = f"paper_cache:{paper_id}"
+        cache_name = self.redis.get(cache_key)
+        if cache_name:
+            try:
+                await self.ai_provider.delete_context_cache(cache_name)
+                self.redis.delete(cache_key)
+                logger.info(f"Deleted context cache for paper {paper_id}")
+            except Exception as e:
+                logger.warning(f"Failed to delete context cache for {paper_id}: {e}")

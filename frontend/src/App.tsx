@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import Sidebar from './components/Sidebar/Sidebar'
 import PDFViewer from './components/PDF/PDFViewer'
 import { useAuth } from './contexts/AuthContext'
@@ -32,6 +32,8 @@ function App() {
     const [isResizing, setIsResizing] = useState(false)
     const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true)
 
+    const prevPaperIdRef = useRef<string | null>(null);
+
     // Developer settings
     const SHOW_DEV_TOOLS = true;
 
@@ -45,8 +47,48 @@ function App() {
         }
     }, [user])
 
+    // Context Cache Lifecycle Management
+    useEffect(() => {
+        const deleteCache = (paperId: string) => {
+            const formData = new FormData();
+            formData.append('session_id', sessionId);
+            formData.append('paper_id', paperId);
+            
+            if (navigator.sendBeacon) {
+                navigator.sendBeacon('/chat/cache/delete', formData);
+            } else {
+                fetch('/chat/cache/delete', {
+                    method: 'POST',
+                    body: formData,
+                    keepalive: true
+                }).catch(e => console.error('Failed to delete cache:', e));
+            }
+        };
+
+        if (prevPaperIdRef.current && prevPaperIdRef.current !== currentPaperId) {
+            deleteCache(prevPaperIdRef.current);
+        }
+        prevPaperIdRef.current = currentPaperId;
+    }, [currentPaperId, sessionId]);
+
+    useEffect(() => {
+        const handleBeforeUnload = () => {
+            if (currentPaperId) {
+                const formData = new FormData();
+                formData.append('session_id', sessionId);
+                formData.append('paper_id', currentPaperId);
+                navigator.sendBeacon('/chat/cache/delete', formData);
+            }
+        };
+
+
+        window.addEventListener('beforeunload', handleBeforeUnload);
+        return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+    }, [currentPaperId, sessionId]);
+
     useEffect(() => {
         const handleMouseMove = (e: MouseEvent) => {
+
             if (!isResizing) return;
             // Calculate new width from right side
             const newWidth = window.innerWidth - e.clientX;
