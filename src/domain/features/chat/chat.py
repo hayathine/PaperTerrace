@@ -4,6 +4,9 @@ AIチャットアシスタント機能を提供するモジュール
 """
 
 import os
+from typing import Any, Dict, List
+
+from pydantic import BaseModel
 
 from src.core.logger import logger
 from src.domain.prompts import (
@@ -20,6 +23,17 @@ class ChatError(Exception):
     pass
 
 
+class Evidence(BaseModel):
+    id: str
+    page: int
+    text: str
+
+
+class ChatResponse(BaseModel):
+    response: str
+    evidence: List[Evidence] = []
+
+
 class ChatService:
     """AI Chat service for paper Q&A and author agent simulation."""
 
@@ -30,27 +44,17 @@ class ChatService:
 
     async def chat(
         self, user_message: str, document_context: str = "", target_lang: str = "ja"
-    ) -> str:
+    ) -> Dict[str, Any]:
         """
         Generate a chat response based on user message and document context.
 
-        Args:
-            user_message: The user's question or message
-            document_context: The paper text for context
-
         Returns:
-            AI-generated response
+            Dict containing 'response' (text) and 'evidence' (list)
         """
-        # Build conversation history for context
-        # The user message is added to history *after* a successful response is generated.
-        # For prompt generation, we use the current history + the new user message.
         current_conversation = self.history + [{"role": "user", "content": user_message}]
         history_text = "\n".join(
             [f"{msg['role']}: {msg['content']}" for msg in current_conversation[-5:]]
         )
-        history_str = "\n".join(
-            [f"{msg['role']}: {msg['content']}" for msg in current_conversation]
-        )  # This will be passed as context to the AI provider
 
         from ..translate import SUPPORTED_LANGUAGES
 
@@ -58,47 +62,41 @@ class ChatService:
         context = document_context if document_context else "No paper loaded."
 
         prompt = CHAT_GENERAL_RESPONSE_PROMPT.format(
-            lang_name=lang_name, document_context=context[:20000], history_text=history_text
+            lang_name=lang_name, document_context=context[:25000], history_text=history_text
         )
         instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
+
         try:
             logger.debug(
-                "Processing chat request",
+                "Processing grounded chat request",
                 extra={"message_length": len(user_message), "history_size": len(self.history)},
             )
-            response = await self.ai_provider.generate(
+
+            # Request structured output
+            structured_res = await self.ai_provider.generate(
                 prompt,
                 model=self.model,
                 system_instruction=instruction,
+                response_model=ChatResponse,
             )
-            response = response.strip()
 
-            if not response:
+            if not structured_res or not structured_res.response:
                 logger.warning("Empty chat response received")
                 raise ChatError("Empty response from AI")
 
-            # Add to history
+            # Add to history (only plain text part)
             self.history.append({"role": "user", "content": user_message})
-            self.history.append({"role": "assistant", "content": response})
+            self.history.append({"role": "assistant", "content": structured_res.response})
 
-            # Keep history manageable (last 20 exchanges)
+            # Keep history manageable
             if len(self.history) > 40:
                 self.history = self.history[-40:]
-                logger.debug("Chat history trimmed to 40 messages")
 
-            logger.info(
-                "Chat response generated",
-                extra={"response_length": len(response), "history_size": len(self.history)},
-            )
-            return response
-        except ChatError:
-            raise
+            return structured_res.model_dump()
+
         except Exception as e:
-            logger.exception(
-                "Chat request failed",
-                extra={"error": str(e), "message_preview": user_message[:50]},
-            )
-            return f"エラーが発生しました: {str(e)}"
+            logger.exception("Chat request failed")
+            return {"response": f"エラーが発生しました: {str(e)}", "evidence": []}
 
     async def author_agent_response(
         self, question: str, paper_text: str, target_lang: str = "ja"

@@ -1,9 +1,7 @@
-import React from 'react';
 import ChatWindow from '../Chat/ChatWindow';
 import NoteList from '../Notes/NoteList';
 import Dictionary from '../Dictionary/Dictionary';
 import Summary from '../Summary/Summary';
-import FigureInsight from '../FigureInsight/FigureInsight';
 import ParagraphExplain from '../ParagraphExplain/ParagraphExplain';
 
 interface SidebarProps {
@@ -16,12 +14,12 @@ interface SidebarProps {
     selectedImage?: string;
     onJump?: (page: number, x: number, y: number) => void;
     isAnalyzing?: boolean;
-    paperId?: string | null;
     initialChatMessage?: string | null;
     onClearInitialChatMessage?: () => void;
+    onEvidenceClick?: (evidence: any) => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord, context, coordinates, selectedImage, onJump, isAnalyzing = false, paperId, initialChatMessage, onClearInitialChatMessage }) => {
+const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord, context, coordinates, selectedImage, onJump, isAnalyzing = false, initialChatMessage, onClearInitialChatMessage, onEvidenceClick }) => {
 
     return (
         <div className="flex flex-col h-full bg-white border-l border-gray-200 shadow-xl overflow-hidden font-sans">
@@ -44,15 +42,6 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
                         }`}
                 >
                     Summary
-                </button>
-                <button
-                    onClick={() => onTabChange('figure')}
-                    className={`flex-1 min-w-[50px] py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${activeTab === 'figure'
-                        ? 'bg-white text-indigo-600 shadow-sm border border-slate-100'
-                        : 'text-slate-400 hover:text-slate-600'
-                        }`}
-                >
-                    Figure
                 </button>
                 <button
                     onClick={() => onTabChange('chat')}
@@ -95,17 +84,13 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
                         <Summary sessionId={sessionId} isAnalyzing={isAnalyzing} />
                     </div>
                 )}
-                {activeTab === 'figure' && (
-                    <div className="absolute inset-0">
-                        <FigureInsight paperId={paperId} />
-                    </div>
-                )}
                 {activeTab === 'chat' && (
                     <div className="absolute inset-0">
                         <ChatWindow 
                             sessionId={sessionId} 
                             initialPrompt={initialChatMessage}
                             onPromptConsumed={onClearInitialChatMessage}
+                            onEvidenceClick={onEvidenceClick}
                         />
                     </div>
                 )}

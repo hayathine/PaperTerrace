@@ -345,7 +345,19 @@ Based on the paper context below, answer the user's question in {lang_name}.
 [Chat History]
 {history_text}
 
-Please provide a clear and concise answer in {lang_name}.
+[GROUNDING RULE]
+1. Your answer must be based ONLY on the provided Paper Context.
+2. You MUST include citations in your response text using bracketed numbers like [1], [2].
+3. For each citation, you must provide the exact text snippet from the paper and the page number it belongs to.
+4. Output your response as a JSON object with the following structure:
+{{
+  "response": "Your answer string in {lang_name} with citation markers like [1].",
+  "evidence": [
+    {{"id": "1", "page": 1, "text": "Exact snippet from the paper supporting the claim"}}
+  ]
+}}
+
+Output ONLY the JSON object.
 """
 
 CHAT_AUTHOR_PERSONA_PROMPT = """You are the author of this paper. Answer the reader's question from the author's perspective in {lang_name}.

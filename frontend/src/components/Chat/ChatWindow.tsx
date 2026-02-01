@@ -9,9 +9,10 @@ interface ChatWindowProps {
     initialMessages?: Message[];
     initialPrompt?: string | null;
     onPromptConsumed?: () => void;
+    onEvidenceClick?: (evidence: any) => void;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ sessionId = 'default', initialMessages = [], initialPrompt, onPromptConsumed }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ sessionId = 'default', initialMessages = [], initialPrompt, onPromptConsumed, onEvidenceClick }) => {
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [isLoading, setIsLoading] = useState(false);
 
@@ -23,7 +24,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ sessionId = 'default', initialM
     }, [initialPrompt]);
 
     const handleSendMessage = async (text: string) => {
-        // Add user message immediately
         const userMsg: Message = {
             id: uuidv4(),
             role: 'user',
@@ -44,7 +44,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ sessionId = 'default', initialM
                     message: text,
                     session_id: sessionId,
                     author_mode: false,
-                    lang: 'ja', // Defaulting to Japanese as per project goals
+                    lang: 'ja',
                 }),
             });
 
@@ -58,13 +58,13 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ sessionId = 'default', initialM
                 id: uuidv4(),
                 role: 'assistant',
                 content: data.response,
+                evidence: data.evidence,
                 timestamp: Date.now(),
             };
 
             setMessages(prev => [...prev, aiMsg]);
         } catch (error) {
             console.error('Chat error:', error);
-            // Determine error message based on error type? For now generic.
             const errorMsg: Message = {
                 id: uuidv4(),
                 role: 'assistant',
@@ -88,7 +88,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({ sessionId = 'default', initialM
                 </h2>
             </div>
 
-            <MessageList messages={messages} isLoading={isLoading} />
+            <MessageList messages={messages} isLoading={isLoading} onEvidenceClick={onEvidenceClick} />
             <InputArea onSendMessage={handleSendMessage} isLoading={isLoading} />
         </div>
     );

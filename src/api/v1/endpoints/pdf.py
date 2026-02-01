@@ -361,7 +361,10 @@ async def stream(task_id: str):
                     yield f"data: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
 
                 # End of OCR
-                full_text = "\n\n---\n\n".join(full_text_fragments)
+                full_text_with_markers = []
+                for i, p_text in enumerate(full_text_fragments):
+                    full_text_with_markers.append(f"--- PAGE {i + 1} ---\n{p_text}")
+                full_text = "\n\n".join(full_text_with_markers)
                 new_paper_id = str(uuid6.uuid7())
 
                 # Save to DB (Background or here)

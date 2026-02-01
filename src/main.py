@@ -18,7 +18,6 @@ from .api.v1.endpoints import (
     auth_router,
     chat_router,
     explore_router,
-    figures_router,
     note_router,
     papers_router,
     pdf_router,
@@ -54,16 +53,16 @@ async def lifespan(app: FastAPI):
     from src.core.logger import logger
 
     logger.info("Starting up...")
-    try:
-        # Run Alembic migrations
-        from alembic import command
-        from alembic.config import Config
-
-        alembic_cfg = Config("alembic.ini")
-        command.upgrade(alembic_cfg, "head")
-        logger.info("Database migrations completed")
-    except Exception as e:
-        logger.error(f"Failed to run database migrations: {e}")
+    # try:
+    #     # Run Alembic migrations
+    #     from alembic import command
+    #     from alembic.config import Config
+    #
+    #     alembic_cfg = Config("alembic.ini")
+    #     command.upgrade(alembic_cfg, "head")
+    #     logger.info("Database migrations completed")
+    # except Exception as e:
+    #     logger.error(f"Failed to run database migrations: {e}")
 
     yield
 
@@ -139,7 +138,7 @@ app.include_router(chat_router)
 
 # Analysis Features
 app.include_router(analysis_router)
-app.include_router(figures_router)
+# app.include_router(figures_router)
 
 # Notes
 app.include_router(note_router)
@@ -184,6 +183,7 @@ if os.path.exists(dist_dir):
 
 @app.get("/api/health")
 async def health_check():
+    logger.info("Health check endpoint hit")
     return {"status": "ok"}
 
 

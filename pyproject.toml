@@ -42,6 +42,9 @@ dependencies = [
     "google-cloud-tasks>=2.21.0",
     "alembic>=1.18.3",
     "sqlalchemy>=2.0.46",
+    "docling>=2.71.0",
+    "transformers>=4.48.0",
+    "surya-ocr==0.17.1",
 ]
 
 [dependency-groups]
@@ -53,10 +56,7 @@ dev = [
     "pytest-asyncio>=0.23.0",
     "httpx>=0.28.0",
     "pylance>=1.0.4",
-    "torch",
-    "transformers",
     "git-filter-repo>=2.47.0",
-    "surya-ocr==0.17.1",
 ]
 
 [[tool.uv.index]]
@@ -85,7 +85,6 @@ python = ".venv"
 root = [".", "./src"]
 
 [tool.uv.sources]
-# torch と torchvision が docling 経由で入る際、CPU版を強制する
+en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
 torch = { index = "pytorch-cpu" }
 torchvision = { index = "pytorch-cpu" }
-en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }

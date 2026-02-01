@@ -15,12 +15,13 @@ interface PDFViewerProps {
     onTextSelect?: (text: string, coords: { page: number, x: number, y: number }) => void;
     onAreaSelect?: (imageUrl: string, coords: { page: number, x: number, y: number }) => void; // New prop
     jumpTarget?: { page: number, x: number, y: number } | null;
+    evidenceHighlight?: { page: number, text: string } | null;
     onStatusChange?: (status: 'idle' | 'uploading' | 'processing' | 'done' | 'error') => void;
     onPaperLoaded?: (paperId: string | null) => void;
     onAskAI?: (prompt: string) => void;
 }
 
-const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSelect, onAreaSelect, sessionId, jumpTarget, onStatusChange, onPaperLoaded, onAskAI }) => {
+const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSelect, onAreaSelect, sessionId, jumpTarget, evidenceHighlight, onStatusChange, onPaperLoaded, onAskAI }) => {
     const { token } = useAuth();
     const [pages, setPages] = useState<PageData[]>([]);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle');
@@ -377,6 +378,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                             isAreaMode={mode === 'area'}
                             onAreaSelect={handleAreaSelect}
                             jumpTarget={jumpTarget}
+                            evidenceHighlight={evidenceHighlight}
                         />
                     ))}
                 </div>

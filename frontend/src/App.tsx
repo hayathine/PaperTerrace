@@ -25,8 +25,17 @@ function App() {
     const [selectedContext, setSelectedContext] = useState<string | undefined>(undefined)
     const [selectedCoordinates, setSelectedCoordinates] = useState<{ page: number, x: number, y: number } | undefined>(undefined)
     const [selectedImage, setSelectedImage] = useState<string | undefined>(undefined)
-    const [jumpTarget, setJumpTarget] = useState<{ page: number, x: number, y: number } | null>(null)
+    const [jumpTarget, setJumpTarget] = useState<{ page: number, x: number, y: number, term?: string } | null>(null)
+    const [evidenceHighlight, setEvidenceHighlight] = useState<{ page: number, text: string } | null>(null);
     const [initialChatMessage, setInitialChatMessage] = useState<string | null>(null);
+
+    const handleEvidenceClick = (evidence: { page: number, text: string }) => {
+        setEvidenceHighlight(evidence);
+        // Also jump to that page. For now just scroll to the top of that page.
+        // We'll set x,y to -1 as a special value to indicate "just jump to page" 
+        // OR we can try to find the coordinates if we have the index.
+        setJumpTarget({ page: evidence.page, x: 0.5, y: 0.2 }); // Jump to top-middle of that page
+    }
     const [showLoginModal, setShowLoginModal] = useState(false)
     const [currentPaperId, setCurrentPaperId] = useState<string | null>(null)
     const [isAnalyzing, setIsAnalyzing] = useState(false)
@@ -237,6 +246,7 @@ function App() {
                                     onTextSelect={handleTextSelect}
                                     onAreaSelect={handleAreaSelect}
                                     jumpTarget={jumpTarget}
+                                    evidenceHighlight={evidenceHighlight}
                                     onStatusChange={handleAnalysisStatusChange}
                                     onPaperLoaded={handlePaperLoaded}
                                     onAskAI={handleAskAI}
@@ -261,8 +271,8 @@ function App() {
                             coordinates={selectedCoordinates}
                             selectedImage={selectedImage}
                             onJump={handleJumpToLocation}
+                            onEvidenceClick={handleEvidenceClick}
                             isAnalyzing={isAnalyzing}
-                            paperId={currentPaperId}
                             initialChatMessage={initialChatMessage}
                             onClearInitialChatMessage={() => setInitialChatMessage(null)}
                         />

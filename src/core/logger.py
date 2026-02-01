@@ -1,4 +1,5 @@
 import logging
+import os
 import sys
 
 import structlog
@@ -8,8 +9,7 @@ from structlog.typing import EventDict, WrappedLogger
 def flatten_extra(logger: WrappedLogger, method_name: str, event_dict: EventDict) -> EventDict:
     """
     'extra' 引数が渡された場合（標準logging互換）、
-    その内容をフラットに展開してJSONのルートに含めるプロセッサ。
-    例: logger.info("msg", extra={"user_id": 1}) -> {"event": "msg", "user_id": 1, ...}
+    その内容をフラットに展開して構造化データに含めるプロセッサ。
     """
     extra = event_dict.pop("extra", None)
     if extra and isinstance(extra, dict):
@@ -31,6 +31,19 @@ shared_processors = [
 
 
 def configure_logging():
+    """
+    structlog と 標準 logging の統合設定。
+    """
+    # ログ設定の取得
+    log_format = os.getenv("LOG_FORMAT", "console").lower()
+    log_level_str = os.getenv("LOG_LEVEL", "INFO").upper()
+    log_level = getattr(logging, log_level_str, logging.INFO)
+
+    if log_format == "json":
+        renderer = structlog.processors.JSONRenderer(ensure_ascii=False)
+    else:
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
+
     # structlog の設定
     structlog.configure(
         processors=shared_processors + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
@@ -40,26 +53,47 @@ def configure_logging():
     )
 
     # 標準logging（stdlib）の設定
-    # これにより、他ライブラリからのログもstructlog経由でJSON出力されるようにする
+    # これにより、他ライブラリからのログもstructlog形式に変換される
     formatter = structlog.stdlib.ProcessorFormatter(
-        # stdlibのログレコードをstructlog形式に変換する前の処理
         foreign_pre_chain=shared_processors,
-        # 最終的な出力フォーマッター
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.processors.JSONRenderer(ensure_ascii=False),
+            renderer,
         ],
     )
 
+    # ハンドラの作成
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(formatter)
 
+    # ルートロガーの設定
     root_logger = logging.getLogger()
+    # 既存のハンドラをクリアして二重出力を防ぐ
+    for h in root_logger.handlers[:]:
+        root_logger.removeHandler(h)
     root_logger.addHandler(handler)
-    root_logger.setLevel(logging.INFO)
+    root_logger.setLevel(log_level)
 
-    # 既存の app_logger があれば設定を適用
-    logging.getLogger("app_logger").setLevel(logging.INFO)
+    # 主要なライブラリのロガー設定
+    # これらのロガーの伝搬(propagate)を有効にし、独自ハンドラを削除することで、
+    # ルートロガーのハンドラ（structlog形式）で出力されるようにする
+    target_loggers = [
+        "uvicorn",
+        "uvicorn.error",
+        "uvicorn.access",
+        "alembic",
+        "fastapi",
+        "starlette",
+        "sqlalchemy",
+    ]
+    for logger_name in target_loggers:
+        log = logging.getLogger(logger_name)
+        for h in log.handlers[:]:
+            log.removeHandler(h)
+        log.propagate = True
+
+    # アプリケーションロガーのレベル設定
+    logging.getLogger("app_logger").setLevel(log_level)
 
 
 # 初期化実行

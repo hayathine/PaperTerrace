@@ -25,12 +25,14 @@ interface PDFPageProps {
     isAreaMode?: boolean;
     onAreaSelect?: (coords: { page: number, x: number, y: number, width: number, height: number }) => void;
     jumpTarget?: { page: number, x: number, y: number, term?: string } | null;
+    evidenceHighlight?: { page: number, text: string } | null;
 }
 
 const WordBox = React.memo(({ 
-    idx, w, width, height, isSelected, isJumpHighlight, isStampMode, onMouseDown, onMouseEnter, onClick 
+    idx, w, width, height, isSelected, isJumpHighlight, isEvidenceHighlight, isStampMode, onMouseDown, onMouseEnter, onClick 
 }: { 
     idx: number, w: any, width: number, height: number, isSelected: boolean, isJumpHighlight: boolean, 
+    isEvidenceHighlight: boolean,
     isStampMode: boolean, onMouseDown: (idx: number) => void, onMouseEnter: (idx: number) => void, onClick: (idx: number, w: any) => void 
 }) => {
     const [x1, y1, x2, y2] = w.bbox;
@@ -45,8 +47,9 @@ const WordBox = React.memo(({
     return (
         <div
             className={`absolute rounded-sm group ${!isStampMode ? 'cursor-pointer' : 'pointer-events-none'} 
-                ${!isStampMode && !isSelected && !isJumpHighlight ? 'hover:bg-yellow-300/30' : ''} 
+                ${!isStampMode && !isSelected && !isJumpHighlight && !isEvidenceHighlight ? 'hover:bg-yellow-300/30' : ''} 
                 ${isSelected ? 'bg-indigo-500/30 border border-indigo-500/50' : ''}
+                ${isEvidenceHighlight ? 'bg-emerald-400/40 border border-emerald-600/50 z-10 shadow-[0_0_8px_rgba(52,211,153,0.3)]' : ''}
                 ${isJumpHighlight ? 'bg-yellow-400/60 border-2 border-yellow-600 shadow-[0_0_15px_rgba(250,204,21,0.5)] z-20 animate-bounce-subtle' : ''}`}
             style={{
                 left: `${left}%`,
@@ -81,9 +84,40 @@ const PDFPage: React.FC<PDFPageProps> = ({
     onAddStamp,
     isAreaMode = false,
     onAreaSelect,
-    jumpTarget
+    jumpTarget,
+    evidenceHighlight
 }) => {
     const { width, height, words, figures, links, image_url, page_num } = page;
+
+    // Evidence Highlight Logic using Phrase Match
+    const evidenceIndices = React.useMemo(() => {
+        if (!evidenceHighlight || evidenceHighlight.page !== page_num || !words || words.length === 0) return null;
+        
+        const fullText = words.map(w => w.word.toLowerCase()).join(' ');
+        const snippet = evidenceHighlight.text.toLowerCase().trim();
+        
+        const index = fullText.indexOf(snippet);
+        if (index === -1) return null;
+
+        // Find which words fall into this range
+        let currentPos = 0;
+        const resultIndices: number[] = [];
+        for (let i = 0; i < words.length; i++) {
+            const word = words[i].word.toLowerCase();
+            const wordEnd = currentPos + word.length;
+            
+            // Check if this word overlaps with the matched snippet range [index, index + snippet.length]
+            if (wordEnd > index && currentPos < index + snippet.length) {
+                resultIndices.push(i);
+            }
+            currentPos += word.length + 1; // +1 for the join(' ') space
+        }
+        return resultIndices;
+    }, [evidenceHighlight, page_num, words]);
+
+    const isWordInEvidence = React.useCallback((idx: number) => {
+        return evidenceIndices?.includes(idx) || false;
+    }, [evidenceIndices]);
 
     // Text Selection State
     const [isDragging, setIsDragging] = React.useState(false);
@@ -246,6 +280,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
                             Math.abs(((w.bbox[1] + w.bbox[3]) / 2 / height) - jumpTarget.y) < 0.005
                         );
 
+                        const isEvidenceHighlight = isWordInEvidence(idx);
+
                         return (
                             <WordBox
                                 key={`${idx}`}
@@ -255,6 +291,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
                                 height={height}
                                 isSelected={isSelected}
                                 isJumpHighlight={!!isJumpHighlight}
+                                isEvidenceHighlight={isEvidenceHighlight}
                                 isStampMode={isStampMode || isAreaMode}
                                 onMouseDown={(i) => {
                                     if (isAreaMode) return;
@@ -303,7 +340,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
                         return (
                             <div
                                 key={`fig-${idx}`}
-                                className="absolute cursor-pointer pointer-events-auto border-2 border-transparent hover:border-indigo-500/40 hover:bg-indigo-500/5 transition-all rounded-lg group flex items-start justify-end p-2"
+                                className="absolute cursor-pointer pointer-events-auto border border-indigo-400/20 hover:border-indigo-500/60 hover:bg-indigo-500/5 transition-all rounded-xl group overflow-hidden"
                                 style={{
                                     left: `${left}%`,
                                     top: `${top}%`,
@@ -319,14 +356,27 @@ const PDFPage: React.FC<PDFPageProps> = ({
                                 }}
                                 title={`${fig.label || 'figure'} click to explain`}
                             >
-                                <div className="hidden group-hover:flex items-center gap-2 bg-slate-900/90 backdrop-blur-md text-white text-[10px] px-3 py-2 rounded-xl shadow-2xl font-bold border border-white/20 transform scale-90 group-hover:scale-100 transition-all duration-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                                    <div className="w-5 h-5 bg-indigo-500 rounded-lg flex items-center justify-center">
-                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
-                                            <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
+                                {/* Background Badge for Label */}
+                                <div className="absolute top-2 left-2 px-2 py-0.5 bg-indigo-500/80 backdrop-blur-sm text-white text-[9px] font-black uppercase tracking-tighter rounded-md opacity-40 group-hover:opacity-100 transition-opacity">
+                                    {fig.label || 'FIG'}
+                                </div>
+
+                                {/* Central Action Button */}
+                                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 flex flex-col items-center gap-2">
+                                    <div className="w-10 h-10 bg-white/20 group-hover:bg-indigo-600 backdrop-blur-md rounded-full flex items-center justify-center shadow-lg border border-white/30 group-hover:border-indigo-400 transition-all duration-300 transform group-hover:scale-110">
+                                        <svg className="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" />
                                         </svg>
                                     </div>
-                                    <span>AIで{FIG_TYPE_LABEL[fig.label?.toLowerCase() || ''] || '図表'}を解説</span>
+                                    <div className="opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                                        <span className="bg-slate-900/90 text-white text-[10px] px-3 py-1 rounded-full font-bold shadow-2xl backdrop-blur-sm whitespace-nowrap border border-white/10">
+                                            AIで解説
+                                        </span>
+                                    </div>
                                 </div>
+
+                                {/* Pulse Effect for higher discoverability */}
+                                <div className="absolute inset-0 bg-indigo-500/5 animate-pulse-slow pointer-events-none group-hover:hidden"></div>
                             </div>
                         );
                     })}

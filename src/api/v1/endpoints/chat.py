@@ -34,13 +34,13 @@ async def chat(request: ChatRequest):
         context = redis_service.get(f"session:{request.session_id}") or ""
 
         if request.author_mode:
-            response = await chat_service.author_agent_response(
+            response_text = await chat_service.author_agent_response(
                 request.message, context, target_lang=request.lang
             )
+            return JSONResponse({"response": response_text, "evidence": []})
         else:
-            response = await chat_service.chat(request.message, context, target_lang=request.lang)
-
-        return JSONResponse({"response": response})
+            result = await chat_service.chat(request.message, context, target_lang=request.lang)
+            return JSONResponse(result)
     except Exception as e:
         logger.exception(f"[Chat] Error in chat session {request.session_id}")
         return JSONResponse({"error": str(e)}, status_code=500)

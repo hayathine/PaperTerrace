@@ -99,29 +99,6 @@ task build
 
 ---
 
-## ⚙️ 環境変数 (.env)
-
-プロジェクトルートの `.env` に以下の設定が必要です。
-
-```ini
-# AIプロバイダ設定
-GEMINI_API_KEY=your_gemini_api_key
-AI_PROVIDER=gemini  # gemini or vertex
-
-# Firebase (Auth)
-FIREBASE_API_KEY=...
-FIREBASE_AUTH_DOMAIN=...
-FIREBASE_PROJECT_ID=...
-# ...その他のFirebase設定...
-
-# Database & Cache
-DB_PATH=ocr_reader.db
-REDIS_URL=redis://localhost:6379/0
-
-```
-
----
-
 ## 📂 ディレクトリ構造
 
 - `frontend/`: React + TypeScript (Vite) ソースコード

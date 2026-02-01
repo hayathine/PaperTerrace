@@ -1,3 +1,4 @@
+import os
 from typing import Any, Dict, List, Optional
 
 from PIL import Image
@@ -25,6 +26,12 @@ class FigureService:
         Figures: Extracted using pdfplumber coordinates (native images).
         Tables/Formulas: Detected via AI (Gemini/Surya).
         """
+        if os.getenv("SKIP_FIGURE_EXTRACTION") == "True":
+            logger.info(
+                f"[FigureService] Skipping figure extraction for page {page_num} (SKIP_FIGURE_EXTRACTION=True)"
+            )
+            return []
+
         final_figures = []
         try:
             # 1. Get Figure coordinates from pdfplumber
@@ -61,8 +68,17 @@ class FigureService:
             # 2. Get Tables and Formulas from AI
             ai_items = await self._get_items(page_image, page_num)
 
-            # Combine all items
-            all_items = native_figures + ai_items
+            # Combine and deduplicate
+            # Prioritize AI items (especially Heron) for tables/formulas
+            all_items = ai_items.copy()
+            for n_fig in native_figures:
+                is_duplicate = False
+                for a_item in ai_items:
+                    if self._calculate_iou(n_fig["bbox"], a_item["bbox"]) > 0.5:
+                        is_duplicate = True
+                        break
+                if not is_duplicate:
+                    all_items.append(n_fig)
 
             # 3. Crop and save each item
             for i, item in enumerate(all_items):
@@ -83,8 +99,8 @@ class FigureService:
             from .cordinate_service import cordinate_service
 
             items = []
-            # Use AI only for Table and Formula (Figures are handled by pdfplumber)
-            mapping = ("Table", "Formula")
+            # We look for Tables, Formulas, and Figures (AI can find vector graphics that pdfplumber misses)
+            mapping = ("Table", "Formula", "Figure")
 
             import asyncio
 

@@ -11,19 +11,17 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from src.core.logger import logger
+from src.domain.features.translate import SUPPORTED_LANGUAGES
 from src.domain.prompts import (
     CORE_SYSTEM_PROMPT,
     DICT_EXPLAIN_WORD_CONTEXT_PROMPT,
     DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT,
     DICT_TRANSLATE_WORD_SIMPLE_PROMPT,
 )
-from src.domain.services.analysis_service import EnglishAnalysisService
+from src.domain.services.analysis_service import EnglishAnalysisService, executor
 from src.domain.services.local_translator import get_local_translator
 from src.infra import get_ai_provider, get_storage_provider
-
-from ..features.translate import SUPPORTED_LANGUAGES
-from ..logic import executor
-from ..providers.dictionary_provider import get_dictionary_provider
+from src.infra.dictionary_provider import get_dictionary_provider
 
 router = APIRouter(tags=["Translation"])
 
@@ -156,7 +154,7 @@ async def explain(
     is_htmx = req.headers.get("HX-Request") == "true"
 
     # 0. Lemmatize input
-    clean_input = word.replace("\n", " ").strip(" .,;!?(){}[\]\"'")
+    clean_input = word.replace("\n", " ").strip(r" .,;!?(){}[\]\"'")
     if not clean_input:
         clean_input = word.strip()
 
@@ -283,7 +281,7 @@ async def explain_deep(
 
     is_htmx = req.headers.get("HX-Request") == "true"
     # 0. Lemmatize input
-    clean_input = word.replace("\n", " ").strip(" .,;!?(){}[\]\"'")
+    clean_input = word.replace("\n", " ").strip(r" .,;!?(){}[\]\"'")
     if not clean_input:
         clean_input = word.strip()
 
