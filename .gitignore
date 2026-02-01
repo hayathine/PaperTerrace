@@ -18,6 +18,8 @@ logs/
 plans/
 node_modules/
 __pycache__/
+tests/
+test_log.py
 # C extensions
 *.so
 
