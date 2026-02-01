@@ -18,20 +18,55 @@ class FigureService:
         file_hash: str,
         page_num: int,
         pdf_bytes: Optional[bytes] = None,
-        page_height_pt: float = 792.0,  # Default to US Letter if unknown
+        page_height_pt: float = 792.0,
     ) -> List[Dict[str, Any]]:
         """
-        Detect figures/tables/equations according to the parser setting.
+        Detect figures/tables/equations.
+        Figures: Extracted using pdfplumber coordinates (native images).
+        Tables/Formulas: Detected via AI (Gemini/Surya).
         """
+        final_figures = []
         try:
-            # Get items from coordinator service
-            items = await self._get_items(page_image, page_num)
+            # 1. Get Figure coordinates from pdfplumber
+            native_figures = []
+            if pdf_bytes:
+                try:
+                    import io
 
-            # Crop and save each item
-            final_figures = []
-            for i, item in enumerate(items):
-                bbox = item["bbox"]  # [x1, y1, x2, y2] in pixels
+                    import pdfplumber
 
+                    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+                        if page_num <= len(pdf.pages):
+                            page = pdf.pages[page_num - 1]
+                            scale_x = page_image.width / float(page.width)
+                            scale_y = page_image.height / float(page.height)
+
+                            for img in page.images:
+                                # Scale points to pixels
+                                xmin = img["x0"] * scale_x
+                                ymin = img["top"] * scale_y
+                                xmax = img["x1"] * scale_x
+                                ymax = img["bottom"] * scale_y
+
+                                # Skip tiny icons
+                                if (xmax - xmin) < 20 or (ymax - ymin) < 20:
+                                    continue
+
+                                native_figures.append(
+                                    {"bbox": [xmin, ymin, xmax, ymax], "label": "Figure"}
+                                )
+                except Exception as e:
+                    logger.warning(f"[FigureService] pdfplumber figure extraction failed: {e}")
+
+            # 2. Get Tables and Formulas from AI
+            ai_items = await self._get_items(page_image, page_num)
+
+            # Combine all items
+            all_items = native_figures + ai_items
+
+            # 3. Crop and save each item
+            for i, item in enumerate(all_items):
+                bbox = item["bbox"]
                 fig_data = self._crop_and_save_pix_coords(
                     page_image, bbox, item["label"], page_num, i, file_hash
                 )
@@ -41,28 +76,26 @@ class FigureService:
             return final_figures
         except Exception as e:
             logger.error(f"[FigureService] Figure extraction failed on p.{page_num}: {e}")
-            return []
+            return final_figures
 
     async def _get_items(self, page_image: Image.Image, page_num: int) -> List[Dict]:
         try:
             from .cordinate_service import cordinate_service
 
             items = []
-            # We look for Tables, Formulas, and Figures
-            mapping = ("Table", "Formula", "Figure")
+            # Use AI only for Table and Formula (Figures are handled by pdfplumber)
+            mapping = ("Table", "Formula")
 
-            # Execute requests in parallel for efficiency
             import asyncio
 
             tasks = [cordinate_service.get_coordinates_bbox(page_image, label) for label in mapping]
             results = await asyncio.gather(*tasks)
 
-            # Flatten results and convert to dict format
             for label_results in results:
                 for res in label_results:
                     items.append(
                         {
-                            "bbox": res.bbox,  # Access as attribute since it's a BboxResponse (Pydantic)
+                            "bbox": res.bbox,
                             "label": res.label,
                             "confidence": res.confidence,
                         }
