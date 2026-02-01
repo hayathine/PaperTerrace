@@ -38,7 +38,7 @@ class FirebaseAuth:
         """Initialize Firebase Admin SDK."""
         # Use a more robust check for existing app
         try:
-            firebase_app = firebase_admin.get_app()
+            firebase_admin.get_app()
             logger.info("Firebase already initialized (default app exists)")
             FirebaseAuth._initialized = True
             return

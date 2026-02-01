@@ -19,7 +19,6 @@ from src.domain.prompts import (
     DICT_TRANSLATE_WORD_SIMPLE_PROMPT,
 )
 from src.domain.services.analysis_service import EnglishAnalysisService, executor
-from src.domain.services.local_translator import get_local_translator
 from src.infra import get_ai_provider, get_storage_provider
 
 router = APIRouter(tags=["Translation"])
@@ -185,32 +184,8 @@ async def explain(
             )
         )
 
-    # Stage 2: Local Machine Translation (M2M100)
-    if lang == "ja":
-        local_translator = get_local_translator()
-        local_translation = await loop.run_in_executor(executor, local_translator.translate, lemma)
-        if local_translation:
-            service.translation_cache[lemma] = local_translation
-            if not is_htmx:
-                return JSONResponse(
-                    {
-                        "word": original_word,
-                        "lemma": lemma,
-                        "translation": local_translation,
-                        "source": "Local-MT",
-                    }
-                )
-            return HTMLResponse(
-                build_dict_card_html(
-                    original_word,
-                    lemma,
-                    local_translation,
-                    "Local-MT",
-                    lang,
-                    paper_id,
-                    element_id=element_id,
-                )
-            )
+    # Stage 2: Local Machine Translation (REMOVED)
+    # stage 2 (M2M100) logic was removed at user request.
 
     # 見つからない場合もローカル翻訳の枠組みで「未発見」として返し、AIボタンを表示
     if not is_htmx:

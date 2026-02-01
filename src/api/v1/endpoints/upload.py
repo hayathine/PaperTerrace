@@ -27,20 +27,22 @@ async def upload_image(file: UploadFile = File(...)):
     """
     try:
         if not file.content_type.startswith("image/"):
-            return JSONResponse({"error": "Invalid file type. Only images are allowed."}, status_code=400)
+            return JSONResponse(
+                {"error": "Invalid file type. Only images are allowed."}, status_code=400
+            )
 
         # Generate unique filename
         ext = file.filename.split(".")[-1] if "." in file.filename else "png"
         filename = f"{uuid.uuid4()}_{int(time.time())}.{ext}"
         file_path = UPLOAD_DIR / filename
-        
+
         # Save file
         with file_path.open("wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
-            
+
         file_url = f"/static/user_uploads/{filename}"
         logger.info(f"Image uploaded: {file_url}")
-        
+
         return JSONResponse({"url": file_url})
     except Exception as e:
         logger.error(f"Failed to upload image: {e}")

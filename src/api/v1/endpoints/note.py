@@ -49,6 +49,7 @@ async def add_note(request: NoteRequest, user: OptionalUser):
     )
     return JSONResponse(jsonable_encoder(note))
 
+
 @router.put("/note/{note_id}")
 async def update_note(note_id: str, request: NoteRequest, user: OptionalUser):
     user_id = user.uid if user else None
@@ -66,11 +67,13 @@ async def update_note(note_id: str, request: NoteRequest, user: OptionalUser):
             request.x,
             request.y,
             user_id=user_id,
-            note_id=note_id # We need to pass note_id to update specific note
+            note_id=note_id,  # We need to pass note_id to update specific note
         )
         return JSONResponse(jsonable_encoder(updated))
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=500)
+
+
 @router.delete("/note/{note_id}")
 async def delete_note(note_id: str):
     deleted = sidebar_note_service.delete_note(note_id)

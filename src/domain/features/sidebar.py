@@ -53,7 +53,7 @@ class SidebarNoteService:
         try:
             if not note_id:
                 note_id = str(uuid6.uuid7())
-            
+
             self.storage.save_note(
                 note_id, session_id, term, note, image_url, page_number, x, y, user_id
             )
