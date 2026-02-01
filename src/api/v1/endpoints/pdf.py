@@ -11,12 +11,12 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from src.core.auth import OptionalUser
-
-from src.domain.features import SummaryService
 from src.core.logger import logger
-from src.infra import RedisService, get_storage_provider
-from src.domain.services.analysis_service import EnglishAnalysisService
 from src.core.utils import _get_file_hash
+from src.domain.features import SummaryService
+from src.domain.services.analysis_service import EnglishAnalysisService
+from src.infra import RedisService, get_storage_provider
+from src.infra.cloud_tasks_service import cloud_tasks_service
 
 router = APIRouter(tags=["PDF Analysis"])
 
@@ -393,8 +393,14 @@ async def stream(task_id: str):
                                 caption="",  # Can't easily extract yet
                                 explanation="",  # Initially empty
                             )
-                            # Trigger background explanation
-                            asyncio.create_task(process_figure_auto_analysis(fid, fig["image_url"]))
+                            # Trigger background explanation via Cloud Tasks
+                            cloud_tasks_service.enqueue_figure_analysis(
+                                figure_id=fid,
+                                image_url=fig["image_url"],
+                                label=fig.get("label", "figure"),
+                                target_lang=lang,
+                                content=fig.get("table_content") or fig.get("latex"),
+                            )
 
                 except Exception:
                     logger.exception(f"Failed to save paper {new_paper_id} to database")
@@ -407,19 +413,16 @@ async def stream(task_id: str):
                 if s_id:
                     storage.save_session_context(s_id, new_paper_id)
 
-                # --- Auto-Summarization for Abstract ---
-                # Generate a full summary and save it to 'abstract' column
+                # --- Auto-Summarization via Cloud Tasks ---
                 try:
-                    summary_full = await summary_service.summarize_full(full_text, target_lang=lang)
-                    if summary_full:
-                        storage.update_paper_abstract(new_paper_id, summary_full)
-                        logger.info(f"Full summary saved as abstract for paper {new_paper_id}")
-
+                    cloud_tasks_service.enqueue_paper_summary(
+                        new_paper_id, full_text, target_lang=lang
+                    )
                     if raw_abstract:
                         storage.update_paper_raw_abstract(new_paper_id, raw_abstract)
-                        logger.info(f"Raw abstract extracted and saved for paper {new_paper_id}")
+                        logger.info(f"Raw abstract saved for paper {new_paper_id}")
                 except Exception:
-                    logger.exception(f"Auto-summary generation failed for paper {new_paper_id}")
+                    logger.exception(f"Failed to enqueue summary for paper {new_paper_id}")
 
                 logger.info(
                     f"Saved session context for: {s_id} (result: {res}, length: {len(full_text)})"
@@ -634,14 +637,13 @@ async def stream(task_id: str):
                         label = fig.get("label", "figure")
                         # Pass docling-extracted content (markdown/latex) to analysis task
                         extra_content = fig.get("table_content") or fig.get("latex")
-                        asyncio.create_task(
-                            process_figure_auto_analysis(
-                                fid,
-                                fig["image_url"],
-                                label,
-                                target_lang=lang,
-                                content=extra_content,
-                            )
+                        # Trigger background explanation via Cloud Tasks
+                        cloud_tasks_service.enqueue_figure_analysis(
+                            figure_id=fid,
+                            image_url=fig["image_url"],
+                            label=label,
+                            target_lang=lang,
+                            content=extra_content,
                         )
 
             except Exception as e:
@@ -653,21 +655,16 @@ async def stream(task_id: str):
                 # DBにも保存
                 storage.save_session_context(session_id, paper_id)
 
-            # --- Auto-Summarization for Abstract ---
+            # --- Auto-Summarization via Cloud Tasks ---
             try:
                 # Extract raw abstract first
                 raw_abstract = service.ocr_service.extract_abstract_text(pdf_content)
-
-                summary_full = await summary_service.summarize_full(full_text, target_lang=lang)
-                if summary_full:
-                    storage.update_paper_abstract(paper_id, summary_full)
-                    logger.info(f"Full summary saved as abstract for paper {paper_id}")
-
+                cloud_tasks_service.enqueue_paper_summary(paper_id, full_text, target_lang=lang)
                 if raw_abstract:
                     storage.update_paper_raw_abstract(paper_id, raw_abstract)
-                    logger.info(f"Raw abstract extracted and saved for paper {paper_id}")
+                    logger.info(f"Raw abstract saved for paper {paper_id}")
             except Exception as e:
-                logger.error(f"Auto-summary generation failed: {e}")
+                logger.error(f"Failed to enqueue summary: {e}")
 
             # 完了処理
 

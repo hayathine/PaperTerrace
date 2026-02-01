@@ -23,6 +23,7 @@ from .api.v1.endpoints import (
     papers_router,
     pdf_router,
     stamps_router,
+    tasks_router,
     translation_router,
     upload_router,
     users_router,
@@ -51,16 +52,18 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown events.
     """
     from src.core.logger import logger
-    from src.infra import get_storage_provider
 
     logger.info("Starting up...")
     try:
-        storage = get_storage_provider()
-        if hasattr(storage, "init_tables"):
-            storage.init_tables()
-            logger.info("Database tables initialized")
+        # Run Alembic migrations
+        from alembic import command
+        from alembic.config import Config
+
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations completed")
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
+        logger.error(f"Failed to run database migrations: {e}")
 
     yield
 
@@ -104,15 +107,14 @@ app.add_middleware(
 
 @app.post("/api/debug/init-db")
 async def init_db_manual():
-    """Manual trigger for database initialization."""
-    from src.infra import get_storage_provider
-
+    """Manual trigger for database migrations."""
     try:
-        storage = get_storage_provider()
-        if hasattr(storage, "init_tables"):
-            storage.init_tables()
-            return {"status": "ok", "message": "Tables initialized"}
-        return {"status": "skipped", "message": "Storage provider does not support init_tables"}
+        from alembic import command
+        from alembic.config import Config
+
+        alembic_cfg = Config("alembic.ini")
+        command.upgrade(alembic_cfg, "head")
+        return {"status": "ok", "message": "Migrations completed"}
     except Exception as e:
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
@@ -150,6 +152,9 @@ app.include_router(papers_router)
 
 # Uploads
 app.include_router(upload_router)
+
+# Internal Tasks (Cloud Tasks context)
+app.include_router(tasks_router, prefix="/api/v1")
 
 
 # ============================================================================

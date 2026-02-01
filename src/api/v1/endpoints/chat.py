@@ -7,8 +7,8 @@ from fastapi import APIRouter, Form
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from src.domain.features import ChatService
 from src.core.logger import logger
+from src.domain.features import ChatService
 from src.infra import RedisService
 
 router = APIRouter(tags=["Chat"])

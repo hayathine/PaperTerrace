@@ -56,6 +56,31 @@ resource "google_cloud_run_v2_service" "main" {
         name  = "STORAGE_PROVIDER"
         value = "cloudsql"
       }
+      
+      env {
+        name  = "GCP_PROJECT_ID"
+        value = var.project_id
+      }
+      
+      env {
+        name  = "GOOGLE_CLOUD_LOCATION"
+        value = var.region
+      }
+      
+      env {
+        name  = "CLOUD_TASKS_QUEUE"
+        value = var.cloud_task_queue
+      }
+      
+      env {
+        name  = "APP_BASE_URL"
+        value = var.app_base_url
+      }
+      
+      env {
+        name  = "GCP_SERVICE_ACCOUNT"
+        value = var.gcp_service_account
+      }
 
       # Secrets from Secret Manager
       env {

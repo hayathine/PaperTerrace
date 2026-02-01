@@ -40,6 +40,9 @@ dependencies = [
     "typer>=0.21.1",
     "pillow>=10.4.0",
     "surya-ocr==0.17.1",
+    "google-cloud-tasks>=2.21.0",
+    "alembic>=1.18.3",
+    "sqlalchemy>=2.0.46",
 ]
 
 [dependency-groups]

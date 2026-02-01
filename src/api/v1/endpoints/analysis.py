@@ -7,6 +7,7 @@ figure/table analysis, and adversarial review.
 from fastapi import APIRouter, File, Form, UploadFile
 from fastapi.responses import JSONResponse
 
+from src.core.logger import logger
 from src.domain.features import (
     AdversarialReviewService,
     CiteIntentService,
@@ -16,7 +17,6 @@ from src.domain.features import (
     ResearchRadarService,
     SummaryService,
 )
-from src.core.logger import logger
 from src.infra import RedisService, get_storage_provider
 
 router = APIRouter(tags=["Analysis"])

@@ -11,7 +11,7 @@ from typing import List
 
 from dotenv import load_dotenv
 
-from ..logger import logger
+from ..core.logger import logger
 
 load_dotenv()
 

@@ -41,6 +41,7 @@ resource "google_project_service" "apis" {
     "vpcaccess.googleapis.com",
     "servicenetworking.googleapis.com",
     "iam.googleapis.com", # Added IAM API
+    "cloudtasks.googleapis.com",
   ])
 
   service            = each.value
@@ -119,6 +120,17 @@ module "storage" {
   depends_on = [google_project_service.apis, module.iam]
 }
 
+# Cloud Tasks
+module "cloud_tasks" {
+  source = "./modules/cloud_tasks"
+
+  project_id = var.project_id
+  region     = var.region
+  queue_name = var.cloud_task_queue
+
+  depends_on = [google_project_service.apis]
+}
+
 # Cloud Run
 module "cloud_run" {
   source = "./modules/cloud_run"
@@ -135,6 +147,10 @@ module "cloud_run" {
   db_host                  = module.cloud_sql.private_ip
   db_name                  = module.cloud_sql.database_name
   db_user                  = module.cloud_sql.database_user
+  
+  cloud_task_queue         = var.cloud_task_queue
+  app_base_url             = var.app_base_url
+  gcp_service_account      = var.gcp_service_account
 
   # Pass service account email
   service_account_email = module.iam.service_account_email

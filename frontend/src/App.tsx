@@ -5,6 +5,7 @@ import { useAuth } from './contexts/AuthContext'
 import Login from './components/Auth/Login'
 import PaperList from './components/Library/PaperList'
 import { PageData } from './components/PDF/types'
+import UploadZone from './components/PDF/UploadZone'
 
 function App() {
     const { user, logout } = useAuth()
@@ -225,7 +226,7 @@ function App() {
 
                 <div className="flex-1 flex overflow-hidden">
                     {/* PDF Viewer Area */}
-                    <div className="flex-1 bg-slate-100 flex items-start justify-center relative overflow-hidden">
+                    <div className="flex-1 bg-slate-100 flex items-center justify-center relative overflow-hidden">
                         {uploadFile || initialPages ? (
                             <div className="w-full h-full p-4 md:p-8 overflow-y-auto custom-scrollbar">
                                 <PDFViewer
@@ -242,9 +243,10 @@ function App() {
                                 />
                             </div>
                         ) : (
-                            <div className="bg-white p-8 rounded shadow text-center text-gray-400">
-                                Select a PDF to view
-                            </div>
+                            <UploadZone onFileChange={(file: File) => {
+                                setUploadFile(file);
+                                setCurrentPaperId(null);
+                            }} />
                         )}
                     </div>
 

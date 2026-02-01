@@ -9,7 +9,6 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.core.auth import OptionalUser
-
 from src.infra import get_storage_provider
 
 router = APIRouter(tags=["Stamps"])

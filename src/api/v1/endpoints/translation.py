@@ -10,20 +10,20 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
+from src.core.logger import logger
 from src.domain.prompts import (
     CORE_SYSTEM_PROMPT,
     DICT_EXPLAIN_WORD_CONTEXT_PROMPT,
     DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT,
     DICT_TRANSLATE_WORD_SIMPLE_PROMPT,
 )
-
-from ..features.translate import SUPPORTED_LANGUAGES
-from src.core.logger import logger
-from ..logic import executor
-from src.infra import get_ai_provider, get_storage_provider
-from ..providers.dictionary_provider import get_dictionary_provider
 from src.domain.services.analysis_service import EnglishAnalysisService
 from src.domain.services.local_translator import get_local_translator
+from src.infra import get_ai_provider, get_storage_provider
+
+from ..features.translate import SUPPORTED_LANGUAGES
+from ..logic import executor
+from ..providers.dictionary_provider import get_dictionary_provider
 
 router = APIRouter(tags=["Translation"])
 

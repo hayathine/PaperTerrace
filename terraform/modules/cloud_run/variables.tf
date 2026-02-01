@@ -62,3 +62,18 @@ variable "service_account_email" {
   description = "Service Account Email to run the service as"
   type        = string
 }
+
+variable "cloud_task_queue" {
+  description = "Cloud Tasks Queue"
+  type        = string
+}
+
+variable "app_base_url" {
+  description = "Base URL for the application"
+  type        = string
+}
+
+variable "gcp_service_account" {
+  description = "GCP Service Account for Cloud Tasks"
+  type        = string
+}
