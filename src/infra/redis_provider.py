@@ -8,11 +8,13 @@ from src.core.logger import logger
 
 # Singleton instance
 _redis_client: Optional[redis.Redis] = None
+# Static flag to avoid repeated warning logs
+_redis_warning_logged = False
 
 
 def get_redis_client() -> Optional[redis.Redis]:
     """Get or create a Redis client instance (singleton). Returns None if connection fails."""
-    global _redis_client
+    global _redis_client, _redis_warning_logged
     if _redis_client is None:
         host = os.getenv("REDIS_HOST", "localhost")
         port = int(os.getenv("REDIS_PORT", "6379"))
@@ -27,7 +29,11 @@ def get_redis_client() -> Optional[redis.Redis]:
             _redis_client = client
             logger.info(f"Connected to Redis at {host}:{port}")
         except redis.ConnectionError as e:
-            logger.warning(f"Failed to connect to Redis: {e}. Falling back to in-memory storage.")
+            if not _redis_warning_logged:
+                logger.warning(
+                    f"Failed to connect to Redis at {host}:{port}: {e}. Falling back to in-memory storage."
+                )
+                _redis_warning_logged = True
             _redis_client = None
 
     return _redis_client

@@ -21,7 +21,6 @@ from src.domain.prompts import (
 from src.domain.services.analysis_service import EnglishAnalysisService, executor
 from src.domain.services.local_translator import get_local_translator
 from src.infra import get_ai_provider, get_storage_provider
-from src.infra.dictionary_provider import get_dictionary_provider
 
 router = APIRouter(tags=["Translation"])
 
@@ -144,7 +143,7 @@ async def explain(
     paper_id: str | None = None,
     element_id: str | None = None,
 ):
-    """単語の解説 (Local: Cache -> Jamdict -> local-MT)"""
+    """単語の解説 (Local: Cache local-MT)"""
     # Robust element_id detection: Try query param, then fallback to HTMX header
     element_id = element_id or req.headers.get("HX-Trigger")
 
@@ -186,42 +185,12 @@ async def explain(
             )
         )
 
-    is_phrase = " " in lemma.strip()
-
-    # Stage 1: Local Dictionary (Jamdict)
-    if lang == "ja" and not is_phrase:
-        dict_provider = get_dictionary_provider()
-        definition = await loop.run_in_executor(executor, dict_provider.lookup, lemma)
-        if definition:
-            translation = definition[:100] + "..." if len(definition) > 100 else definition
-            if not is_htmx:
-                return JSONResponse(
-                    {
-                        "word": original_word,
-                        "lemma": lemma,
-                        "translation": translation,
-                        "source": "Jamdict",
-                    }
-                )
-            return HTMLResponse(
-                build_dict_card_html(
-                    original_word,
-                    lemma,
-                    translation,
-                    "Jamdict",
-                    lang,
-                    paper_id,
-                    element_id=element_id,
-                )
-            )
-
     # Stage 2: Local Machine Translation (M2M100)
     if lang == "ja":
         local_translator = get_local_translator()
         local_translation = await loop.run_in_executor(executor, local_translator.translate, lemma)
         if local_translation:
             service.translation_cache[lemma] = local_translation
-            service.word_cache[lemma] = False
             if not is_htmx:
                 return JSONResponse(
                     {
@@ -329,7 +298,6 @@ async def explain_deep(
         )
 
         service.translation_cache[lemma] = translation
-        service.word_cache[lemma] = False
 
         if not is_htmx:
             return JSONResponse(

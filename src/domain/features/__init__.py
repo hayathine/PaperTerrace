@@ -7,7 +7,6 @@ from .chat import ChatService
 from .cite_intent import CiteIntentService
 from .claim_agent import ClaimVerificationService
 from .figure_insight import FigureInsightService
-from .paragraph_explain import ParagraphExplainService
 from .research_radar import ResearchRadarService
 from .sidebar import SidebarNoteService
 from .summary import SummaryService
@@ -20,7 +19,6 @@ __all__ = [
     "CiteIntentService",
     "ClaimVerificationService",
     "FigureInsightService",
-    "ParagraphExplainService",
     "ResearchRadarService",
     "SidebarNoteService",
     "SummaryService",

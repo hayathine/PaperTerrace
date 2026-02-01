@@ -13,7 +13,6 @@ from src.domain.features import (
     CiteIntentService,
     ClaimVerificationService,
     FigureInsightService,
-    ParagraphExplainService,
     ResearchRadarService,
     SummaryService,
 )
@@ -24,7 +23,7 @@ router = APIRouter(tags=["Analysis"])
 # Services
 summary_service = SummaryService()
 research_radar_service = ResearchRadarService()
-paragraph_explain_service = ParagraphExplainService()
+
 figure_insight_service = FigureInsightService()
 adversarial_service = AdversarialReviewService()
 cite_intent_service = CiteIntentService()
@@ -141,36 +140,6 @@ async def analyze_citations(session_id: str = Form(...)):
 
     citations = await research_radar_service.analyze_citations(context)
     return JSONResponse({"citations": citations})
-
-
-# ============================================================================
-# Paragraph Explanation
-# ============================================================================
-
-
-@router.post("/explain-paragraph")
-async def explain_paragraph(
-    paragraph: str = Form(...), session_id: str = Form(...), lang: str = Form("ja")
-):
-    try:
-        logger.info(f"[Analysis] Explaining paragraph for session {session_id}")
-        context = _get_context(session_id)
-        explanation = await paragraph_explain_service.explain(paragraph, context or "", lang=lang)
-        return JSONResponse({"explanation": explanation})
-    except Exception as e:
-        logger.exception(f"[Analysis] Paragraph explanation failed for session {session_id}")
-        return JSONResponse({"error": f"解説の生成に失敗しました: {str(e)}"}, status_code=500)
-
-
-@router.post("/translate-paragraph")
-async def translate_paragraph_endpoint(
-    paragraph: str = Form(...), session_id: str = Form(...), lang: str = Form("ja")
-):
-    context = _get_context(session_id)
-    translation = await paragraph_explain_service.translate_paragraph(
-        paragraph, context or "", lang=lang
-    )
-    return JSONResponse({"translation": translation})
 
 
 # ============================================================================

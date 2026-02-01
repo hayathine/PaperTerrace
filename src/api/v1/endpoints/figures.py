@@ -23,7 +23,7 @@ async def get_paper_figures(paper_id: str, user: OptionalUser = None):
 
 
 @router.post("/api/figures/{figure_id}/explain")
-async def explain_figure(figure_id: str, user: OptionalUser = None):
+async def explain_figure(figure_id: str, lang: str = "ja", user: OptionalUser = None):
     """Generate or retrieve explanation for a figure."""
     try:
         figure = storage.get_figure(figure_id)
@@ -76,7 +76,7 @@ async def explain_figure(figure_id: str, user: OptionalUser = None):
             raise HTTPException(status_code=404, detail="Image file not found")
 
         explanation = await figure_service.analyze_figure(
-            image_bytes, caption=figure.get("caption", ""), target_lang="ja"
+            image_bytes, caption=figure.get("caption", ""), target_lang=lang
         )
 
         # Save it

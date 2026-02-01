@@ -186,7 +186,6 @@ const Dictionary: React.FC<DictionaryProps> = ({ term, sessionId, context, coord
                             <div className="flex items-center gap-2">
                                 <span className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide
                                     ${entry.source === 'Cache' ? 'bg-purple-100 text-purple-600' :
-                                        entry.source === 'Jamdict' ? 'bg-blue-100 text-blue-600' :
                                             entry.source === 'Gemini' ? 'bg-amber-100 text-amber-600' : 'bg-gray-100'
                                     }`}>
                                     {entry.source}

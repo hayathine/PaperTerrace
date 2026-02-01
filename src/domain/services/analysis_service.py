@@ -28,7 +28,6 @@ class EnglishAnalysisService:
         self.ocr_service = PDFOCRService(self.model)
 
         # Maintain public properties if they were used outside
-        self.word_cache = self.word_analysis.word_cache
         self.translation_cache = self.word_analysis.translation_cache
 
     def lemmatize(self, text: str) -> str:
@@ -45,8 +44,5 @@ class EnglishAnalysisService:
         return await self.word_analysis.lookup_or_translate(lemma, lang=lang, context=context)
 
     # Legacy accessors
-    def get_word_cache(self):
-        return self.word_analysis.word_cache
-
     def get_translation_cache(self):
         return self.word_analysis.translation_cache

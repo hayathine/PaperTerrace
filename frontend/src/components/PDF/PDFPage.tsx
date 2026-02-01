@@ -24,6 +24,8 @@ interface PDFPageProps {
     // Area selection props
     isAreaMode?: boolean;
     onAreaSelect?: (coords: { page: number, x: number, y: number, width: number, height: number }) => void;
+    onFigureClick?: (fig: any) => void;
+    onTableClick?: (table: any) => void;
     jumpTarget?: { page: number, x: number, y: number, term?: string } | null;
     evidenceHighlight?: { page: number, text: string } | null;
 }
@@ -84,6 +86,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
     onAddStamp,
     isAreaMode = false,
     onAreaSelect,
+    onFigureClick,
+    onTableClick,
     jumpTarget,
     evidenceHighlight
 }) => {
@@ -349,8 +353,13 @@ const PDFPage: React.FC<PDFPageProps> = ({
                                 }}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    if (onAskAI) {
-                                        const typeName = FIG_TYPE_LABEL[fig.label?.toLowerCase() || ''] || '図表';
+                                    const label = fig.label?.toLowerCase() || '';
+                                    if (label === 'table' && onTableClick) {
+                                        onTableClick(fig);
+                                    } else if (onFigureClick) {
+                                        onFigureClick(fig);
+                                    } else if (onAskAI) {
+                                        const typeName = FIG_TYPE_LABEL[label] || '図表';
                                         onAskAI(`${typeName}の解説をお願いします。`);
                                     }
                                 }}

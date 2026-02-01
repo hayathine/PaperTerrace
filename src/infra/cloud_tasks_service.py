@@ -30,7 +30,7 @@ class CloudTasksService:
         If GCP_PROJECT_ID is not set or client fails, returns False to indicate fallback needed.
         """
         if not self.client or not self.project_id or not self.base_url:
-            logger.info(f"Cloud Tasks not configured, fallback needed for task {task_type}")
+            logger.debug(f"Cloud Tasks not configured, fallback needed for task {task_type}")
             return False
 
         parent = self._get_parent()
@@ -81,7 +81,7 @@ class CloudTasksService:
 
             from src.api.v1.endpoints.pdf import process_figure_auto_analysis
 
-            logger.info(f"Falling back to local execution for figure {figure_id}")
+            logger.debug(f"Falling back to local execution for figure {figure_id}")
             asyncio.create_task(
                 process_figure_auto_analysis(
                     figure_id=figure_id,

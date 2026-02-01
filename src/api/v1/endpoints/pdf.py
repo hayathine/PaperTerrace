@@ -388,21 +388,15 @@ async def stream(task_id: str):
                             f"Saving {len(collected_figures)} extracted figures for paper {new_paper_id}"
                         )
                         for fig in collected_figures:
-                            fid = save_figure_to_db(
+                            save_figure_to_db(
                                 paper_id=new_paper_id,
                                 page_number=fig["page_num"],
                                 bbox=fig["bbox"],
                                 image_url=fig["image_url"],
                                 caption="",  # Can't easily extract yet
                                 explanation="",  # Initially empty
-                            )
-                            # Trigger background explanation via Cloud Tasks
-                            cloud_tasks_service.enqueue_figure_analysis(
-                                figure_id=fid,
-                                image_url=fig["image_url"],
                                 label=fig.get("label", "figure"),
-                                target_lang=lang,
-                                content=fig.get("table_content") or fig.get("latex"),
+                                latex=fig.get("latex", ""),
                             )
 
                 except Exception:
@@ -627,7 +621,7 @@ async def stream(task_id: str):
                         f"Saving {len(collected_figures)} extracted figures for paper {paper_id}"
                     )
                     for fig in collected_figures:
-                        fid = save_figure_to_db(
+                        save_figure_to_db(
                             paper_id=paper_id,
                             page_number=fig["page_num"],
                             bbox=fig["bbox"],
@@ -636,17 +630,6 @@ async def stream(task_id: str):
                             explanation="",
                             label=fig.get("label", "figure"),
                             latex=fig.get("latex", ""),
-                        )
-                        label = fig.get("label", "figure")
-                        # Pass docling-extracted content (markdown/latex) to analysis task
-                        extra_content = fig.get("table_content") or fig.get("latex")
-                        # Trigger background explanation via Cloud Tasks
-                        cloud_tasks_service.enqueue_figure_analysis(
-                            figure_id=fid,
-                            image_url=fig["image_url"],
-                            label=label,
-                            target_lang=lang,
-                            content=extra_content,
                         )
 
             except Exception as e:

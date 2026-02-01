@@ -14,6 +14,7 @@ export interface PageData {
 }
 
 export interface FigureData {
+    id?: string;
     bbox: number[]; // [x1, y1, x2, y2]
     label: string;
     image_url?: string;

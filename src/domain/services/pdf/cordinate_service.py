@@ -201,8 +201,8 @@ class CoordinateService:
         """
         label_lower = label.lower()
 
-        # 1. Table, Formula, Figure は Docling Heron を使用
-        if label_lower in ["table", "formula", "equation", "figure"]:
+        # 1. Table, Formula, Equation は Docling Heron を使用
+        if label_lower in ["table", "formula", "equation"]:
             logger.info(f"[CoordinateService] Start detecting '{label}' using Docling Heron...")
             results = await self._docling_heron_predictor(image)
 

@@ -59,35 +59,22 @@ class TokenizationService:
 
                         lemma = token.lemma_.lower()
 
-                        # Cache and Dictionary Check
-                        if lemma not in self.word_analysis.word_cache:
-                            # Quick check memory cache
-                            if lemma in self.word_analysis.translation_cache:
-                                self.word_analysis.word_cache[lemma] = False
+                        # Cache Check
+                        is_cached = False
+                        if lemma in self.word_analysis.translation_cache:
+                            is_cached = True
+                        else:
+                            # Redis check
+                            cached_trans = self.redis.get(f"trans:{lang}:{lemma}")
+                            if cached_trans:
+                                self.word_analysis.translation_cache[lemma] = cached_trans
+                                is_cached = True
                             else:
-                                # Redis/Dict check
-                                cached_trans = self.redis.get(f"trans:{lang}:{lemma}")
-                                if cached_trans:
-                                    self.word_analysis.translation_cache[lemma] = cached_trans
-                                    self.word_analysis.word_cache[lemma] = False
-                                else:
-                                    # Dict lookup
-                                    try:
-                                        definition = await loop.run_in_executor(
-                                            executor, self.word_analysis.dict_provider.lookup, lemma
-                                        )
-                                        self.word_analysis.word_cache[lemma] = bool(definition)
-                                        if not definition:
-                                            unknown_words.add(lemma)
-                                    except Exception as dict_err:
-                                        logger.warning(
-                                            f"[Tokenization] Dict lookup failed for '{lemma}': {dict_err}"
-                                        )
-                                        self.word_analysis.word_cache[lemma] = False
+                                unknown_words.add(lemma)
 
                         color = (
                             "border-transparent hover:border-indigo-300 hover:bg-indigo-50"
-                            if self.word_analysis.word_cache.get(lemma, False)
+                            if is_cached
                             else "border-transparent hover:border-purple-300 hover:bg-purple-50"
                         )
 

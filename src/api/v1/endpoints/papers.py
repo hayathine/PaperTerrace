@@ -17,7 +17,7 @@ storage = get_storage_provider()
 
 
 @router.get("/papers")
-async def list_papers(limit: int = 50):
+async def list_papers(limit: int = 100):
     try:
         logger.info(f"[Papers] Listing papers with limit {limit}")
         papers = storage.list_papers(limit)

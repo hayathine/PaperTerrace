@@ -1,7 +1,7 @@
 export interface DictionaryEntry {
     word: string;
     translation: string;
-    source: string; // Cache, Jamdict, Gemini, Error
+    source: string;
 }
 
 export interface ExplanationResponse {

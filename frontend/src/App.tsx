@@ -48,23 +48,46 @@ function App() {
 
         try {
             const headers: HeadersInit = {};
-            // if (token) headers['Authorization'] = `Bearer ${token}`; // Need to get token here if used
-
             const res = await fetch(`/papers/${paperId}`, { headers });
             if (res.ok) {
                 const data = await res.json();
                 if (data.layout_json) {
                     try {
                         const layout = JSON.parse(data.layout_json);
+                        
+                        // Fetch figure IDs from backend
+                        let figureMap: Record<string, string> = {};
+                        try {
+                            const figRes = await fetch(`/api/papers/${paperId}/figures`);
+                            if (figRes.ok) {
+                                const figData = await figRes.json();
+                                (figData.figures || []).forEach((f: any) => {
+                                    // Key by page and bbox string for matching
+                                    const key = `${f.page_number}-${f.bbox.join(',')}`;
+                                    figureMap[key] = f.figure_id;
+                                });
+                            }
+                        } catch (e) {
+                            console.warn('Failed to fetch figures', e);
+                        }
+
                         // Convert DB layout to PageData format
-                        const pages: PageData[] = layout.map((lp: any, idx: number) => ({
-                            page_num: idx + 1,
-                            image_url: `/static/paper_images/${data.file_hash}/page_${idx + 1}.png`,
-                            width: lp?.width || 0,
-                            height: lp?.height || 0,
-                            words: lp?.words || [],
-                            figures: lp?.figures || []
-                        }));
+                        const pages: PageData[] = layout.map((lp: any, idx: number) => {
+                            const pageNum = idx + 1;
+                            const figures = (lp?.figures || []).map((fig: any) => ({
+                                ...fig,
+                                id: figureMap[`${pageNum}-${fig.bbox.join(',')}`]
+                            }));
+
+                            return {
+                                page_num: pageNum,
+                                image_url: `/static/paper_images/${data.file_hash}/page_${pageNum}.png`,
+                                width: lp?.width || 0,
+                                height: lp?.height || 0,
+                                words: lp?.words || [],
+                                figures: figures
+                            };
+                        });
                         setInitialPages(pages);
                     } catch (e) {
                         console.error('Failed to parse layout_json', e);
@@ -102,7 +125,7 @@ function App() {
     
     const handleAskAI = (prompt: string) => {
         setInitialChatMessage(prompt);
-        setActiveTab('Chat');
+        setActiveTab('chat');
     };
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -136,6 +159,41 @@ function App() {
         setSelectedImage(imageUrl)
         setSelectedCoordinates(coords)
         setActiveTab('notes')
+    }
+
+    const handleFigureClick = async (fig: any) => {
+        if (!fig.id) {
+            handleAskAI(`${fig.label || '図'}の解説をお願いします。`);
+            return;
+        }
+
+        // Show immediate feedback in chat
+        const typeName = fig.label || '図';
+        handleAskAI(`${typeName}を解析しています...`);
+
+        try {
+            const res = await fetch(`/api/figures/${fig.id}/explain`, { method: 'POST' });
+            if (res.ok) {
+                const data = await res.json();
+                handleAskAI(`### ${typeName}の解析結果\n\n${data.explanation}`);
+            } else {
+                handleAskAI(`${typeName}の解析に失敗しました。`);
+            }
+        } catch (e) {
+            console.error('Figure analysis failed', e);
+            handleAskAI(`${typeName}の解析中にエラーが発生しました。`);
+        }
+    }
+
+    const handleTableClick = async (table: any) => {
+        // Tables might have table_content/markdown
+        if (table.table_content) {
+            handleAskAI(`この表について解説してください:\n\n${table.table_content}`);
+        } else if (table.id) {
+            handleFigureClick(table);
+        } else {
+            handleAskAI(`この表の解説をお願いします。`);
+        }
     }
 
     const handleJumpToLocation = (page: number, x: number, y: number) => {
@@ -250,6 +308,8 @@ function App() {
                                     onStatusChange={handleAnalysisStatusChange}
                                     onPaperLoaded={handlePaperLoaded}
                                     onAskAI={handleAskAI}
+                                    onFigureClick={handleFigureClick}
+                                    onTableClick={handleTableClick}
                                 />
                             </div>
                         ) : (

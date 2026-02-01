@@ -19,9 +19,11 @@ interface PDFViewerProps {
     onStatusChange?: (status: 'idle' | 'uploading' | 'processing' | 'done' | 'error') => void;
     onPaperLoaded?: (paperId: string | null) => void;
     onAskAI?: (prompt: string) => void;
+    onFigureClick?: (fig: any) => void;
+    onTableClick?: (table: any) => void;
 }
 
-const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSelect, onAreaSelect, sessionId, jumpTarget, evidenceHighlight, onStatusChange, onPaperLoaded, onAskAI }) => {
+const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSelect, onAreaSelect, sessionId, jumpTarget, evidenceHighlight, onStatusChange, onPaperLoaded, onAskAI, onFigureClick, onTableClick }) => {
     const { token } = useAuth();
     const [pages, setPages] = useState<PageData[]>([]);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle');
@@ -377,6 +379,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                             onAddStamp={handleAddStamp}
                             isAreaMode={mode === 'area'}
                             onAreaSelect={handleAreaSelect}
+                            onFigureClick={onFigureClick}
+                            onTableClick={onTableClick}
                             jumpTarget={jumpTarget}
                             evidenceHighlight={evidenceHighlight}
                         />

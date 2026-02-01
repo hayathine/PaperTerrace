@@ -95,6 +95,17 @@ def configure_logging():
     # アプリケーションロガーのレベル設定
     logging.getLogger("app_logger").setLevel(log_level)
 
+    # 外部ライブラリの過剰なログを抑制
+    # google-genai などのライブラリは INFO レベルでも冗長なため WARNING に設定
+    noisy_loggers = [
+        "google_genai",
+        "google.ai.generativelanguage",
+        "grpc",
+        "httpx",
+    ]
+    for noisy in noisy_loggers:
+        logging.getLogger(noisy).setLevel(logging.WARNING)
+
 
 # 初期化実行
 configure_logging()

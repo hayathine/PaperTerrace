@@ -2,7 +2,6 @@ import ChatWindow from '../Chat/ChatWindow';
 import NoteList from '../Notes/NoteList';
 import Dictionary from '../Dictionary/Dictionary';
 import Summary from '../Summary/Summary';
-import ParagraphExplain from '../ParagraphExplain/ParagraphExplain';
 
 interface SidebarProps {
     sessionId: string;
@@ -52,15 +51,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
                 >
                     Chat
                 </button>
-                <button
-                    onClick={() => onTabChange('explain')}
-                    className={`flex-1 min-w-[50px] py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${activeTab === 'explain'
-                        ? 'bg-white text-indigo-600 shadow-sm border border-slate-100'
-                        : 'text-slate-400 hover:text-slate-600'
-                        }`}
-                >
-                    Exp
-                </button>
+
                 <button
                     onClick={() => onTabChange('notes')}
                     className={`flex-1 min-w-[50px] py-2 text-[10px] font-bold uppercase tracking-wider rounded-lg transition-all ${activeTab === 'notes'
@@ -94,11 +85,7 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
                         />
                     </div>
                 )}
-                {activeTab === 'explain' && (
-                    <div className="absolute inset-0">
-                        <ParagraphExplain sessionId={sessionId} />
-                    </div>
-                )}
+
 
                 {activeTab === 'notes' && (
                     <div className="absolute inset-0">

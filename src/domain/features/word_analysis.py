@@ -8,7 +8,6 @@ from src.domain.prompts import (
     CORE_SYSTEM_PROMPT,
 )
 from src.infra import RedisService, get_ai_provider
-from src.infra.dictionary_provider import get_dictionary_provider
 
 from .translate import SUPPORTED_LANGUAGES
 
@@ -16,11 +15,9 @@ from .translate import SUPPORTED_LANGUAGES
 class WordAnalysisService:
     def __init__(self):
         self.ai_provider = get_ai_provider()
-        self.dict_provider = get_dictionary_provider()
         self.redis = RedisService()
         self.translate_model = os.getenv("MODEL_TRANSLATE", "gemini-1.5-flash")
 
-        self.word_cache = {}  # lemma -> bool (exists in dictionary)
         self.translation_cache = {}  # lemma -> translation
 
     async def lookup_or_translate(
@@ -47,24 +44,7 @@ class WordAnalysisService:
                 "source": "Redis Cache",
             }
 
-        # 3. Dictionary Lookup (Jamdict)
-        if lang == "ja":
-            try:
-                definition = self.dict_provider.lookup(lemma)
-                if definition:
-                    self.word_cache[lemma] = True
-                    logger.debug(f"[WordAnalysis] Jamdict HIT for '{lemma}'")
-                    return {
-                        "word": lemma,
-                        "translation": definition[:500],
-                        "source": "Jamdict",
-                    }
-                else:
-                    logger.debug(f"[WordAnalysis] Jamdict MISS for '{lemma}'")
-            except Exception as e:
-                logger.warning(f"[WordAnalysis] Jamdict lookup failed for '{lemma}': {e}")
-
-        # 4. AI Translation (Context-aware if context provided)
+        # 3. AI Translation (Context-aware if context provided)
         if context:
             return await self.translate_with_context(lemma, context, lang)
 
