@@ -3,7 +3,7 @@ Models package for PaperTerrace.
 Contains Pydantic models for API request/response validation.
 """
 
-from .paper import (
+from .db.paper import (
     PaperBase,
     PaperCreate,
     PaperDetail,
@@ -13,7 +13,7 @@ from .paper import (
     PaperUpdate,
     PaperVisibility,
 )
-from .user import (
+from .db.user import (
     UserBase,
     UserCreate,
     UserInDB,

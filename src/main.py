@@ -13,8 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.cors import CORSMiddleware
 
-from .logger import logger
-from .routers import (
+from .api.v1.endpoints import (
     analysis_router,
     auth_router,
     chat_router,
@@ -28,6 +27,7 @@ from .routers import (
     upload_router,
     users_router,
 )
+from .core.logger import logger
 
 # Load environment variables
 load_dotenv()
@@ -50,8 +50,8 @@ async def lifespan(app: FastAPI):
     Lifespan event handler for FastAPI.
     Handles startup and shutdown events.
     """
-    from src.logger import logger
-    from src.providers import get_storage_provider
+    from src.core.logger import logger
+    from src.infra import get_storage_provider
 
     logger.info("Starting up...")
     try:
@@ -105,7 +105,7 @@ app.add_middleware(
 @app.post("/api/debug/init-db")
 async def init_db_manual():
     """Manual trigger for database initialization."""
-    from src.providers import get_storage_provider
+    from src.infra import get_storage_provider
 
     try:
         storage = get_storage_provider()
