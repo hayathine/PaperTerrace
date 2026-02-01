@@ -39,7 +39,6 @@ dependencies = [
     "pypdf>=6.6.2",
     "typer>=0.21.1",
     "pillow>=10.4.0",
-    "surya-ocr==0.17.1",
     "google-cloud-tasks>=2.21.0",
     "alembic>=1.18.3",
     "sqlalchemy>=2.0.46",
@@ -57,6 +56,7 @@ dev = [
     "torch",
     "transformers",
     "git-filter-repo>=2.47.0",
+    "surya-ocr==0.17.1",
 ]
 
 [[tool.uv.index]]

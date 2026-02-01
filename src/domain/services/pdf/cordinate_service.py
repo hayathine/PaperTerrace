@@ -2,7 +2,6 @@ import io
 import os
 from typing import List, Optional
 
-import torch
 from PIL import Image
 
 from src.core.logger import logger
@@ -22,13 +21,24 @@ class CoordinateService:
     def __init__(self):
         if self._initialized:
             return
-        self.device = "cuda" if torch.cuda.is_available() else "cpu"
+        self._device = None
         self.det_model = None
         self.det_processor = None
         self.layout_model = None
         self.layout_processor = None
         self._initialized = True
-        logger.info(f"[CoordinateService] Initialized on {self.device}")
+        logger.info("[CoordinateService] Initialized")
+
+    @property
+    def device(self):
+        if self._device is None:
+            try:
+                import torch
+
+                self._device = "cuda" if torch.cuda.is_available() else "cpu"
+            except ImportError:
+                self._device = "cpu"
+        return self._device
 
     async def _surya_predictor(self, image: Image.Image) -> List[BboxResponse]:
         from surya.foundation import FoundationPredictor

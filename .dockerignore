@@ -37,3 +37,17 @@ terraform/
 *.log
 .env
 .env.*
+
+# Local data / Cache
+src/static/paper_images/*
+src/static/user_uploads/*
+src/static/dist/
+frontend/dist/
+frontend/node_modules/
+node_modules/
+!src/static/paper_images/.gitkeep
+!src/static/user_uploads/.gitkeep
+wnjpn.db
+ocr_reader.db
+dictionary.db
+test.pdf
