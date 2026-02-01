@@ -43,6 +43,7 @@ dependencies = [
     "docling>=2.71.0",
     "transformers>=4.48.0",
     "surya-ocr==0.17.1",
+    "paddleocr>=3.4.0",
 ]
 
 [dependency-groups]

@@ -16,8 +16,17 @@ class SuryaService:
                 from surya.foundation import FoundationPredictor
                 from surya.layout import LayoutPredictor
                 from surya.settings import settings
+                import torch
+                import os
 
-                logger.info("[SuryaService] Initializing predictors...")
+                if torch.cuda.is_available():
+                    dev = "cuda"
+                else:
+                    dev = "cpu"
+                    # CPU全コアを占有してシステムがフリーズするのを防ぐ
+                    torch.set_num_threads(min(4, os.cpu_count() or 1))
+
+                logger.info(f"[SuryaService] Initializing predictors on {dev}...")
                 self._foundation_predictor = FoundationPredictor(
                     checkpoint=settings.LAYOUT_MODEL_CHECKPOINT
                 )

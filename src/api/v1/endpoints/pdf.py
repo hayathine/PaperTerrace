@@ -232,20 +232,7 @@ async def process_figure_auto_analysis(
         if image_bytes:
             insight_service = FigureInsightService()
 
-            if label == "equation":
-                from src.domain.features.figure_insight.equation_service import EquationService
-
-                eq_service = EquationService()
-                analysis = await eq_service._analyze_bbox_with_ai(
-                    image_bytes, target_lang=target_lang
-                )
-                if analysis:
-                    storage.update_figure_explanation(figure_id, analysis.explanation)
-                    # Use docling latex if available, otherwise use Vision AI's
-                    final_latex = content if content else analysis.latex
-                    if final_latex:
-                        storage.update_figure_latex(figure_id, final_latex)
-            elif label == "table" and content:
+            if label == "table" and content:
                 # Use docling's markdown for better table analysis
                 explanation = await insight_service.analyze_table_text(
                     content, context="Table from PDF", target_lang=target_lang
