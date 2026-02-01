@@ -84,8 +84,8 @@ async def explain_figure(figure_id: str, user: OptionalUser = None):
 
         return {"explanation": explanation}
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to explain figure: {e}")
-        return JSONResponse({"error": str(e)}, status_code=500)
+    except HTTPException as he:
+        raise he
+    except Exception:
+        logger.exception(f"[Figures] Failed to explain figure {figure_id}")
+        return JSONResponse({"error": "Internal server error during analysis"}, status_code=500)

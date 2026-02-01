@@ -7,11 +7,20 @@ import InputArea from './InputArea';
 interface ChatWindowProps {
     sessionId?: string;
     initialMessages?: Message[];
+    initialPrompt?: string | null;
+    onPromptConsumed?: () => void;
 }
 
-const ChatWindow: React.FC<ChatWindowProps> = ({ sessionId = 'default', initialMessages = [] }) => {
+const ChatWindow: React.FC<ChatWindowProps> = ({ sessionId = 'default', initialMessages = [], initialPrompt, onPromptConsumed }) => {
     const [messages, setMessages] = useState<Message[]>(initialMessages);
     const [isLoading, setIsLoading] = useState(false);
+
+    React.useEffect(() => {
+        if (initialPrompt && onPromptConsumed) {
+            handleSendMessage(initialPrompt);
+            onPromptConsumed();
+        }
+    }, [initialPrompt]);
 
     const handleSendMessage = async (text: string) => {
         // Add user message immediately

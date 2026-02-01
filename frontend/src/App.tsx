@@ -3,6 +3,8 @@ import Sidebar from './components/Sidebar/Sidebar'
 import PDFViewer from './components/PDF/PDFViewer'
 import { useAuth } from './contexts/AuthContext'
 import Login from './components/Auth/Login'
+import PaperList from './components/Library/PaperList'
+import { PageData } from './components/PDF/types'
 
 function App() {
     const { user, logout } = useAuth()
@@ -23,9 +25,56 @@ function App() {
     const [selectedCoordinates, setSelectedCoordinates] = useState<{ page: number, x: number, y: number } | undefined>(undefined)
     const [selectedImage, setSelectedImage] = useState<string | undefined>(undefined)
     const [jumpTarget, setJumpTarget] = useState<{ page: number, x: number, y: number } | null>(null)
+    const [initialChatMessage, setInitialChatMessage] = useState<string | null>(null);
     const [showLoginModal, setShowLoginModal] = useState(false)
     const [currentPaperId, setCurrentPaperId] = useState<string | null>(null)
     const [isAnalyzing, setIsAnalyzing] = useState(false)
+    const [initialPages, setInitialPages] = useState<PageData[] | undefined>(undefined)
+
+    const handleSelectPaper = async (paperId: string) => {
+        setCurrentPaperId(paperId);
+        setIsAnalyzing(true);
+        setInitialPages(undefined);
+
+        try {
+            const headers: HeadersInit = {};
+            // if (token) headers['Authorization'] = `Bearer ${token}`; // Need to get token here if used
+
+            const res = await fetch(`/papers/${paperId}`, { headers });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.layout_json) {
+                    try {
+                        const layout = JSON.parse(data.layout_json);
+                        // Convert DB layout to PageData format
+                        const pages: PageData[] = layout.map((lp: any, idx: number) => ({
+                            page_num: idx + 1,
+                            image_url: `/static/paper_images/${data.file_hash}/page_${idx + 1}.png`,
+                            width: lp?.width || 0,
+                            height: lp?.height || 0,
+                            words: lp?.words || [],
+                            figures: lp?.figures || []
+                        }));
+                        setInitialPages(pages);
+                    } catch (e) {
+                        console.error('Failed to parse layout_json', e);
+                    }
+                }
+            }
+        } catch (e) {
+            console.error('Failed to load paper', e);
+        } finally {
+            setIsAnalyzing(false);
+        }
+    }
+
+    useEffect(() => {
+        const path = window.location.pathname;
+        const match = path.match(/^\/(?:papers|reader|pdf)\/([a-z0-9-]+)/i);
+        if (match && match[1]) {
+            handleSelectPaper(match[1]);
+        }
+    }, [])
 
     useEffect(() => {
         if (user) {
@@ -41,6 +90,11 @@ function App() {
         setCurrentPaperId(paperId);
     }
     
+    const handleAskAI = (prompt: string) => {
+        setInitialChatMessage(prompt);
+        setActiveTab('Chat');
+    };
+
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
             setUploadFile(e.target.files[0])
@@ -85,11 +139,27 @@ function App() {
     return (
         <div className="flex h-screen w-full bg-gray-100 overflow-hidden">
             {/* Sidebar Placeholder */}
-            <div className="w-64 bg-gray-900 text-white p-4 hidden md:flex flex-col">
-                <h1 className="text-xl font-bold mb-8">PaperTerrace</h1>
-                <div className="flex-1">
-                    <p className="text-gray-400 text-sm">Validating React Migration...</p>
-                    {config && <p className="text-green-400 text-xs mt-2">● API Connected</p>}
+            <div className="w-72 bg-gray-900 text-white p-4 hidden md:flex flex-col border-r border-gray-800">
+                <div className="flex items-center gap-3 mb-10 px-2">
+                    <div className="w-10 h-10 bg-indigo-600 rounded-2xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+                        <span className="text-2xl font-black italic text-white">T</span>
+                    </div>
+                    <div>
+                        <h1 className="text-xl font-black tracking-tighter text-white">Paper<span className="text-indigo-400">Terrace</span></h1>
+                        <p className="text-[10px] text-gray-500 font-bold uppercase tracking-widest leading-none">Intelligence Hub</p>
+                    </div>
+                </div>
+
+                <div className="flex-1 overflow-y-auto custom-scrollbar">
+                    <PaperList onSelectPaper={handleSelectPaper} currentPaperId={currentPaperId} />
+                    {config && (
+                        <div className="px-4 py-2 mt-4">
+                            <div className="flex items-center gap-2">
+                                <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">System Online</span>
+                            </div>
+                        </div>
+                    )}
                 </div>
 
                 <div className="mt-auto mb-4">
@@ -156,17 +226,19 @@ function App() {
                 <div className="flex-1 flex overflow-hidden">
                     {/* PDF Viewer Area */}
                     <div className="flex-1 bg-slate-100 flex items-start justify-center relative overflow-hidden">
-                        {uploadFile ? (
+                        {uploadFile || initialPages ? (
                             <div className="w-full h-full p-4 md:p-8 overflow-y-auto custom-scrollbar">
                                 <PDFViewer
                                     sessionId={sessionId}
                                     uploadFile={uploadFile}
+                                    initialData={initialPages}
                                     onWordClick={handleWordClick}
                                     onTextSelect={handleTextSelect}
                                     onAreaSelect={handleAreaSelect}
                                     jumpTarget={jumpTarget}
                                     onStatusChange={handleAnalysisStatusChange}
                                     onPaperLoaded={handlePaperLoaded}
+                                    onAskAI={handleAskAI}
                                 />
                             </div>
                         ) : (
@@ -189,6 +261,8 @@ function App() {
                             onJump={handleJumpToLocation}
                             isAnalyzing={isAnalyzing}
                             paperId={currentPaperId}
+                            initialChatMessage={initialChatMessage}
+                            onClearInitialChatMessage={() => setInitialChatMessage(null)}
                         />
                     </div>
                 </div>

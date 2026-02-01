@@ -64,6 +64,10 @@ export default defineConfig({
             '/static': {
                 target: 'http://127.0.0.1:8000',
                 changeOrigin: true,
+            },
+            '/papers': {
+                target: 'http://127.0.0.1:8000',
+                changeOrigin: true,
             }
         }
     }

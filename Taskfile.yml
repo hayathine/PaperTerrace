@@ -22,7 +22,7 @@ tasks:
     cmds:
       - uv run uvicorn src.main:app 2>&1 | tee logs/server.log
 
-  build:
+  dev:
     desc: "Build frontend"
     cmds:
       - cd frontend && npm run dev

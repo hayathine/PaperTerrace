@@ -2,7 +2,7 @@
 variable "project_id" {
   description = "GCP Project ID"
   type        = string
-  default     = "paperterrace"
+  default     = "gen-lang-client-0800253336"
 }
 
 variable "project_number" {

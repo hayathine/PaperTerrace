@@ -215,7 +215,11 @@ async def analyze_pdf_json(
 
 
 async def process_figure_auto_analysis(
-    figure_id: str, image_url: str, label: str = "figure", target_lang: str = "ja"
+    figure_id: str,
+    image_url: str,
+    label: str = "figure",
+    target_lang: str = "ja",
+    content: Optional[str] = None,
 ):
     """
     Background task to automatically analyze and explain a figure.
@@ -237,7 +241,18 @@ async def process_figure_auto_analysis(
                 )
                 if analysis:
                     storage.update_figure_explanation(figure_id, analysis.explanation)
-                    storage.update_figure_latex(figure_id, analysis.latex)
+                    # Use docling latex if available, otherwise use Vision AI's
+                    final_latex = content if content else analysis.latex
+                    if final_latex:
+                        storage.update_figure_latex(figure_id, final_latex)
+            elif label == "table" and content:
+                # Use docling's markdown for better table analysis
+                explanation = await insight_service.analyze_table_text(
+                    content, context="Table from PDF", target_lang=target_lang
+                )
+                storage.update_figure_explanation(figure_id, explanation)
+                # Store the markdown content in latex field for now as a structured representation
+                storage.update_figure_latex(figure_id, content)
             else:
                 explanation = await insight_service.analyze_figure(
                     image_bytes, caption="Figure from paper", target_lang=target_lang
@@ -381,8 +396,8 @@ async def stream(task_id: str):
                             # Trigger background explanation
                             asyncio.create_task(process_figure_auto_analysis(fid, fig["image_url"]))
 
-                except Exception as e:
-                    logger.error(f"Failed to save paper: {e}")
+                except Exception:
+                    logger.exception(f"Failed to save paper {new_paper_id} to database")
 
                 # セッションコンテキスト保存 (Summary等のために必要)
                 s_id = session_id or new_paper_id
@@ -403,8 +418,8 @@ async def stream(task_id: str):
                     if raw_abstract:
                         storage.update_paper_raw_abstract(new_paper_id, raw_abstract)
                         logger.info(f"Raw abstract extracted and saved for paper {new_paper_id}")
-                except Exception as e:
-                    logger.error(f"Auto-summary generation failed: {e}")
+                except Exception:
+                    logger.exception(f"Auto-summary generation failed for paper {new_paper_id}")
 
                 logger.info(
                     f"Saved session context for: {s_id} (result: {res}, length: {len(full_text)})"
@@ -421,8 +436,8 @@ async def stream(task_id: str):
                 if paper_data and paper_data.get("layout_json"):
                     try:
                         layout_list = json.loads(paper_data["layout_json"])
-                    except Exception as e:
-                        logger.error(f"Failed to parse layout_json: {e}")
+                    except Exception:
+                        logger.exception(f"Failed to parse layout_json for paper {paper_id}")
 
                 f_hash = data.get("file_hash")
                 if f_hash:
@@ -617,9 +632,15 @@ async def stream(task_id: str):
                             latex=fig.get("latex", ""),
                         )
                         label = fig.get("label", "figure")
+                        # Pass docling-extracted content (markdown/latex) to analysis task
+                        extra_content = fig.get("table_content") or fig.get("latex")
                         asyncio.create_task(
                             process_figure_auto_analysis(
-                                fid, fig["image_url"], label, target_lang=lang
+                                fid,
+                                fig["image_url"],
+                                label,
+                                target_lang=lang,
+                                content=extra_content,
                             )
                         )
 

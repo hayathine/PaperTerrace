@@ -203,6 +203,7 @@ class GeminiProvider(AIProviderInterface):
             )
 
             if response_model:
+                text_to_parse = ""
                 try:
                     # Method 1: Use .parsed if available (google-genai SDK 1.0+)
                     if hasattr(response, "parsed") and response.parsed is not None:
@@ -213,22 +214,29 @@ class GeminiProvider(AIProviderInterface):
                         return response.parsed
 
                     # Method 2: Manual Parse
-                    text_to_parse = response.text or ""
+                    text_to_parse = (response.text or "").strip()
                     # Handle potential markdown wrapping
-                    text_to_parse = text_to_parse.strip()
                     if text_to_parse.startswith("```json"):
                         text_to_parse = text_to_parse[7:].strip("` \n")
                     elif text_to_parse.startswith("```"):
                         text_to_parse = text_to_parse[3:].strip("` \n")
+
+                    if not text_to_parse:
+                        logger.warning("Empty response text from Gemini, returning empty model")
+                        return response_model.model_validate({})
+
                     return response_model.model_validate_json(text_to_parse)
                 except Exception as parse_err:
-                    logger.error(f"Failed to parse structured image output: {parse_err}")
-                    text_to_parse = response.text or ""
-                    # Try cleaning again just in case
-                    text_to_parse = text_to_parse.strip()
-                    if text_to_parse.startswith("```json"):
-                        text_to_parse = text_to_parse[7:].strip("` \n")
-                    return response_model.model_validate_json(text_to_parse)
+                    logger.error(
+                        f"Failed to parse structured image output: {parse_err}. "
+                        f"Snippet: {text_to_parse[:200]}..."
+                    )
+                    # Return an empty response model instead of crashing
+                    try:
+                        return response_model.model_validate({"figures": []})
+                    except Exception:
+                        # If the model doesn't support an empty figures list, we might need a more generic fallback
+                        return response_model.model_construct()
 
             result = (response.text or "").strip()
             logger.debug(
@@ -423,6 +431,7 @@ class VertexAIProvider(AIProviderInterface):
             )
 
             if response_model:
+                text_to_parse = ""
                 try:
                     if hasattr(response, "parsed") and response.parsed is not None:
                         if isinstance(response.parsed, response_model):
@@ -430,17 +439,28 @@ class VertexAIProvider(AIProviderInterface):
                         if isinstance(response.parsed, dict):
                             return response_model.model_validate(response.parsed)
                         return response.parsed
-                    text_to_parse = response.text or ""
+
+                    text_to_parse = (response.text or "").strip()
+                    # Handle potential markdown wrapping
+                    if text_to_parse.startswith("```json"):
+                        text_to_parse = text_to_parse[7:].strip("` \n")
+                    elif text_to_parse.startswith("```"):
+                        text_to_parse = text_to_parse[3:].strip("` \n")
+
+                    if not text_to_parse:
+                        return response_model.model_validate({"figures": []})
+
                     return response_model.model_validate_json(text_to_parse)
                 except Exception as parse_err:
                     logger.error(
-                        f"Failed to parse structured image output from Vertex: {parse_err}"
+                        f"Failed to parse structured image output from Vertex: {parse_err}. "
+                        f"Snippet: {text_to_parse[:200]}..."
                     )
-                    text_to_parse = response.text or ""
-                    text_to_parse = text_to_parse.strip()
-                    if text_to_parse.startswith("```json"):
-                        text_to_parse = text_to_parse[7:].strip("` \n")
-                    return response_model.model_validate_json(text_to_parse)
+                    # Return an empty response model instead of crashing
+                    try:
+                        return response_model.model_validate({"figures": []})
+                    except Exception:
+                        return response_model.model_construct()
 
             return (response.text or "").strip()
 

@@ -79,7 +79,6 @@ async def test_detect_and_convert_equations_with_candidates(equation_service):
     )
     equation_service._analyze_bbox_with_ai = AsyncMock(return_value=mock_analysis)
 
-    # Mock fitz (PyMuPDF)
     with patch("src.features.figure_insight.equation_service.fitz.open") as mock_fitz:
         mock_doc = MagicMock()
         mock_page = MagicMock()

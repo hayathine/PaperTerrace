@@ -37,86 +37,105 @@ class TokenizationService:
         all_html_parts: dict[str, str] = {}
         unknown_words = set()
 
-        for i, p_text in enumerate(paragraphs):
-            p_text = clean_text_for_tokenization(p_text)
-            if not p_text:
-                continue
-
-            unique_id = f"{id_prefix}-{i}"
-            doc = await loop.run_in_executor(executor, self.nlp, p_text)
-            p_tokens_html = []
-
-            for j, token in enumerate(doc):
-                whitespace = token.whitespace_
-
-                if token.is_punct or token.is_space:
-                    p_tokens_html.append(f"<span>{token.text}</span>{whitespace}")
+        try:
+            for i, p_text in enumerate(paragraphs):
+                p_text = clean_text_for_tokenization(p_text)
+                if not p_text:
                     continue
 
-                lemma = token.lemma_.lower()
+                unique_id = f"{id_prefix}-{i}"
+                logger.debug(f"[Tokenization] Processing paragraph {i} ({len(p_text)} chars)")
 
-                # Cache and Dictionary Check
-                if lemma not in self.word_analysis.word_cache:
-                    # Quick check memory cache
-                    if lemma in self.word_analysis.translation_cache:
-                        self.word_analysis.word_cache[lemma] = False
-                    else:
-                        # Redis/Dict check
-                        cached_trans = self.redis.get(f"trans:{lang}:{lemma}")
-                        if cached_trans:
-                            self.word_analysis.translation_cache[lemma] = cached_trans
-                            self.word_analysis.word_cache[lemma] = False
-                        else:
-                            # Dict lookup
-                            definition = await loop.run_in_executor(
-                                executor, self.word_analysis.dict_provider.lookup, lemma
-                            )
-                            self.word_analysis.word_cache[lemma] = bool(definition)
-                            if not definition:
-                                unknown_words.add(lemma)
+                try:
+                    doc = await loop.run_in_executor(executor, self.nlp, p_text)
+                    p_tokens_html = []
 
-                color = (
-                    "border-transparent hover:border-indigo-300 hover:bg-indigo-50"
-                    if self.word_analysis.word_cache.get(lemma, False)
-                    else "border-transparent hover:border-purple-300 hover:bg-purple-50"
-                )
+                    for j, token in enumerate(doc):
+                        whitespace = token.whitespace_
 
-                paper_param = f"&paper_id={paper_id}" if paper_id else ""
-                token_id = f"{unique_id}-{j}"
-                p_tokens_html.append(
-                    f'<span id="{token_id}" class="cursor-pointer border-b transition-colors {color}'
-                    f'" hx-get="/explain/{lemma}?lang={lang}{paper_param}&element_id={token_id}" hx-trigger="click" '
-                    f'hx-indicator="#dict-loading" '
-                    f'hx-target="#dict-stack" hx-swap="afterbegin">{token.text}</span>{whitespace}'
-                )
+                        if token.is_punct or token.is_space:
+                            p_tokens_html.append(f"<span>{token.text}</span>{whitespace}")
+                            continue
 
-            html_content = "".join(p_tokens_html)
-            all_html_parts[unique_id] = html_content
+                        lemma = token.lemma_.lower()
 
-            # UI Component for Paragraph Actions
-            explain_btn = self._get_paragraph_actions_html()
+                        # Cache and Dictionary Check
+                        if lemma not in self.word_analysis.word_cache:
+                            # Quick check memory cache
+                            if lemma in self.word_analysis.translation_cache:
+                                self.word_analysis.word_cache[lemma] = False
+                            else:
+                                # Redis/Dict check
+                                cached_trans = self.redis.get(f"trans:{lang}:{lemma}")
+                                if cached_trans:
+                                    self.word_analysis.translation_cache[lemma] = cached_trans
+                                    self.word_analysis.word_cache[lemma] = False
+                                else:
+                                    # Dict lookup
+                                    try:
+                                        definition = await loop.run_in_executor(
+                                            executor, self.word_analysis.dict_provider.lookup, lemma
+                                        )
+                                        self.word_analysis.word_cache[lemma] = bool(definition)
+                                        if not definition:
+                                            unknown_words.add(lemma)
+                                    except Exception as dict_err:
+                                        logger.warning(
+                                            f"[Tokenization] Dict lookup failed for '{lemma}': {dict_err}"
+                                        )
+                                        self.word_analysis.word_cache[lemma] = False
 
-            wrapped_html = (
-                f'<div class="group relative paragraph-container mb-6 pr-4" hx-swap-oob="beforeend:#{target_id}">'
-                f"{explain_btn}"
-                f'<p id="{unique_id}" class="text-base leading-relaxed text-slate-700 text-justify">{html_content}</p>'
-                f"</div>"
-            )
+                        color = (
+                            "border-transparent hover:border-indigo-300 hover:bg-indigo-50"
+                            if self.word_analysis.word_cache.get(lemma, False)
+                            else "border-transparent hover:border-purple-300 hover:bg-purple-50"
+                        )
 
-            yield f"event: message\ndata: {wrapped_html}\n\n"
+                        paper_param = f"&paper_id={paper_id}" if paper_id else ""
+                        token_id = f"{unique_id}-{j}"
+                        p_tokens_html.append(
+                            f'<span id="{token_id}" class="cursor-pointer border-b transition-colors {color}'
+                            f'" hx-get="/explain/{lemma}?lang={lang}{paper_param}&element_id={token_id}" hx-trigger="click" '
+                            f'hx-indicator="#dict-loading" '
+                            f'hx-target="#dict-stack" hx-swap="afterbegin">{token.text}</span>{whitespace}'
+                        )
 
-        # Finalize
-        if paper_id and save_to_db:
-            await self._save_full_html(paper_id, paragraphs, all_html_parts, id_prefix)
+                    html_content = "".join(p_tokens_html)
+                    all_html_parts[unique_id] = html_content
 
-        # Batch translate unknown words
-        if unknown_words:
-            async for msg in self._handle_unknown_words(unknown_words, lang):
-                yield msg
+                    # UI Component for Paragraph Actions
+                    explain_btn = self._get_paragraph_actions_html()
 
-        # UI Cleanup
-        yield 'event: message\ndata: <div id="dict-status-container" hx-swap-oob="true" class="relative min-h-[100px] flex flex-col items-center justify-center text-center p-4 border-2 border-dashed border-slate-100 rounded-2xl"><div class="bg-slate-50 p-2 rounded-xl mb-2"><svg class="w-6 h-6 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></div><p class="text-[10px] font-bold text-slate-400 leading-relaxed">Dictionary Ready!</p></div>\n\n'
-        yield 'event: message\ndata: <div id="tokenize-status" hx-swap-oob="true" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg">✅ 分析完了！単語をクリックで翻訳</div>\n\n'
+                    wrapped_html = (
+                        f'<div class="group relative paragraph-container mb-6 pr-4" hx-swap-oob="beforeend:#{target_id}">'
+                        f"{explain_btn}"
+                        f'<p id="{unique_id}" class="text-base leading-relaxed text-slate-700 text-justify">{html_content}</p>'
+                        f"</div>"
+                    )
+
+                    yield f"event: message\ndata: {wrapped_html}\n\n"
+                except Exception:
+                    logger.exception(f"[Tokenization] Failed to process paragraph {i}")
+                    continue
+
+            # Finalize
+            if paper_id and save_to_db:
+                await self._save_full_html(paper_id, paragraphs, all_html_parts, id_prefix)
+
+            # Batch translate unknown words
+            if unknown_words:
+                try:
+                    async for msg in self._handle_unknown_words(unknown_words, lang):
+                        yield msg
+                except Exception:
+                    logger.exception("[Tokenization] Batch translation failed")
+
+            # UI Cleanup
+            yield 'event: message\ndata: <div id="dict-status-container" hx-swap-oob="true" class="relative min-h-[100px] flex flex-col items-center justify-center text-center p-4 border-2 border-dashed border-slate-100 rounded-2xl"><div class="bg-slate-50 p-2 rounded-xl mb-2"><svg class="w-6 h-6 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></div><p class="text-[10px] font-bold text-slate-400 leading-relaxed">Dictionary Ready!</p></div>\n\n'
+            yield 'event: message\ndata: <div id="tokenize-status" hx-swap-oob="true" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg">✅ 分析完了！単語をクリックで翻訳</div>\n\n'
+        except Exception as global_err:
+            logger.exception("[Tokenization] Global stream failure")
+            yield f"event: error\ndata: {str(global_err)}\n\n"
 
     def _get_paragraph_actions_html(self) -> str:
         return (

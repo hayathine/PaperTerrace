@@ -40,7 +40,7 @@ class LocalImageStorage(ImageStorageStrategy):
 
     def save(self, file_hash: str, page_num: int | str, image_b64: str) -> str:
         hash_dir = self.images_dir / file_hash
-        hash_dir.mkdir(exist_ok=True)
+        hash_dir.mkdir(parents=True, exist_ok=True)
 
         image_path = hash_dir / f"page_{page_num}.png"
         image_bytes = base64.b64decode(image_b64)

@@ -89,28 +89,32 @@ async def summarize(session_id: str = Form(...), mode: str = Form("full"), lang:
         )
     logger.info(f"[summarize] session_id={session_id}, context_len={len(context)}")
 
-    if mode == "sections":
-        sections = await summary_service.summarize_sections(context, target_lang=lang)
-        return JSONResponse({"sections": sections})
-    elif mode == "abstract":
-        # Check DB first
-        paper_id = storage.get_session_paper_id(session_id)
-        if paper_id:
-            paper = storage.get_paper(paper_id)
-            if paper and paper.get("abstract"):
-                logger.info(f"[summarize] Cache HIT for abstract: {paper_id}")
-                return JSONResponse({"abstract": paper["abstract"]})
+    try:
+        if mode == "sections":
+            sections = await summary_service.summarize_sections(context, target_lang=lang)
+            return JSONResponse({"sections": sections})
+        elif mode == "abstract":
+            # Check DB first
+            paper_id = storage.get_session_paper_id(session_id)
+            if paper_id:
+                paper = storage.get_paper(paper_id)
+                if paper and paper.get("abstract"):
+                    logger.info(f"[summarize] Cache HIT for abstract: {paper_id}")
+                    return JSONResponse({"abstract": paper["abstract"]})
 
-        abstract = await summary_service.summarize_abstract(context, target_lang=lang)
+            abstract = await summary_service.summarize_abstract(context, target_lang=lang)
 
-        # Save generated abstract if paper exists
-        if paper_id:
-            storage.update_paper_abstract(paper_id, abstract)
+            # Save generated abstract if paper exists
+            if paper_id:
+                storage.update_paper_abstract(paper_id, abstract)
 
-        return JSONResponse({"abstract": abstract})
-    else:
-        summary = await summary_service.summarize_full(context, target_lang=lang)
-        return JSONResponse({"summary": summary})
+            return JSONResponse({"abstract": abstract})
+        else:
+            summary = await summary_service.summarize_full(context, target_lang=lang)
+            return JSONResponse({"summary": summary})
+    except Exception as e:
+        logger.exception(f"[summarize] Failed to generate summary for session {session_id}")
+        return JSONResponse({"error": f"要約の生成に失敗しました: {str(e)}"}, status_code=500)
 
 
 # ============================================================================
@@ -148,9 +152,14 @@ async def analyze_citations(session_id: str = Form(...)):
 async def explain_paragraph(
     paragraph: str = Form(...), session_id: str = Form(...), lang: str = Form("ja")
 ):
-    context = _get_context(session_id)
-    explanation = await paragraph_explain_service.explain(paragraph, context or "", lang=lang)
-    return JSONResponse({"explanation": explanation})
+    try:
+        logger.info(f"[Analysis] Explaining paragraph for session {session_id}")
+        context = _get_context(session_id)
+        explanation = await paragraph_explain_service.explain(paragraph, context or "", lang=lang)
+        return JSONResponse({"explanation": explanation})
+    except Exception as e:
+        logger.exception(f"[Analysis] Paragraph explanation failed for session {session_id}")
+        return JSONResponse({"error": f"解説の生成に失敗しました: {str(e)}"}, status_code=500)
 
 
 @router.post("/translate-paragraph")

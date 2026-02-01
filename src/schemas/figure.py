@@ -18,3 +18,10 @@ class FigureDetectionResponse(BaseModel):
     """
 
     figures: List[FigureBox] = Field(description="List of detected figures, tables, and equations")
+
+
+class BboxResponse(BaseModel):
+    label: str
+    bbox: List[float]
+    polygon: List[List[float]]
+    confidence: float = 1.0

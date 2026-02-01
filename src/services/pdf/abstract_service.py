@@ -29,14 +29,14 @@ class AbstractService:
                     return None
 
                 top = abs_word["top"]
-                bottom = top + 500  # Reasonable height for an abstract
+                bottom = min(top + 500, page.height)
                 left = 0
                 right = page.width
 
                 bbox = (left, top, right, bottom)
                 try:
                     abstract_area = page.within_bbox(bbox)
-                    abstract_text = abstract_area.extract_text()
+                    abstract_text = abstract_area.extract_text(use_text_flow=True)
                     if abstract_text:
                         return abstract_text.strip()
                 except Exception as e:

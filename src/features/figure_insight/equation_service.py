@@ -1,7 +1,6 @@
 import io
 from typing import Any, Dict, List, Optional
 
-import fitz
 import pdfplumber
 from pydantic import BaseModel
 
@@ -28,53 +27,99 @@ class EquationService:
         self, file_bytes: bytes, page_num: int, target_lang: str = "ja"
     ) -> List[Dict[str, Any]]:
         """
-        1. Identify potential equation areas using pdfplumber heuristics.
-        2. Crop and analyze these areas using AI.
-        3. Convert to LaTeX and return results.
+        Detect and convert mathematical equations using Docling for structure
+        and AI for verification/explanation.
         """
-        potential_bboxes = self._identify_potential_equation_areas(file_bytes, page_num)
-        if not potential_bboxes:
-            return []
+        import time
 
         results = []
         try:
-            # Use fitz to crop for high-quality images
-            doc = fitz.open(stream=file_bytes, filetype="pdf")
-            page = doc[page_num - 1]
+            start_t = time.time()
 
-            for bbox in potential_bboxes:
-                # fitz bbox is (x0, y0, x1, y1)
-                # pdfplumber bbox is (x0, top, x1, bottom) which is same as (x0, y0, x1, y1) in fitz coordinates (points)
-                zoom = 3.0  # High zoom for math clarity
-                mat = fitz.Matrix(zoom, zoom)
+            # 1. Detect equations using Surya (primary)
+            surya_bboxes = []
+            try:
+                with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                    if page_num <= len(pdf.pages):
+                        page = pdf.pages[page_num - 1]
+                        dpi = 300  # Use 300 DPI for detection (good balance of speed/accuracy)
+                        im = page.to_image(resolution=dpi).original
 
-                # Expand bbox slightly to catch symbols like exponents
-                expanded_bbox = [
-                    max(0, bbox[0] - 5),
-                    max(0, bbox[1] - 5),
-                    min(page.rect.width, bbox[2] + 5),
-                    min(page.rect.height, bbox[3] + 5),
-                ]
+                        from src.services.pdf.surya_service import surya_service
 
-                rect = fitz.Rect(expanded_bbox)
-                pix = page.get_pixmap(matrix=mat, clip=rect)
-                img_bytes = pix.tobytes("png")
+                        surya_results = await surya_service.detect_layout(im)
 
-                # Analyze with AI
-                analysis = await self._analyze_bbox_with_ai(img_bytes, target_lang)
-                if analysis and analysis.is_equation and analysis.confidence > 0.6:
-                    results.append(
-                        {
-                            "bbox": bbox,
-                            "latex": analysis.latex,
-                            "explanation": analysis.explanation,
-                            "page_num": page_num,
-                        }
-                    )
+                        for res in surya_results:
+                            if res["label"] == "Formula":
+                                # Convert pixel coords back to pdfplumber points
+                                # points = pixels * (72 / dpi)
+                                px_bbox = res["bbox"]
+                                pt_bbox = [
+                                    px_bbox[0] * (72 / dpi),
+                                    px_bbox[1] * (72 / dpi),
+                                    px_bbox[2] * (72 / dpi),
+                                    px_bbox[3] * (72 / dpi),
+                                ]
+                                surya_bboxes.append(pt_bbox)
 
-            doc.close()
-        except Exception as e:
-            logger.error(f"Equation extraction failed: {e}")
+                        logger.info(
+                            f"[Equations] Surya found {len(surya_bboxes)} candidates in {time.time() - start_t:.2f}s"
+                        )
+            except Exception as e:
+                logger.error(f"[Equations] Surya detection failed: {e}")
+
+            if not surya_bboxes:
+                # Fallback to heuristics if surya found nothing
+                logger.info("[Equations] Falling back to heuristic detection")
+                potential_bboxes = self._identify_potential_equation_areas(file_bytes, page_num)
+            else:
+                potential_bboxes = surya_bboxes
+
+            if not potential_bboxes:
+                return []
+
+            # Reuse AI analysis for explanation and verification
+            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                if page_num > len(pdf.pages):
+                    return []
+                page = pdf.pages[page_num - 1]
+
+                for i, bbox in enumerate(potential_bboxes):
+                    try:
+                        # Expand bbox slightly for better image
+                        expanded_bbox = (
+                            max(0, bbox[0] - 5),
+                            max(0, bbox[1] - 5),
+                            min(page.width, bbox[2] + 5),
+                            min(page.height, bbox[3] + 5),
+                        )
+
+                        page_crop = page.crop(expanded_bbox)
+                        im_crop = page_crop.to_image(resolution=288)
+
+                        img_byte_arr = io.BytesIO()
+                        im_crop.original.save(img_byte_arr, format="PNG")
+                        img_bytes = img_byte_arr.getvalue()
+
+                        # Analyze with AI
+                        analysis = await self._analyze_bbox_with_ai(img_bytes, target_lang)
+                        if analysis and analysis.is_equation and analysis.confidence > 0.6:
+                            results.append(
+                                {
+                                    "bbox": bbox,
+                                    "latex": analysis.latex,
+                                    "explanation": analysis.explanation,
+                                    "page_num": page_num,
+                                }
+                            )
+                            logger.debug(f"[Equations] Verified equation {i + 1} on p.{page_num}")
+                    except Exception as cand_err:
+                        logger.error(f"[Equations] Candidate error: {cand_err}")
+                        continue
+
+            logger.info(f"[Equations] Finished page {page_num}, found {len(results)} equations")
+        except Exception:
+            logger.exception("[Equations] Extraction failed")
 
         return results
 
@@ -146,8 +191,8 @@ class EquationService:
 
                 # Filter and deduplicate bboxes
                 return self._sanitize_bboxes(potential_bboxes)
-        except Exception as e:
-            logger.error(f"Heuristic detection failed: {e}")
+        except Exception:
+            logger.exception(f"[Equations] Heuristic detection failed on page {page_num}")
             return []
 
     def _get_bbox_from_chars(self, chars: List[Dict]) -> List[float]:
@@ -189,6 +234,7 @@ class EquationService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         prompt = VISION_ANALYZE_EQUATION_PROMPT.format(lang_name=lang_name)
+        instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
 
         try:
             response = await self.ai_provider.generate_with_image(
@@ -196,9 +242,9 @@ class EquationService:
                 img_bytes,
                 "image/png",
                 response_model=EquationAnalysisResponse,
-                system_instruction=CORE_SYSTEM_PROMPT,
+                system_instruction=instruction,
             )
             return response
         except Exception as e:
-            logger.warning(f"AI Equation analysis failed: {e}")
+            logger.warning(f"[Equations] AI analysis failed: {e}")
             return None

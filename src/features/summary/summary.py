@@ -71,6 +71,7 @@ class SummaryService:
 
         safe_text = await self._truncate_to_token_limit(text)
         prompt = PAPER_SUMMARY_FULL_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
+        instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
 
         try:
             logger.debug(
@@ -81,7 +82,7 @@ class SummaryService:
                 prompt,
                 model=self.model,
                 response_model=FullSummaryResponse,
-                system_instruction=CORE_SYSTEM_PROMPT,
+                system_instruction=instruction,
             )
 
             # 後方互換性のため整形済みテキストを返す
@@ -121,6 +122,7 @@ class SummaryService:
 
         safe_text = await self._truncate_to_token_limit(text)
         prompt = PAPER_SUMMARY_SECTIONS_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
+        instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
 
         try:
             logger.debug(
@@ -131,7 +133,7 @@ class SummaryService:
                 prompt,
                 model=self.model,
                 response_model=SectionSummariesResponse,
-                system_instruction=CORE_SYSTEM_PROMPT,
+                system_instruction=instruction,
             )
 
             logger.info(
@@ -197,8 +199,9 @@ class SummaryService:
             prompt = PAPER_SUMMARY_AI_CONTEXT_PROMPT.format(
                 max_length=max_length, paper_text=text[:20000]
             )
+            instruction = CORE_SYSTEM_PROMPT.format(lang_name="en")
             summary = await self.ai_provider.generate(
-                prompt, model=self.model, system_instruction=CORE_SYSTEM_PROMPT
+                prompt, model=self.model, system_instruction=instruction
             )
             logger.info(f"Context summary generated (length: {len(summary)})")
             return summary[:max_length]

@@ -82,6 +82,7 @@ class CiteIntentService:
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
         prompt = AGENT_CITE_INTENT_PROMPT.format(paragraph=paragraph, lang_name=lang_name)
+        instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
         try:
             logger.info(f"Analyzing citation intent for paragraph with model: {self.model}")
 
@@ -90,7 +91,7 @@ class CiteIntentService:
                 prompt,
                 model=self.model,
                 response_model=CitationAnalysisResponse,
-                system_instruction=CORE_SYSTEM_PROMPT,
+                system_instruction=instruction,
             )
 
             # メタデータのマージ

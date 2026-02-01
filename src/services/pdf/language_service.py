@@ -1,4 +1,6 @@
-import fitz
+import io
+
+from pypdf import PdfReader
 
 from src.logger import logger
 from src.prompts import PDF_DETECT_LANGUAGE_PROMPT
@@ -14,22 +16,19 @@ class LanguageService:
         language = "en"  # default
 
         try:
-            doc = fitz.open(stream=file_bytes, filetype="pdf")
+            reader = PdfReader(io.BytesIO(file_bytes))
 
             # 1. Metadata check
-            catalog = doc.pdf_catalog()
-            lang_entry = doc.xref_get_key(catalog, "Lang")
-            if lang_entry[0] in ("name", "string") and lang_entry[1]:
-                lang_code = lang_entry[1]
+            metadata = reader.metadata
+            if metadata and "/Lang" in metadata:
+                lang_code = str(metadata["/Lang"])
                 logger.info(f"PDF Metadata Language detected: {lang_code}")
-                language = lang_code.split("-")[0].lower()
-                doc.close()
-                return language
+                return lang_code.split("-")[0].lower()
 
             # 2. AI prediction fallback
-            if len(doc) > 0:
-                text = doc[0].get_text()[:1000]
-                if text.strip():
+            if len(reader.pages) > 0:
+                text = reader.pages[0].extract_text()[:1000]
+                if text and text.strip():
                     prompt = PDF_DETECT_LANGUAGE_PROMPT.format(text=text[:5000])
                     detected = await self.ai_provider.generate(prompt, model=self.model)
                     detected = detected.strip().lower()
@@ -37,7 +36,6 @@ class LanguageService:
                         language = detected
                         logger.info(f"PDF Content Language detected by AI: {language}")
 
-            doc.close()
         except Exception as e:
             logger.error(f"Language detection failed: {e}")
 

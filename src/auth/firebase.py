@@ -36,10 +36,15 @@ class FirebaseAuth:
 
     def _initialize(self):
         """Initialize Firebase Admin SDK."""
-        # Check if already initialized
-        if firebase_admin._apps:
-            logger.info("Firebase already initialized")
+        # Use a more robust check for existing app
+        try:
+            firebase_app = firebase_admin.get_app()
+            logger.info("Firebase already initialized (default app exists)")
+            FirebaseAuth._initialized = True
             return
+        except ValueError:
+            # Default app does not exist, proceed with initialization
+            pass
 
         # Try to load credentials from environment or file
         cred_path = os.getenv("FIREBASE_CREDENTIALS_PATH")
@@ -66,7 +71,11 @@ class FirebaseAuth:
                 "Failed to initialize Firebase",
                 extra={"error": str(e)},
             )
-            raise FirebaseAuthError(f"Firebase initialization failed: {e}") from e
+            # Don't raise if it's just already existing (though we checked above)
+            if "already exists" in str(e):
+                logger.warning("Firebase app already exists, continuing...")
+            else:
+                raise FirebaseAuthError(f"Firebase initialization failed: {e}") from e
 
     def verify_token(self, id_token: str) -> dict:
         """

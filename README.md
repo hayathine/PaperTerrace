@@ -1,117 +1,134 @@
 # PaperTerrace
 
-PaperTerraceは、英語の論文やドキュメントを効率的に読むために開発されたWebベースのリーディング支援ツールです。
-最新のAI技術とNLP（自然言語処理）を活用し、英語の文書を読む際の「単語の意味を調べる」という手間を極限まで減らします。
+PaperTerraceは、「テラスで読むくらい気軽に」論文を読み、理解を深めるための知的でリラックスした読書体験を提供するAI論文リーディングアシスタントです。
 
-## ✨ 主な機能
+最新のAI技術（Gemini）と高度なドキュメント解析（）を組み合わせ、英語論文のハードルを極限まで下げ、本質的な理解に集中できる環境を提供します。
 
-PaperTerraceは、単なるPDFビューアではありません。英語学習者や研究者が快適にドキュメントを読み進めるための工夫が凝らされています。
+## ✨ 特徴
 
-### 1. AI OCRによる高度なPDF解析
-Googleの高性能AIモデル **Gemini 1.5 Flash** を搭載しており、アップロードされたPDFを自動で解析します。
-*   **構造を維持したテキスト化**: 複雑なレイアウトの論文でも、段落や構造を崩さずに読みやすいテキスト形式に変換します。
-*   **キャッシュ機能**: 一度解析したファイルのOCR結果はデータベースに保存されるため、2回目以降は瞬時に開くことができます。
+### 1. インテリジェントなPDF解析 (Powered by Gemini)
 
-### 2. ワンクリック辞書・解説機能
-テキスト内の英単語はすべてインタラクティブになっています。
-*   **クリックで即座に検索**: 分からない単語をクリックするだけで、その場で日本語の意味がポップアップ表示されます。
+単なるテキスト抽出ではありません。論文の構造を深く理解します。
 
-### 3. "Jamdict x Gemini" ハイブリッド検索システム
-安定的かつ高速なローカル辞書と、柔軟なAI解説を組み合わせたハイブリッドな仕組みを採用しています。
-*   **Jamdict (ローカル辞書)**: 一般的な英単語は、内蔵された英和辞書データから瞬時に意味を取得します。オフラインに近い速度でレスポンスを返します。
-*   **Gemini AI (フォールバック)**: 辞書に載っていない専門用語、スラング、固有名詞などは、AIが文脈を考慮して自動的に解説を生成します。
+- **構造化OCR**: 複雑な2段組みレイアウト、図表、数式を正確に認識し、読みやすい形式で再現します。
+- **マルチモーダル認識**: 論文内の図表（Figure）や数式（Equation）を個別に抽出し、AIによる詳細な解説を提供します。
+- **高速な再表示**: 解析結果はキャッシュされ、2回目以降は瞬時にアクセス可能です。
 
-### 4. 高度なAI読解支援（開発中・β機能）
-PaperTerraceは、単なる翻訳を超えた「理解」をサポートする以下のAI機能を搭載しています。
+### 2. インタラクティブ・リーディング
 
-*   **💬 AIチャットアシスタント**: 論文の内容についてチャット形式で質問できます。著者の思考をシミュレートした「著者エージェント」としても機能します。
-*   **📡 Research Radar (関連論文探索)**: 読んでいる論文に関連する文献を自動で調査・リコメンドし、研究の文脈を広げます。
-*   **📝 スマート要約**: 論文全体を要約するだけでなく、セクションごとの要点を簡潔にまとめます。
-*   **🔍 パラグラフ詳細解説**: 難解な段落を深く分析し、背景知識や論理展開を補足して説明します。
-*   **📊 図表インサイト**: 論文中のグラフや表をAIが認識し、そこから読み取れる傾向や意図を言語化して解説します。
-*   **🧠 アドバーサリアル・レビュー (批判的読み込み)**: あえて「批判的な視点」から論文を分析します。隠れた前提、検証されていない条件、再現性のリスクなどを指摘し、クリティカルシンキングを助けます。
-*   **📌 サイドバーメモ**: 解析中に気になった用語やメモをサイドバーにストックし、いつでも参照できるようにします。
+読む行為そのものをAIがサポートします。
 
-### 5. モダンで快適なUI/UX
-*   **ストレスフリーな操作感**: FastAPI, HTMX, Tailwind CSS を採用し、ページ遷移のないスムーズな動作を実現しています。
-*   **レスポンシブデザイン**: PCの大画面でもタブレットでも快適に閲覧できます。
+- **ワンクリック辞書**: 文中のあらゆる単語をクリックするだけで、文脈に応じた意味を表示。
+- **AI翻訳・解説**: 難解なパラグラフを選択して、AIに背景知識を含めた解説を求めることができます。
+- **ジャンプ機能**: 関連キーワードや用語の出現箇所を瞬時に横断できます。
+
+### 3. 高度なAI読解支援
+
+- **💬 AIチャットアシスタント**: 論文の内容に基づいたコンテキスト・アウェアな対話。著者の思考パターンを模した質問も可能です。
+- **🧪 図表・数式インサイト**: 図表が示すデータの意味や、複雑な数式の導出過程をAIが言語化して説明します。
+- **🧠 アドバーサリアル・レビュー**: 批判的思考を促すため、あえて論文の弱点や隠れた前提を指摘する機能です。
+- **� スマート・ノート**: 読書中に浮かんだアイデアや重要な箇所をシミュレーションし、構造的に整理します。
+
+### 4. 洗練されたUI/UX
+
+- **Modern & Premium**: React と Tailwind CSS を使用した、美しくレスポンスの良いインターフェース。
+- **集中できるデザイン**: 論文本文とAIサイドバーが調和し、情報のオーバーロードを防ぐレイアウト。
 
 ---
 
-## 🛠️ 前提条件
-
-このプロジェクトを実行するには以下の環境が必要です：
-
-*   **Python 3.12** 以上
-*   **uv**: 高速なPythonパッケージマネージャー
-*   **Google Gemini API Key**: AI機能を利用するために必要です
-
-## 🚀 インストール方法
-
-### 1. リポジトリのクローン
-```bash
-git clone <repository-url>
-cd PaperTerrace
-```
-
-### 2. 依存関係のインストール
-`uv` を使用してプロジェクトの依存ライブラリを同期します。
-```bash
-uv sync
-```
-
-### 3. 環境変数の設定
-プロジェクトルートに `.env` ファイルを作成し、以下の設定を記述してください。
-
-```ini
-GEMINI_API_KEY=あなたのGemini_APIキー
-OCR_MODEL=gemini-1.5-flash
-DB_PATH=ocr_reader.db
-
-# 機能別AIモデル設定 (任意: 設定しない場合はデフォルトが使用されます)
-# MODEL_CHAT=gemini-2.0-flash
-# MODEL_SUMMARY=gemini-2.0-flash
-# MODEL_DICT=gemini-2.0-flash-lite
-# MODEL_TRANSLATE=gemini-1.5-flash
-# MODEL_PARAGRAPH=gemini-2.0-flash
-
-# AIプロバイダ設定 (Gemini or Vertex AI)
-AI_PROVIDER=gemini
-# Vertex AIを使用する場合:
-# AI_PROVIDER=vertex
-# GCP_PROJECT_ID=your-project-id
-# GCP_LOCATION=us-central1
-# VERTEX_MODEL=gemini-2.0-flash-lite-001
-```
-
-### 4. 辞書データの準備
-Jamdictが正しく動作するために、`wnjpn.db` ファイルがプロジェクトのルートディレクトリに配置されていることを確認してください。
-
-## 💻 使い方
-
-### サーバーの起動
-開発サーバーを起動するには、以下のコマンドを実行します。`task` コマンドが使える場合は `task run` が便利です。
-
-**Taskを使用する場合:**
-```bash
-task run
-```
-
-**手動で実行する場合:**
-```bash
-uv run uvicorn src.main:app --reload
-```
-
-### アプリケーションへのアクセス
-ブラウザで以下のURLを開いてください。
-http://localhost:8000
-
-トップページからPDFファイルをアップロードするか、テキストを入力して解析を開始できます。
-
 ## 🏗️ 技術スタック
 
-*   **Backend**: FastAPI
-*   **AI & NLP**: Google GenAI (Gemini), Spacy (`en_core_web_lg`), Jamdict
-*   **Frontend**: Jinja2 Templates, HTMX, Tailwind CSS
-*   **Database**: SQLite (OCRキャッシュ用)
-*   **Tooling**: uv, go-task
+- **Backend**: FastAPI, Python 3.12+
+- **Frontend**: React, TypeScript, Vite, Tailwind CSS
+- **AI/ML**:
+  - **LLM**: Google Gemini 2.0 Flash / Pro
+  - **Parsing**: Marker PDF
+  - **NLP**: Spacy (en_core_web_sm)
+- **Infrastructure**:
+  - **Database**: SQLite (Local) / Cloud SQL (Production)
+  - **Cache**: Redis
+  - **Deployment**: GCP (Terraform, Docker)
+- **Tooling**: uv (Python Package Manager), go-task
+
+---
+
+## 🚀 セットアップ
+
+### 1. リポジトリの準備
+
+```bash
+git clone <repository-url>
+cd paperterrace
+```
+
+### 2. バックエンドのセットアップ (`uv` を推奨)
+
+```bash
+# 依存関係のインストール
+uv sync
+
+# .env の設定 (後述)
+cp .env.example .env
+```
+
+### 3. フロントエンドのセットアップ
+
+```bash
+cd frontend
+npm install
+```
+
+### 4. 開発サーバーの起動
+
+個別のターミナルでそれぞれ起動するか、`task` コマンドを使用します。
+
+**Taskを使用する場合:**
+
+```bash
+# Terminal 1: Backend
+task run
+
+# Terminal 2: Frontend
+task build
+```
+
+または個別に起動する場合：
+
+- Backend: `uv run uvicorn src.main:app --reload`
+- Frontend: `cd frontend && npm run dev`
+
+---
+
+## ⚙️ 環境変数 (.env)
+
+プロジェクトルートの `.env` に以下の設定が必要です。
+
+```ini
+# AIプロバイダ設定
+GEMINI_API_KEY=your_gemini_api_key
+AI_PROVIDER=gemini  # gemini or vertex
+
+# Firebase (Auth)
+FIREBASE_API_KEY=...
+FIREBASE_AUTH_DOMAIN=...
+FIREBASE_PROJECT_ID=...
+# ...その他のFirebase設定...
+
+# Database & Cache
+DB_PATH=ocr_reader.db
+REDIS_URL=redis://localhost:6379/0
+
+```
+
+---
+
+## 📂 ディレクトリ構造
+
+- `frontend/`: React + TypeScript (Vite) ソースコード
+- `src/`: FastAPI バックエンド
+  - `features/`: 各機能のビジネスロジック (Figure, Chat, etc.)
+  - `routers/`: API エンドポイント
+  - `services/`: 共通サービス (AI, PDF解析)
+  - `providers/`: ストレージやAIプロバイダの実装
+- `terraform/`: インフラ定義 (GCP)
+- `docs/`: 開発ドキュメント

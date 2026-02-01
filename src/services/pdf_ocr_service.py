@@ -1,7 +1,8 @@
 import base64
+import io
 from typing import AsyncGenerator, Optional
 
-import fitz  # PyMuPDF
+import pdfplumber
 
 from src.crud import get_ocr_from_db, save_ocr_to_db
 from src.logger import logger
@@ -39,7 +40,7 @@ class PDFOCRService:
         file_hash = _get_file_hash(file_bytes)
 
         # 1. Cache handling
-        cached_result = await self._handle_cache(file_hash)
+        cached_result = await self._handle_cache(file_hash, file_bytes)
         if cached_result:
             for page in cached_result:
                 yield page
@@ -48,17 +49,33 @@ class PDFOCRService:
         logger.info(f"--- AI OCR Streaming: {filename} ---")
 
         try:
-            pdf_doc = fitz.open(stream=file_bytes, filetype="pdf")
-            total_pages = len(pdf_doc)
-            all_text_parts = []
+            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                total_pages = len(pdf.pages)
+                all_text_parts = []
 
-            for page_num in range(total_pages):
-                result = await self._process_page(pdf_doc, page_num, total_pages, file_hash)
-                page_text = result[2]
-                all_text_parts.append(page_text)
-                yield result
+                import time
 
-            pdf_doc.close()
+                for page_num in range(total_pages):
+                    page_start = time.time()
+                    logger.info(
+                        f"[OCR] Starting page {page_num + 1}/{total_pages} (hash: {file_hash[:8]})"
+                    )
+                    try:
+                        result = await self._process_page(
+                            pdf, page_num, total_pages, file_hash, file_bytes
+                        )
+                        page_elapsed = time.time() - page_start
+                        logger.info(
+                            f"[OCR] Finished page {page_num + 1}/{total_pages} in {page_elapsed:.2f}s"
+                        )
+                        page_text = result[2]
+                        all_text_parts.append(page_text)
+                        yield result
+                    except Exception as page_err:
+                        logger.exception(f"[OCR] Error processing page {page_num + 1}")
+                        if page_num == 0:
+                            raise page_err
+                        continue
 
             # 2. Finalize and save to DB
             self._finalize_ocr(file_hash, filename, all_text_parts)
@@ -67,8 +84,8 @@ class PDFOCRService:
             logger.error(f"OCR streaming failed: {e}")
             yield (0, 0, f"ERROR_API_FAILED: {str(e)}", True, file_hash, None, None)
 
-    async def _handle_cache(self, file_hash: str) -> Optional[list]:
-        """Check for existing OCR results."""
+    async def _handle_cache(self, file_hash: str, file_bytes: bytes) -> Optional[list]:
+        """Check for existing OCR results and verify all pages are present."""
         cached_ocr = get_ocr_from_db(file_hash)
         if not cached_ocr:
             return None
@@ -78,7 +95,20 @@ class PDFOCRService:
             logger.info("Cached OCR text found but images missing. Regenerating.")
             return None
 
-        logger.info("Returning cached OCR text and images.")
+        # Verify page count to ensure all pages are displayed
+        try:
+            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                total_pdf_pages = len(pdf.pages)
+
+                if len(cached_images) < total_pdf_pages:
+                    logger.info(
+                        f"Incomplete cache: {len(cached_images)}/{total_pdf_pages} pages. Regenerating."
+                    )
+                    return None
+        except Exception as e:
+            logger.warning(f"Failed to verify PDF page count for cache: {e}")
+
+        logger.info(f"Returning cached OCR text and {len(cached_images)} images.")
         total_pages = len(cached_images)
         pages = []
         for i, img_url in enumerate(cached_images):
@@ -95,52 +125,86 @@ class PDFOCRService:
             )
         return pages
 
-    async def _process_page(self, pdf_doc, page_idx, total_pages, file_hash):
+    async def _process_page(
+        self, pdf, page_idx, total_pages, file_hash, pdf_bytes: Optional[bytes] = None
+    ):
         """Process a single page: render image, OCR, detect layout/figures."""
         page_num = page_idx + 1
-        page = pdf_doc[page_idx]
+        page = pdf.pages[page_idx]
 
         # Render image
-        zoom = 2.0
-        mat = fitz.Matrix(zoom, zoom)
-        pix = page.get_pixmap(matrix=mat)
-        img_bytes = pix.tobytes("png")
-        page_image_b64 = base64.b64encode(img_bytes).decode("utf-8")
-        image_url = save_page_image(file_hash, page_num, page_image_b64)
+        try:
+            logger.debug(f"[OCR] Rendering image for page {page_num}")
+            # pdfplumber rendering (requires Pillow)
+            im = page.to_image(resolution=300)
+            img_pil = im.original
+
+            img_byte_arr = io.BytesIO()
+            img_pil.save(img_byte_arr, format="PNG")
+            img_bytes = img_byte_arr.getvalue()
+
+            page_image_b64 = base64.b64encode(img_bytes).decode("utf-8")
+            image_url = save_page_image(file_hash, page_num, page_image_b64)
+            logger.debug(f"[OCR] Page {page_num} image saved: {image_url}")
+        except Exception:
+            logger.exception(f"[OCR] Failed to render image for page {page_num}")
+            raise
 
         # Extract native text/layout
-        page_text, layout_data = await self._extract_native_or_vision_text(
-            page, img_bytes, pix, zoom
-        )
+        try:
+            logger.debug(f"[OCR] Extracting text for page {page_num}")
+            page_text, layout_data = await self._extract_native_or_vision_text(
+                page, img_bytes, img_pil
+            )
+            logger.debug(f"[OCR] Page {page_num} text extracted (length: {len(page_text)})")
+        except Exception as e:
+            logger.warning(f"[OCR] Text extraction failed for page {page_num}: {e}")
+            page_text = ""
+            layout_data = None
 
         # Figure extraction
-        figures = await self.figure_service.detect_and_extract_figures(
-            img_bytes, pix, file_hash, page_num
-        )
-        if figures:
-            if not layout_data:
-                layout_data = {"width": pix.width, "height": pix.height, "words": []}
-            if "figures" not in layout_data:
-                layout_data["figures"] = []
-            layout_data["figures"].extend(figures)
+        try:
+            logger.debug(f"[OCR] Detecting figures for page {page_num}")
+            figures = await self.figure_service.detect_and_extract_figures(
+                img_bytes, img_pil, file_hash, page_num, pdf_bytes, float(page.height)
+            )
+            if figures:
+                logger.info(f"[OCR] Page {page_num} detected {len(figures)} figures")
+                if not layout_data:
+                    layout_data = {"width": img_pil.width, "height": img_pil.height, "words": []}
+                if "figures" not in layout_data:
+                    layout_data["figures"] = []
+                layout_data["figures"].extend(figures)
+        except Exception as e:
+            logger.error(f"[OCR] Figure extraction failed for page {page_num}: {e}", exc_info=True)
 
         is_last = page_idx == total_pages - 1
         return (page_num, total_pages, page_text, is_last, file_hash, image_url, layout_data)
 
-    async def _extract_native_or_vision_text(self, page, img_bytes, pix, zoom):
+    async def _extract_native_or_vision_text(self, page, img_bytes, img_pil):
         """Try to extract text from PDF directly, fallback to Vision API or Gemini."""
-        words = page.get_text("words")
+        scale = img_pil.width / float(page.width)
+
+        words = page.extract_words(use_text_flow=True, x_tolerance=1, y_tolerance=3)
         if words:
             word_list = [
-                {"word": w[4], "bbox": [w[0] * zoom, w[1] * zoom, w[2] * zoom, w[3] * zoom]}
+                {
+                    "word": w["text"],
+                    "bbox": [
+                        w["x0"] * scale,
+                        w["top"] * scale,
+                        w["x1"] * scale,
+                        w["bottom"] * scale,
+                    ],
+                }
                 for w in words
             ]
-            page_text = " ".join([w[4] for w in words])
-            layout = {"width": pix.width, "height": pix.height, "words": word_list}
+            page_text = page.extract_text(use_text_flow=True, x_tolerance=1, y_tolerance=3)
+            layout = {"width": img_pil.width, "height": img_pil.height, "words": word_list}
             return page_text, layout
 
         # Fallback to Vision OCR
-        logger.info(f"[OCR] No text on page {page.number + 1}, trying Vision API")
+        logger.info(f"[OCR] No text on page {page.page_number}, trying Vision API")
         try:
             from src.providers.vision_ocr import VisionOCRService
 
@@ -148,13 +212,13 @@ class PDFOCRService:
             if vision.is_available():
                 text, layout = await vision.detect_text_with_layout(img_bytes)
                 if layout:
-                    layout.update({"width": pix.width, "height": pix.height})
+                    layout.update({"width": img_pil.width, "height": img_pil.height})
                     return text, layout
         except Exception as e:
             logger.error(f"Vision OCR failed: {e}")
 
         # Final fallback to Gemini
-        logger.info(f"[OCR] Falling back to Gemini for page {page.number + 1}")
+        logger.info(f"[OCR] Falling back to Gemini for page {page.page_number}")
         try:
             text = await self.ai_provider.generate_with_image(
                 PDF_EXTRACT_TEXT_OCR_PROMPT, img_bytes, "image/png", model=self.model

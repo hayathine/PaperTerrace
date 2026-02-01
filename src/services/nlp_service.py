@@ -20,12 +20,16 @@ class NLPService:
     @staticmethod
     def lemmatize(text: str) -> str:
         """Get lemma for text using Spacy model."""
-        text = text.strip()
-        if not text:
-            return ""
-        # Lowercase for better normalization
-        doc = nlp(text.lower())
-        return " ".join([token.lemma_.lower() for token in doc])
+        try:
+            text = text.strip()
+            if not text:
+                return ""
+            # Lowercase for better normalization
+            doc = nlp(text.lower())
+            return " ".join([token.lemma_.lower() for token in doc])
+        except Exception as e:
+            logger.error(f"[NLPService] Lemmatization failed for '{text}': {e}")
+            return text.lower()  # Fallback to lowercase original if lemmatization fails
 
     @staticmethod
     def get_nlp():

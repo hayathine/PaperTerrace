@@ -1,6 +1,7 @@
 # Cloud Run Module
 
 resource "google_cloud_run_v2_service" "main" {
+  provider = google-beta
   name     = "paperterrace"
   location = var.region
   project  = var.project_id
@@ -21,7 +22,9 @@ resource "google_cloud_run_v2_service" "main" {
           memory = "4Gi"
         }
         cpu_idle = true
+    startup_cpu_boost = true
       }
+
 
       # Environment variables
       env {

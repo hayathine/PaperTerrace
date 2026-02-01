@@ -4,11 +4,19 @@ import StampOverlay from '../Stamps/StampOverlay';
 import BoxOverlay from './BoxOverlay';
 import { Stamp } from '../Stamps/types';
 
+const FIG_TYPE_LABEL: Record<string, string> = {
+    'table': '表',
+    'figure': '図',
+    'equation': '数式',
+    'image': '画像'
+};
+
 interface PDFPageProps {
     page: PageData;
     scale?: number;
     onWordClick?: (word: string, context?: string, coords?: { page: number, x: number, y: number }) => void;
     onTextSelect?: (text: string, coords: { page: number, x: number, y: number }) => void;
+    onAskAI?: (prompt: string) => void;
     // Stamp props
     stamps?: Stamp[];
     isStampMode?: boolean;
@@ -16,19 +24,66 @@ interface PDFPageProps {
     // Area selection props
     isAreaMode?: boolean;
     onAreaSelect?: (coords: { page: number, x: number, y: number, width: number, height: number }) => void;
+    jumpTarget?: { page: number, x: number, y: number, term?: string } | null;
 }
+
+const WordBox = React.memo(({ 
+    idx, w, width, height, isSelected, isJumpHighlight, isStampMode, onMouseDown, onMouseEnter, onClick 
+}: { 
+    idx: number, w: any, width: number, height: number, isSelected: boolean, isJumpHighlight: boolean, 
+    isStampMode: boolean, onMouseDown: (idx: number) => void, onMouseEnter: (idx: number) => void, onClick: (idx: number, w: any) => void 
+}) => {
+    const [x1, y1, x2, y2] = w.bbox;
+    const w_width = x2 - x1;
+    const w_height = y2 - y1;
+
+    const left = (x1 / width) * 100;
+    const top = (y1 / height) * 100;
+    const styleW = (w_width / width) * 100;
+    const styleH = (w_height / height) * 100;
+
+    return (
+        <div
+            className={`absolute rounded-sm group ${!isStampMode ? 'cursor-pointer' : 'pointer-events-none'} 
+                ${!isStampMode && !isSelected && !isJumpHighlight ? 'hover:bg-yellow-300/30' : ''} 
+                ${isSelected ? 'bg-indigo-500/30 border border-indigo-500/50' : ''}
+                ${isJumpHighlight ? 'bg-yellow-400/60 border-2 border-yellow-600 shadow-[0_0_15px_rgba(250,204,21,0.5)] z-20 animate-bounce-subtle' : ''}`}
+            style={{
+                left: `${left}%`,
+                top: `${top}%`,
+                width: `${styleW}%`,
+                height: `${styleH}%`,
+                willChange: isSelected || isJumpHighlight ? 'transform, opacity' : 'auto'
+            }}
+            onMouseDown={(e) => {
+                if (isStampMode) return;
+                e.preventDefault();
+                e.stopPropagation();
+                onMouseDown(idx);
+            }}
+            onMouseEnter={() => onMouseEnter(idx)}
+            onClick={(e) => {
+                e.stopPropagation();
+                onClick(idx, w);
+            }}
+            title={w.word}
+        />
+    );
+});
 
 const PDFPage: React.FC<PDFPageProps> = ({
     page,
     onWordClick,
     onTextSelect,
+    onAskAI,
     stamps = [],
     isStampMode = false,
     onAddStamp,
     isAreaMode = false,
-    onAreaSelect
+    onAreaSelect,
+    jumpTarget
 }) => {
-    const { width, height, words, image_url, page_num } = page;
+    const { width, height, words, figures, links, image_url, page_num } = page;
 
     // Text Selection State
     const [isDragging, setIsDragging] = React.useState(false);
@@ -124,8 +179,13 @@ const PDFPage: React.FC<PDFPageProps> = ({
     return (
         <div
             id={`page-${page.page_num}`}
-            className="relative mb-8 shadow-2xl rounded-xl overflow-hidden bg-white transition-all duration-300 border border-slate-200/50 mx-auto"
-            style={{ maxWidth: '100%' }}
+            className="relative mb-8 shadow-2xl rounded-xl overflow-hidden bg-white border border-slate-200/50 mx-auto transform-gpu"
+            style={{ 
+                maxWidth: '100%',
+                contentVisibility: 'auto',
+                containIntrinsicSize: '1px 1100px', // Estimate for a typical A4-style page
+                willChange: 'transform'
+            }}
             onMouseUp={handleMouseUp}
             onMouseLeave={() => {
                 if (isDragging) {
@@ -148,7 +208,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
                     src={image_url}
                     alt={`Page ${page.page_num}`}
                     className="w-full h-auto block select-none"
-                    loading="lazy"
+                    style={{ imageRendering: 'high-quality' as any }}
                 />
 
                 {/* Stamp Overlay */}
@@ -177,61 +237,127 @@ const PDFPage: React.FC<PDFPageProps> = ({
                 {/* Word Overlays */}
                 <div className="absolute inset-0 w-full h-full z-10">
                     {words.map((w, idx) => {
-                        const [x1, y1, x2, y2] = w.bbox;
-                        const w_width = x2 - x1;
-                        const w_height = y2 - y1;
-
-                        const left = (x1 / width) * 100;
-                        const top = (y1 / height) * 100;
-                        const styleW = (w_width / width) * 100;
-                        const styleH = (w_height / height) * 100;
-
                         const isSelected = selectionStart !== null && selectionEnd !== null &&
                             ((idx >= selectionStart && idx <= selectionEnd) || (idx >= selectionEnd && idx <= selectionStart));
 
+                        const isJumpHighlight = jumpTarget && jumpTarget.page === page_num && (
+                            // Use a small epsilon for coordinate matching
+                            Math.abs(((w.bbox[0] + w.bbox[2]) / 2 / width) - jumpTarget.x) < 0.005 && 
+                            Math.abs(((w.bbox[1] + w.bbox[3]) / 2 / height) - jumpTarget.y) < 0.005
+                        );
+
+                        return (
+                            <WordBox
+                                key={`${idx}`}
+                                idx={idx}
+                                w={w}
+                                width={width}
+                                height={height}
+                                isSelected={isSelected}
+                                isJumpHighlight={!!isJumpHighlight}
+                                isStampMode={isStampMode || isAreaMode}
+                                onMouseDown={(i) => {
+                                    if (isAreaMode) return;
+                                    setIsDragging(true);
+                                    setSelectionStart(i);
+                                    setSelectionEnd(i);
+                                    setSelectionMenu(null);
+                                }}
+                                onMouseEnter={(i) => {
+                                    if (isDragging && selectionStart !== null) {
+                                        setSelectionEnd(i);
+                                    }
+                                }}
+                                onClick={(i, word) => {
+                                    if (!isStampMode && !isAreaMode && onWordClick) {
+                                        if (selectionStart === selectionEnd && !selectionMenu) {
+                                            const cleanWord = word.word.replace(/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g, '');
+                                            const start = Math.max(0, i - 50);
+                                            const end = Math.min(words.length, i + 50);
+                                            const context = words.slice(start, end).map(w => w.word).join(' ');
+
+                                            const wordCenterX = (word.bbox[0] + word.bbox[2]) / 2 / width;
+                                            const wordCenterY = (word.bbox[1] + word.bbox[3]) / 2 / height;
+
+                                            onWordClick(cleanWord, context, { page: page_num, x: wordCenterX, y: wordCenterY });
+                                        }
+                                    }
+                                }}
+                            />
+                        );
+                    })}
+                </div>
+                
+                {/* Figure/Equation Overlays */}
+                <div className="absolute inset-0 w-full h-full z-20 pointer-events-none">
+                    {figures?.map((fig, idx) => {
+                        const [x1, y1, x2, y2] = fig.bbox;
+                        const f_width = x2 - x1;
+                        const f_height = y2 - y1;
+
+                        const left = (x1 / width) * 100;
+                        const top = (y1 / height) * 100;
+                        const styleW = (f_width / width) * 100;
+                        const styleH = (f_height / height) * 100;
+
                         return (
                             <div
-                                key={`${idx}`}
-                                className={`absolute rounded-sm group ${!isStampMode ? 'cursor-pointer' : 'pointer-events-none'} 
-                                    ${!isStampMode && !isSelected ? 'hover:bg-yellow-300/30' : ''} 
-                                    ${isSelected ? 'bg-indigo-500/30 border border-indigo-500/50' : ''}`}
+                                key={`fig-${idx}`}
+                                className="absolute cursor-pointer pointer-events-auto border-2 border-transparent hover:border-indigo-500/40 hover:bg-indigo-500/5 transition-all rounded-lg group flex items-start justify-end p-2"
                                 style={{
                                     left: `${left}%`,
                                     top: `${top}%`,
                                     width: `${styleW}%`,
                                     height: `${styleH}%`,
                                 }}
-                                onMouseDown={(e) => {
-                                    if (isStampMode || isAreaMode) return;
-                                    e.preventDefault();
+                                onClick={(e) => {
                                     e.stopPropagation();
-                                    setIsDragging(true);
-                                    setSelectionStart(idx);
-                                    setSelectionEnd(idx);
-                                    setSelectionMenu(null); // Hide menu on new select start
-                                }}
-                                onMouseEnter={() => {
-                                    if (isDragging && selectionStart !== null) {
-                                        setSelectionEnd(idx);
+                                    if (onAskAI) {
+                                        const typeName = FIG_TYPE_LABEL[fig.label?.toLowerCase() || ''] || '図表';
+                                        onAskAI(`${typeName}の解説をお願いします。`);
                                     }
+                                }}
+                                title={`${fig.label || 'figure'} click to explain`}
+                            >
+                                <div className="hidden group-hover:flex items-center gap-2 bg-slate-900/90 backdrop-blur-md text-white text-[10px] px-3 py-2 rounded-xl shadow-2xl font-bold border border-white/20 transform scale-90 group-hover:scale-100 transition-all duration-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                                    <div className="w-5 h-5 bg-indigo-500 rounded-lg flex items-center justify-center">
+                                        <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
+                                            <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
+                                        </svg>
+                                    </div>
+                                    <span>AIで{FIG_TYPE_LABEL[fig.label?.toLowerCase() || ''] || '図表'}を解説</span>
+                                </div>
+                            </div>
+                        );
+                    })}
+                </div>
+
+                {/* Link Overlays */}
+                <div className="absolute inset-0 w-full h-full z-20 pointer-events-none">
+                    {links?.map((link, idx) => {
+                        const [x1, y1, x2, y2] = link.bbox;
+                        const l_width = x2 - x1;
+                        const l_height = y2 - y1;
+                        const left = (x1 / width) * 100;
+                        const top = (y1 / height) * 100;
+                        const styleW = (l_width / width) * 100;
+                        const styleH = (l_height / height) * 100;
+
+                        return (
+                            <button
+                                key={`link-${idx}`}
+                                className="absolute cursor-pointer pointer-events-auto border border-blue-400/0 hover:border-blue-400/50 hover:bg-blue-400/10 transition-all rounded-sm z-30"
+                                style={{
+                                    left: `${left}%`,
+                                    top: `${top}%`,
+                                    width: `${styleW}%`,
+                                    height: `${styleH}%`,
                                 }}
                                 onClick={(e) => {
-                                    e.stopPropagation(); // Stop propagation to document
-                                    if (!isStampMode && onWordClick) {
-                                        if (selectionStart === selectionEnd && !selectionMenu) {
-                                            const start = Math.max(0, idx - 50);
-                                            const end = Math.min(words.length, idx + 50);
-                                            const context = words.slice(start, end).map(w => w.word).join(' ');
-
-                                            const centerX = (x1 + x2) / 2 / width;
-                                            const centerY = (y1 + y2) / 2 / height;
-
-                                            const cleanWord = w.word.replace(/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g, '');
-                                            onWordClick(cleanWord, context, { page: page_num, x: centerX, y: centerY });
-                                        }
-                                    }
+                                    e.stopPropagation();
+                                    window.open(link.url, '_blank', 'noopener,noreferrer');
                                 }}
-                                title={w.word}
+                                title={link.url}
                             />
                         );
                     })}
@@ -280,4 +406,4 @@ const PDFPage: React.FC<PDFPageProps> = ({
     );
 };
 
-export default PDFPage;
+export default React.memo(PDFPage);

@@ -45,14 +45,16 @@ class AdversarialReviewService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         prompt = AGENT_ADVERSARIAL_CRITIQUE_PROMPT.format(text=text[:12000], lang_name=lang_name)
-
+        instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
         try:
             logger.debug(
                 "Generating adversarial critique",
                 extra={"text_length": len(text)},
             )
             critique = await self.ai_provider.generate(
-                prompt, response_model=CritiqueResponse, system_instruction=CORE_SYSTEM_PROMPT
+                prompt,
+                response_model=CritiqueResponse,
+                system_instruction=instruction,
             )
 
             issue_count = (

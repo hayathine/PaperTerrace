@@ -17,9 +17,11 @@ interface SidebarProps {
     onJump?: (page: number, x: number, y: number) => void;
     isAnalyzing?: boolean;
     paperId?: string | null;
+    initialChatMessage?: string | null;
+    onClearInitialChatMessage?: () => void;
 }
 
-const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord, context, coordinates, selectedImage, onJump, isAnalyzing = false, paperId }) => {
+const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, selectedWord, context, coordinates, selectedImage, onJump, isAnalyzing = false, paperId, initialChatMessage, onClearInitialChatMessage }) => {
 
     return (
         <div className="flex flex-col h-full bg-white border-l border-gray-200 shadow-xl overflow-hidden font-sans">
@@ -100,7 +102,11 @@ const Sidebar: React.FC<SidebarProps> = ({ sessionId, activeTab, onTabChange, se
                 )}
                 {activeTab === 'chat' && (
                     <div className="absolute inset-0">
-                        <ChatWindow sessionId={sessionId} />
+                        <ChatWindow 
+                            sessionId={sessionId} 
+                            initialPrompt={initialChatMessage}
+                            onPromptConsumed={onClearInitialChatMessage}
+                        />
                     </div>
                 )}
                 {activeTab === 'explain' && (

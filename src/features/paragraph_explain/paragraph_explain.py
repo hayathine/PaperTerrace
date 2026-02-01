@@ -55,6 +55,7 @@ class ParagraphExplainService:
         prompt = PARAGRAPH_EXPLAIN_PROMPT.format(
             context_hint=context_hint, paragraph=paragraph, lang_name=lang_name
         )
+        instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
 
         try:
             logger.debug(
@@ -65,7 +66,7 @@ class ParagraphExplainService:
                 prompt,
                 model=self.model,
                 response_model=ParagraphExplanationResponse,
-                system_instruction=CORE_SYSTEM_PROMPT,
+                system_instruction=instruction,
             )
 
             # 整形された文字列として返す（後方互換性のため）
@@ -113,6 +114,7 @@ class ParagraphExplainService:
         prompt = PARAGRAPH_TRANSLATE_PROMPT.format(
             context_hint=context_hint, paragraph=paragraph, lang_name=lang_name
         )
+        instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
 
         try:
             logger.debug(
@@ -122,7 +124,7 @@ class ParagraphExplainService:
             translation = await self.ai_provider.generate(
                 prompt,
                 model=self.model,
-                system_instruction=CORE_SYSTEM_PROMPT,
+                system_instruction=instruction,
             )
             return translation.strip()
         except Exception as e:

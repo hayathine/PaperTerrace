@@ -13,6 +13,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.cors import CORSMiddleware
 
+from .logger import logger
 from .routers import (
     analysis_router,
     auth_router,
@@ -73,6 +74,19 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Global exception handler to catch all unhandled errors.
+    """
+    logger.exception(f"Unhandled exception occurred at {request.url.path}")
+    return JSONResponse(
+        status_code=500,
+        content={"error": "INTERNAL_SERVER_ERROR", "message": str(exc)},
+    )
+
 
 # Templates and static files
 templates = Jinja2Templates(directory="src/templates")

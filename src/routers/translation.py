@@ -307,6 +307,7 @@ async def explain_deep(
         logger.info(f"[explain-deep] Gemini Call for '{lemma}'")
 
         is_phrase = " " in lemma.strip()
+        instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
         if is_phrase:
             prompt = DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT.format(
                 paper_context=paper_context, lang_name=lang_name, original_word=original_word
@@ -320,7 +321,9 @@ async def explain_deep(
         translation = (
             (
                 await provider.generate(
-                    prompt, model=translate_model, system_instruction=CORE_SYSTEM_PROMPT
+                    prompt,
+                    model=translate_model,
+                    system_instruction=instruction,
                 )
             )
             .strip()
@@ -404,11 +407,14 @@ async def explain_with_context(req: ExplainContextRequest):
     prompt = DICT_EXPLAIN_WORD_CONTEXT_PROMPT.format(
         word=req.word, lang_name=lang_name, summary_context=summary_context, context=req.context
     )
+    instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
     translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.0-flash-lite")
 
     try:
         explanation = await provider.generate(
-            prompt, model=translate_model, system_instruction=CORE_SYSTEM_PROMPT
+            prompt,
+            model=translate_model,
+            system_instruction=instruction,
         )
         return JSONResponse(
             {

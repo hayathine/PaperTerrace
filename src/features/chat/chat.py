@@ -60,14 +60,16 @@ class ChatService:
         prompt = CHAT_GENERAL_RESPONSE_PROMPT.format(
             lang_name=lang_name, document_context=context[:20000], history_text=history_text
         )
-
+        instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
         try:
             logger.debug(
                 "Processing chat request",
                 extra={"message_length": len(user_message), "history_size": len(self.history)},
             )
             response = await self.ai_provider.generate(
-                prompt, model=self.model, system_instruction=CORE_SYSTEM_PROMPT
+                prompt,
+                model=self.model,
+                system_instruction=instruction,
             )
             response = response.strip()
 

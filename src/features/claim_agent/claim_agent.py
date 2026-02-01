@@ -44,6 +44,7 @@ class ClaimVerificationService:
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
         prompt = AGENT_CLAIM_VERIFY_PROMPT.format(paragraph=paragraph, lang_name=lang_name)
+        instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
         try:
             logger.info(f"Verifying paragraph claims with model: {self.model}")
 
@@ -52,7 +53,7 @@ class ClaimVerificationService:
                 prompt,
                 model=self.model,
                 response_model=ClaimVerificationResponse,
-                system_instruction=CORE_SYSTEM_PROMPT,
+                system_instruction=instruction,
             )
 
             return verification.model_dump()

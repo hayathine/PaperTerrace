@@ -9,6 +9,20 @@ export interface PageData {
     width: number;
     height: number;
     words: PageWord[];
+    figures?: FigureData[];
+    links?: LinkData[];
+}
+
+export interface FigureData {
+    bbox: number[]; // [x1, y1, x2, y2]
+    label: string;
+    image_url?: string;
+    latex?: string;
+}
+
+export interface LinkData {
+    bbox: number[]; // [x1, y1, x2, y2]
+    url: string;
 }
 
 export interface PageWord {

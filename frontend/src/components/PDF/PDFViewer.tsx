@@ -17,9 +17,10 @@ interface PDFViewerProps {
     jumpTarget?: { page: number, x: number, y: number } | null;
     onStatusChange?: (status: 'idle' | 'uploading' | 'processing' | 'done' | 'error') => void;
     onPaperLoaded?: (paperId: string | null) => void;
+    onAskAI?: (prompt: string) => void;
 }
 
-const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSelect, onAreaSelect, sessionId, jumpTarget, onStatusChange, onPaperLoaded }) => {
+const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSelect, onAreaSelect, sessionId, jumpTarget, onStatusChange, onPaperLoaded, onAskAI }) => {
     const { token } = useAuth();
     const [pages, setPages] = useState<PageData[]>([]);
     const [status, setStatus] = useState<'idle' | 'uploading' | 'processing' | 'done' | 'error'>('idle');
@@ -203,17 +204,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
         }
     };
 
-    const handleWordClick = (word: string, context?: string, coords?: { page: number, x: number, y: number }) => {
-        if (onWordClick) {
-            onWordClick(word, context, coords);
-        }
-    };
-
-    const handleTextSelect = (text: string, coords: { page: number, x: number, y: number }) => {
-        if (onTextSelect) {
-            onTextSelect(text, coords);
-        }
-    };
 
     const handleAreaSelect = async (coords: { page: number, x: number, y: number, width: number, height: number }) => {
         // Find page data
@@ -343,28 +333,28 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
             {pages.length > 0 && (
                 <div className="sticky top-0 z-40 bg-white/90 backdrop-blur shadow-sm rounded-lg mb-4 p-2 flex items-center gap-2 justify-center">
                     <button
-                        onClick={() => setMode('text')}
-                        className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'text' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
-                    >
-                        <span>📄 PDF</span>
-                    </button>
-                    <button
                         onClick={() => setMode('plaintext')}
                         className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'plaintext' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
                     >
-                        <span>📝 Text</span>
+                        <span>📝 テキストモード</span>
+                    </button>
+                    <button
+                        onClick={() => setMode('text')}
+                        className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'text' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
+                    >
+                        <span>📄 支援モード</span>
                     </button>
                     <button
                         onClick={() => setMode('area')}
                         className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'area' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
                     >
-                        <span>✂️ Crop</span>
+                        <span>✂️ 切り取りモード</span>
                     </button>
                     <button
                         onClick={() => setMode('stamp')}
                         className={`p-2 rounded-lg flex items-center gap-2 text-sm font-bold transition-all ${mode === 'stamp' ? 'bg-indigo-100 text-indigo-600' : 'text-slate-500 hover:bg-slate-100'}`}
                     >
-                        <span>👍 Stamp</span>
+                        <span>👍 スタンプモード</span>
                     </button>
                 </div>
             )}
@@ -378,13 +368,15 @@ const PDFViewer: React.FC<PDFViewerProps> = ({ uploadFile, onWordClick, onTextSe
                         <PDFPage
                             key={page.page_num}
                             page={page}
-                            onWordClick={handleWordClick}
-                            onTextSelect={handleTextSelect}
+                            onWordClick={onWordClick}
+                            onTextSelect={onTextSelect}
+                            onAskAI={onAskAI}
                             stamps={stamps}
                             isStampMode={mode === 'stamp'}
                             onAddStamp={handleAddStamp}
                             isAreaMode={mode === 'area'}
                             onAreaSelect={handleAreaSelect}
+                            jumpTarget={jumpTarget}
                         />
                     ))}
                 </div>

@@ -49,14 +49,20 @@ class WordAnalysisService:
 
         # 3. Dictionary Lookup (Jamdict)
         if lang == "ja":
-            definition = self.dict_provider.lookup(lemma)
-            if definition:
-                self.word_cache[lemma] = True
-                return {
-                    "word": lemma,
-                    "translation": definition[:500],
-                    "source": "Jamdict",
-                }
+            try:
+                definition = self.dict_provider.lookup(lemma)
+                if definition:
+                    self.word_cache[lemma] = True
+                    logger.debug(f"[WordAnalysis] Jamdict HIT for '{lemma}'")
+                    return {
+                        "word": lemma,
+                        "translation": definition[:500],
+                        "source": "Jamdict",
+                    }
+                else:
+                    logger.debug(f"[WordAnalysis] Jamdict MISS for '{lemma}'")
+            except Exception as e:
+                logger.warning(f"[WordAnalysis] Jamdict lookup failed for '{lemma}': {e}")
 
         # 4. AI Translation (Context-aware if context provided)
         if context:
@@ -78,11 +84,19 @@ class WordAnalysisService:
         prompt = ANALYSIS_BATCH_TRANSLATE_PROMPT.format(
             lang_name=lang_name, words_list="\n".join(words_to_translate)
         )
+        instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
 
         result = {}
         try:
+            import time
+
+            start_t = time.time()
+            logger.info(f"[WordAnalysis] Batch translating {len(words_to_translate)} words")
+
             response_text = await self.ai_provider.generate(
-                prompt, model=self.translate_model, system_instruction=CORE_SYSTEM_PROMPT
+                prompt,
+                model=self.translate_model,
+                system_instruction=instruction,
             )
 
             for line in response_text.split("\n"):
@@ -99,8 +113,12 @@ class WordAnalysisService:
             for lemma, trans in result.items():
                 self.redis.set(f"trans:{lang}:{lemma}", trans, expire=604800)
 
-        except Exception as e:
-            logger.error(f"Batch translation failed: {e}")
+            logger.info(
+                f"[WordAnalysis] Batch translation finished in {time.time() - start_t:.2f}s ({len(result)}/{len(words_to_translate)} successful)"
+            )
+
+        except Exception:
+            logger.exception("[WordAnalysis] Batch translation failed")
 
         return result
 
@@ -117,10 +135,14 @@ class WordAnalysisService:
         prompt = ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT.format(
             word=word, context=truncated, lang_name=lang_name
         )
+        instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
 
         try:
+            logger.debug(f"[WordAnalysis] Translating '{word}' with context")
             translation = await self.ai_provider.generate(
-                prompt, model=self.translate_model, system_instruction=CORE_SYSTEM_PROMPT
+                prompt,
+                model=self.translate_model,
+                system_instruction=instruction,
             )
             translation = translation.strip()
 
@@ -132,6 +154,6 @@ class WordAnalysisService:
                 "translation": translation,
                 "source": "Gemini (Context)",
             }
-        except Exception as e:
-            logger.error(f"Context translation failed for '{word}': {e}")
+        except Exception:
+            logger.exception(f"[WordAnalysis] Context translation failed for '{word}'")
             return None
