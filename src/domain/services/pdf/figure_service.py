@@ -67,6 +67,11 @@ class FigureService:
                 if fig_data:
                     final_figures.append(fig_data)
 
+            # 4. Clear cache to free up memory (PIL images, etc.)
+            from .cordinate_service import cordinate_service
+
+            cordinate_service.clear_all_caches()
+
             return final_figures
         except Exception as e:
             logger.error(f"[FigureService] Figure extraction failed on p.{page_num}: {e}")

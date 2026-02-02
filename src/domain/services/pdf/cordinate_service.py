@@ -19,18 +19,37 @@ class CoordinateService:
         return cls._instance
 
     def __init__(self):
-        if self._initialized:
+        if getattr(self, "_initialized", False):
             return
         self._device = None
 
         # 画像単位の結果キャッシュ
-        self._cache_image_id = None
+        self._clear_cache()
+
+        self._initialized = True
+        logger.info("[CoordinateService] Initialized with Cache")
+
+    def _clear_cache(self, image: Optional[Image.Image] = None):
+        """内部キャッシュのリセット。imageが指定された場合はそのIDをセットする"""
+        self._cache_image_id = id(image) if image else None
         self._cache_heron_results = []
         self._cache_surya_results = []
         self._cache_gemini_results = []
 
-        self._initialized = True
-        logger.info("[CoordinateService] Initialized with Cache")
+    def clear_all_caches(self):
+        """外部から呼び出し可能な全キャッシュクリアとGC実行"""
+        self._clear_cache()
+        import gc
+
+        gc.collect()
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+        except (ImportError, RuntimeError):
+            pass
+        logger.debug("[CoordinateService] All caches cleared and GC executed")
 
     @property
     def device(self):
@@ -75,12 +94,6 @@ class CoordinateService:
         self._update_cache(image, results, "surya")
         return results
 
-    def _clear_cache(self, image: Image.Image):
-        self._cache_image_id = id(image)
-        self._cache_heron_results = []
-        self._cache_surya_results = []
-        self._cache_gemini_results = []
-
     def _update_cache(self, image: Image.Image, results: List[BboxResponse], parser_type: str):
         """解析結果でキャッシュを更新する"""
         if self._cache_image_id != id(image):
@@ -112,8 +125,9 @@ class CoordinateService:
             avail_mb = get_available_memory_mb()
             logger.info(f"[CoordinateService] Available memory: {avail_mb:.1f}MB")
 
-            # メモリが非常に少ない場合（例: 800MB以下）かつ Gemini が使えるならそちらを優先する
-            if avail_mb < 800 and os.getenv("GEMINI_API_KEY"):
+            # メモリが非常に少ない場合かつ Gemini が使えるならそちらを優先する
+            threshold = int(os.getenv("MEMORY_THRESHOLD", "300"))
+            if avail_mb < threshold and os.getenv("GEMINI_API_KEY"):
                 logger.warning(
                     "[CoordinateService] Memory is critically low, falling back to Gemini for Table/Formula detection"
                 )

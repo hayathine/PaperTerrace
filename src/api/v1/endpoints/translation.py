@@ -184,8 +184,32 @@ async def explain(
             )
         )
 
-    # Stage 2: Local Machine Translation (REMOVED)
-    # stage 2 (M2M100) logic was removed at user request.
+    # Stage 2: Local Machine Translation
+    local_translation = await loop.run_in_executor(
+        executor, service.translate_local, lemma, "en", lang
+    )
+    if local_translation:
+        if not is_htmx:
+            return JSONResponse(
+                {
+                    "word": original_word,
+                    "lemma": lemma,
+                    "translation": local_translation,
+                    "source": "M2M100 (Local)",
+                    "element_id": element_id,
+                }
+            )
+        return HTMLResponse(
+            build_dict_card_html(
+                original_word,
+                lemma,
+                local_translation,
+                "M2M100 (Local)",
+                lang,
+                paper_id,
+                element_id=element_id,
+            )
+        )
 
     # 見つからない場合もローカル翻訳の枠組みで「未発見」として返し、AIボタンを表示
     if not is_htmx:
@@ -193,7 +217,7 @@ async def explain(
             {
                 "word": original_word,
                 "lemma": lemma,
-                "translation": "Not found in local dict",
+                "translation": "Not found locally",
                 "source": "Search",
                 "element_id": element_id,
             }
@@ -202,7 +226,7 @@ async def explain(
         build_dict_card_html(
             original_word,
             lemma,
-            "Not found in local dict",
+            "Not found locally",
             "Search",
             lang,
             paper_id,

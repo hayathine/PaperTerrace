@@ -80,6 +80,9 @@ async def fetch_image_bytes_from_url(url: str) -> bytes | None:
 
 def get_memory_usage_mb() -> float:
     """Get current process memory usage in MB."""
+
+    # Actually, we can just use the implementation here or delegate.
+    # To keep it simple, let's just keep the existing implementation from utils.py
     try:
         with open("/proc/self/status") as f:
             for line in f:
