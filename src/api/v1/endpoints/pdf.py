@@ -54,11 +54,6 @@ async def analyze_pdf(
     content = await file.read()
     file_hash = _get_file_hash(content)
 
-    # Language detection
-    detected_lang = await service.ocr_service.detect_language_from_pdf(content)
-    if detected_lang:
-        lang = detected_lang
-
     # Cache check
     cached_paper = storage.get_paper_by_hash(file_hash)
     raw_text = None
@@ -132,11 +127,6 @@ async def analyze_pdf_json(
     content = await file.read()
     file_hash = _get_file_hash(content)
     logger.info(f"[analyze-pdf-json] session_id={session_id}, file_hash={file_hash}")
-
-    # Detect PDF language
-    detected_lang = await service.ocr_service.detect_language_from_pdf(content)
-    if detected_lang:
-        lang = detected_lang
 
     # Check for cached paper
     cached_paper = storage.get_paper_by_hash(file_hash)

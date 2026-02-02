@@ -15,7 +15,6 @@ from src.infra.image_storage import get_page_images, save_page_image
 
 from .pdf.abstract_service import AbstractService
 from .pdf.figure_service import FigureService
-from .pdf.language_service import LanguageService
 
 
 class PDFOCRService:
@@ -23,15 +22,10 @@ class PDFOCRService:
         self.ai_provider = get_ai_provider()
         self.model = model
         self.figure_service = FigureService(self.ai_provider, self.model)
-        self.language_service = LanguageService(self.ai_provider, self.model)
 
     def extract_abstract_text(self, file_bytes: bytes) -> Optional[str]:
         """Extract abstract using specialized service."""
         return AbstractService.extract_abstract(file_bytes)
-
-    async def detect_language_from_pdf(self, file_bytes: bytes) -> str:
-        """Detect language using specialized service."""
-        return await self.language_service.detect_language(file_bytes)
 
     async def extract_text_streaming(
         self, file_bytes: bytes, filename: str = "unknown.pdf", user_plan: str = "free"

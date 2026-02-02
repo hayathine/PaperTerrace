@@ -359,10 +359,6 @@ Ensure the response is in {lang_name}.
 # ==========================================
 # PDFの言語判定やテキスト抽出の補助に使用
 
-PDF_DETECT_LANGUAGE_PROMPT = """Identify the primary language of the following text and return ONLY the ISO 639-1 code (e.g., 'en', 'ja', 'fr').
-Text Sample:
-{text}
-"""
 
 PDF_EXTRACT_TEXT_OCR_PROMPT = (
     "Transcribe the text from this PDF page preserving the structure as much as possible."
