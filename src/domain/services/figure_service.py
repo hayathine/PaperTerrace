@@ -2,11 +2,6 @@ import base64
 import io
 from typing import Any, Dict, List, Optional, Sequence
 
-from docling.datamodel.base_models import InputFormat
-from docling.datamodel.pipeline_options import PdfPipelineOptions
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling_core.types.doc import DocItemLabel
-
 # pdfplumber related imports for type hinting and functionality
 from pdfplumber.display import PageImage
 from pdfplumber.page import Page
@@ -23,19 +18,6 @@ class FigureService:
         self.model = model
         self.layout_service = get_layout_service()
 
-        # Initialize Docling Converter
-        pipeline_options = PdfPipelineOptions()
-        pipeline_options.do_ocr = False
-        pipeline_options.do_table_structure = True
-
-        self.doc_converter = DocumentConverter(
-            allowed_formats=[InputFormat.PDF],
-            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)},
-        )
-        # Cache for converted documents: {file_hash: DoclingDocument}
-        self._doc_cache: Dict[str, Any] = {}
-        self._cache_order: List[str] = []
-
     async def detect_and_extract_figures(
         self,
         img_bytes: bytes,
@@ -47,10 +29,9 @@ class FigureService:
         pdf_path: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Detect figures/tables/equations using Docling and pdfplumber coordinates.
+        Detect figures/tables/equations using local layout service and pdfplumber coordinates.
         """
         candidates = []
-        page_height = page.height
 
         # 0. Use local Paddle Layout if available (PRIORITY for CPU optimization)
         local_results = self.layout_service.detect_layout(img_bytes)
@@ -61,13 +42,7 @@ class FigureService:
                 bbox = [b / zoom for b in res["bbox"]]
                 candidates.append({"bbox": bbox, "label": label})
 
-        # 1. Use Docling for structured items (Tables, Formulas, Pictures)
-        if pdf_path:
-            await self._add_docling_candidates(
-                pdf_path, file_hash, page_num, page_height, candidates
-            )
-
-        # 2. Add native pdfplumber images if not already covered by Docling
+        # 1. Add native pdfplumber images if not already covered by local detector
         for img in page.images:
             bbox = [img["x0"], img["top"], img["x1"], img["bottom"]]
             if self._is_new_candidate(bbox, candidates):
@@ -78,7 +53,7 @@ class FigureService:
         if not candidates:
             return []
 
-        # 3. Process candidates, Extract and Save images
+        # 2. Process candidates, Extract and Save images
         final_areas = []
         # Sort candidates to process larger ones first (handle containment)
         candidates.sort(
@@ -128,62 +103,6 @@ class FigureService:
                 continue
 
         return [{k: v for k, v in f.items() if k != "bbox_pt"} for f in final_areas]
-
-    async def _add_docling_candidates(
-        self,
-        pdf_path: str,
-        file_hash: str,
-        page_num: int,
-        page_height: float,
-        candidates: List[Dict],
-    ):
-        """Runs Docling (cached) and extracts candidates for the given page."""
-        try:
-            if file_hash not in self._doc_cache:
-                logger.info(f"[FigureService] Converting PDF with Docling: {file_hash}")
-                result = self.doc_converter.convert(pdf_path)
-
-                # Manage cache size (Limit to 5 recent documents)
-                if len(self._cache_order) >= 5:
-                    old_hash = self._cache_order.pop(0)
-                    self._doc_cache.pop(old_hash, None)
-
-                self._doc_cache[file_hash] = result.document
-                self._cache_order.append(file_hash)
-
-            doc = self._doc_cache[file_hash]
-
-            for item, level in doc.iterate_items():
-                if not hasattr(item, "prov") or not item.prov:
-                    continue
-
-                for p in item.prov:
-                    if p.page_no == page_num:
-                        # Convert bbox to top-left origin
-                        # Docling v2 BoundingBox has to_top_left_origin(page_height)
-                        tl_bbox = p.bbox.to_top_left_origin(page_height)
-                        bbox = [tl_bbox.l, tl_bbox.t, tl_bbox.r, tl_bbox.b]
-
-                        label_val = (
-                            item.label.value if hasattr(item.label, "value") else str(item.label)
-                        )
-
-                        if label_val in [
-                            DocItemLabel.TABLE,
-                            DocItemLabel.FORMULA,
-                            DocItemLabel.PICTURE,
-                            DocItemLabel.CHART,
-                        ]:
-                            our_label = "figure"
-                            if label_val == DocItemLabel.TABLE:
-                                our_label = "table"
-                            elif label_val == DocItemLabel.FORMULA:
-                                our_label = "equation"
-
-                            candidates.append({"bbox": bbox, "label": our_label})
-
-        except Exception as e:
-            logger.error(f"[FigureService] Docling candidate extraction failed: {e}")
 
     def _is_new_candidate(
         self,

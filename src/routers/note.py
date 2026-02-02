@@ -9,9 +9,8 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.auth import OptionalUser
-
-from ..features import SidebarNoteService
-from ..providers import get_storage_provider
+from src.domain.features import SidebarNoteService
+from src.providers import get_storage_provider
 
 router = APIRouter(tags=["Notes"])
 

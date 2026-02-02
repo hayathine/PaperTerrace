@@ -11,12 +11,11 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from src.auth import OptionalUser
-
-from ..features import SummaryService
-from ..logger import logger
-from ..providers import RedisService, get_storage_provider
-from ..services.analysis_service import EnglishAnalysisService
-from ..utils import _get_file_hash
+from src.domain.features import SummaryService
+from src.domain.services.analysis_service import EnglishAnalysisService
+from src.logger import logger
+from src.providers import RedisService, get_storage_provider
+from src.utils import _get_file_hash
 
 router = APIRouter(tags=["PDF Analysis"])
 

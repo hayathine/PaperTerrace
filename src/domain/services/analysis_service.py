@@ -1,7 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
 
-from src.domain.features.tokenization import TokenizationService
-from src.domain.features.word_analysis import WordAnalysisService
 from src.domain.services.nlp_service import NLPService
 
 # 共通設定 (Legacy executor for backwards consistency if needed by external callers)
@@ -17,6 +15,8 @@ class EnglishAnalysisService:
     def __init__(self):
         import os
 
+        from src.domain.features.tokenization import TokenizationService
+        from src.domain.features.word_analysis import WordAnalysisService
         from src.domain.services.pdf_ocr_service import PDFOCRService
 
         self.nlp_service = NLPService()

@@ -35,10 +35,9 @@ dependencies = [
     "uuid6>=2025.0.1",
     "uvicorn>=0.40.0",
     "Pillow>=10.4.0",
-    "camelot-py[cv]>=1.0.9",
-    "opencv-python-headless>=4.13.0.90",
     "typer>=0.21.1",
     "onnxruntime>=1.23.2",
+    "opencv-python-headless>=4.13.0.90",
 ]
 
 
