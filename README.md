@@ -1,5 +1,6 @@
 # PaperTerrace
 
+[PaperTerrace](https://paperterrace-t2nx5gtwia-an.a.run.app/) (β版)
 PaperTerraceは、「テラスで読むくらい気軽に」論文を読み、理解を深めるための知的でリラックスした読書体験を提供するAI論文リーディングアシスタントです。
 
 最新のAI技術（Gemini）と高度なドキュメント解析（）を組み合わせ、英語論文のハードルを極限まで下げ、本質的な理解に集中できる環境を提供します。
