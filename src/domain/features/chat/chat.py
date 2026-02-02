@@ -5,7 +5,6 @@ AIチャットアシスタント機能を提供するモジュール
 
 import os
 
-from src.logger import logger
 from src.domain.prompts import (
     CHAT_AUTHOR_FROM_PDF_PROMPT,
     CHAT_AUTHOR_PERSONA_PROMPT,
@@ -14,6 +13,7 @@ from src.domain.prompts import (
     CHAT_WITH_FIGURE_PROMPT,
     CORE_SYSTEM_PROMPT,
 )
+from src.logger import logger
 from src.providers import get_ai_provider
 from src.providers.redis_provider import RedisService
 

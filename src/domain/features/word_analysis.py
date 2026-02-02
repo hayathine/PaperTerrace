@@ -2,15 +2,15 @@ import asyncio
 import os
 from concurrent.futures import ThreadPoolExecutor
 
-from src.logger import logger
 from src.domain.prompts import (
     ANALYSIS_BATCH_TRANSLATE_PROMPT,
     ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT,
     CORE_SYSTEM_PROMPT,
 )
+from src.domain.services.local_translator import get_local_translator
+from src.logger import logger
 from src.providers import RedisService, get_ai_provider
 from src.providers.dictionary_provider import get_dictionary_provider
-from src.domain.services.local_translator import get_local_translator
 from src.utils import truncate_context
 
 from .translate import SUPPORTED_LANGUAGES

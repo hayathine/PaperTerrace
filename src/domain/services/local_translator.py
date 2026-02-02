@@ -30,13 +30,13 @@ class LocalTranslator:
             )
         else:
             try:
-                # Load CTranslate2 translator
+                # 8 vCPUを最大限活用するためのスレッド設定
                 self.translator = ctranslate2.Translator(  # type: ignore[attr-defined]
                     self.model_path,
                     device="cpu",
                     compute_type="int8",
-                    inter_threads=1,
-                    intra_threads=2,
+                    inter_threads=int(os.getenv("CT2_INTER_THREADS", "1")),
+                    intra_threads=int(os.getenv("CT2_INTRA_THREADS", "4")),
                 )
 
                 # Load SentencePiece model for tokenization

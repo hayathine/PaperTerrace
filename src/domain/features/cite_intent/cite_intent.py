@@ -3,8 +3,8 @@ from typing import Any, Dict, List
 
 from pydantic import BaseModel, Field
 
-from src.logger import logger
 from src.domain.prompts import AGENT_CITE_INTENT_PROMPT, CORE_SYSTEM_PROMPT
+from src.logger import logger
 from src.providers import get_ai_provider
 
 

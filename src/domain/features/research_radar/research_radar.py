@@ -4,12 +4,12 @@ from typing import Any, Dict, List
 import httpx
 from pydantic import BaseModel, Field
 
-from src.logger import logger
 from src.domain.prompts import (
     RADAR_GENERATE_QUERY_ABSTRACT_PROMPT,
     RADAR_GENERATE_QUERY_CONTEXT_PROMPT,
     RADAR_SIMULATE_SEARCH_PROMPT,
 )
+from src.logger import logger
 from src.providers import get_ai_provider
 
 

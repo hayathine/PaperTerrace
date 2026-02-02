@@ -6,12 +6,12 @@
     再現性リスク
 """
 
-from src.logger import logger
 from src.domain.prompts import (
     ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT,
     AGENT_ADVERSARIAL_CRITIQUE_PROMPT,
     CORE_SYSTEM_PROMPT,
 )
+from src.logger import logger
 from src.providers import get_ai_provider
 from src.schemas.adversarial import (
     AdversarialCritiqueResponse as CritiqueResponse,

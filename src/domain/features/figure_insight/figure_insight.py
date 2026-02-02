@@ -2,12 +2,12 @@ from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
 
-from src.logger import logger
 from src.domain.prompts import (
     VISION_ANALYZE_FIGURE_PROMPT,
     VISION_ANALYZE_TABLE_PROMPT,
     VISION_COMPARE_FIGURES_PROMPT,
 )
+from src.logger import logger
 from src.providers import get_ai_provider
 
 

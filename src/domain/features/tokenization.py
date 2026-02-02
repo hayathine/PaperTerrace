@@ -5,9 +5,9 @@ import re
 # Use the same executor if possible, or create a new one
 from concurrent.futures import ThreadPoolExecutor
 
+from src.domain.services.nlp_service import NLPService
 from src.logger import logger
 from src.providers import get_storage_provider
-from src.domain.services.nlp_service import NLPService
 from src.utils import clean_text_for_tokenization
 
 from .word_analysis import WordAnalysisService

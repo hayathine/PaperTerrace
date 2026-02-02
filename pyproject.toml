@@ -38,6 +38,7 @@ dependencies = [
     "camelot-py[cv]>=1.0.9",
     "opencv-python-headless>=4.13.0.90",
     "typer>=0.21.1",
+    "onnxruntime>=1.23.2",
 ]
 
 

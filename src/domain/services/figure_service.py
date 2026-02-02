@@ -14,11 +14,14 @@ from pdfplumber.page import Page
 from src.logger import logger
 from src.providers.image_storage import save_page_image
 
+from .paddle_layout_service import get_layout_service
+
 
 class FigureService:
     def __init__(self, ai_provider, model: str):
         self.ai_provider = ai_provider
         self.model = model
+        self.layout_service = get_layout_service()
 
         # Initialize Docling Converter
         pipeline_options = PdfPipelineOptions()
@@ -48,6 +51,15 @@ class FigureService:
         """
         candidates = []
         page_height = page.height
+
+        # 0. Use local Paddle Layout if available (PRIORITY for CPU optimization)
+        local_results = self.layout_service.detect_layout(img_bytes)
+        for res in local_results:
+            if res["label"] in ["figure", "table", "equation", "chart"]:
+                label = res["label"] if res["label"] != "chart" else "figure"
+                # Convert pixel coordinates (at resolution) to PDF points
+                bbox = [b / zoom for b in res["bbox"]]
+                candidates.append({"bbox": bbox, "label": label})
 
         # 1. Use Docling for structured items (Tables, Formulas, Pictures)
         if pdf_path:

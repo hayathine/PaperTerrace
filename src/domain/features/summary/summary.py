@@ -1,6 +1,5 @@
 import os
 
-from src.logger import logger
 from src.domain.prompts import (
     CORE_SYSTEM_PROMPT,
     PAPER_SUMMARY_AI_CONTEXT_PROMPT,
@@ -8,6 +7,7 @@ from src.domain.prompts import (
     PAPER_SUMMARY_FULL_PROMPT,
     PAPER_SUMMARY_SECTIONS_PROMPT,
 )
+from src.logger import logger
 from src.providers import get_ai_provider, get_storage_provider
 from src.schemas.summary import FullSummaryResponse
 from src.schemas.summary import SectionSummaryList as SectionSummariesResponse
