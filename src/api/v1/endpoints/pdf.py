@@ -277,7 +277,26 @@ async def stream(task_id: str):
                 pdf_content = base64.b64decode(pdf_b64)
 
                 full_text_fragments = []
+                # 1. Fast text extraction for immediate "Text Mode" display
+                fast_text = service.ocr_service.fast_extract_text(pdf_content)
+                new_paper_id = str(uuid6.uuid7())
+
+                # Send meta data immediately
+                meta_payload = {
+                    "type": "meta",
+                    "paper_id": new_paper_id,
+                    "filename": filename,
+                    "full_text": fast_text,
+                }
+                yield f"data: {json.dumps(meta_payload)}\n\n"
+
+                # 2. Extract raw abstract using pdfplumber logic (also fast)
+                raw_abstract = service.ocr_service.extract_abstract_text(pdf_content)
+
+                # Collect figures/layout to save later
+                full_text_fragments = []
                 all_layout_data = []
+                collected_figures = []
 
                 # User plan lookup
                 user_plan = "free"
@@ -286,12 +305,7 @@ async def stream(task_id: str):
                     if user_data:
                         user_plan = user_data.get("plan", "free")
 
-                # Extract raw abstract using pdfplumber logic
-                raw_abstract = service.ocr_service.extract_abstract_text(pdf_content)
-
-                # Collect figures to save later
-                collected_figures = []
-
+                # 3. Stream pages for "Support Mode"
                 async for (
                     page_num,
                     total_pages,
@@ -323,11 +337,8 @@ async def stream(task_id: str):
                     if layout_data:
                         page_payload["width"] = layout_data["width"]
                         page_payload["height"] = layout_data["height"]
-                        # Convert words to frontend format if needed, or pass as is
-                        # Backend layout_data['words'] has {bbox, word}
                         page_payload["words"] = layout_data.get("words", [])
 
-                        # Collect figures if present
                         if "figures" in layout_data:
                             collected_figures.extend(layout_data["figures"])
 
@@ -342,9 +353,8 @@ async def stream(task_id: str):
                 for i, p_text in enumerate(full_text_fragments):
                     full_text_with_markers.append(f"--- PAGE {i + 1} ---\n{p_text}")
                 full_text = "\n\n".join(full_text_with_markers)
-                new_paper_id = str(uuid6.uuid7())
 
-                # Save to DB (Background or here)
+                # Save to DB
                 try:
                     storage.save_paper(
                         paper_id=new_paper_id,
@@ -354,53 +364,41 @@ async def stream(task_id: str):
                         html_content="",
                         target_language="ja",
                         layout_json=json.dumps(all_layout_data),
-                        owner_id=user_id,  # Pass owner_id
+                        owner_id=user_id,
                     )
 
-                    # Save Collected Figures and Trigger Auto-Explanation
                     if collected_figures:
                         from src.infra.crud import save_figure_to_db
 
-                        logger.info(
-                            f"Saving {len(collected_figures)} extracted figures for paper {new_paper_id}"
-                        )
                         for fig in collected_figures:
                             save_figure_to_db(
                                 paper_id=new_paper_id,
                                 page_number=fig["page_num"],
                                 bbox=fig["bbox"],
                                 image_url=fig["image_url"],
-                                caption="",  # Can't easily extract yet
-                                explanation="",  # Initially empty
+                                caption="",
+                                explanation="",
                                 label=fig.get("label", "figure"),
                                 latex=fig.get("latex", ""),
                             )
-
                 except Exception:
                     logger.exception(f"Failed to save paper {new_paper_id} to database")
 
-                # セッションコンテキスト保存 (Summary等のために必要)
+                # Session context for summary/chat
                 s_id = session_id or new_paper_id
-                res = redis_service.set(f"session:{s_id}", full_text, expire=86400)
-
-                # DBにもセッションマッピングを保存 (再起動対策)
+                redis_service.set(f"session:{s_id}", full_text, expire=86400)
                 if s_id:
                     storage.save_session_context(s_id, new_paper_id)
 
-                # --- Auto-Summarization via Cloud Tasks ---
+                # 4. Trigger Auto-Summarization (Images are now saved to DB)
                 try:
                     cloud_tasks_service.enqueue_paper_summary(
-                        new_paper_id, full_text, target_lang=lang
+                        new_paper_id, full_text, target_lang=lang, file_hash=file_hash
                     )
                     if raw_abstract:
                         storage.update_paper_raw_abstract(new_paper_id, raw_abstract)
-                        logger.info(f"Raw abstract saved for paper {new_paper_id}")
                 except Exception:
                     logger.exception(f"Failed to enqueue summary for paper {new_paper_id}")
-
-                logger.info(
-                    f"Saved session context for: {s_id} (result: {res}, length: {len(full_text)})"
-                )
 
                 yield f"data: {json.dumps({'type': 'done', 'paper_id': new_paper_id})}\n\n"
 
@@ -622,7 +620,9 @@ async def stream(task_id: str):
             try:
                 # Extract raw abstract first
                 raw_abstract = service.ocr_service.extract_abstract_text(pdf_content)
-                cloud_tasks_service.enqueue_paper_summary(paper_id, full_text, target_lang=lang)
+                cloud_tasks_service.enqueue_paper_summary(
+                    paper_id, full_text, target_lang=lang, file_hash=file_hash
+                )
                 if raw_abstract:
                     storage.update_paper_raw_abstract(paper_id, raw_abstract)
                     logger.info(f"Raw abstract saved for paper {paper_id}")

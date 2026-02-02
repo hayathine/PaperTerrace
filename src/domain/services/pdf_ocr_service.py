@@ -23,10 +23,6 @@ class PDFOCRService:
         self.model = model
         self.figure_service = FigureService(self.ai_provider, self.model)
 
-    def extract_abstract_text(self, file_bytes: bytes) -> Optional[str]:
-        """Extract abstract using specialized service."""
-        return AbstractService.extract_abstract(file_bytes)
-
     async def extract_text_streaming(
         self, file_bytes: bytes, filename: str = "unknown.pdf", user_plan: str = "free"
     ) -> AsyncGenerator:
@@ -77,6 +73,24 @@ class PDFOCRService:
         except Exception as e:
             logger.error(f"OCR streaming failed: {e}")
             yield (0, 0, f"ERROR_API_FAILED: {str(e)}", True, file_hash, None, None)
+
+    def fast_extract_text(self, file_bytes: bytes) -> str:
+        """Rapidly extract native text from all pages for Text Mode."""
+        try:
+            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
+                all_text = []
+                for page in pdf.pages:
+                    txt = page.extract_text(use_text_flow=True, x_tolerance=1, y_tolerance=3)
+                    if txt:
+                        all_text.append(txt)
+                return "\n\n---\n\n".join(all_text)
+        except Exception as e:
+            logger.error(f"Fast text extraction failed: {e}")
+            return ""
+
+    def extract_abstract_text(self, file_bytes: bytes) -> Optional[str]:
+        """Extract abstract using specialized service."""
+        return AbstractService.extract_abstract(file_bytes)
 
     async def _handle_cache(self, file_hash: str, file_bytes: bytes) -> Optional[list]:
         """Check for existing OCR results and verify all pages are present."""

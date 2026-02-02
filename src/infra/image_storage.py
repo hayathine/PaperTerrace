@@ -29,6 +29,10 @@ class ImageStorageStrategy(ABC):
     def delete(self, file_hash: str) -> bool:
         pass
 
+    @abstractmethod
+    def get_bytes(self, file_hash: str, page_num: int | str) -> bytes | None:
+        pass
+
 
 class LocalImageStorage(ImageStorageStrategy):
     def __init__(self):
@@ -83,6 +87,12 @@ class LocalImageStorage(ImageStorageStrategy):
             logger.info(f"Deleted images (Local) for hash: {file_hash}")
             return True
         return False
+
+    def get_bytes(self, file_hash: str, page_num: int | str) -> bytes | None:
+        image_path = self.images_dir / file_hash / f"page_{page_num}.png"
+        if image_path.exists():
+            return image_path.read_bytes()
+        return None
 
 
 class GCSImageStorage(ImageStorageStrategy):
@@ -178,6 +188,13 @@ class GCSImageStorage(ImageStorageStrategy):
             logger.info(f"Deleted images (GCS) for hash: {file_hash}")
         return deleted
 
+    def get_bytes(self, file_hash: str, page_num: int | str) -> bytes | None:
+        blob_name = f"paper_images/{file_hash}/page_{page_num}.png"
+        blob = self.bucket.blob(blob_name)
+        if blob.exists():
+            return blob.download_as_bytes()
+        return None
+
 
 # Factory
 def get_image_storage() -> ImageStorageStrategy:
@@ -209,3 +226,7 @@ def get_page_images(file_hash: str) -> List[str]:
 
 def delete_page_images(file_hash: str) -> bool:
     return _get_instance().delete(file_hash)
+
+
+def get_image_bytes(file_hash: str, page_num: int | str) -> bytes | None:
+    return _get_instance().get_bytes(file_hash, page_num)

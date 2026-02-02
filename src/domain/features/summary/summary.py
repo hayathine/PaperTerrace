@@ -3,11 +3,13 @@ import os
 from src.core.logger import logger
 from src.domain.prompts import (
     CORE_SYSTEM_PROMPT,
+    PAPER_INTEGRATED_ANALYSIS_PROMPT,
     PAPER_SUMMARY_AI_CONTEXT_PROMPT,
     PAPER_SUMMARY_FULL_PROMPT,
     PAPER_SUMMARY_SECTIONS_PROMPT,
 )
 from src.infra import get_ai_provider
+from src.models.schemas.analysis import IntegratedAnalysisResponse
 from src.models.schemas.summary import FullSummaryResponse
 from src.models.schemas.summary import SectionSummaryList as SectionSummariesResponse
 
@@ -208,3 +210,39 @@ class SummaryService:
         except Exception as e:
             logger.error(f"Context summary generation failed: {e}")
             return ""
+
+    async def analyze_integrated(
+        self, text: str, image_data_list: list[tuple[bytes, str]], target_lang: str = "ja"
+    ) -> IntegratedAnalysisResponse:
+        """
+        論文全体を統合的に解析し、要約と座標検出を一括で行う。
+        """
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
+        # 1. トークン制限に合わせてテキストを切り詰める
+        safe_text = await self._truncate_to_token_limit(text)
+
+        # 2. プロンプト構築
+        prompt = PAPER_INTEGRATED_ANALYSIS_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
+        instruction = CORE_SYSTEM_PROMPT.format(lang_name=lang_name)
+
+        try:
+            logger.info(f"Starting integrated analysis with {len(image_data_list)} images")
+
+            # 3. Gemini 2.0 Flash で解析 (マルチモーダル入力)
+            analysis: IntegratedAnalysisResponse = (
+                await self.ai_provider.generate_with_multiple_images(
+                    prompt=prompt,
+                    images=image_data_list,
+                    model=self.model,
+                    response_model=IntegratedAnalysisResponse,
+                    system_instruction=instruction,
+                )
+            )
+
+            logger.info("Integrated analysis completed successfully")
+            return analysis
+
+        except Exception as e:
+            logger.exception("Integrated analysis failed")
+            raise SummaryError(f"Integrated analysis failed: {str(e)}")

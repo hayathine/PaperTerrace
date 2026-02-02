@@ -117,6 +117,29 @@ Focus on key terminology and the main research topic to serve as context for tec
 {paper_text}
 """
 
+PAPER_INTEGRATED_ANALYSIS_PROMPT = """You are an advanced academic research assistant. 
+Your task is to analyze the provided paper (both text and page images) to generate a structured summary in {lang_name} and perform precise visual grounding of its contents.
+
+### INSTRUCTIONS
+1. **Structured Summary**: Generate a comprehensive summary in {lang_name} as defined in the response schema.
+2. **Visual Grounding**: For each point in the summary, identify the specific visual elements (Figures, Tables, or Equations) that support or illustrate the claim. Refer to them by their specific labels (e.g., "Figure 1").
+3. **Comprehensive Detection**: Identify and provide coordinates for ALL significant figures, tables, and independent mathematical equations across all provided page images.
+
+### GROUNDING RULES
+- **Coordinates**: Use normalized integers ranging from 0 to 1000 in the format `[ymin, xmin, ymax, xmax]`.
+- **Labels**: Accurately transcribe labels from the document (e.g., "Table 2", "Eq. (4)", "Fig. 1").
+- **Consistency**: Ensure that every label mentioned in the `evidence_labels` of the summary sections corresponds to an entry in the `all_detected_items` list.
+
+### SUMMARY CONTENT (Translate these into {lang_name})
+- **Overview**: Core essence of the research.
+- **Key Contributions**: Specific novelties or results. Link to result figures/tables.
+- **Methodology**: System architecture or logical flow. Link to methodology diagrams or core equations.
+- **Conclusion**: Summarize findings and future directions.
+
+### OUTPUT
+Return ONLY a valid JSON object matching the defined schema. Do not include markdown code blocks or any introductory text.
+"""
+
 # ==========================================
 # Paragraph Analysis Prompts
 # ==========================================
@@ -157,17 +180,19 @@ Output ONLY the translation.
 
 VISION_DETECT_ITEMS_PROMPT = """Analyze the following image of a document page and identify all tables and independent mathematical equations.
 
-Return a JSON list of bounding boxes for each detected item:
-[
-  {"label": "table" | "equation", "box_2d": [ymin, xmin, ymax, xmax]}
-]
+Return a JSON object with a list of bounding boxes for each detected item:
+{
+  "figures": [
+    {"label": "table" | "equation", "box_2d": [ymin, xmin, ymax, xmax]}
+  ]
+}
 
 [Instructions]
-- Coordinates must be normalized (0.0 to 1.0).
+- Coordinates must be normalized integers (0 to 1000).
 - "table": Tabular data structures.
 - "equation": Significant mathematical formulas/equations displayed independently (not inline).
 - Ignore small icons, headers, footers, or page numbers.
-- If no items are found, return an empty list [].
+- If no items are found, return an empty list for "figures".
 """
 
 VISION_ANALYZE_FIGURE_PROMPT = """Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.

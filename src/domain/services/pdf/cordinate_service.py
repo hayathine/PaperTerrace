@@ -136,10 +136,14 @@ class CoordinateService:
 
             return await self.gemini_predictor(image, get_ai_provider())
 
-        # 2. ローカルモデル (Heron/Surya) の選択
+        # 2. ローカルモデル (Heron/Surya) または Gemini の選択
         parser_type = os.getenv("LAYOUT_PARSER_TYPE", "heron").lower()
         if parser_type == "surya":
             return await self._get_surya_results(image)
+        elif parser_type == "gemini":
+            from src.infra import get_ai_provider
+
+            return await self.gemini_predictor(image, get_ai_provider())
         else:
             return await self._get_heron_results(image)
 
@@ -190,11 +194,11 @@ class CoordinateService:
         if response.figures:
             for fig in response.figures:
                 ymin, xmin, ymax, xmax = fig.box_2d
-                # ピクセル座標に変換
-                p_xmin = xmin * page_w
-                p_ymin = ymin * page_h
-                p_xmax = xmax * page_w
-                p_ymax = ymax * page_h
+                # ピクセル座標に変換 (0-1000を0-1に変換してからピクセルを掛ける)
+                p_xmin = (xmin / 1000.0) * page_w
+                p_ymin = (ymin / 1000.0) * page_h
+                p_xmax = (xmax / 1000.0) * page_w
+                p_ymax = (ymax / 1000.0) * page_h
 
                 bbox = [p_xmin, p_ymin, p_xmax, p_ymax]
                 # 多角形（矩形）の頂点を作成

@@ -16,7 +16,12 @@ from src.domain.features import (
     ResearchRadarService,
     SummaryService,
 )
-from src.infra import RedisService, get_storage_provider
+from src.infra import (
+    RedisService,
+    get_image_bytes,
+    get_page_images,
+    get_storage_provider,
+)
 
 router = APIRouter(tags=["Analysis"])
 
@@ -109,6 +114,41 @@ async def summarize(session_id: str = Form(...), mode: str = Form("full"), lang:
 
             return JSONResponse({"abstract": abstract})
         else:
+            # Integrated analysis for full summary
+            paper_id = storage.get_session_paper_id(session_id)
+            file_hash = None
+            if paper_id:
+                paper = storage.get_paper(paper_id)
+                if paper:
+                    file_hash = paper.get("file_hash")
+
+            if file_hash:
+                image_urls = get_page_images(file_hash)
+                if image_urls:
+                    image_data_list = []
+                    # Limit to first 20 pages for performance/cost if very long?
+                    # Gemini 2.0 Flash should handle more, but let's be safe.
+                    for i, url in enumerate(image_urls[:20]):
+                        # URL is /static/paper_images/{file_hash}/page_{n}.png
+                        # Extract page number or just iterate
+                        page_num = i + 1
+                        img_bytes = get_image_bytes(file_hash, page_num)
+                        if img_bytes:
+                            image_data_list.append((img_bytes, "image/png"))
+
+                    if image_data_list:
+                        integrated = await summary_service.analyze_integrated(
+                            context, image_data_list, target_lang=lang
+                        )
+                        # Save detected items to DB for later use
+                        if paper_id:
+                            # TODO: Update paper/figures table with all_detected_items
+                            # For now, we just return it
+                            pass
+
+                        return JSONResponse(integrated.model_dump())
+
+            # Fallback to text-only if no images
             summary = await summary_service.summarize_full(context, target_lang=lang)
             return JSONResponse({"summary": summary})
     except Exception as e:

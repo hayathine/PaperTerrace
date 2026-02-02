@@ -128,7 +128,11 @@ const Sidebar: React.FC<SidebarProps> = ({
         )}
         {activeTab === "summary" && (
           <div className="absolute inset-0">
-            <Summary sessionId={sessionId} isAnalyzing={isAnalyzing} />
+            <Summary
+              sessionId={sessionId}
+              isAnalyzing={isAnalyzing}
+              onEvidenceClick={onEvidenceClick}
+            />
           </div>
         )}
         {activeTab === "chat" && (

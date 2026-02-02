@@ -4,6 +4,7 @@ Enables switching between local (Gemini/SQLite) and cloud (Vertex AI/Cloud SQL) 
 """
 
 from .ai_provider import AIProviderInterface, GeminiProvider, get_ai_provider
+from .image_storage import delete_page_images, get_image_bytes, get_page_images, save_page_image
 from .redis_provider import RedisService, get_redis_client
 from .storage_provider import SQLiteStorage, StorageInterface, get_storage_provider
 
@@ -16,4 +17,8 @@ __all__ = [
     "get_storage_provider",
     "RedisService",
     "get_redis_client",
+    "save_page_image",
+    "get_page_images",
+    "delete_page_images",
+    "get_image_bytes",
 ]

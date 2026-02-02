@@ -44,17 +44,27 @@ function App() {
   const [evidenceHighlight, setEvidenceHighlight] = useState<{
     page: number;
     text: string;
+    box_2d?: number[];
   } | null>(null);
   const [initialChatMessage, setInitialChatMessage] = useState<string | null>(
     null,
   );
 
-  const handleEvidenceClick = (evidence: { page: number; text: string }) => {
+  const handleEvidenceClick = (evidence: {
+    page: number;
+    text: string;
+    box_2d?: number[];
+  }) => {
     setEvidenceHighlight(evidence);
-    // Also jump to that page. For now just scroll to the top of that page.
-    // We'll set x,y to -1 as a special value to indicate "just jump to page"
-    // OR we can try to find the coordinates if we have the index.
-    setJumpTarget({ page: evidence.page, x: 0.5, y: 0.2 }); // Jump to top-middle of that page
+    if (evidence.box_2d) {
+      const [ymin, xmin, ymax, xmax] = evidence.box_2d;
+      // Convert 0-1000 normalized to 0-1
+      const x = (xmin + xmax) / 2000;
+      const y = (ymin + ymax) / 2000;
+      setJumpTarget({ page: evidence.page, x, y });
+    } else {
+      setJumpTarget({ page: evidence.page, x: 0.5, y: 0.2 });
+    }
   };
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentPaperId, setCurrentPaperId] = useState<string | null>(null);

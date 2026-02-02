@@ -5,6 +5,20 @@ import { CritiqueResponse, RadarResponse } from "./types";
 interface SummaryProps {
   sessionId: string;
   isAnalyzing?: boolean;
+  onEvidenceClick?: (evidence: any) => void;
+}
+
+interface IntegratedSummary {
+  overview: string;
+  key_contributions: { content: string; evidence_labels: string[] }[];
+  methodology: { content: string; evidence_labels: string[] };
+  conclusion: { content: string; evidence_labels: string[] };
+  all_detected_items: {
+    label: string;
+    type: string;
+    page_num: number;
+    box_2d: number[];
+  }[];
 }
 
 type Mode = "summary" | "critique" | "radar";
@@ -12,6 +26,7 @@ type Mode = "summary" | "critique" | "radar";
 const Summary: React.FC<SummaryProps> = ({
   sessionId,
   isAnalyzing = false,
+  onEvidenceClick,
 }) => {
   const { t, i18n } = useTranslation();
   const [mode, setMode] = useState<Mode>("summary");
@@ -19,6 +34,8 @@ const Summary: React.FC<SummaryProps> = ({
   const [error, setError] = useState<string | null>(null);
 
   const [summaryData, setSummaryData] = useState<string | null>(null);
+  const [integratedData, setIntegratedData] =
+    useState<IntegratedSummary | null>(null);
   const [critiqueData, setCritiqueData] = useState<CritiqueResponse | null>(
     null,
   );
@@ -30,19 +47,28 @@ const Summary: React.FC<SummaryProps> = ({
     try {
       const formData = new FormData();
       formData.append("session_id", sessionId);
-      formData.append("mode", "abstract");
+      formData.append("mode", "full"); // Changed to full for integrated analysis
       formData.append("lang", i18n.language);
 
-      const res = await fetch("/summarize", { method: "POST", body: formData });
+      const res = await fetch("/summarize", {
+        method: "POST",
+        body: formData,
+      });
       if (!res.ok) {
         const errorText = await res.text();
         throw new Error(errorText || `Status ${res.status}`);
       }
       const data = await res.json();
-      if (data.summary) {
+
+      if (data.overview && data.key_contributions) {
+        setIntegratedData(data);
+        setSummaryData(null);
+      } else if (data.summary) {
         setSummaryData(data.summary);
+        setIntegratedData(null);
       } else if (data.abstract) {
         setSummaryData(data.abstract);
+        setIntegratedData(null);
       } else {
         setError(data.error || "Summary not found in response");
       }
@@ -146,7 +172,7 @@ const Summary: React.FC<SummaryProps> = ({
 
         {!loading && mode === "summary" && (
           <div className="space-y-4">
-            {!summaryData && (
+            {!summaryData && !integratedData && (
               <div className="text-center py-8">
                 <p className="text-xs text-slate-400 mb-4">
                   {t("summary.summary_desc")}
@@ -168,6 +194,104 @@ const Summary: React.FC<SummaryProps> = ({
                 )}
               </div>
             )}
+
+            {integratedData && (
+              <div className="space-y-4">
+                <div className="bg-white p-4 rounded-xl border border-indigo-100 shadow-sm">
+                  <h3 className="text-[10px] font-bold text-indigo-700 uppercase mb-2 tracking-wider">
+                    Overview
+                  </h3>
+                  <div className="text-[11px] text-slate-600 leading-relaxed font-medium">
+                    {integratedData.overview}
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                  <h3 className="text-[10px] font-bold text-indigo-700 uppercase mb-2 tracking-wider">
+                    Key Contributions
+                  </h3>
+                  <div className="space-y-3">
+                    {integratedData.key_contributions.map((point, i) => (
+                      <div
+                        key={i}
+                        className="text-[11px] text-slate-600 leading-relaxed pl-3 border-l-2 border-slate-100"
+                      >
+                        {point.content}
+                        <div className="mt-1.5 flex flex-wrap gap-1">
+                          {point.evidence_labels.map((label, li) => {
+                            const item = integratedData.all_detected_items.find(
+                              (it) => it.label === label,
+                            );
+                            return (
+                              <button
+                                key={li}
+                                onClick={() => {
+                                  if (item && onEvidenceClick) {
+                                    onEvidenceClick({
+                                      page: item.page_num,
+                                      text: item.label,
+                                      box_2d: item.box_2d,
+                                    });
+                                  }
+                                }}
+                                className="bg-indigo-50 text-indigo-600 text-[9px] px-2 py-0.5 rounded border border-indigo-100 font-bold hover:bg-indigo-600 hover:text-white transition-colors"
+                              >
+                                {label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                  <h3 className="text-[10px] font-bold text-indigo-700 uppercase mb-2 tracking-wider">
+                    Methodology
+                  </h3>
+                  <div className="text-[11px] text-slate-600 leading-relaxed">
+                    {integratedData.methodology.content}
+                    <div className="mt-2 flex flex-wrap gap-1">
+                      {integratedData.methodology.evidence_labels.map(
+                        (label, li) => {
+                          const item = integratedData.all_detected_items.find(
+                            (it) => it.label === label,
+                          );
+                          return (
+                            <button
+                              key={li}
+                              onClick={() => {
+                                if (item && onEvidenceClick) {
+                                  onEvidenceClick({
+                                    page: item.page_num,
+                                    text: item.label,
+                                    box_2d: item.box_2d,
+                                  });
+                                }
+                              }}
+                              className="bg-slate-50 text-slate-600 text-[9px] px-2 py-0.5 rounded border border-slate-200 font-bold hover:bg-indigo-600 hover:text-white transition-colors"
+                            >
+                              {label}
+                            </button>
+                          );
+                        },
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                  <h3 className="text-[10px] font-bold text-indigo-700 uppercase mb-2 tracking-wider">
+                    Conclusion
+                  </h3>
+                  <div className="text-[11px] text-slate-600 leading-relaxed italic">
+                    {integratedData.conclusion.content}
+                  </div>
+                </div>
+              </div>
+            )}
+
             {summaryData && (
               <div className="prose prose-sm max-w-none text-xs text-slate-600 leading-relaxed whitespace-pre-wrap bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
                 {summaryData}

@@ -1,3 +1,4 @@
+import asyncio
 import os
 from abc import ABC, abstractmethod
 from typing import Any, Type
@@ -61,6 +62,18 @@ class AIProviderInterface(ABC):
         ...
 
     @abstractmethod
+    async def generate_with_multiple_images(
+        self,
+        prompt: str,
+        images: list[tuple[bytes, str]],
+        model: str | None = None,
+        response_model: Type[BaseModel] | None = None,
+        system_instruction: str | None = None,
+    ) -> Any:
+        """Generate text or structured response from prompt with multiple images."""
+        ...
+
+    @abstractmethod
     async def count_tokens(self, contents: Any, model: str | None = None) -> int:
         """Count tokens for the given contents."""
         ...
@@ -74,7 +87,7 @@ class GeminiProvider(AIProviderInterface):
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable is required")
         self.client = genai.Client(api_key=api_key, vertexai=False)
-        self.model = os.getenv("MODEL_OCR", "gemini-2.0-flash")
+        self.model = os.getenv("MODEL_OCR") or "gemini-2.0-flash"
         logger.info(f"GeminiProvider initialized with model: {self.model}")
 
     async def generate(
@@ -90,14 +103,8 @@ class GeminiProvider(AIProviderInterface):
         target_model = model or self.model
         try:
             full_prompt = f"{context}\n\n{prompt}" if context else prompt
-            logger.debug(
-                "Gemini generate request",
-                extra={
-                    "prompt_length": len(full_prompt),
-                    "model": target_model,
-                    "search": enable_search,
-                    "structured": response_model is not None,
-                },
+            logger.info(
+                f"[Gemini] generate request | model: {target_model} | prompt_len: {len(full_prompt)} | structured: {response_model is not None}"
             )
 
             # Configure tools
@@ -172,14 +179,8 @@ class GeminiProvider(AIProviderInterface):
         """Generate text response from prompt with image input."""
         target_model = model or self.model
         try:
-            logger.debug(
-                "Gemini image request",
-                extra={
-                    "image_size": len(image_bytes),
-                    "mime_type": mime_type,
-                    "model": target_model,
-                    "structured": response_model is not None,
-                },
+            logger.info(
+                f"[Gemini] image request | model: {target_model} | image_size: {len(image_bytes)} | structured: {response_model is not None}"
             )
 
             # Configure generation config
@@ -193,57 +194,82 @@ class GeminiProvider(AIProviderInterface):
 
             config = types.GenerateContentConfig(**config_params) if config_params else None
 
-            response = await self.client.aio.models.generate_content(
-                model=target_model,
-                contents=[
-                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                    prompt,
-                ],
-                config=config,
-            )
+            # Retry logic for structured output
+            max_retries = 2
+            last_error = None
+            text_to_parse = ""
 
-            if response_model:
-                text_to_parse = ""
+            for attempt in range(max_retries):
                 try:
-                    # Method 1: Use .parsed if available (google-genai SDK 1.0+)
-                    if hasattr(response, "parsed") and response.parsed is not None:
-                        if isinstance(response.parsed, response_model):
-                            return response.parsed
-                        if isinstance(response.parsed, dict):
-                            return response_model.model_validate(response.parsed)
-                        return response.parsed
-
-                    # Method 2: Manual Parse
-                    text_to_parse = (response.text or "").strip()
-                    # Handle potential markdown wrapping
-                    if text_to_parse.startswith("```json"):
-                        text_to_parse = text_to_parse[7:].strip("` \n")
-                    elif text_to_parse.startswith("```"):
-                        text_to_parse = text_to_parse[3:].strip("` \n")
-
-                    if not text_to_parse:
-                        logger.warning("Empty response text from Gemini, returning empty model")
-                        return response_model.model_validate({})
-
-                    return response_model.model_validate_json(text_to_parse)
-                except Exception as parse_err:
-                    logger.error(
-                        f"Failed to parse structured image output: {parse_err}. "
-                        f"Snippet: {text_to_parse[:200]}..."
+                    response = await self.client.aio.models.generate_content(
+                        model=target_model,
+                        contents=[
+                            types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                            prompt,
+                        ],
+                        config=config,
                     )
-                    # Return an empty response model instead of crashing
-                    try:
-                        return response_model.model_validate({"figures": []})
-                    except Exception:
-                        # If the model doesn't support an empty figures list, we might need a more generic fallback
-                        return response_model.model_construct()
 
-            result = (response.text or "").strip()
-            logger.debug(
-                "Gemini image response",
-                extra={"response_length": len(result)},
-            )
-            return result
+                    if response_model:
+                        try:
+                            # Method 1: Use .parsed if available (google-genai SDK 1.0+)
+                            if hasattr(response, "parsed") and response.parsed is not None:
+                                if isinstance(response.parsed, response_model):
+                                    return response.parsed
+                                if isinstance(response.parsed, dict):
+                                    return response_model.model_validate(response.parsed)
+                                return response.parsed
+
+                            # Manual Parse
+                            text_to_parse = (response.text or "").strip()
+                            # Handle potential markdown wrapping
+                            if text_to_parse.startswith("```json"):
+                                text_to_parse = text_to_parse[7:].strip("` \n")
+                            elif text_to_parse.startswith("```"):
+                                text_to_parse = text_to_parse[3:].strip("` \n")
+
+                            if not text_to_parse:
+                                logger.warning(
+                                    "Empty response text from Gemini, returning empty model"
+                                )
+                                return response_model.model_validate({"figures": []})
+
+                            return response_model.model_validate_json(text_to_parse)
+                        except Exception as parse_err:
+                            candidate = response.candidates[0] if response.candidates else None
+                            finish_reason = candidate.finish_reason if candidate else "UNKNOWN"
+                            logger.warning(
+                                f"Attempt {attempt + 1} failed to parse structured output from Gemini: {parse_err}. "
+                                f"Finish Reason: {finish_reason}. Snippet: {text_to_parse[:100]}..."
+                            )
+                            last_error = parse_err
+                            if attempt < max_retries - 1:
+                                continue
+                            raise parse_err
+                    else:
+                        return (response.text or "").strip()
+
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1)
+                        continue
+                    break
+
+            if response_model and last_error:
+                model_name = response_model.__name__
+                logger.error(
+                    f"Final attempt failed to parse structured image output from Gemini for {model_name}: {last_error}. "
+                    "Returning best-effort constructed model."
+                )
+                try:
+                    if model_name == "FigureDetectionResponse":
+                        return response_model.model_validate({"figures": []})
+                    return response_model.model_construct()
+                except Exception:
+                    return response_model.model_construct()
+
+            return ""
         except Exception as e:
             logger.exception(
                 "Gemini image generation failed",
@@ -251,15 +277,80 @@ class GeminiProvider(AIProviderInterface):
             )
             raise AIGenerationError(f"Image analysis failed: {e}") from e
 
+    async def generate_with_multiple_images(
+        self,
+        prompt: str,
+        images: list[tuple[bytes, str]],
+        model: str | None = None,
+        response_model: Type[BaseModel] | None = None,
+        system_instruction: str | None = None,
+    ) -> Any:
+        """Generate text or structured response from prompt with multiple images."""
+        target_model = model or self.model
+        try:
+            logger.info(
+                f"[Gemini] multi-image request | model: {target_model} | image_count: {len(images)} | structured: {response_model is not None}"
+            )
+
+            # Configure generation config
+            config_params: dict[str, Any] = {}
+            if response_model:
+                config_params["response_mime_type"] = "application/json"
+                config_params["response_json_schema"] = response_model.model_json_schema()
+
+            if system_instruction:
+                config_params["system_instruction"] = system_instruction
+
+            config = types.GenerateContentConfig(**config_params) if config_params else None
+
+            # Build parts
+            parts = []
+            for img_bytes, m_type in images:
+                parts.append(types.Part.from_bytes(data=img_bytes, mime_type=m_type))
+            parts.append(prompt)
+
+            response = await self.client.aio.models.generate_content(
+                model=target_model,
+                contents=parts,
+                config=config,
+            )
+
+            if response_model:
+                try:
+                    if hasattr(response, "parsed") and response.parsed is not None:
+                        if isinstance(response.parsed, response_model):
+                            return response.parsed
+                        if isinstance(response.parsed, dict):
+                            return response_model.model_validate(response.parsed)
+                        return response.parsed
+
+                    text_to_parse = (response.text or "").strip()
+                    if text_to_parse.startswith("```json"):
+                        text_to_parse = text_to_parse[7:].strip("` \n")
+                    elif text_to_parse.startswith("```"):
+                        text_to_parse = text_to_parse[3:].strip("` \n")
+
+                    if not text_to_parse:
+                        return response_model.model_validate({})
+
+                    return response_model.model_validate_json(text_to_parse)
+                except Exception as parse_err:
+                    logger.error(f"Failed to parse structured multi-image output: {parse_err}")
+                    return response_model.model_construct()
+
+            return (response.text or "").strip()
+        except Exception as e:
+            logger.exception("Gemini multi-image generation failed")
+            raise AIGenerationError(f"Multi-image analysis failed: {e}") from e
+
     async def generate_with_pdf(
         self, prompt: str, pdf_bytes: bytes, model: str | None = None
     ) -> str:
         """Generate text response from prompt with PDF input."""
         target_model = model or self.model
         try:
-            logger.debug(
-                "Gemini PDF request",
-                extra={"pdf_size": len(pdf_bytes), "model": target_model},
+            logger.info(
+                f"[Gemini] PDF request | model: {target_model} | pdf_size: {len(pdf_bytes)}"
             )
             response = await self.client.aio.models.generate_content(
                 model=target_model,
@@ -304,13 +395,10 @@ class VertexAIProvider(AIProviderInterface):
 
     def __init__(self):
         self.project_id = os.getenv("GCP_PROJECT_ID")
-        self.location = os.getenv("GCP_LOCATION", "us-central1")
-        self.model = os.getenv("VERTEX_MODEL", "gemini-2.0-flash-lite-001")
+        self.location = os.getenv("GCP_LOCATION", "asia-northeast1")
+        self.model = os.getenv("VERTEX_MODEL") or "gemini-2.0-flash-lite"
 
         if not self.project_id:
-            # Fallback or strict error? Let's check env or assume ADC might work without explicit project in some cases,
-            # but usually project is needed for Vertex init in this SDK style.
-            # However, genai.Client might auto-detect. Let's warn if missing.
             logger.warning(
                 "GCP_PROJECT_ID not set for VertexAIProvider. Relying on default credentials/config."
             )
@@ -361,9 +449,8 @@ class VertexAIProvider(AIProviderInterface):
 
             config = types.GenerateContentConfig(**config_params)
 
-            logger.debug(
-                "Vertex generate request",
-                extra={"model": target_model, "structured": response_model is not None},
+            logger.info(
+                f"[Vertex] generate request | model: {target_model} | prompt_len: {len(contents)} | structured: {response_model is not None}"
             )
 
             response = await self.client.aio.models.generate_content(
@@ -409,6 +496,9 @@ class VertexAIProvider(AIProviderInterface):
         """Generate text response from prompt with image input."""
         target_model = model or self.model
         try:
+            logger.info(
+                f"[Vertex] image request | model: {target_model} | image_size: {len(image_bytes)} | structured: {response_model is not None}"
+            )
             contents = [
                 types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
                 prompt,
@@ -424,14 +514,116 @@ class VertexAIProvider(AIProviderInterface):
 
             config = types.GenerateContentConfig(**config_params)
 
+            # Retry logic for structured output
+            max_retries = 2
+            last_error = None
+            text_to_parse = ""
+
+            for attempt in range(max_retries):
+                try:
+                    response = await self.client.aio.models.generate_content(
+                        model=target_model,
+                        contents=contents,
+                        config=config,
+                    )
+
+                    if response_model:
+                        try:
+                            if hasattr(response, "parsed") and response.parsed is not None:
+                                if isinstance(response.parsed, response_model):
+                                    return response.parsed
+                                if isinstance(response.parsed, dict):
+                                    return response_model.model_validate(response.parsed)
+                                return response.parsed
+
+                            text_to_parse = (response.text or "").strip()
+                            # Handle potential markdown wrapping
+                            if text_to_parse.startswith("```json"):
+                                text_to_parse = text_to_parse[7:].strip("` \n")
+                            elif text_to_parse.startswith("```"):
+                                text_to_parse = text_to_parse[3:].strip("` \n")
+
+                            if not text_to_parse:
+                                return response_model.model_validate({"figures": []})
+
+                            return response_model.model_validate_json(text_to_parse)
+                        except Exception as parse_err:
+                            candidate = response.candidates[0] if response.candidates else None
+                            finish_reason = candidate.finish_reason if candidate else "UNKNOWN"
+                            logger.warning(
+                                f"Attempt {attempt + 1} failed to parse structured output: {parse_err}. "
+                                f"Finish Reason: {finish_reason}. Snippet: {text_to_parse[:100]}..."
+                            )
+                            last_error = parse_err
+                            if attempt < max_retries - 1:
+                                continue
+                            raise parse_err
+                    else:
+                        return (response.text or "").strip()
+
+                except Exception as e:
+                    last_error = e
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1)  # Brief sleep before retry
+                        continue
+                    break
+
+            if response_model and last_error:
+                model_name = response_model.__name__
+                logger.error(
+                    f"Final attempt failed to parse structured image output from Vertex for {model_name}: {last_error}. "
+                    "Returning best-effort constructed model."
+                )
+                try:
+                    # Attempt to return a valid empty figures list if it's FigureDetectionResponse
+                    if model_name == "FigureDetectionResponse":
+                        return response_model.model_validate({"figures": []})
+                    return response_model.model_construct()
+                except Exception:
+                    return response_model.model_construct()
+
+            return ""
+
+        except Exception as e:
+            logger.exception("Vertex AI image generation failed", extra={"error": str(e)})
+            raise AIGenerationError(f"Vertex image analysis failed: {e}") from e
+
+    async def generate_with_multiple_images(
+        self,
+        prompt: str,
+        images: list[tuple[bytes, str]],
+        model: str | None = None,
+        response_model: Type[BaseModel] | None = None,
+        system_instruction: str | None = None,
+    ) -> Any:
+        """Generate text or structured response from prompt with multiple images."""
+        target_model = model or self.model
+        try:
+            logger.info(
+                f"[Vertex] multi-image request | model: {target_model} | image_count: {len(images)} | structured: {response_model is not None}"
+            )
+            parts = []
+            for img_bytes, m_type in images:
+                parts.append(types.Part.from_bytes(data=img_bytes, mime_type=m_type))
+            parts.append(prompt)
+
+            config_params: dict[str, Any] = {"temperature": 0.2, "max_output_tokens": 8192}
+            if response_model:
+                config_params["response_mime_type"] = "application/json"
+                config_params["response_json_schema"] = response_model.model_json_schema()
+
+            if system_instruction:
+                config_params["system_instruction"] = system_instruction
+
+            config = types.GenerateContentConfig(**config_params)
+
             response = await self.client.aio.models.generate_content(
                 model=target_model,
-                contents=contents,
+                contents=parts,
                 config=config,
             )
 
             if response_model:
-                text_to_parse = ""
                 try:
                     if hasattr(response, "parsed") and response.parsed is not None:
                         if isinstance(response.parsed, response_model):
@@ -439,34 +631,20 @@ class VertexAIProvider(AIProviderInterface):
                         if isinstance(response.parsed, dict):
                             return response_model.model_validate(response.parsed)
                         return response.parsed
-
                     text_to_parse = (response.text or "").strip()
-                    # Handle potential markdown wrapping
                     if text_to_parse.startswith("```json"):
                         text_to_parse = text_to_parse[7:].strip("` \n")
-                    elif text_to_parse.startswith("```"):
-                        text_to_parse = text_to_parse[3:].strip("` \n")
-
-                    if not text_to_parse:
-                        return response_model.model_validate({"figures": []})
-
                     return response_model.model_validate_json(text_to_parse)
                 except Exception as parse_err:
                     logger.error(
-                        f"Failed to parse structured image output from Vertex: {parse_err}. "
-                        f"Snippet: {text_to_parse[:200]}..."
+                        f"Failed to parse structured multi-image output from Vertex: {parse_err}"
                     )
-                    # Return an empty response model instead of crashing
-                    try:
-                        return response_model.model_validate({"figures": []})
-                    except Exception:
-                        return response_model.model_construct()
+                    return response_model.model_construct()
 
             return (response.text or "").strip()
-
         except Exception as e:
-            logger.exception("Vertex AI image generation failed", extra={"error": str(e)})
-            raise AIGenerationError(f"Vertex image analysis failed: {e}") from e
+            logger.exception("Vertex multi-image generation failed")
+            raise AIGenerationError(f"Vertex multi-image analysis failed: {e}") from e
 
     async def generate_with_pdf(
         self, prompt: str, pdf_bytes: bytes, model: str | None = None
@@ -474,6 +652,9 @@ class VertexAIProvider(AIProviderInterface):
         """Generate text response from prompt with PDF input."""
         target_model = model or self.model
         try:
+            logger.info(
+                f"[Vertex] PDF request | model: {target_model} | pdf_size: {len(pdf_bytes)}"
+            )
             contents = [
                 types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
                 prompt,
