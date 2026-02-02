@@ -1,0 +1,72 @@
+{
+  "app": {
+    "title": "PaperTerrace",
+    "tagline": "Intelligence Hub",
+    "reading_mode": "Reading Mode",
+    "system_online": "System Online",
+    "guest_user": "Guest User",
+    "limited_access": "Limited Access",
+    "sign_in": "Sign In / Sign Up",
+    "sign_out": "Sign Out",
+    "upload_pdf": "UPLOAD PDF",
+    "analyzing": "Analyzing...",
+    "starting_analysis": "Starting analysis...",
+    "processing": "Processing...",
+    "reading": "Reading...",
+    "welcome_message": "Welcome back, {name}"
+  },
+  "sidebar": {
+    "chat": "Chat",
+    "dict": "Dict",
+    "summary": "Summary",
+    "notes": "Notes",
+    "history": "History"
+  },
+  "pdf": {
+    "upload_title": "Upload PDF",
+    "upload_subtitle": "Drag & drop your paper here, or click to select a file.",
+    "select_file": "Select File",
+    "fast_analysis": "Fast Analysis",
+    "ai_explanation": "AI Insight",
+    "upload_instructions": "Drop PDF here, or click to select",
+    "analysis_error": "An error occurred during analysis",
+    "no_file": "No file selected",
+    "alert_pdf_only": "Please upload a PDF file."
+  },
+  "chat": {
+    "title": "Chat Assistant",
+    "error": "An error occurred. Please try again.",
+    "placeholder": "Type a question...",
+    "analyzing_figure": "Analyzing {type}...",
+    "analysis_failed": "Failed to analyze {type}.",
+    "analysis_error": "Error during {type} analysis."
+  },
+  "dict": {
+    "title": "Dictionary",
+    "ready": "Dictionary Ready",
+    "instructions": "Click any word in the PDF to see its definition here.",
+    "rethink": "Ask AI with Context",
+    "save_to_notes": "Save to Notes",
+    "saved": "Saved",
+    "not_found": "Definition not found"
+  },
+  "summary": {
+    "modes": {
+      "summary": "Summary",
+      "critique": "Critique",
+      "radar": "Radar"
+    },
+    "analyzing": "Analyzing paper...",
+    "generate": "Generate Summary",
+    "critique_start": "Start Critique",
+    "radar_scan": "Scan Radar",
+    "summary_desc": "Generate a comprehensive summary of the paper.",
+    "critique_desc": "Analyze flaws and assumptions from a critical perspective.",
+    "radar_desc": "Research related papers and missing citations."
+  },
+  "library": {
+    "title": "Library",
+    "no_papers": "No papers found",
+    "loading": "Loading..."
+  }
+}

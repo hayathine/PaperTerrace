@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { DictionaryEntry } from "./types";
 import { useAuth } from "../../contexts/AuthContext";
 
@@ -17,6 +18,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
   coordinates,
   onSave,
 }) => {
+  const { t, i18n } = useTranslation();
   const { token } = useAuth();
   // Maintain a list of entries instead of a single one
   const [entries, setEntries] = useState<DictionaryEntry[]>([]);
@@ -39,9 +41,12 @@ const Dictionary: React.FC<DictionaryProps> = ({
         const headers: HeadersInit = {};
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        const res = await fetch(`/explain/${encodeURIComponent(term)}`, {
-          headers,
-        });
+        const res = await fetch(
+          `/explain/${encodeURIComponent(term)}?lang=${i18n.language}`,
+          {
+            headers,
+          },
+        );
         if (res.ok) {
           const data: DictionaryEntry = await res.json();
 
@@ -106,7 +111,11 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
   const handleRethink = async () => {
     if (!term || !context) {
-      alert("No context available for this word.");
+      alert(
+        t("dict.no_context_alert", {
+          defaultValue: "No context available for this word.",
+        }),
+      );
       return;
     }
     setLoading(true);
@@ -121,7 +130,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
           word: term,
           context: context.substring(0, 500), // Limit context length just in case
           session_id: sessionId,
-          lang: "ja",
+          lang: i18n.language,
         }),
       });
 
@@ -129,11 +138,15 @@ const Dictionary: React.FC<DictionaryProps> = ({
         const data: DictionaryEntry = await res.json();
         setEntries((prev) => [data, ...prev]);
       } else {
-        alert("Failed to rethink with context.");
+        alert(
+          t("dict.rethink_failed", {
+            defaultValue: "Failed to rethink with context.",
+          }),
+        );
       }
     } catch (e) {
       console.error(e);
-      alert("Error Rethinking.");
+      alert(t("dict.rethink_error", { defaultValue: "Error Rethinking." }));
     } finally {
       setLoading(false);
     }
@@ -158,11 +171,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
           </svg>
         </div>
         <p className="text-xs font-bold uppercase tracking-wider">
-          Dictionary Ready
+          {t("dict.ready")}
         </p>
-        <p className="text-[10px] mt-2 text-center">
-          Click any word in the PDF to see its definition here.
-        </p>
+        <p className="text-[10px] mt-2 text-center">{t("dict.instructions")}</p>
       </div>
     );
   }
@@ -170,7 +181,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
   return (
     <div className="p-4 h-full overflow-y-auto">
       <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
-        Dictionary {entries.length > 0 && `(${entries.length})`}
+        {t("dict.title")} {entries.length > 0 && `(${entries.length})`}
       </h3>
 
       {loading && (
@@ -199,7 +210,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
                 d="M13 10V3L4 14h7v7l9-11h-7z"
               />
             </svg>
-            Ask AI with Context
+            {t("dict.rethink")}
           </button>
           <p className="text-[9px] text-slate-400 mt-1 px-1 truncate">
             Context: {context.substring(0, 40)}...
@@ -264,7 +275,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
                       d="M5 13l4 4L19 7"
                     />
                   </svg>
-                  Saved
+                  {t("dict.saved")}
                 </>
               ) : (
                 <>
@@ -281,7 +292,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
                       d="M12 4v16m8-8H4"
                     />
                   </svg>
-                  Save to Notes
+                  {t("dict.save_to_notes")}
                 </>
               )}
             </button>

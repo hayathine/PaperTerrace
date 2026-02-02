@@ -1,0 +1,72 @@
+{
+  "app": {
+    "title": "PaperTerrace",
+    "tagline": "Intelligence Hub",
+    "reading_mode": "閲覧モード",
+    "system_online": "システム稼働中",
+    "guest_user": "ゲストユーザー",
+    "limited_access": "制限付きアクセス",
+    "sign_in": "サインイン / 新規登録",
+    "sign_out": "ログアウト",
+    "upload_pdf": "PDFをアップロード",
+    "analyzing": "解析中...",
+    "starting_analysis": "解析を開始しています...",
+    "processing": "処理中...",
+    "reading": "読込中...",
+    "welcome_message": "お帰りなさい、{name}さん"
+  },
+  "sidebar": {
+    "chat": "AIチャット",
+    "dict": "辞書",
+    "summary": "要約",
+    "notes": "ノート",
+    "history": "履歴"
+  },
+  "pdf": {
+    "upload_title": "PDFをアップロード",
+    "upload_subtitle": "論文をドラッグ＆ドロップするか、ここをクリックしてファイルを選択してください。",
+    "select_file": "ファイルを選択",
+    "fast_analysis": "高速解析",
+    "ai_explanation": "AI解説",
+    "upload_instructions": "PDFをここにドロップ、またはクリックして選択",
+    "analysis_error": "解析中にエラーが発生しました",
+    "no_file": "ファイルが選択されていません",
+    "alert_pdf_only": "PDFファイルを選択してください。"
+  },
+  "chat": {
+    "title": "チャットアシスタント",
+    "error": "エラーが発生しました。もう一度お試しください。",
+    "placeholder": "質問を入力...",
+    "analyzing_figure": "{type}を解析しています...",
+    "analysis_failed": "{type}の解析に失敗しました。",
+    "analysis_error": "{type}の解析中にエラーが発生しました。"
+  },
+  "dict": {
+    "title": "辞書",
+    "ready": "辞書準備完了",
+    "instructions": "PDF内の単語をクリックすると、ここに意味が表示されます。",
+    "rethink": "文脈を踏まえてAIに聞く",
+    "save_to_notes": "ノートに保存",
+    "saved": "保存済み",
+    "not_found": "定義が見つかりませんでした"
+  },
+  "summary": {
+    "modes": {
+      "summary": "要約",
+      "critique": "批判的レビュー",
+      "radar": "関連調査"
+    },
+    "analyzing": "論文を解析中...",
+    "generate": "要約を生成",
+    "critique_start": "レビュー開始",
+    "radar_scan": "レーダースキャン",
+    "summary_desc": "論文全体の包括的な要約を生成します。",
+    "critique_desc": "批判的な視点から論文の欠点や前提を分析します。",
+    "radar_desc": "関連する論文や引用漏れを調査します。"
+  },
+  "library": {
+    "title": "ライブラリ",
+    "no_papers": "論文がありません",
+    "loading": "読み込み中..."
+  }
+}

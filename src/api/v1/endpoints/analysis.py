@@ -173,7 +173,7 @@ async def critique(session_id: str = Form(...), lang: str = Form("ja")):
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
-    critique = await adversarial_service.critique(context)
+    critique = await adversarial_service.critique(context, target_lang=lang)
     return JSONResponse(critique)
 
 

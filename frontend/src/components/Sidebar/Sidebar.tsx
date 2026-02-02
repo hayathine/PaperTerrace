@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from "react";
+import { useTranslation } from "react-i18next";
 import ChatWindow from "../Chat/ChatWindow";
 import NoteList from "../Notes/NoteList";
 import Dictionary from "../Dictionary/Dictionary";
@@ -34,6 +35,7 @@ const Sidebar: React.FC<SidebarProps> = ({
   onClearInitialChatMessage,
   onEvidenceClick,
 }) => {
+  const { t } = useTranslation();
   const { token } = useAuth();
   const [dictCount, setDictCount] = useState<number>(0);
 
@@ -69,7 +71,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               : "text-slate-400 hover:text-slate-600"
           }`}
         >
-          Dict
+          {t("sidebar.dict")}
           {dictCount > 0 && (
             <span
               className={`px-1.5 py-0.5 rounded-full text-[8px] ${activeTab === "dict" ? "bg-indigo-100 text-indigo-600" : "bg-slate-100 text-slate-400"}`}
@@ -86,7 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               : "text-slate-400 hover:text-slate-600"
           }`}
         >
-          Summary
+          {t("sidebar.summary")}
         </button>
         <button
           onClick={() => onTabChange("chat")}
@@ -96,7 +98,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               : "text-slate-400 hover:text-slate-600"
           }`}
         >
-          Chat
+          {t("sidebar.chat")}
         </button>
 
         <button
@@ -107,7 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               : "text-slate-400 hover:text-slate-600"
           }`}
         >
-          Notes
+          {t("sidebar.notes")}
         </button>
       </div>
 
