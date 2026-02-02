@@ -15,6 +15,8 @@ class HeronService:
         self._load_lock = asyncio.Lock()
         self._executor = ThreadPoolExecutor(max_workers=1)
         self._infer_semaphore = asyncio.Semaphore(1)
+        self._unload_timer_task = None
+        self._unload_delay = 300  # 5 minutes
 
         self.classes_map = {
             0: "Caption",
@@ -72,6 +74,9 @@ class HeronService:
 
     async def detect_layout(self, image: Image.Image) -> List[Dict[str, Any]]:
         try:
+            from src.core.utils.memory import register_model_activity
+
+            register_model_activity(self, self._unload_delay)
             await self._init_predictors()
 
             async with self._infer_semaphore:
@@ -117,12 +122,16 @@ class HeronService:
         )
 
         bboxes = []
+        target_labels = ("Table", "Formula")
         if results:
             for result in results:
                 for score, label_id, box in zip(
                     result["scores"], result["labels"], result["boxes"]
                 ):
-                    label = self.classes_map.get(label_id.item(), "Text")
+                    label = self.classes_map.get(label_id.item(), "Unknown")
+                    if label not in target_labels:
+                        continue
+
                     box_list = box.tolist()
                     bboxes.append(
                         {
@@ -144,17 +153,14 @@ class HeronService:
         async with self._load_lock:
             if self._model is not None:
                 logger.info("[HeronService] Unloading models to release memory...")
-                import gc
-
-                import torch
-
                 del self._model
                 del self._processor
                 self._model = None
                 self._processor = None
-                gc.collect()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
+
+                from src.core.utils.memory import cleanup_memory
+
+                cleanup_memory()
                 logger.info("[HeronService] Models unloaded.")
 
 

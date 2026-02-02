@@ -1,3 +1,4 @@
+import asyncio
 import os
 from typing import Optional
 
@@ -29,8 +30,20 @@ class LocalTranslatorService:
         self.translator = None
         self.sp_processor = None
         self._initialized = False
-        self._load_model()
         self._initialized_service = True
+
+        self._unload_timer_task = None
+        self._unload_delay = 600  # 10 minutes for translator
+        self._load_lock = asyncio.Lock()
+
+    async def _ensure_loaded(self):
+        """モデルがロードされていることを保証する（非同期版）"""
+        from src.core.utils.memory import register_model_activity
+
+        register_model_activity(self, self._unload_delay)
+        async with self._load_lock:
+            if not self._initialized:
+                self._load_model()
 
     def _load_model(self):
         try:
@@ -57,14 +70,32 @@ class LocalTranslatorService:
         except Exception as e:
             logger.error(f"[LocalTranslator] Failed to load local translator: {e}")
 
-    def is_available(self) -> bool:
-        return self._initialized
+    def unload(self):
+        """メモリを解放するためにモデルをアンロードする"""
+        if self._initialized:
+            logger.info("[LocalTranslator] Unloading M2M100 model...")
+            del self.translator
+            del self.sp_processor
+            self.translator = None
+            self.sp_processor = None
+            self._initialized = False
 
-    def translate(self, text: str, src_lang: str = "en", tgt_lang: str = "ja") -> Optional[str]:
+            from src.core.utils.memory import cleanup_memory
+
+            cleanup_memory()
+            logger.info("[LocalTranslator] Model unloaded.")
+
+    def is_available(self) -> bool:
+        return self._initialized or os.path.exists(self.model_path)
+
+    async def translate(
+        self, text: str, src_lang: str = "en", tgt_lang: str = "ja"
+    ) -> Optional[str]:
         """
         Translate text using M2M100.
         Default: English -> Japanese
         """
+        await self._ensure_loaded()
         if not self._initialized or not text.strip():
             return None
 

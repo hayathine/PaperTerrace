@@ -1,3 +1,4 @@
+import asyncio
 import io
 import os
 from typing import List, Optional
@@ -22,6 +23,7 @@ class CoordinateService:
         if getattr(self, "_initialized", False):
             return
         self._device = None
+        self._inference_lock = asyncio.Lock()  # 重複推論防止のためのロック
 
         # 画像単位の結果キャッシュ
         self._clear_cache()
@@ -68,15 +70,21 @@ class CoordinateService:
         """
         from src.domain.services.pdf.heron_service import heron_service
 
-        if self._cache_image_id == id(image) and self._cache_heron_results:
-            logger.debug(f"[CoordinateService] Heron Cache hit for image object {id(image)}")
-            return self._cache_heron_results
+        # ロックを使用して同時呼び出しを制御
+        async with self._inference_lock:
+            if self._cache_image_id == id(image) and self._cache_heron_results:
+                logger.debug(f"[CoordinateService] Heron Cache hit for image object {id(image)}")
+                return self._cache_heron_results
 
-        results_raw = await heron_service.detect_layout(image)
-        results = [BboxResponse(**res) for res in results_raw]
+            results_raw = await heron_service.detect_layout(image)
+            # Identify only tables and formulas/equations
+            allowed_labels = ("table", "formula", "equation")
+            results = [
+                BboxResponse(**res) for res in results_raw if res["label"].lower() in allowed_labels
+            ]
 
-        self._update_cache(image, results, "heron")
-        return results
+            self._update_cache(image, results, "heron")
+            return results
 
     async def _get_surya_results(self, image: Image.Image) -> List[BboxResponse]:
         """
@@ -84,18 +92,24 @@ class CoordinateService:
         """
         from src.domain.services.pdf.surya_service import surya_service
 
-        if self._cache_image_id == id(image) and self._cache_surya_results:
-            logger.debug(f"[CoordinateService] Surya Cache hit for image object {id(image)}")
-            return self._cache_surya_results
+        async with self._inference_lock:
+            if self._cache_image_id == id(image) and self._cache_surya_results:
+                logger.debug(f"[CoordinateService] Surya Cache hit for image object {id(image)}")
+                return self._cache_surya_results
 
-        results_raw = await surya_service.detect_layout(image)
-        results = [BboxResponse(**res) for res in results_raw]
+            results_raw = await surya_service.detect_layout(image)
+            # Identify only tables and formulas/equations
+            allowed_labels = ("table", "formula", "equation")
+            results = [
+                BboxResponse(**res) for res in results_raw if res["label"].lower() in allowed_labels
+            ]
 
-        self._update_cache(image, results, "surya")
-        return results
+            self._update_cache(image, results, "surya")
+            return results
 
     def _update_cache(self, image: Image.Image, results: List[BboxResponse], parser_type: str):
         """解析結果でキャッシュを更新する"""
+        # ロック内で呼ばれることを想定
         if self._cache_image_id != id(image):
             self._clear_cache(image)
 
@@ -106,89 +120,42 @@ class CoordinateService:
         elif parser_type == "gemini":
             self._cache_gemini_results = results
 
+    async def get_all_items(self, image: Image.Image) -> List[BboxResponse]:
+        """
+        画像内の全レイアウト要素（Table, Formula, Figure 等）を一括で取得する。
+        """
+        from src.core.utils.memory import get_available_memory_mb
+
+        avail_mb = get_available_memory_mb()
+
+        # 1. 外部モデル (Gemini) が優先される条件（メモリ使用量が閾値以下かつ Gemini API Key が設定されている場合）
+        threshold = int(os.getenv("MEMORY_THRESHOLD", "300"))
+        if avail_mb < threshold and os.getenv("GEMINI_API_KEY"):
+            logger.warning("[CoordinateService] Memory low, falling back to Gemini for all items")
+            from src.infra import get_ai_provider
+
+            return await self.gemini_predictor(image, get_ai_provider())
+
+        # 2. ローカルモデル (Heron/Surya) の選択
+        parser_type = os.getenv("LAYOUT_PARSER_TYPE", "heron").lower()
+        if parser_type == "surya":
+            return await self._get_surya_results(image)
+        else:
+            return await self._get_heron_results(image)
+
     async def get_coordinates_bbox(self, image: Image.Image, label: str) -> List[BboxResponse]:
         """
-        指定されたラベルの座標を取得する。
-        Table, Formula については Docling Heron または Surya を使用する。
-        Figure 等のその他は Gemini が有効な場合のみ使用する。
+        指定された単一ラベルの座標を取得する（後方互換用）。
         """
-        label_lower = label.lower()
-        is_table_or_formula = label_lower in ["table", "formula", "equation"]
+        all_results = await self.get_all_items(image)
 
-        results = []
-        if is_table_or_formula:
-            # 1. Table / Formula は専用のローカルAIモデルを使用
-            logger.info(f"[CoordinateService] Detecting '{label}' using specialized models...")
-
-            from src.core.utils.memory import get_available_memory_mb
-
-            avail_mb = get_available_memory_mb()
-            logger.info(f"[CoordinateService] Available memory: {avail_mb:.1f}MB")
-
-            # メモリが非常に少ない場合かつ Gemini が使えるならそちらを優先する
-            threshold = int(os.getenv("MEMORY_THRESHOLD", "300"))
-            if avail_mb < threshold and os.getenv("GEMINI_API_KEY"):
-                logger.warning(
-                    "[CoordinateService] Memory is critically low, falling back to Gemini for Table/Formula detection"
-                )
-                from src.infra import get_ai_provider
-
-                results = await self.gemini_predictor(image, get_ai_provider())
-            else:
-                # Heron か Surya かを環境変数で切り替える (デフォルトは heron)
-                parser_type = os.getenv("LAYOUT_PARSER_TYPE", "heron").lower()
-
-                if parser_type == "surya":
-                    logger.info(f"[CoordinateService] Calling Surya for '{label}'...")
-                    results = await self._get_surya_results(image)
-                    logger.info(
-                        f"[CoordinateService] Surya returned {len(results)} raw results for '{label}'"
-                    )
-                else:
-                    logger.info(f"[CoordinateService] Calling Heron for '{label}'...")
-                    results = await self._get_heron_results(image)
-                    logger.info(
-                        f"[CoordinateService] Heron returned {len(results)} raw results for '{label}'"
-                    )
-
-        else:
-            # 2. Figure 等のその他は、Gemini が明示的に有効な場合のみ AI 推論を行う
-            if os.getenv("USE_GEMINI_FOR_PARSER") == "True":
-                logger.info(f"[CoordinateService] Detecting '{label}' using Gemini Vision...")
-                from src.infra import get_ai_provider
-
-                ai_provider = get_ai_provider()
-                results = await self.gemini_predictor(image, ai_provider)
-                logger.info(
-                    f"[CoordinateService] Gemini returned {len(results)} results for '{label}'"
-                )
-            else:
-                # ローカルでの Figure 等の解析はスキップ（重いモデルの重複ロードを避ける）
-                logger.debug(
-                    f"[CoordinateService] Skip heavy AI model for non-table/formula label: '{label}'"
-                )
-                return []
-
-        # ラベルでフィルタリング
-        logger.debug(f"[CoordinateService] Filtering results for label '{label}'...")
-        filtered_results = []
-        if not results:
-            logger.info(f"[CoordinateService] No results to filter for label '{label}'")
-            return []
-
-        for f_res in results:
-            l_result = await self._labeling(f_res, label)
+        # ラベルフィルタリング
+        filtered = []
+        for res in all_results:
+            l_result = await self._labeling(res, label)
             if l_result:
-                filtered_results.append(l_result)
-
-        if filtered_results:
-            logger.info(
-                f"[CoordinateService] Found {len(filtered_results)} final items for label '{label}'"
-            )
-        else:
-            logger.info(f"[CoordinateService] No items matched label '{label}' after filtering")
-
-        return filtered_results
+                filtered.append(l_result)
+        return filtered
 
     async def gemini_predictor(self, image: Image.Image, ai_provider) -> List[BboxResponse]:
         """
@@ -242,9 +209,13 @@ class CoordinateService:
                     )
                 )
 
-        self._update_cache(image, bboxes, "gemini")
+        # Filter: AI predictor should only return tables and formulas/equations
+        allowed_labels = ("table", "formula", "equation")
+        filtered_bboxes = [b for b in bboxes if b.label.lower() in allowed_labels]
 
-        return bboxes
+        self._update_cache(image, filtered_bboxes, "gemini")
+
+        return filtered_bboxes
 
     async def _labeling(self, result: BboxResponse, label: str) -> Optional[BboxResponse]:
         """

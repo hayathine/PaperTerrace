@@ -155,20 +155,18 @@ Output ONLY the translation.
 # ==========================================
 # 図表の検出、分析、比較に使用
 
-VISION_DETECT_ITEMS_PROMPT = """Analyze the following image of a document page and identify all figures, tables, and independent mathematical equations.
+VISION_DETECT_ITEMS_PROMPT = """Analyze the following image of a document page and identify all tables and independent mathematical equations.
 
 Return a JSON list of bounding boxes for each detected item:
 [
-  {"label": "figure" | "table" | "equation", "box_2d": [ymin, xmin, ymax, xmax]}
+  {"label": "table" | "equation", "box_2d": [ymin, xmin, ymax, xmax]}
 ]
 
 [Instructions]
 - Coordinates must be normalized (0.0 to 1.0).
-- "figure": Graphs, charts, diagrams, photos.
 - "table": Tabular data structures.
 - "equation": Significant mathematical formulas/equations displayed independently (not inline).
 - Ignore small icons, headers, footers, or page numbers.
-- Combine the figure image and its caption into one box if possible, or just the figure.
 - If no items are found, return an empty list [].
 """
 

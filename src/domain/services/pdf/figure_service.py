@@ -22,9 +22,9 @@ class FigureService:
         page_height_pt: float = 792.0,
     ) -> List[Dict[str, Any]]:
         """
-        Detect figures/tables/equations.
+        Detect figures, tables, and equations.
         Figures: Extracted using pdfplumber coordinates (native images).
-        Tables/Formulas:
+        Tables/Formulas: Detected using AI layout models (Heron/Surya/Gemini) as they are often more accurate for these structures.
         """
         if os.getenv("SKIP_FIGURE_EXTRACTION") == "True":
             logger.info(
@@ -81,17 +81,19 @@ class FigureService:
         try:
             from .cordinate_service import cordinate_service
 
+            # 一度の推論で全要素（Table, Formula, Figure等）を取得
+            all_results = await cordinate_service.get_all_items(page_image)
+
             items = []
-            # We look for Tables, Formulas, and Figures (AI can find vector graphics that pdfplumber misses)
-            mapping = ("Table", "Formula")  # "Figure"はnative_figure_serviceで取得する
+            target_labels = ("table", "formula")
 
-            import asyncio
+            for res in all_results:
+                label_lower = res.label.lower()
+                # equation と formula は同一視
+                if label_lower == "equation":
+                    label_lower = "formula"
 
-            tasks = [cordinate_service.get_coordinates_bbox(page_image, label) for label in mapping]
-            results = await asyncio.gather(*tasks)
-
-            for label_results in results:
-                for res in label_results:
+                if label_lower in target_labels:
                     items.append(
                         {
                             "bbox": res.bbox,

@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 
@@ -62,3 +63,46 @@ def log_memory(label: str):
         )
     except Exception as e:
         logger.error(f"Failed to log memory: {e}")
+
+
+def cleanup_memory():
+    """
+    強制的にGCを実行し、PyTorchのGPUキャッシュを解放する。
+    """
+    import gc
+
+    gc.collect()
+    try:
+        import torch
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except (ImportError, RuntimeError):
+        pass
+
+
+def register_model_activity(service_instance, unload_delay: int = 300):
+    """
+    モデルのアクティビティを記録し、一定時間後にアンロードするようにタイマーを設定する。
+    service_instance は 'unload' メソッド（非同期推奨）を持っている必要がある。
+    """
+    import time
+
+    service_instance._last_used = time.time()
+
+    # 既存のタイマーがあればキャンセル
+    if hasattr(service_instance, "_unload_timer_task") and service_instance._unload_timer_task:
+        service_instance._unload_timer_task.cancel()
+
+    async def _wait_and_unload():
+        try:
+            await asyncio.sleep(unload_delay)
+            if hasattr(service_instance, "unload"):
+                if asyncio.iscoroutinefunction(service_instance.unload):
+                    await service_instance.unload()
+                else:
+                    service_instance.unload()
+        except asyncio.CancelledError:
+            pass
+
+    service_instance._unload_timer_task = asyncio.create_task(_wait_and_unload())

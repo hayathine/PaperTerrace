@@ -178,6 +178,14 @@ class PDFOCRService:
         except Exception as e:
             logger.error(f"[OCR] Figure extraction failed for page {page_num}: {e}", exc_info=True)
 
+        # 明示的なメモリ解放
+        import gc
+
+        del img_pil
+        del img_byte_arr
+        del img_bytes
+        gc.collect()
+
         is_last = page_idx == total_pages - 1
         return (page_num, total_pages, page_text, is_last, file_hash, image_url, layout_data)
 

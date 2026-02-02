@@ -57,9 +57,11 @@ class EnglishAnalysisService:
         """Get translation for a lemma, optionally using context."""
         return await self.word_analysis.lookup_or_translate(lemma, lang=lang, context=context)
 
-    def translate_local(self, text: str, src_lang: str = "en", tgt_lang: str = "ja") -> str | None:
+    async def translate_local(
+        self, text: str, src_lang: str = "en", tgt_lang: str = "ja"
+    ) -> str | None:
         """Translate text using local M2M100 model."""
-        return self.local_translator.translate(text, src_lang=src_lang, tgt_lang=tgt_lang)
+        return await self.local_translator.translate(text, src_lang=src_lang, tgt_lang=tgt_lang)
 
     # Legacy accessors
     def get_translation_cache(self):

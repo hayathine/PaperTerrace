@@ -11,6 +11,8 @@ class SuryaService:
         self._layout_predictor = None
         self._foundation_predictor = None
         self._load_lock = asyncio.Lock()
+        self._unload_timer_task = None
+        self._unload_delay = 300  # 5 minutes
 
     async def _init_predictors(self):
         async with self._load_lock:
@@ -50,6 +52,9 @@ class SuryaService:
 
     async def detect_layout(self, image: Image.Image) -> List[Dict[str, Any]]:
         try:
+            from src.core.utils.memory import register_model_activity
+
+            register_model_activity(self, self._unload_delay)
             await self._init_predictors()
             assert self._layout_predictor is not None
 
@@ -64,7 +69,11 @@ class SuryaService:
             log_memory("After Surya Detection")
 
             bboxes = []
+            target_labels = ("Table", "Formula")
             for box in results[0].bboxes:
+                if box.label not in target_labels:
+                    continue
+
                 bboxes.append(
                     {
                         "label": box.label,
@@ -82,17 +91,14 @@ class SuryaService:
         async with self._load_lock:
             if self._layout_predictor is not None:
                 logger.info("[SuryaService] Unloading models to release memory...")
-                import gc
-
-                import torch
-
                 del self._layout_predictor
                 del self._foundation_predictor
                 self._layout_predictor = None
                 self._foundation_predictor = None
-                gc.collect()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
+
+                from src.core.utils.memory import cleanup_memory
+
+                cleanup_memory()
                 logger.info("[SuryaService] Models unloaded.")
 
 

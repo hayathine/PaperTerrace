@@ -185,9 +185,7 @@ async def explain(
         )
 
     # Stage 2: Local Machine Translation
-    local_translation = await loop.run_in_executor(
-        executor, service.translate_local, lemma, "en", lang
-    )
+    local_translation = await service.translate_local(lemma, "en", lang)
     if local_translation:
         if not is_htmx:
             return JSONResponse(
