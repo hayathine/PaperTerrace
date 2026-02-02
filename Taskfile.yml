@@ -109,7 +109,8 @@ tasks:
     cmds:
       - uv run ruff check --fix .
 
-  chche_clear:
+  cache_clear:
     desc: "Clear cache"
     cmds:
       - sqlite3 ocr_reader.db "DELETE FROM ocr_reader;"
+      - rm -rf src/static/paper_images?*
