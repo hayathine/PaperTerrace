@@ -24,7 +24,7 @@ class FigureService:
         """
         Detect figures/tables/equations.
         Figures: Extracted using pdfplumber coordinates (native images).
-        Tables/Formulas: Detected via AI (Gemini/Surya).
+        Tables/Formulas:
         """
         if os.getenv("SKIP_FIGURE_EXTRACTION") == "True":
             logger.info(
@@ -34,36 +34,14 @@ class FigureService:
 
         final_figures = []
         try:
-            # 1. Get Figure coordinates from pdfplumber
+            # 1. Get Figure coordinates from pdfplumber (native images)
             native_figures = []
             if pdf_bytes:
-                try:
-                    import io
+                from .native_figure_service import native_figure_service
 
-                    import pdfplumber
-
-                    with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-                        if page_num <= len(pdf.pages):
-                            page = pdf.pages[page_num - 1]
-                            scale_x = page_image.width / float(page.width)
-                            scale_y = page_image.height / float(page.height)
-
-                            for img in page.images:
-                                # Scale points to pixels
-                                xmin = img["x0"] * scale_x
-                                ymin = img["top"] * scale_y
-                                xmax = img["x1"] * scale_x
-                                ymax = img["bottom"] * scale_y
-
-                                # Skip tiny icons
-                                if (xmax - xmin) < 20 or (ymax - ymin) < 20:
-                                    continue
-
-                                native_figures.append(
-                                    {"bbox": [xmin, ymin, xmax, ymax], "label": "Figure"}
-                                )
-                except Exception as e:
-                    logger.warning(f"[FigureService] pdfplumber figure extraction failed: {e}")
+                native_figures = native_figure_service.extract_figures(
+                    pdf_bytes, page_num, page_image
+                )
 
             # 2. Get Tables and Formulas from AI
             ai_items = await self._get_items(page_image, page_num)
@@ -100,7 +78,7 @@ class FigureService:
 
             items = []
             # We look for Tables, Formulas, and Figures (AI can find vector graphics that pdfplumber misses)
-            mapping = ("Table", "Formula", "Figure")
+            mapping = ("Table", "Formula")  # "Figure"はnative_figure_serviceで取得する
 
             import asyncio
 

@@ -1,16 +1,27 @@
 import spacy
 
 from src.core.logger import logger
+from src.core.utils import get_memory_usage_mb
 
 try:
     # Get lemma using parser for better accuracy
+    mem_before = get_memory_usage_mb()
     nlp = spacy.load("en_core_web_sm", disable=["ner"])
-    logger.info("Loaded spaCy model: en_core_web_sm (with parser for better lemmatization)")
+    mem_after = get_memory_usage_mb()
+    logger.info(
+        f"Loaded spaCy model: en_core_web_sm (with parser). "
+        f"Memory: {mem_before:.1f}MB -> {mem_after:.1f}MB (diff: {mem_after - mem_before:.1f}MB)"
+    )
 except OSError:
     try:
         # Fallback
+        mem_before = get_memory_usage_mb()
         nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
-        logger.info("Loaded spaCy model: en_core_web_sm (fallback)")
+        mem_after = get_memory_usage_mb()
+        logger.info(
+            f"Loaded spaCy model: en_core_web_sm (fallback). "
+            f"Memory: {mem_before:.1f}MB -> {mem_after:.1f}MB (diff: {mem_after - mem_before:.1f}MB)"
+        )
     except OSError:
         logger.error("No spaCy model found. Please run 'python -m spacy download en_core_web_sm'.")
         raise

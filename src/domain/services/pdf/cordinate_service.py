@@ -6,7 +6,6 @@ from PIL import Image
 
 from src.core.logger import logger
 from src.domain.prompts import VISION_DETECT_ITEMS_PROMPT
-from src.domain.services.pdf.heron_service import heron_service
 from src.models.schemas.figure import BboxResponse, FigureDetectionResponse
 
 
@@ -48,6 +47,8 @@ class CoordinateService:
         """
         HeronServiceを使用して解析を行う。
         """
+        from src.domain.services.pdf.heron_service import heron_service
+
         if self._cache_image_id == id(image) and self._cache_heron_results:
             logger.debug(f"[CoordinateService] Heron Cache hit for image object {id(image)}")
             return self._cache_heron_results
@@ -95,45 +96,70 @@ class CoordinateService:
     async def get_coordinates_bbox(self, image: Image.Image, label: str) -> List[BboxResponse]:
         """
         指定されたラベルの座標を取得する。
-        Table, Formula, Figure については Docling Heron のみを使用する（フォールバックなし）。
+        Table, Formula については Docling Heron または Surya を使用する。
+        Figure 等のその他は Gemini が有効な場合のみ使用する。
         """
         label_lower = label.lower()
+        is_table_or_formula = label_lower in ["table", "formula", "equation"]
 
-        # 1. Table, Formula, Equation は Docling Heron を使用
-        if label_lower in ["table", "formula", "equation"]:
-            logger.info(f"[CoordinateService] Start detecting '{label}' using Docling Heron...")
-            results = await self._get_heron_results(image)
+        results = []
+        if is_table_or_formula:
+            # 1. Table / Formula は専用のローカルAIモデルを使用
+            logger.info(f"[CoordinateService] Detecting '{label}' using specialized models...")
 
-            # フィルタリング
-            filtered = []
-            for res in results:
-                labeled = await self._labeling(res, label)
-                if labeled:
-                    filtered.append(labeled)
+            from src.core.utils.memory import get_available_memory_mb
 
-            if filtered:
+            avail_mb = get_available_memory_mb()
+            logger.info(f"[CoordinateService] Available memory: {avail_mb:.1f}MB")
+
+            # メモリが非常に少ない場合（例: 800MB以下）かつ Gemini が使えるならそちらを優先する
+            if avail_mb < 800 and os.getenv("GEMINI_API_KEY"):
+                logger.warning(
+                    "[CoordinateService] Memory is critically low, falling back to Gemini for Table/Formula detection"
+                )
+                from src.infra import get_ai_provider
+
+                results = await self.gemini_predictor(image, get_ai_provider())
+            else:
+                # Heron か Surya かを環境変数で切り替える (デフォルトは heron)
+                parser_type = os.getenv("LAYOUT_PARSER_TYPE", "heron").lower()
+
+                if parser_type == "surya":
+                    logger.info(f"[CoordinateService] Calling Surya for '{label}'...")
+                    results = await self._get_surya_results(image)
+                    logger.info(
+                        f"[CoordinateService] Surya returned {len(results)} raw results for '{label}'"
+                    )
+                else:
+                    logger.info(f"[CoordinateService] Calling Heron for '{label}'...")
+                    results = await self._get_heron_results(image)
+                    logger.info(
+                        f"[CoordinateService] Heron returned {len(results)} raw results for '{label}'"
+                    )
+
+        else:
+            # 2. Figure 等のその他は、Gemini が明示的に有効な場合のみ AI 推論を行う
+            if os.getenv("USE_GEMINI_FOR_PARSER") == "True":
+                logger.info(f"[CoordinateService] Detecting '{label}' using Gemini Vision...")
+                from src.infra import get_ai_provider
+
+                ai_provider = get_ai_provider()
+                results = await self.gemini_predictor(image, ai_provider)
                 logger.info(
-                    f"[CoordinateService] Found {len(filtered)} items for label '{label}' via Docling Heron"
+                    f"[CoordinateService] Gemini returned {len(results)} results for '{label}'"
                 )
             else:
-                logger.info(
-                    f"[CoordinateService] No items found for label '{label}' via Docling Heron"
+                # ローカルでの Figure 等の解析はスキップ（重いモデルの重複ロードを避ける）
+                logger.debug(
+                    f"[CoordinateService] Skip heavy AI model for non-table/formula label: '{label}'"
                 )
-
-            return filtered
-
-        # 2. その他のラベル（Text等）は環境設定に従う (Gemini/Surya)
-        if os.getenv("USE_GEMINI_FOR_PARSER") == "True":
-            from src.infra import get_ai_provider
-
-            ai_provider = get_ai_provider()
-            results = await self.gemini_predictor(image, ai_provider)
-        else:
-            results = await self._get_surya_results(image)
+                return []
 
         # ラベルでフィルタリング
+        logger.debug(f"[CoordinateService] Filtering results for label '{label}'...")
         filtered_results = []
         if not results:
+            logger.info(f"[CoordinateService] No results to filter for label '{label}'")
             return []
 
         for f_res in results:
@@ -142,9 +168,11 @@ class CoordinateService:
                 filtered_results.append(l_result)
 
         if filtered_results:
-            logger.debug(
-                f"[CoordinateService] Found {len(filtered_results)} items for label '{label}' via secondary parser"
+            logger.info(
+                f"[CoordinateService] Found {len(filtered_results)} final items for label '{label}'"
             )
+        else:
+            logger.info(f"[CoordinateService] No items matched label '{label}' after filtering")
 
         return filtered_results
 
@@ -206,23 +234,19 @@ class CoordinateService:
 
     async def _labeling(self, result: BboxResponse, label: str) -> Optional[BboxResponse]:
         """
-        検出されたBboxのラベルが、ターゲットのラベルと一致するか確認し、
-        一致する場合はそのBboxResponseを返す。
+        検出されたBboxのラベルが、ターゲットのラベルと一致するか確認。
+        Table / Formula に特化したマッピングを行う。
         """
-        # 指定されたラベルのものを中心に探す（大文字小文字の違いを許容）
         target_label = label.lower()
         current_label = result.label.lower()
 
-        # "equation" と "formula" は基本的に同じものとして扱うように正規化
+        # "equation" と "formula" は基本的に同じものとして扱う
         if target_label == "equation":
             target_label = "formula"
         if current_label == "equation":
             current_label = "formula"
 
-        # Heron の Picture は Figure として扱う
-        if current_label == "picture":
-            current_label = "figure"
-
+        # Table / Formula 以外（HeronのPicture等）は無視する方針のため、明示的な変換は行わない
         if current_label == target_label:
             return result
 

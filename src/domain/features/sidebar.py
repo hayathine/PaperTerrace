@@ -111,6 +111,25 @@ class SidebarNoteService:
             )
             return []
 
+    def get_dictionary_count(self, session_id: str, user_id: str | None = None) -> int:
+        """
+        Count the number of notes that have a registered term (dictionary entries).
+
+        Args:
+            session_id: The session identifier
+            user_id: Optional user identifier
+
+        Returns:
+            Count of dictionary entries
+        """
+        try:
+            notes = self.get_notes(session_id, user_id)
+            count = sum(1 for note in notes if note.get("term"))
+            return count
+        except Exception as e:
+            logger.error(f"Failed to count dictionary entries: {e}")
+            return 0
+
     def delete_note(self, note_id: str) -> bool:
         """
         Delete a note.

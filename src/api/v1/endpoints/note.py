@@ -34,6 +34,13 @@ async def get_notes(session_id: str, user: OptionalUser):
     return JSONResponse({"notes": jsonable_encoder(notes)})
 
 
+@router.get("/note/count/{session_id}")
+async def get_note_count(session_id: str, user: OptionalUser):
+    user_id = user.uid if user else None
+    count = sidebar_note_service.get_dictionary_count(session_id, user_id=user_id)
+    return JSONResponse({"count": count})
+
+
 @router.post("/note")
 async def add_note(request: NoteRequest, user: OptionalUser):
     user_id = user.uid if user else None

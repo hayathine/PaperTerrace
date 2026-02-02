@@ -76,3 +76,15 @@ async def fetch_image_bytes_from_url(url: str) -> bytes | None:
     except Exception as e:
         logger.error(f"Failed to fetch image from {url}: {e}")
     return None
+
+
+def get_memory_usage_mb() -> float:
+    """Get current process memory usage in MB."""
+    try:
+        with open("/proc/self/status") as f:
+            for line in f:
+                if line.startswith("VmRSS:"):
+                    return int(line.split()[1]) / 1024.0
+    except Exception:
+        pass
+    return 0.0
