@@ -7,7 +7,7 @@
 """
 
 from src.logger import logger
-from src.prompts import (
+from src.domain.prompts import (
     ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT,
     AGENT_ADVERSARIAL_CRITIQUE_PROMPT,
     CORE_SYSTEM_PROMPT,

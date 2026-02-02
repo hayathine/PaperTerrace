@@ -5,7 +5,7 @@ import pdfplumber
 from pydantic import BaseModel
 
 from src.logger import logger
-from src.prompts import CORE_SYSTEM_PROMPT, VISION_ANALYZE_EQUATION_PROMPT
+from src.domain.prompts import CORE_SYSTEM_PROMPT, VISION_ANALYZE_EQUATION_PROMPT
 from src.providers import get_ai_provider
 
 

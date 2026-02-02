@@ -6,9 +6,9 @@ allowing the user to 'chat' with the author.
 
 from typing import Dict, List
 
-from src.features.research_radar import ResearchRadarService
+from src.domain.features.research_radar import ResearchRadarService
 from src.logger import logger
-from src.prompts import AGENT_AUTHOR_PERSONA_PROMPT, CORE_SYSTEM_PROMPT
+from src.domain.prompts import AGENT_AUTHOR_PERSONA_PROMPT, CORE_SYSTEM_PROMPT
 from src.providers import get_ai_provider
 
 

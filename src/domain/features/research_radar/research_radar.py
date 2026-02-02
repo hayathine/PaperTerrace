@@ -5,7 +5,7 @@ import httpx
 from pydantic import BaseModel, Field
 
 from src.logger import logger
-from src.prompts import (
+from src.domain.prompts import (
     RADAR_GENERATE_QUERY_ABSTRACT_PROMPT,
     RADAR_GENERATE_QUERY_CONTEXT_PROMPT,
     RADAR_SIMULATE_SEARCH_PROMPT,

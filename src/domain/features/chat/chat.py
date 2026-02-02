@@ -6,7 +6,7 @@ AIチャットアシスタント機能を提供するモジュール
 import os
 
 from src.logger import logger
-from src.prompts import (
+from src.domain.prompts import (
     CHAT_AUTHOR_FROM_PDF_PROMPT,
     CHAT_AUTHOR_PERSONA_PROMPT,
     CHAT_GENERAL_FROM_PDF_PROMPT,

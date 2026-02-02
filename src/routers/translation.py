@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
-from src.prompts import (
+from src.domain.prompts import (
     CORE_SYSTEM_PROMPT,
     DICT_EXPLAIN_WORD_CONTEXT_PROMPT,
     DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT,

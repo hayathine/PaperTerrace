@@ -13,9 +13,9 @@ from src.providers import get_ai_provider
 from src.providers.image_storage import get_page_images, save_page_image
 from src.utils import _get_file_hash
 
-from .pdf.abstract_service import AbstractService
-from .pdf.figure_service import FigureService
-from .pdf.language_service import LanguageService
+from .abstract_service import AbstractService
+from .figure_service import FigureService
+from .language_service import LanguageService
 
 
 class PDFOCRService:
@@ -306,7 +306,7 @@ class PDFOCRService:
             f"[OCR] p.{page_num}: All native/Vision attempts failed. Falling back to Gemini"
         )
         try:
-            from src.prompts import PDF_EXTRACT_TEXT_OCR_PROMPT
+            from src.domain.prompts import PDF_EXTRACT_TEXT_OCR_PROMPT
 
             text = await self.ai_provider.generate_with_image(
                 PDF_EXTRACT_TEXT_OCR_PROMPT, img_bytes, "image/png", model=self.model

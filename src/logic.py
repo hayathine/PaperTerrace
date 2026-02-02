@@ -1,6 +1,6 @@
-from src.services.analysis_service import EnglishAnalysisService, executor
-from src.services.nlp_service import nlp
-from src.services.pdf_ocr_service import PDFOCRService
+from src.domain.services.analysis_service import EnglishAnalysisService, executor
+from src.domain.services.nlp_service import nlp
+from src.domain.services.pdf_ocr_service import PDFOCRService
 
 # Re-export definitions to maintain compatibility with existing imports
 __all__ = [

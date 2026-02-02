@@ -278,7 +278,7 @@ async def process_figure_auto_analysis(
     """
     Background task to automatically analyze and explain a figure.
     """
-    from src.features.figure_insight import FigureInsightService
+    from src.domain.features.figure_insight import FigureInsightService
     from src.utils import fetch_image_bytes_from_url
 
     try:
@@ -287,7 +287,7 @@ async def process_figure_auto_analysis(
             insight_service = FigureInsightService()
 
             if label == "equation":
-                from src.features.figure_insight.equation_service import EquationService
+                from src.domain.features.figure_insight.equation_service import EquationService
 
                 eq_service = EquationService()
                 analysis = await eq_service._analyze_bbox_with_ai(

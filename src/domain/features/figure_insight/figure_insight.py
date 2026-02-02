@@ -3,7 +3,7 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from src.logger import logger
-from src.prompts import (
+from src.domain.prompts import (
     VISION_ANALYZE_FIGURE_PROMPT,
     VISION_ANALYZE_TABLE_PROMPT,
     VISION_COMPARE_FIGURES_PROMPT,

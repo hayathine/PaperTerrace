@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 
 from src.auth import OptionalUser
 from src.crud import get_storage_provider
-from src.features.figure_insight import FigureInsightService
+from src.domain.features.figure_insight import FigureInsightService
 from src.logger import logger
 
 router = APIRouter(tags=["Figures"])

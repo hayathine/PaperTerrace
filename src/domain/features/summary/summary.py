@@ -1,7 +1,7 @@
 import os
 
 from src.logger import logger
-from src.prompts import (
+from src.domain.prompts import (
     CORE_SYSTEM_PROMPT,
     PAPER_SUMMARY_AI_CONTEXT_PROMPT,
     PAPER_SUMMARY_FROM_PDF_PROMPT,

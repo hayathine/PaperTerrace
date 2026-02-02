@@ -41,7 +41,7 @@ class ClaimVerificationService:
             lang: 出力言語
             pdf_bytes: PDFバイナリデータ (PDF直接入力方式)
         """
-        from src.prompts import (
+        from src.domain.prompts import (
             AGENT_CLAIM_VERIFY_PROMPT,
             CLAIM_VERIFY_FROM_PDF_PROMPT,
             CORE_SYSTEM_PROMPT,

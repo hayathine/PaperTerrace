@@ -3,7 +3,7 @@ import io
 import pdfplumber
 
 from src.logger import logger
-from src.prompts import PDF_DETECT_LANGUAGE_PROMPT
+from src.domain.prompts import PDF_DETECT_LANGUAGE_PROMPT
 
 
 class LanguageService:
