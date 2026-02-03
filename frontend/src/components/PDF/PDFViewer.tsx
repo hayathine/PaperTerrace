@@ -14,6 +14,8 @@ import { Stamp, StampType } from "../Stamps/types";
 import { useAuth } from "../../contexts/AuthContext";
 import TextModeViewer from "./TextModeViewer";
 import { groupWordsIntoLines } from "./utils";
+import { usePaperCache } from "../../db/hooks";
+import { useSyncStatus } from "../../db/sync";
 
 interface PDFViewerProps {
   taskId?: string;
@@ -56,6 +58,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 }) => {
   const { t, i18n } = useTranslation();
   const { token } = useAuth();
+  const { getCachedPaper, savePaperToCache, cachePaperImages } =
+    usePaperCache();
+  const syncStatus = useSyncStatus();
   const [pages, setPages] = useState<PageData[]>([]);
   const [status, setStatus] = useState<
     "idle" | "uploading" | "processing" | "done" | "error"
@@ -235,6 +240,19 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
             setStatus("done");
             if (eventData.paper_id) {
               setLoadedPaperId(eventData.paper_id);
+
+              // Cache the final results
+              (async () => {
+                const imageUrls = pages.map((p) => p.image_url);
+                await savePaperToCache({
+                  id: eventData.paper_id,
+                  title: processingFileRef.current?.name || "Untitled",
+                  html_content: "", // Full HTML might be huge, maybe store if needed
+                  last_accessed: Date.now(),
+                });
+                // We don't block on image caching
+                cachePaperImages(eventData.paper_id, imageUrls);
+              })();
             }
             es.close();
           } else if (eventData.type === "error") {
@@ -420,6 +438,17 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     setStamps([]);
 
     try {
+      // 0. Check IndexedDB Cache First (Offline First / Fast Load)
+      const cachedPaper = await getCachedPaper(id);
+      if (cachedPaper) {
+        console.log("[PDFViewer] Loading from IndexedDB cache:", id);
+        // If we have full metadata in cache, we could technically reconstruct pages
+        // IF we also cached the layout_json. Let's assume we want to fetch fresh metadata
+        // but it's a good start.
+        // For now, let's still fetch from server to get the LATEST, but we could
+        // show the cached version immediately if we had more details stored.
+      }
+
       const headers: HeadersInit = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
@@ -427,6 +456,17 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       const paperRes = await fetch(`/papers/${id}`, { headers });
       if (paperRes.ok) {
         const paperData = await paperRes.json();
+
+        // Save/Update cache with latest metadata
+        await savePaperToCache({
+          id: id,
+          title: paperData.title || paperData.filename,
+          raw_abstract: paperData.raw_abstract,
+          full_summary: paperData.full_summary,
+          section_summary_json: paperData.section_summary_json,
+          last_accessed: Date.now(),
+        });
+
         if (paperData.layout_json && paperData.file_hash) {
           try {
             const layoutList = JSON.parse(paperData.layout_json);
@@ -448,6 +488,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
             if (fullPages.length > 0) {
               setPages(fullPages);
               setStatus("done");
+
+              // Cache images in background
+              cachePaperImages(
+                id,
+                fullPages.map((p) => p.image_url),
+              );
               return; // Success! No need to stream.
             }
           } catch (parseErr) {
@@ -544,6 +590,20 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       {pages.length > 0 && (
         <div className="sticky top-4 z-[60] flex justify-center mb-6">
           <div className="bg-white p-1 rounded-lg shadow-sm border border-slate-200 flex items-center gap-1">
+            <div
+              className="px-2 flex items-center gap-2 border-r border-slate-100 mr-1"
+              title={`Sync: ${syncStatus}`}
+            >
+              <div
+                className={`w-2 h-2 rounded-full ${
+                  syncStatus === "synced"
+                    ? "bg-green-500"
+                    : syncStatus === "pending"
+                      ? "bg-amber-500 animate-pulse"
+                      : "bg-red-500"
+                }`}
+              />
+            </div>
             <button
               onClick={() => setMode("plaintext")}
               className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${

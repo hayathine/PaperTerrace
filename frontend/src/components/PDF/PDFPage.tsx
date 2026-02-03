@@ -1,5 +1,7 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useLiveQuery } from "dexie-react-hooks";
+import { db } from "../../db";
 
 import { PageData } from "./types";
 import StampOverlay from "../Stamps/StampOverlay";
@@ -60,6 +62,23 @@ const PDFPage: React.FC<PDFPageProps> = ({
 }) => {
   const { t } = useTranslation();
   const { width, height, words, figures, image_url, page_num } = page;
+
+  // Check for cached image in IndexedDB
+  const cachedImage = useLiveQuery(() => db.images.get(image_url), [image_url]);
+
+  const [displayUrl, setDisplayUrl] = useState(image_url);
+
+  useEffect(() => {
+    if (cachedImage && cachedImage.blob) {
+      const blobUrl = URL.createObjectURL(cachedImage.blob);
+      setDisplayUrl(blobUrl);
+      return () => {
+        URL.revokeObjectURL(blobUrl);
+      };
+    } else {
+      setDisplayUrl(image_url);
+    }
+  }, [cachedImage, image_url]);
 
   // Text Selection State
   const [isDragging, setIsDragging] = React.useState(false);
@@ -186,7 +205,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
       {/* Image Container */}
       <div className="relative w-full">
         <img
-          src={image_url}
+          src={displayUrl}
           alt={`Page ${page.page_num}`}
           className="w-full h-auto block select-none"
           loading="lazy"
