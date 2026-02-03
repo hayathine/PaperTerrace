@@ -50,7 +50,10 @@ async def lifespan(app: FastAPI):
     Lifespan event handler for FastAPI.
     Handles startup and shutdown events.
     """
-    from src.logger import logger
+    from src.logger import configure_logging, logger
+
+    # Re-configure logging to ensure it survives uvicorn's setup
+    configure_logging()
 
     async def _prewarm_models():
         try:

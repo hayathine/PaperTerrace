@@ -20,7 +20,7 @@ tasks:
   run:
     desc: "Run local server"
     cmds:
-      - uv run uvicorn src.main:app 2>&1 | tee logs/server.log
+      - PYTHONUNBUFFERED=1 uv run uvicorn src.main:app 2>&1 | tee logs/server.log
   build:
     desc: "Build frontend"
     cmds:

@@ -51,15 +51,25 @@ def configure_logging():
         ],
     )
 
-    handler = logging.StreamHandler(sys.stdout)
+    # Clear existing handlers to avoid duplication or conflicts
+    root_logger = logging.getLogger()
+    for h in root_logger.handlers[:]:
+        root_logger.removeHandler(h)
+
+    handler = logging.StreamHandler(sys.stderr)
     handler.setFormatter(formatter)
 
-    root_logger = logging.getLogger()
     root_logger.addHandler(handler)
     root_logger.setLevel(logging.INFO)
 
     # 既存の app_logger があれば設定を適用
     logging.getLogger("app_logger").setLevel(logging.INFO)
+
+    # uvicornのログもルートに伝播させるように設定（uvicornは独自の設定を持つため）
+    for logger_name in ["uvicorn", "uvicorn.error", "uvicorn.access"]:
+        uv_logger = logging.getLogger(logger_name)
+        uv_logger.handlers = []
+        uv_logger.propagate = True
 
 
 # 初期化実行

@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from typing import Any, Optional
 
 import redis
@@ -8,27 +9,45 @@ from src.logger import logger
 
 # Singleton instance
 _redis_client: Optional[redis.Redis] = None
+_redis_error_logged = False
+_last_connection_attempt = 0.0
+RETRY_DELAY = 60  # Retry every 60 seconds if failed
 
 
 def get_redis_client() -> Optional[redis.Redis]:
     """Get or create a Redis client instance (singleton). Returns None if connection fails."""
-    global _redis_client
-    if _redis_client is None:
-        host = os.getenv("REDIS_HOST", "localhost")
-        port = int(os.getenv("REDIS_PORT", "6379"))
-        db = int(os.getenv("REDIS_DB", "0"))
+    global _redis_client, _redis_error_logged, _last_connection_attempt
 
-        try:
-            client = redis.Redis(
-                host=host, port=port, db=db, decode_responses=True, socket_timeout=5
-            )
-            # 接続テスト
-            client.ping()
-            _redis_client = client
+    if _redis_client is not None:
+        return _redis_client
+
+    # Avoid frequent reconnection attempts if it previously failed
+    current_time = time.time()
+    if _redis_error_logged and (current_time - _last_connection_attempt) < RETRY_DELAY:
+        return None
+
+    host = os.getenv("REDIS_HOST", "localhost")
+    port = int(os.getenv("REDIS_PORT", "6379"))
+    db = int(os.getenv("REDIS_DB", "0"))
+
+    _last_connection_attempt = current_time
+    try:
+        client = redis.Redis(host=host, port=port, db=db, decode_responses=True, socket_timeout=5)
+        # Test connection
+        client.ping()
+        _redis_client = client
+        if _redis_error_logged:
+            logger.info(f"Successfully connected to Redis at {host}:{port} (Recovered)")
+            _redis_error_logged = False
+        else:
             logger.info(f"Connected to Redis at {host}:{port}")
-        except redis.ConnectionError as e:
-            logger.warning(f"Failed to connect to Redis: {e}. Falling back to in-memory storage.")
-            _redis_client = None
+    except redis.ConnectionError as e:
+        if not _redis_error_logged:
+            logger.warning(
+                f"Failed to connect to Redis: {e}. Falling back to in-memory storage. (This warning will only be shown once until successfully connected)"
+            )
+            _redis_error_logged = True
+        _redis_client = None
 
     return _redis_client
 
@@ -37,7 +56,6 @@ class RedisService:
     """Wrapper for Redis operations with in-memory fallback."""
 
     def __init__(self):
-        self.client = get_redis_client()
         self.memory_cache: dict[str, Any] = {}
 
     def set(self, key: str, value: Any, expire: int | None = None) -> bool:
@@ -48,11 +66,14 @@ class RedisService:
         else:
             value_str = str(value)
 
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
-                return self.client.set(key, value_str, ex=expire)
+                return client.set(key, value_str, ex=expire)
             except Exception as e:
                 logger.error(f"Redis SET failed for key {key}: {e}")
+                global _redis_client
+                _redis_client = None
                 return False
         else:
             # Memory fallback (ignoring expire)
@@ -62,11 +83,14 @@ class RedisService:
     def get(self, key: str) -> Any | None:
         """Get a value from Redis (or memory)."""
         value_str = None
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
-                value_str = self.client.get(key)
+                value_str = client.get(key)
             except Exception as e:
                 logger.error(f"Redis GET failed for key {key}: {e}")
+                global _redis_client
+                _redis_client = None
                 return None
         else:
             value_str = self.memory_cache.get(key)
@@ -81,11 +105,14 @@ class RedisService:
 
     def delete(self, key: str) -> int:
         """Delete a key."""
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
-                return int(self.client.delete(key))  # type: ignore
+                return int(client.delete(key))  # type: ignore
             except Exception as e:
                 logger.error(f"Redis DELETE failed for key {key}: {e}")
+                global _redis_client
+                _redis_client = None
                 return 0
         else:
             if key in self.memory_cache:
@@ -95,11 +122,14 @@ class RedisService:
 
     def exists(self, key: str) -> bool:
         """Check if key exists."""
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
-                return bool(self.client.exists(key))
+                return bool(client.exists(key))
             except Exception as e:
                 logger.error(f"Redis EXISTS failed for key {key}: {e}")
+                global _redis_client
+                _redis_client = None
                 return False
         else:
             return key in self.memory_cache
