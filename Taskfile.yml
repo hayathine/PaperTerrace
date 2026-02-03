@@ -21,6 +21,7 @@ tasks:
     desc: "Run local server"
     cmds:
       - PYTHONUNBUFFERED=1 uv run uvicorn src.main:app 2>&1 | tee logs/server.log
+
   build:
     desc: "Build frontend"
     cmds:
@@ -31,15 +32,25 @@ tasks:
     cmds:
       - cd frontend && npm run dev
 
-  read:
+  read:info:
     desc: "Run local server"
     cmds:
-      - gcloud run services logs read paperterrace --limit=1000
+      - gcloud run services logs read paperterrace --limit=100
 
-  tail:
+  read:error:
+    desc: "Run local server"
+    cmds:
+      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace" AND severity>=ERROR' --limit=50 --format=json
+
+  tail:info:
     desc: "Run local server"
     cmds:
       - gcloud beta run services logs tail paperterrace
+
+  tail:error:
+    desc: "Run local server"
+    cmds:
+      - gcloud logging tail 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace" AND severity>=ERROR' --limit=50 --format=json
 
   get_iam:
     desc: "Get IAM policy"

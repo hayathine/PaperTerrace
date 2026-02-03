@@ -3,7 +3,9 @@ import os
 import ctranslate2
 import sentencepiece as spm
 
-from src.logger import logger
+from src.logger import get_service_logger
+
+log = get_service_logger("LocalTranslator")
 
 
 class LocalTranslator:
@@ -25,8 +27,9 @@ class LocalTranslator:
         self.sp_model: spm.SentencePieceProcessor | None = None
 
         if not os.path.exists(self.model_path):
-            logger.warning(
-                f"Local translation model not found at {self.model_path}. Local translation will be unavailable."
+            log.warning(
+                "init",
+                f"Model not found at {self.model_path}. Local translation unavailable.",
             )
         else:
             try:
@@ -43,20 +46,20 @@ class LocalTranslator:
                 spm_path = os.path.join(self.model_path, "sentencepiece.bpe.model")
                 if os.path.exists(spm_path):
                     self.sp_model = spm.SentencePieceProcessor(model_file=spm_path)  # type: ignore[call-arg]
-                    logger.info(f"Loaded SentencePiece model from {spm_path}")
+                    log.info("init", f"Loaded SentencePiece model from {spm_path}")
                 else:
-                    logger.error(f"SentencePiece model not found at {spm_path}")
+                    log.error("init", f"SentencePiece model not found at {spm_path}")
                     return
 
                 self._initialized = True
-                logger.info("LocalTranslator (M2M100) initialized successfully.")
+                log.info("init", "M2M100 translator initialized successfully")
             except Exception as e:
-                logger.error(f"Failed to initialize LocalTranslator: {e}")
+                log.error("init", f"Failed to initialize: {e}")
 
     async def prewarm(self):
         """Pre-initialize models to avoid delay on first request."""
         if not self._initialized:
-            logger.info("Pre-warming LocalTranslator (M2M100)...")
+            log.info("prewarm", "Pre-warming M2M100 model...")
             # Running in executor to not block the event loop
             import asyncio
             from concurrent.futures import ThreadPoolExecutor
@@ -78,8 +81,15 @@ class LocalTranslator:
             pieces = self.sp_model.encode_as_pieces(text)  # type: ignore[attr-defined]
             source_tokens = [src_token] + pieces + ["</s>"]
 
-            # Translate
-            results = self.translator.translate_batch([source_tokens], target_prefix=[[tgt_token]])
+            # Translate with optimized parameters
+            results = self.translator.translate_batch(
+                [source_tokens],
+                target_prefix=[[tgt_token]],
+                beam_size=4,
+                repetition_penalty=1.2,
+                max_decoding_length=256,
+                no_repeat_ngram_size=3,
+            )
             target_tokens = results[0].hypotheses[0]
 
             # Remove target language token if present
@@ -91,7 +101,7 @@ class LocalTranslator:
             return translation.strip()
 
         except Exception as e:
-            logger.error(f"Local translation error for '{text}': {e}", extra={"error": str(e)})
+            log.error("translate", f"Translation error for '{text}': {e}")
             return None
 
 

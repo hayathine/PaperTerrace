@@ -45,9 +45,11 @@ WORKDIR /app
 # libxext6 libsm6 libxrender1 を追加 (OpenCV/Paddle用), gcsfuseを追加
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 curl libgl1 libglib2.0-0 libxcb1 libx11-6 \
-    libxext6 libsm6 libxrender1 ghostscript gnupg lsb-release \
-    && echo "deb http://packages.cloud.google.com/apt gcsfuse-$(lsb_release -c -s) main" | tee /etc/apt/sources.list.d/gcsfuse.list \
-    && curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add - \
+    libxext6 libsm6 libxrender1 ghostscript gnupg lsb-release ca-certificates \
+    && curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
+       | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt gcsfuse-$(lsb_release -c -s) main" \
+       | tee /etc/apt/sources.list.d/gcsfuse.list \
     && apt-get update && apt-get install -y gcsfuse \
     && rm -rf /var/lib/apt/lists/*
 

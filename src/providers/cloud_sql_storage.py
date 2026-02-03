@@ -4,8 +4,10 @@ Cloud SQL Storage Provider
 
 import json
 import os
+from contextlib import contextmanager
 from datetime import datetime
 
+import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 
@@ -31,6 +33,43 @@ class CloudSQLStorage(StorageInterface):
         self.instance_connection_name = os.getenv("CLOUDSQL_CONNECTION_NAME")
 
         logger.info(f"CloudSQLStorage initialized - host: {self.host}, db: {self.db_name}")
+
+    def _get_connection(self):
+        """
+        Cloud SQL接続を取得する。
+        Cloud Run環境ではUnixソケット、ローカル環境ではTCP接続を使用。
+        """
+
+        @contextmanager
+        def get_conn():
+            conn = None
+            try:
+                # Cloud Run環境: Unixソケット経由で接続
+                if self.instance_connection_name and self.host.startswith("/cloudsql"):
+                    conn = psycopg2.connect(
+                        user=self.db_user,
+                        password=self.db_password,
+                        database=self.db_name,
+                        host=self.host,  # /cloudsql/PROJECT:REGION:INSTANCE
+                    )
+                else:
+                    # ローカル環境: TCP接続
+                    conn = psycopg2.connect(
+                        user=self.db_user,
+                        password=self.db_password,
+                        database=self.db_name,
+                        host=self.host,
+                        port=self.port,
+                    )
+                yield conn
+            except Exception as e:
+                logger.error(f"Database connection error: {e}")
+                raise
+            finally:
+                if conn:
+                    conn.close()
+
+        return get_conn()
 
     def init_tables(self) -> None:
         """Legacy method retained for interface compatibility (now handled by Alembic)."""

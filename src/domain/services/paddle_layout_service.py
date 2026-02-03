@@ -5,7 +5,9 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
-from src.logger import logger
+from src.logger import get_service_logger
+
+log = get_service_logger("LayoutService")
 
 
 class PaddleLayoutService:
@@ -42,8 +44,9 @@ class PaddleLayoutService:
 
         self.session: Optional[ort.InferenceSession] = None
         if not os.path.exists(self.model_path):
-            logger.warning(
-                f"Layout model not found at {self.model_path}. Layout detection will be limited."
+            log.warning(
+                "init",
+                f"Layout model not found at {self.model_path}. Layout detection will be limited.",
             )
         else:
             try:
@@ -59,9 +62,9 @@ class PaddleLayoutService:
                 self.input_name = self.session.get_inputs()[0].name
                 self.output_names = [o.name for o in self.session.get_outputs()]
                 self._initialized = True
-                logger.info("PaddleLayoutService initialized successfully with ONNX Runtime.")
+                log.info("init", "Initialized successfully with ONNX Runtime")
             except Exception as e:
-                logger.error(f"Failed to initialize PaddleLayoutService: {e}")
+                log.error("init", f"Failed to initialize: {e}")
 
     def detect_layout(self, image_bytes: bytes) -> List[Dict[str, Any]]:
         """
@@ -128,7 +131,7 @@ class PaddleLayoutService:
             return results
 
         except Exception as e:
-            logger.error(f"Layout detection error: {e}")
+            log.error("detect_layout", f"Detection error: {e}")
             return []
 
 

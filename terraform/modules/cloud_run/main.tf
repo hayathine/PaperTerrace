@@ -7,6 +7,8 @@ resource "google_cloud_run_v2_service" "main" {
 
   template {
     service_account = var.service_account_email
+
+    
     containers {
       image = var.image_url
 
@@ -17,7 +19,7 @@ resource "google_cloud_run_v2_service" "main" {
       resources {
         limits = {
           cpu    = "2"
-          memory = "2Gi"
+          memory = "4Gi"
         }
         cpu_idle = true
       }
@@ -98,7 +100,7 @@ resource "google_cloud_run_v2_service" "main" {
     }
 
     scaling {
-      min_instance_count = 0
+      min_instance_count = 1
       max_instance_count = 10
     }
 
