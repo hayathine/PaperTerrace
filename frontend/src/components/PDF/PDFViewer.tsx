@@ -461,7 +461,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         await savePaperToCache({
           id: id,
           title: paperData.title || paperData.filename,
-          raw_abstract: paperData.raw_abstract,
           full_summary: paperData.full_summary,
           section_summary_json: paperData.section_summary_json,
           last_accessed: Date.now(),

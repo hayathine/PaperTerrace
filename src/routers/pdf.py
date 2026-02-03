@@ -351,8 +351,6 @@ async def stream(task_id: str):
                     if user_data:
                         user_plan = user_data.get("plan", "free")
 
-                # Extract raw abstract using pdfplumber logic
-                raw_abstract = service.ocr_service.extract_abstract_text(pdf_content)
                 logger.info(f"[stream] {task_id}: Starting OCR extraction for {filename}")
 
                 # Collect figures to save later
@@ -469,9 +467,6 @@ async def stream(task_id: str):
                         storage.update_paper_abstract(new_paper_id, summary_full)
                         logger.info(f"Full summary saved as abstract for paper {new_paper_id}")
 
-                    if raw_abstract:
-                        storage.update_paper_raw_abstract(new_paper_id, raw_abstract)
-                        logger.info(f"Raw abstract extracted and saved for paper {new_paper_id}")
                 except Exception as e:
                     logger.error(f"Auto-summary generation failed: {e}")
 
@@ -719,19 +714,12 @@ async def stream(task_id: str):
 
             # --- Auto-Summarization for Abstract ---
             try:
-                # Extract raw abstract first
-                raw_abstract = service.ocr_service.extract_abstract_text(pdf_content)
-
                 summary_full = await summary_service.summarize_full(
                     target_lang=lang, pdf_bytes=pdf_content
                 )
                 if summary_full:
                     storage.update_paper_abstract(paper_id, summary_full)
                     logger.info(f"Full summary saved as abstract for paper {paper_id}")
-
-                if raw_abstract:
-                    storage.update_paper_raw_abstract(paper_id, raw_abstract)
-                    logger.info(f"Raw abstract extracted and saved for paper {paper_id}")
             except Exception as e:
                 logger.error(f"Auto-summary generation failed: {e}")
 

@@ -425,18 +425,6 @@ class CloudSQLStorage(StorageInterface):
             conn.commit()
             return cur.rowcount > 0
 
-    def update_paper_raw_abstract(self, paper_id: str, raw_abstract: str) -> bool:
-        """Update the raw extracted abstract of a paper."""
-        now = datetime.now()
-        with self._get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "UPDATE papers SET raw_abstract = %s, updated_at = %s WHERE paper_id = %s",
-                    (raw_abstract, now, paper_id),
-                )
-            conn.commit()
-            return cur.rowcount > 0
-
     def update_paper_full_summary(self, paper_id: str, summary: str) -> bool:
         """Update the full summary of a paper."""
         now = datetime.now()

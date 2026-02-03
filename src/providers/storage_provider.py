@@ -69,11 +69,6 @@ class StorageInterface(ABC):
         ...
 
     @abstractmethod
-    def update_paper_raw_abstract(self, paper_id: str, raw_abstract: str) -> bool:
-        """Update the raw extracted abstract of a paper."""
-        ...
-
-    @abstractmethod
     def update_paper_full_summary(self, paper_id: str, summary: str) -> bool:
         """Update the full summary of a paper."""
         ...
@@ -417,17 +412,6 @@ class SQLiteStorage(StorageInterface):
             cursor = conn.execute(
                 "UPDATE papers SET abstract = ?, updated_at = ? WHERE paper_id = ?",
                 (abstract, now, paper_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-
-    def update_paper_raw_abstract(self, paper_id: str, raw_abstract: str) -> bool:
-        """Update the raw extracted abstract of a paper."""
-        now = datetime.now().isoformat()
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                "UPDATE papers SET raw_abstract = ?, updated_at = ? WHERE paper_id = ?",
-                (raw_abstract, now, paper_id),
             )
             conn.commit()
             return cursor.rowcount > 0

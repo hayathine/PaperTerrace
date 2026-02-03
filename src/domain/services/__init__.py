@@ -1,4 +1,3 @@
-from .abstract_service import AbstractService
 from .analysis_service import EnglishAnalysisService
 from .coordinate_service import CoordinateService
 from .figure_service import FigureService
@@ -13,7 +12,6 @@ from .surya_service import SuryaService
 __all__ = [
     "EnglishAnalysisService",
     "PDFOCRService",
-    "AbstractService",
     "FigureService",
     "LanguageService",
     "CoordinateService",

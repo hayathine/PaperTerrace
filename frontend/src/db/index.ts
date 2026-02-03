@@ -6,7 +6,6 @@ export interface PaperCache {
   author?: string;
   full_text?: string;
   abstract?: string;
-  raw_abstract?: string;
   full_summary?: string;
   section_summary_json?: string;
   html_content?: string;

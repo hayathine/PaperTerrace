@@ -13,7 +13,6 @@ from src.providers import get_ai_provider
 from src.providers.image_storage import get_page_images, save_page_image
 from src.utils import _get_file_hash
 
-from .abstract_service import AbstractService
 from .figure_service import FigureService
 from .language_service import LanguageService
 
@@ -24,10 +23,6 @@ class PDFOCRService:
         self.model = model
         self.figure_service = FigureService(self.ai_provider, self.model)
         self.language_service = LanguageService(self.ai_provider, self.model)
-
-    def extract_abstract_text(self, file_bytes: bytes) -> Optional[str]:
-        """Extract abstract using specialized service."""
-        return AbstractService.extract_abstract(file_bytes)
 
     async def detect_language_from_pdf(self, file_bytes: bytes) -> str:
         """Detect language using specialized service."""
