@@ -40,6 +40,7 @@ dependencies = [
     "opencv-python-headless>=4.13.0.90",
     "alembic>=1.18.3",
     "sqlalchemy>=2.0.46",
+    "google-cloud-tasks>=2.21.0",
 ]
 
 

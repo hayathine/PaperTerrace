@@ -13,6 +13,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingRes
 from src.auth import OptionalUser
 from src.domain.features import SummaryService
 from src.domain.services.analysis_service import EnglishAnalysisService
+from src.domain.services.cloud_tasks_service import get_cloud_tasks_service
 from src.logger import logger
 from src.providers import RedisService, get_storage_provider
 from src.utils import _get_file_hash
@@ -27,6 +28,7 @@ service = EnglishAnalysisService()
 summary_service = SummaryService()
 storage = get_storage_provider()
 redis_service = RedisService()
+cloud_tasks_service = get_cloud_tasks_service()
 
 
 @router.post("/analyze-pdf")
@@ -433,7 +435,7 @@ async def stream(task_id: str):
                             f"Saving {len(collected_figures)} extracted figures for paper {new_paper_id}"
                         )
                         for fig in collected_figures:
-                            save_figure_to_db(
+                            fid = save_figure_to_db(
                                 paper_id=new_paper_id,
                                 page_number=fig["page_num"],
                                 bbox=fig["bbox"],
@@ -443,8 +445,9 @@ async def stream(task_id: str):
                                 label=fig.get("label", "figure"),
                                 latex=fig.get("latex", ""),
                             )
-                            # Auto-explanation disabled to save tokens. Done on-demand via button.
-                            # asyncio.create_task(process_figure_auto_analysis(fid, fig["image_url"]))
+                            # Trigger figure analysis via Cloud Tasks if enabled
+                            if cloud_tasks_service.is_enabled:
+                                cloud_tasks_service.enqueue_figure_analysis(fid, fig["image_url"])
 
                 except Exception as e:
                     logger.error(f"Failed to save paper: {e}")
@@ -458,17 +461,19 @@ async def stream(task_id: str):
                     storage.save_session_context(s_id, new_paper_id)
 
                 # --- Auto-Summarization for Abstract ---
-                # Generate a full summary and save it to 'abstract' column
-                try:
-                    summary_full = await summary_service.summarize_full(
-                        target_lang=lang, pdf_bytes=pdf_content
-                    )
-                    if summary_full:
-                        storage.update_paper_abstract(new_paper_id, summary_full)
-                        logger.info(f"Full summary saved as abstract for paper {new_paper_id}")
+                if cloud_tasks_service.is_enabled:
+                    cloud_tasks_service.enqueue_paper_summary(new_paper_id, lang=lang)
+                else:
+                    try:
+                        summary_full = await summary_service.summarize_full(
+                            target_lang=lang, pdf_bytes=pdf_content
+                        )
+                        if summary_full:
+                            storage.update_paper_abstract(new_paper_id, summary_full)
+                            logger.info(f"Full summary saved as abstract for paper {new_paper_id}")
 
-                except Exception as e:
-                    logger.error(f"Auto-summary generation failed: {e}")
+                    except Exception as e:
+                        logger.error(f"Auto-summary generation failed: {e}")
 
                 logger.info(
                     f"Saved session context for: {s_id} (result: {res}, length: {len(full_text)})"
@@ -685,7 +690,7 @@ async def stream(task_id: str):
                         f"Saving {len(collected_figures)} extracted figures for paper {paper_id}"
                     )
                     for fig in collected_figures:
-                        save_figure_to_db(
+                        fid = save_figure_to_db(
                             paper_id=paper_id,
                             page_number=fig["page_num"],
                             bbox=fig["bbox"],
@@ -695,13 +700,8 @@ async def stream(task_id: str):
                             label=fig.get("label", "figure"),
                             latex=fig.get("latex", ""),
                         )
-                        # Auto-explanation disabled to save tokens. Done on-demand via button.
-                        # label = fig.get("label", "figure")
-                        # asyncio.create_task(
-                        #     process_figure_auto_analysis(
-                        #         fid, fig["image_url"], label, target_lang=lang
-                        #     )
-                        # )
+                        if cloud_tasks_service.is_enabled:
+                            cloud_tasks_service.enqueue_figure_analysis(fid, fig["image_url"])
 
             except Exception as e:
                 logger.error(f"Failed to save paper: {e}")
@@ -713,15 +713,18 @@ async def stream(task_id: str):
                 storage.save_session_context(session_id, paper_id)
 
             # --- Auto-Summarization for Abstract ---
-            try:
-                summary_full = await summary_service.summarize_full(
-                    target_lang=lang, pdf_bytes=pdf_content
-                )
-                if summary_full:
-                    storage.update_paper_abstract(paper_id, summary_full)
-                    logger.info(f"Full summary saved as abstract for paper {paper_id}")
-            except Exception as e:
-                logger.error(f"Auto-summary generation failed: {e}")
+            if cloud_tasks_service.is_enabled:
+                cloud_tasks_service.enqueue_paper_summary(paper_id, lang=lang)
+            else:
+                try:
+                    summary_full = await summary_service.summarize_full(
+                        target_lang=lang, pdf_bytes=pdf_content
+                    )
+                    if summary_full:
+                        storage.update_paper_abstract(paper_id, summary_full)
+                        logger.info(f"Full summary saved as abstract for paper {paper_id}")
+                except Exception as e:
+                    logger.error(f"Auto-summary generation failed: {e}")
 
             # 完了処理
 

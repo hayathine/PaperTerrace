@@ -23,6 +23,7 @@ from .routers import (
     papers_router,
     pdf_router,
     stamps_router,
+    tasks_router,
     translation_router,
     upload_router,
     users_router,
@@ -134,32 +135,23 @@ async def init_db_manual():
 # Auth & Users
 app.include_router(auth_router)
 app.include_router(users_router)
+
+# Grouped routers
+app.include_router(stamps_router)
+app.include_router(tasks_router)
+app.include_router(translation_router)
 app.include_router(explore_router)
+app.include_router(chat_router)
+app.include_router(note_router)
+app.include_router(papers_router)
+app.include_router(upload_router)
 
 # PDF Analysis & Streaming
 app.include_router(pdf_router)
 
-# Translation & Dictionary
-app.include_router(translation_router)
-
-# Chat
-app.include_router(chat_router)
-
 # Analysis Features
 app.include_router(analysis_router)
 app.include_router(figures_router)
-
-# Notes
-app.include_router(note_router)
-
-# Stamps
-app.include_router(stamps_router)
-
-# Paper Management
-app.include_router(papers_router)
-
-# Uploads
-app.include_router(upload_router)
 
 
 # ============================================================================

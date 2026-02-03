@@ -40,7 +40,8 @@ resource "google_project_service" "apis" {
     "cloudbuild.googleapis.com",
     "vpcaccess.googleapis.com",
     "servicenetworking.googleapis.com",
-    "iam.googleapis.com", # Added IAM API
+    "iam.googleapis.com", 
+    "cloudtasks.googleapis.com",
   ])
 
   service            = each.value
@@ -147,4 +148,14 @@ module "cloud_run" {
     module.networking,
     module.iam,
   ]
+}
+
+# Cloud Tasks
+module "cloud_tasks" {
+  source = "./modules/cloud_tasks"
+
+  project_id = var.project_id
+  region     = var.region
+
+  depends_on = [google_project_service.apis]
 }

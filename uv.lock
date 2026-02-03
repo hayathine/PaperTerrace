@@ -1020,6 +1020,23 @@ wheels = [
 ]
 
 [[package]]
+name = "google-cloud-tasks"
+version = "2.21.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "grpc-google-iam-v1" },
+    { name = "grpcio" },
+    { name = "proto-plus" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b6/58/0238b71de170b92ef359e53047a3d6ff9618c04ee255cbc6def53ab79e11/google_cloud_tasks-2.21.0.tar.gz", hash = "sha256:d28f33248553faf0ff029e1981aab56cd13bd933635c3bc33aa187675e7e14d1", size = 351784, upload-time = "2026-01-15T13:04:43.071Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/b4/9d/a7f098037fb56f1d69fbfad95f58bf322a4d0dbb6cafcf380c9535730cc0/google_cloud_tasks-2.21.0-py3-none-any.whl", hash = "sha256:4bf288876892a0afac30658fc42925ccb732d3c4433a8ea568de1d67fde738f2", size = 295211, upload-time = "2026-01-15T13:02:52.377Z" },
+]
+
+[[package]]
 name = "google-crc32c"
 version = "1.8.0"
 source = { registry = "https://pypi.org/simple" }
@@ -2036,6 +2053,7 @@ dependencies = [
     { name = "go-task-bin" },
     { name = "google-cloud-aiplatform" },
     { name = "google-cloud-storage" },
+    { name = "google-cloud-tasks" },
     { name = "google-genai" },
     { name = "httpx" },
     { name = "huggingface-hub" },
@@ -2089,6 +2107,7 @@ requires-dist = [
     { name = "go-task-bin", specifier = ">=3.48.0" },
     { name = "google-cloud-aiplatform", specifier = ">=1.135.0" },
     { name = "google-cloud-storage", specifier = ">=3.8.0" },
+    { name = "google-cloud-tasks", specifier = ">=2.21.0" },
     { name = "google-genai", specifier = ">=1.60.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "huggingface-hub", specifier = ">=0.23.0" },
