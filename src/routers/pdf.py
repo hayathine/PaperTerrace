@@ -379,6 +379,10 @@ async def stream(task_id: str):
                         yield "event: close\ndata: done\n\n"
                         return
 
+                    # Skip phase 1 (text only) to prevent frontend crash due to null image_url
+                    if not page_image_url:
+                        continue
+
                     # Prepare Page Data
                     page_payload = {
                         "page_num": page_num,
@@ -548,17 +552,16 @@ async def stream(task_id: str):
             try:
                 async for item in _inner_json_generate():
                     yield item
+            except asyncio.CancelledError:
+                # Client disconnected - this is normal, log at info level
+                logger.info(f"[stream] {task_id}: Client disconnected (CancelledError)")
             except Exception as e:
                 logger.error(f"[stream] {task_id}: Unexpected error in stream: {e}", exc_info=True)
-                yield f"event: message\ndata: {json.dumps({'type': 'error', 'message': 'Internal Server Error'})}\n\n"
-                yield "event: close\ndata: done\n\n"
-            except BaseException as e:
-                logger.error(
-                    f"[stream] {task_id}: Critical failures (BaseException): {type(e).__name__}: {e}",
-                    exc_info=True,
-                )
-                # Re-raise to ensure proper shutdown if it's a system exit or cancellation
-                raise e
+                try:
+                    yield f"event: message\ndata: {json.dumps({'type': 'error', 'message': 'Internal Server Error'})}\n\n"
+                    yield "event: close\ndata: done\n\n"
+                except Exception:
+                    pass  # Client may already be disconnected
             finally:
                 redis_service.delete(f"task:{task_id}")
                 logger.info(f"[stream] {task_id}: Cleaned up task")

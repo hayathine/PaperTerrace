@@ -94,15 +94,31 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     pagesRef.current = pages;
   }, [pages]);
 
+  // Handle file upload and paper loading
+  // Use isMounted to handle React StrictMode double-mounting
   useEffect(() => {
-    if (uploadFile) {
-      startAnalysis(uploadFile);
-    } else if (propPaperId && propPaperId !== loadedPaperId) {
-      loadExistingPaper(propPaperId);
-    }
+    let isMounted = true;
+
+    const initiate = async () => {
+      // Small delay to avoid StrictMode race condition
+      await new Promise((r) => setTimeout(r, 10));
+      if (!isMounted) return;
+
+      if (uploadFile) {
+        startAnalysis(uploadFile);
+      } else if (propPaperId && propPaperId !== loadedPaperId) {
+        loadExistingPaper(propPaperId);
+      }
+    };
+
+    initiate();
+
     return () => {
-      if (eventSourceRef.current) {
+      isMounted = false;
+      // Only close if there's no active task (avoid closing mid-stream)
+      if (eventSourceRef.current && !activeTaskIdRef.current) {
         eventSourceRef.current.close();
+        eventSourceRef.current = null;
       }
     };
   }, [uploadFile, propPaperId]);
@@ -308,12 +324,21 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       };
 
       es.onerror = (err) => {
-        console.error("SSE Error", err);
+        console.error(
+          "SSE Error",
+          err,
+          "pages received:",
+          pagesRef.current.length,
+        );
         es.close();
-        // If it fails immediately or without any pages, show error
-        if (status === "processing" && pages.length === 0) {
+        // Only show error if we haven't received any pages yet
+        // Use ref to get current value, not stale closure value
+        if (pagesRef.current.length === 0) {
           setStatus("error");
           setErrorMsg("Network error while streaming analysis");
+        } else {
+          // We got some pages, so just mark as done (partial success)
+          setStatus("done");
         }
         processingFileRef.current = null;
         activeTaskIdRef.current = null;
