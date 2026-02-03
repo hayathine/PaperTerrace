@@ -81,11 +81,18 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   const [stamps, setStamps] = useState<Stamp[]>([]);
   const [selectedStamp, setSelectedStamp] = useState<StampType>("👍");
 
+  const pagesRef = useRef<PageData[]>([]);
+
   useEffect(() => {
     if (onStatusChange) {
       onStatusChange(status);
     }
   }, [status, onStatusChange]);
+
+  // Sync ref with state
+  useEffect(() => {
+    pagesRef.current = pages;
+  }, [pages]);
 
   useEffect(() => {
     if (uploadFile) {
@@ -239,19 +246,45 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           } else if (eventData.type === "done") {
             setStatus("done");
             if (eventData.paper_id) {
-              setLoadedPaperId(eventData.paper_id);
+              const pId = eventData.paper_id;
+              setLoadedPaperId(pId);
+
+              // Use ref to get the latest pages collected during streaming
+              const finalPages = pagesRef.current;
 
               // Cache the final results
               (async () => {
-                const imageUrls = pages.map((p) => p.image_url);
+                const imageUrls = finalPages.map((p) => p.image_url);
+                const ocrText = finalPages
+                  .map((p) => p.content)
+                  .join("\n\n---\n\n");
+                const layoutData = finalPages.map((p) => ({
+                  width: p.width,
+                  height: p.height,
+                  words: p.words,
+                  figures: p.figures,
+                  links: p.links,
+                }));
+
+                // Extract file_hash from image_url (e.g. /static/paper_images/{hash}/page_1.png)
+                let fileHash = "";
+                if (imageUrls.length > 0) {
+                  const match = imageUrls[0].match(
+                    /\/static\/paper_images\/([^/]+)\//,
+                  );
+                  if (match) fileHash = match[1];
+                }
+
                 await savePaperToCache({
-                  id: eventData.paper_id,
+                  id: pId,
+                  file_hash: fileHash,
                   title: processingFileRef.current?.name || "Untitled",
-                  html_content: "", // Full HTML might be huge, maybe store if needed
+                  ocr_text: ocrText,
+                  layout_json: JSON.stringify(layoutData),
                   last_accessed: Date.now(),
                 });
                 // We don't block on image caching
-                cachePaperImages(eventData.paper_id, imageUrls);
+                cachePaperImages(pId, imageUrls);
               })();
             }
             es.close();
@@ -439,14 +472,37 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
     try {
       // 0. Check IndexedDB Cache First (Offline First / Fast Load)
-      const cachedPaper = await getCachedPaper(id);
-      if (cachedPaper) {
-        console.log("[PDFViewer] Loading from IndexedDB cache:", id);
-        // If we have full metadata in cache, we could technically reconstruct pages
-        // IF we also cached the layout_json. Let's assume we want to fetch fresh metadata
-        // but it's a good start.
-        // For now, let's still fetch from server to get the LATEST, but we could
-        // show the cached version immediately if we had more details stored.
+      const cached = await getCachedPaper(id);
+      if (cached && cached.layout_json && cached.file_hash) {
+        console.log("[PDFViewer] Fast Load from cache:", id);
+        try {
+          const layoutList = JSON.parse(cached.layout_json);
+          const ocrParts = (cached.ocr_text || "").split("\n\n---\n\n");
+          const fileHash = cached.file_hash;
+
+          const cachedPages: PageData[] = layoutList.map(
+            (layout: any, i: number) => ({
+              page_num: i + 1,
+              image_url: `/static/paper_images/${fileHash}/page_${i + 1}.png`,
+              width: layout?.width || 0,
+              height: layout?.height || 0,
+              words: layout?.words || [],
+              figures: layout?.figures || [],
+              links: layout?.links || [],
+              content: ocrParts[i] || "",
+            }),
+          );
+
+          if (cachedPages.length > 0) {
+            setPages(cachedPages);
+            setStatus("done");
+            // If we have content, we could stop here.
+            // Optional: Background check with server to ensure consistency.
+            return;
+          }
+        } catch (e) {
+          console.warn("[PDFViewer] Failed to parse cached data", e);
+        }
       }
 
       const headers: HeadersInit = {};
@@ -460,7 +516,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         // Save/Update cache with latest metadata
         await savePaperToCache({
           id: id,
+          file_hash: paperData.file_hash || "",
           title: paperData.title || paperData.filename,
+          ocr_text: paperData.ocr_text,
+          layout_json: paperData.layout_json,
           full_summary: paperData.full_summary,
           section_summary_json: paperData.section_summary_json,
           last_accessed: Date.now(),
@@ -480,6 +539,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                 height: layout?.height || 0,
                 words: layout?.words || [],
                 figures: layout?.figures || [],
+                links: layout?.links || [],
                 content: ocrParts[i] || "",
               }),
             );

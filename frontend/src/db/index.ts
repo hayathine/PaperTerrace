@@ -1,10 +1,12 @@
 import Dexie, { type Table } from "dexie";
 
 export interface PaperCache {
-  id: string; // file_hash
+  id: string; // paper_id
+  file_hash: string;
   title: string;
   author?: string;
-  full_text?: string;
+  ocr_text?: string;
+  layout_json?: string;
   abstract?: string;
   full_summary?: string;
   section_summary_json?: string;
@@ -38,8 +40,8 @@ export class PaperTerraceDB extends Dexie {
 
   constructor() {
     super("PaperTerraceDB");
-    this.version(1).stores({
-      papers: "id, last_accessed",
+    this.version(2).stores({
+      papers: "id, last_accessed, file_hash",
       images: "id, paper_id, label",
       edit_history: "++id, paper_id, synced",
     });
