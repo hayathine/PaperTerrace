@@ -121,5 +121,14 @@
   "menu": {
     "translate": "Translate",
     "note": "Note"
+  },
+  "search": {
+    "placeholder": "Search...",
+    "no_results": "No results",
+    "prev": "Previous (Shift+Enter)",
+    "next": "Next (Enter)",
+    "close": "Close (Esc)",
+    "hint_next": "Next",
+    "hint_prev": "Previous"
   }
 }

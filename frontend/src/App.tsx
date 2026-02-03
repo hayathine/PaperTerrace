@@ -5,6 +5,7 @@ import { useAuth } from "./contexts/AuthContext";
 import Login from "./components/Auth/Login";
 import ErrorBoundary from "./components/Error/ErrorBoundary";
 import UploadScreen from "./components/Upload/UploadScreen";
+import SearchBar from "./components/Search/SearchBar";
 
 function App() {
   const { user, logout } = useAuth();
@@ -307,6 +308,70 @@ function App() {
     setStackedPapers((prev) => prev.filter((p) => p.url !== url));
   };
 
+  // Ctrl+F イベントをインターセプトしてカスタム検索を開く
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [searchMatches, setSearchMatches] = useState<
+    Array<{ page: number; wordIndex: number }>
+  >([]);
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+
+  // 現在の検索マッチ
+  const currentSearchMatch =
+    searchMatches.length > 0 && currentMatchIndex < searchMatches.length
+      ? searchMatches[currentMatchIndex]
+      : null;
+
+  // 検索マッチのナビゲーション
+  const handleNextMatch = useCallback(() => {
+    if (searchMatches.length === 0) return;
+    setCurrentMatchIndex((prev) => (prev + 1) % searchMatches.length);
+  }, [searchMatches.length]);
+
+  const handlePrevMatch = useCallback(() => {
+    if (searchMatches.length === 0) return;
+    setCurrentMatchIndex(
+      (prev) => (prev - 1 + searchMatches.length) % searchMatches.length,
+    );
+  }, [searchMatches.length]);
+
+  // 検索を閉じる
+  const handleCloseSearch = useCallback(() => {
+    setIsSearchOpen(false);
+    setSearchTerm("");
+    setSearchMatches([]);
+    setCurrentMatchIndex(0);
+  }, []);
+
+  // 検索マッチの更新
+  const handleSearchMatchesUpdate = useCallback(
+    (matches: Array<{ page: number; wordIndex: number }>) => {
+      setSearchMatches(matches);
+      setCurrentMatchIndex(0);
+    },
+    [],
+  );
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ctrl+F または Cmd+F (Mac)
+      if ((e.ctrlKey || e.metaKey) && e.key === "f") {
+        // PDFが表示されている場合のみカスタム検索を有効化
+        if (uploadFile || currentPaperId) {
+          e.preventDefault();
+          setIsSearchOpen(true);
+        }
+      }
+      // Escで検索を閉じる
+      if (e.key === "Escape" && isSearchOpen) {
+        handleCloseSearch();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [uploadFile, currentPaperId, isSearchOpen, handleCloseSearch]);
+
   return (
     <ErrorBoundary>
       <div className="flex h-screen w-full bg-gray-100 overflow-hidden">
@@ -546,6 +611,9 @@ function App() {
                     onStatusChange={handleAnalysisStatusChange}
                     onPaperLoaded={handlePaperLoaded}
                     onAskAI={handleAskAI}
+                    searchTerm={searchTerm}
+                    onSearchMatchesUpdate={handleSearchMatchesUpdate}
+                    currentSearchMatch={currentSearchMatch}
                   />
                 </div>
               ) : (
@@ -621,6 +689,18 @@ function App() {
             </div>
           </div>
         )}
+
+        {/* Search Bar */}
+        <SearchBar
+          isOpen={isSearchOpen}
+          onClose={handleCloseSearch}
+          searchTerm={searchTerm}
+          onSearchTermChange={setSearchTerm}
+          matches={searchMatches}
+          currentMatchIndex={currentMatchIndex}
+          onNextMatch={handleNextMatch}
+          onPrevMatch={handlePrevMatch}
+        />
       </div>
     </ErrorBoundary>
   );

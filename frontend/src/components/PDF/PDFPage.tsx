@@ -47,6 +47,9 @@ interface PDFPageProps {
   }) => void;
   onAskAI?: (prompt: string) => void;
   jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
+  // 検索関連props
+  searchTerm?: string;
+  currentSearchMatch?: { page: number; wordIndex: number } | null;
 }
 
 const PDFPage: React.FC<PDFPageProps> = ({
@@ -60,6 +63,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
   onAreaSelect,
   onAskAI,
   jumpTarget,
+  searchTerm,
+  currentSearchMatch,
 }) => {
   const { t } = useTranslation();
   const { width, height, words, figures, image_url, page_num } = page;
@@ -345,13 +350,27 @@ const PDFPage: React.FC<PDFPageProps> = ({
                 Math.abs(centerX - jumpTarget.x) < 0.005 &&
                 Math.abs(centerY - jumpTarget.y) < 0.005;
 
+              // 検索マッチのハイライト
+              const isSearchMatch =
+                searchTerm &&
+                searchTerm.length >= 2 &&
+                w.word.toLowerCase().includes(searchTerm.toLowerCase());
+
+              // 現在フォーカスされている検索マッチかどうか
+              const isCurrentSearchMatch =
+                currentSearchMatch &&
+                currentSearchMatch.page === page_num &&
+                currentSearchMatch.wordIndex === idx;
+
               return (
                 <div
                   key={`${idx}`}
                   className={`absolute rounded-sm group ${!isStampMode ? "cursor-pointer" : "pointer-events-none"} 
-                                    ${!isStampMode && !isSelected && !isJumpHighlight ? "hover:bg-yellow-300/30" : ""} 
+                                    ${!isStampMode && !isSelected && !isJumpHighlight && !isSearchMatch ? "hover:bg-yellow-300/30" : ""} 
                                     ${isSelected ? "bg-indigo-500/30 border border-indigo-500/50" : ""}
-                                    ${isJumpHighlight ? "bg-yellow-400/60 border-2 border-yellow-600 shadow-[0_0_15px_rgba(250,204,21,0.5)] z-20 animate-bounce-subtle" : ""}`}
+                                    ${isJumpHighlight ? "bg-yellow-400/60 border-2 border-yellow-600 shadow-[0_0_15px_rgba(250,204,21,0.5)] z-20 animate-bounce-subtle" : ""}
+                                    ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 border border-amber-400" : ""}
+                                    ${isCurrentSearchMatch ? "bg-orange-500/60 border-2 border-orange-600 shadow-[0_0_15px_rgba(249,115,22,0.6)] z-30 ring-2 ring-orange-400" : ""}`}
                   style={{
                     left: `${left}%`,
                     top: `${top}%`,

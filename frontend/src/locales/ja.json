@@ -121,5 +121,14 @@
   "menu": {
     "translate": "翻訳",
     "note": "ノート"
+  },
+  "search": {
+    "placeholder": "検索...",
+    "no_results": "0件",
+    "prev": "前へ (Shift+Enter)",
+    "next": "次へ (Enter)",
+    "close": "閉じる (Esc)",
+    "hint_next": "次へ",
+    "hint_prev": "前へ"
   }
 }

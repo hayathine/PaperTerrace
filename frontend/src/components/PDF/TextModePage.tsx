@@ -13,6 +13,9 @@ interface TextModePageProps {
     coords: { page: number; x: number; y: number },
   ) => void;
   jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
+  // 検索関連props
+  searchTerm?: string;
+  currentSearchMatch?: { page: number; wordIndex: number } | null;
 }
 
 const TextModePage: React.FC<TextModePageProps> = ({
@@ -20,6 +23,8 @@ const TextModePage: React.FC<TextModePageProps> = ({
   onWordClick,
   onTextSelect,
   jumpTarget,
+  searchTerm,
+  currentSearchMatch,
 }) => {
   const [selectionMenu, setSelectionMenu] = React.useState<{
     x: number;
@@ -115,50 +120,72 @@ const TextModePage: React.FC<TextModePageProps> = ({
           className="absolute inset-0 z-10 w-full h-full cursor-text selection:bg-indigo-600/30"
           style={{ userSelect: "text" }}
         >
-          {page.lines.map((line, lIdx) => {
-            const [lx1, ly1, lx2, ly2] = line.bbox;
-            const pWidth = page.width || 1;
-            const pHeight = page.height || 1;
-            const lTop = (ly1 / pHeight) * 100;
-            const lLeft = (lx1 / pWidth) * 100;
-            const lWidth = ((lx2 - lx1) / pWidth) * 100;
-            const lHeight = ((ly2 - ly1) / pHeight) * 100;
+          {(() => {
+            // グローバルwordインデックスを計算するためのカウンター
+            let globalWordIndex = 0;
 
-            return (
-              <div
-                key={lIdx}
-                className="absolute text-transparent whitespace-pre flex items-center"
-                style={{
-                  top: `${lTop}%`,
-                  left: `${lLeft}%`,
-                  width: `${lWidth}%`,
-                  height: `${lHeight}%`,
-                  fontSize: `${lHeight * 0.8}cqw`,
-                  letterSpacing: "-0.05em",
-                }}
-              >
-                {line.words.map((w, wIdx) => {
-                  const isJumpHighlight =
-                    jumpTarget &&
-                    jumpTarget.page === page.page_num &&
-                    jumpTarget.term &&
-                    w.word
-                      .toLowerCase()
-                      .includes(jumpTarget.term.toLowerCase());
+            return page.lines.map((line, lIdx) => {
+              const [lx1, ly1, lx2, ly2] = line.bbox;
+              const pWidth = page.width || 1;
+              const pHeight = page.height || 1;
+              const lTop = (ly1 / pHeight) * 100;
+              const lLeft = (lx1 / pWidth) * 100;
+              const lWidth = ((lx2 - lx1) / pWidth) * 100;
+              const lHeight = ((ly2 - ly1) / pHeight) * 100;
 
-                  return (
-                    <span
-                      key={wIdx}
-                      className={`transition-all ${isJumpHighlight ? "bg-yellow-400/40 border-b border-yellow-600" : ""}`}
-                      style={{ pointerEvents: "auto" }}
-                    >
-                      {w.word}{" "}
-                    </span>
-                  );
-                })}
-              </div>
-            );
-          })}
+              return (
+                <div
+                  key={lIdx}
+                  className="absolute text-transparent whitespace-pre flex items-center"
+                  style={{
+                    top: `${lTop}%`,
+                    left: `${lLeft}%`,
+                    width: `${lWidth}%`,
+                    height: `${lHeight}%`,
+                    fontSize: `${lHeight * 0.8}cqw`,
+                    letterSpacing: "-0.05em",
+                  }}
+                >
+                  {line.words.map((w, wIdx) => {
+                    const currentGlobalIndex = globalWordIndex++;
+
+                    const isJumpHighlight =
+                      jumpTarget &&
+                      jumpTarget.page === page.page_num &&
+                      jumpTarget.term &&
+                      w.word
+                        .toLowerCase()
+                        .includes(jumpTarget.term.toLowerCase());
+
+                    // 検索マッチのハイライト
+                    const isSearchMatch =
+                      searchTerm &&
+                      searchTerm.length >= 2 &&
+                      w.word.toLowerCase().includes(searchTerm.toLowerCase());
+
+                    // 現在フォーカスされている検索マッチかどうか
+                    const isCurrentSearchMatch =
+                      currentSearchMatch &&
+                      currentSearchMatch.page === page.page_num &&
+                      currentSearchMatch.wordIndex === currentGlobalIndex;
+
+                    return (
+                      <span
+                        key={wIdx}
+                        className={`transition-all 
+                          ${isJumpHighlight ? "bg-yellow-400/40 border-b border-yellow-600" : ""}
+                          ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 rounded" : ""}
+                          ${isCurrentSearchMatch ? "bg-orange-500/60 rounded ring-2 ring-orange-400" : ""}`}
+                        style={{ pointerEvents: "auto" }}
+                      >
+                        {w.word}{" "}
+                      </span>
+                    );
+                  })}
+                </div>
+              );
+            });
+          })()}
         </div>
       </div>
 

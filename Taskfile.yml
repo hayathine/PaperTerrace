@@ -144,12 +144,12 @@ tasks:
       - gcloud builds submit --tag {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
       - gcloud run deploy paperterrace-staging --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest --region {{.REGION}} --allow-unauthenticated
 
-  staging:destroy:
-    desc: "Destroy Staging Environment (Terraform enable_staging=false)"
+  staging:stop:
+    desc: "Stop Staging Environment (Terraform enable_staging=false)"
     cmds:
-      - echo "Destroying Staging Environment..."
+      - echo "Stopping Staging Environment..."
       - cd terraform && TF_VAR_gemini_api_key=$GEMINI_API_KEY TF_VAR_db_password=$DB_PASSWORD terraform apply -var="enable_staging=false" -auto-approve
-      - echo "Staging Environment Destroyed. Database 'paperterrace_staging' removed."
+      - echo "Staging Environment Stopped. Database 'paperterrace_staging' removed."
 
   staging:logs:
     desc: "Read Staging logs"

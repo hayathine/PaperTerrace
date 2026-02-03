@@ -22,11 +22,10 @@ Googleの高性能AIモデル **Gemini 1.5 Flash** を搭載しており、ア�
 
 - **クリックで即座に検索**: 分からない単語をクリックするだけで、その場で日本語の意味がポップアップ表示されます。
 
-### 3. "Jamdict x Gemini" ハイブリッド検索システム
+### 3. Gemini" ハイブリッド検索システム
 
 安定的かつ高速なローカル辞書と、柔軟なAI解説を組み合わせたハイブリッドな仕組みを採用しています。
 
-- **Jamdict (ローカル辞書)**: 一般的な英単語は、内蔵された英和辞書データから瞬時に意味を取得します。オフラインに近い速度でレスポンスを返します。
 - **Gemini AI (フォールバック)**: 辞書に載っていない専門用語、スラング、固有名詞などは、AIが文脈を考慮して自動的に解説を生成します。
 
 ### 4. 高度なAI読解支援（開発中・β機能）
@@ -77,7 +76,7 @@ uv sync
 
 プロジェクトルートに `.env` ファイルを作成し、以下の設定を記述してください。
 
-```ini
+````ini
 GEMINI_API_KEY=あなたのGemini_APIキー
 OCR_MODEL=gemini-1.5-flash
 DB_PATH=ocr_reader.db
@@ -96,11 +95,6 @@ AI_PROVIDER=gemini
 # GCP_PROJECT_ID=your-project-id
 # GCP_LOCATION=us-central1
 # VERTEX_MODEL=gemini-2.0-flash-lite-001
-```
-
-### 4. 辞書データの準備
-
-Jamdictが正しく動作するために、`wnjpn.db` ファイルがプロジェクトのルートディレクトリに配置されていることを確認してください。
 
 ## 💻 使い方
 
@@ -112,7 +106,7 @@ Jamdictが正しく動作するために、`wnjpn.db` ファイルがプロジ�
 
 ```bash
 task run
-```
+````
 
 **手動で実行する場合:**
 
@@ -130,7 +124,7 @@ http://localhost:8000
 ## 🏗️ 技術スタック
 
 - **Backend**: FastAPI
-- **AI & NLP**: Google GenAI (Gemini), Spacy (`en_core_web_lg`), Jamdict
+- **AI & NLP**: Google GenAI (Gemini), Spacy (`en_core_web_lg`),
 - **Frontend**: Jinja2 Templates, HTMX, Tailwind CSS
 - **Database**: SQLite (OCRキャッシュ用)
 - **Tooling**: uv, go-task

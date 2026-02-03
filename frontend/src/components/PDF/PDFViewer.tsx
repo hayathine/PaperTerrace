@@ -42,6 +42,12 @@ interface PDFViewerProps {
   onPaperLoaded?: (paperId: string | null) => void;
   onAskAI?: (prompt: string) => void;
   paperId?: string | null;
+  // 検索関連props
+  searchTerm?: string;
+  onSearchMatchesUpdate?: (
+    matches: Array<{ page: number; wordIndex: number }>,
+  ) => void;
+  currentSearchMatch?: { page: number; wordIndex: number } | null;
 }
 
 const PDFViewer: React.FC<PDFViewerProps> = ({
@@ -55,6 +61,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   onStatusChange,
   onPaperLoaded,
   onAskAI,
+  searchTerm,
+  onSearchMatchesUpdate,
+  currentSearchMatch,
 }) => {
   const { t, i18n } = useTranslation();
   const { token } = useAuth();
@@ -93,6 +102,59 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   useEffect(() => {
     pagesRef.current = pages;
   }, [pages]);
+
+  // 検索マッチング処理
+  useEffect(() => {
+    if (!searchTerm || searchTerm.length < 2 || !onSearchMatchesUpdate) {
+      if (onSearchMatchesUpdate) {
+        onSearchMatchesUpdate([]);
+      }
+      return;
+    }
+
+    const lowerSearchTerm = searchTerm.toLowerCase();
+    const matches: Array<{ page: number; wordIndex: number }> = [];
+
+    pages.forEach((page) => {
+      if (page.words) {
+        page.words.forEach((word, wordIndex) => {
+          if (word.word.toLowerCase().includes(lowerSearchTerm)) {
+            matches.push({
+              page: page.page_num,
+              wordIndex,
+            });
+          }
+        });
+      }
+    });
+
+    onSearchMatchesUpdate(matches);
+  }, [searchTerm, pages, onSearchMatchesUpdate]);
+
+  // 現在の検索マッチ位置へスクロール
+  useEffect(() => {
+    if (!currentSearchMatch) return;
+
+    const pageEl = document.getElementById(`page-${currentSearchMatch.page}`);
+    if (!pageEl) return;
+
+    const scroller = pageEl.closest(".overflow-y-auto");
+    if (scroller) {
+      const pageRect = pageEl.getBoundingClientRect();
+      const scrollerRect = scroller.getBoundingClientRect();
+      const currentScrollTop = scroller.scrollTop;
+      const pageTopInScroller =
+        currentScrollTop + (pageRect.top - scrollerRect.top);
+
+      // ページの上部にスクロール
+      scroller.scrollTo({
+        top: pageTopInScroller - 100,
+        behavior: "smooth",
+      });
+    } else {
+      pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }, [currentSearchMatch]);
 
   // Handle file upload and paper loading
   // Use isMounted to handle React StrictMode double-mounting
@@ -762,6 +824,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           onWordClick={handleWordClick}
           onTextSelect={handleTextSelect}
           jumpTarget={jumpTarget}
+          searchTerm={searchTerm}
+          currentSearchMatch={currentSearchMatch}
         />
       </div>
 
@@ -782,6 +846,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
               onAreaSelect={handleAreaSelect}
               onAskAI={onAskAI}
               jumpTarget={jumpTarget}
+              searchTerm={searchTerm}
+              currentSearchMatch={currentSearchMatch}
             />
           ))}
         </div>
