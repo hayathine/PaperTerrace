@@ -4,6 +4,7 @@ import { Message } from "./types";
 import MessageList from "./MessageList";
 import InputArea from "./InputArea";
 import { useTranslation } from "react-i18next";
+import { useLoading } from "../../contexts/LoadingContext";
 
 interface ChatWindowProps {
   sessionId?: string;
@@ -27,6 +28,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
   onStackPaper,
 }) => {
   const { t, i18n } = useTranslation();
+  const { startLoading, stopLoading } = useLoading();
   const [messages, setMessages] = useState<Message[]>(initialMessages);
 
   const [isLoading, setIsLoading] = useState(false);
@@ -97,6 +99,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
     setMessages((prev) => [...prev, userMsg]);
     setIsLoading(true);
+    startLoading(t("common.loading"));
 
     try {
       const response = await fetch("/chat", {
@@ -140,6 +143,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
       setMessages((prev) => [...prev, errorMsg]);
     } finally {
       setIsLoading(false);
+      stopLoading();
     }
   };
 

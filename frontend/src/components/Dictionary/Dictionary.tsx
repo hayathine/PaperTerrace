@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { DictionaryEntry } from "./types";
 import { useAuth } from "../../contexts/AuthContext";
 import { useTranslation } from "react-i18next";
+import { useLoading } from "../../contexts/LoadingContext";
 
 interface DictionaryProps {
   term?: string;
@@ -24,6 +25,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 }) => {
   const { t, i18n } = useTranslation();
   const { token } = useAuth();
+  const { startLoading, stopLoading } = useLoading();
 
   // Maintain a list of entries instead of a single one
   const [entries, setEntries] = useState<DictionaryEntry[]>([]);
@@ -75,6 +77,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
     const fetchDefinition = async () => {
       setLoading(true);
+      startLoading(t("common.loading"));
       setError(null);
 
       try {
@@ -111,6 +114,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
         setError(`Failed to fetch definition for "${term}".`);
       } finally {
         setLoading(false);
+        stopLoading();
       }
     };
 

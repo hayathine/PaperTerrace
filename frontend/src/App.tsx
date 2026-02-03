@@ -6,10 +6,25 @@ import Login from "./components/Auth/Login";
 import ErrorBoundary from "./components/Error/ErrorBoundary";
 import UploadScreen from "./components/Upload/UploadScreen";
 import SearchBar from "./components/Search/SearchBar";
+import GlobalLoading from "./components/UI/GlobalLoading";
+import { useLoading } from "./contexts/LoadingContext";
 
 function App() {
   const { user, logout } = useAuth();
+  const { startLoading, stopLoading } = useLoading();
   const [uploadFile, setUploadFile] = useState<File | null>(null);
+
+  const [currentPaperId, setCurrentPaperId] = useState<string | null>(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
+  // Sync isAnalyzing with GlobalLoading
+  useEffect(() => {
+    if (isAnalyzing) {
+      startLoading();
+    } else {
+      stopLoading();
+    }
+  }, [isAnalyzing, startLoading, stopLoading]);
 
   // Sidebar State
   const [sessionId] = useState(() => {
@@ -39,8 +54,7 @@ function App() {
     term?: string;
   } | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [currentPaperId, setCurrentPaperId] = useState<string | null>(null);
-  const [isAnalyzing, setIsAnalyzing] = useState(false);
+
   const [pendingFigureId, setPendingFigureId] = useState<string | null>(null);
   const [pendingChatPrompt, setPendingChatPrompt] = useState<string | null>(
     null,
@@ -701,6 +715,7 @@ function App() {
           onNextMatch={handleNextMatch}
           onPrevMatch={handlePrevMatch}
         />
+        <GlobalLoading />
       </div>
     </ErrorBoundary>
   );

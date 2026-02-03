@@ -1,6 +1,8 @@
 {
   "common": {
     "loading": "読み込み中...",
+    "preparing": "準備中...",
+    "loading_description": "少々お待ちください...",
     "error": "エラー",
     "save": "保存",
     "cancel": "キャンセル",

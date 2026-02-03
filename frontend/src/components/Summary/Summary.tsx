@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { CritiqueResponse, RadarResponse } from "./types";
 import { useTranslation } from "react-i18next";
+import { useLoading } from "../../contexts/LoadingContext";
 
 interface SummaryProps {
   sessionId: string;
@@ -16,6 +17,7 @@ const Summary: React.FC<SummaryProps> = ({
   isAnalyzing = false,
 }) => {
   const { t, i18n } = useTranslation();
+  const { startLoading, stopLoading } = useLoading();
   const [mode, setMode] = useState<Mode>("summary");
 
   const [loading, setLoading] = useState(false);
@@ -37,6 +39,7 @@ const Summary: React.FC<SummaryProps> = ({
 
   const handleSummarize = useCallback(async () => {
     setLoading(true);
+    startLoading(t("summary.processing"));
     setError(null);
     try {
       const formData = new FormData();
@@ -63,11 +66,13 @@ const Summary: React.FC<SummaryProps> = ({
       console.error(e);
     } finally {
       setLoading(false);
+      stopLoading();
     }
-  }, [sessionId]);
+  }, [sessionId, paperId, i18n.language, t, startLoading, stopLoading]);
 
   const handleCritique = useCallback(async () => {
     setLoading(true);
+    startLoading(t("summary.processing"));
     setError(null);
     try {
       const formData = new FormData();
@@ -86,11 +91,13 @@ const Summary: React.FC<SummaryProps> = ({
       console.error(e);
     } finally {
       setLoading(false);
+      stopLoading();
     }
-  }, [sessionId]);
+  }, [sessionId, i18n.language, t, startLoading, stopLoading]);
 
   const handleRadar = useCallback(async () => {
     setLoading(true);
+    startLoading(t("summary.processing"));
     setError(null);
     try {
       const formData = new FormData();
@@ -112,8 +119,9 @@ const Summary: React.FC<SummaryProps> = ({
       console.error(e);
     } finally {
       setLoading(false);
+      stopLoading();
     }
-  }, [sessionId]);
+  }, [sessionId, i18n.language, t, startLoading, stopLoading]);
 
   // Auto-fetch summary on mount or paper change
   React.useEffect(() => {

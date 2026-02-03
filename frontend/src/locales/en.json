@@ -1,6 +1,8 @@
 {
   "common": {
     "loading": "Loading...",
+    "preparing": "Preparing...",
+    "loading_description": "Please wait a moment...",
     "error": "Error",
     "save": "Save",
     "cancel": "Cancel",
