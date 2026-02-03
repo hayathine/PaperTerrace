@@ -50,7 +50,6 @@ async def lifespan(app: FastAPI):
     Handles startup and shutdown events.
     """
     from src.logger import logger
-    from src.providers import get_storage_provider
 
     async def _prewarm_models():
         try:
@@ -70,10 +69,14 @@ async def lifespan(app: FastAPI):
 
     logger.info("Starting up...")
     try:
-        storage = get_storage_provider()
-        if hasattr(storage, "init_tables"):
-            storage.init_tables()
-            logger.info("Database tables initialized")
+        # Run Alembic migrations
+        from alembic import command
+        from alembic.config import Config
+
+        alembic_cfg = Config("alembic.ini")
+        # Ensure alembic uses the correct directory if we're not in root (though usually we are)
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Database migrations applied successfully")
 
         # Pre-warm models before server starts (Blocking)
         logger.info("Pre-warming models before accepting requests...")
