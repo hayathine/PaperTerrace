@@ -14,9 +14,11 @@ from src.auth import OptionalUser
 from src.domain.features import SummaryService
 from src.domain.services.analysis_service import EnglishAnalysisService
 from src.domain.services.cloud_tasks_service import get_cloud_tasks_service
-from src.logger import logger
+from src.logger import get_service_logger, logger
 from src.providers import RedisService, get_storage_provider
 from src.utils import _get_file_hash
+
+log = get_service_logger("PDF")
 
 router = APIRouter(tags=["PDF Analysis"])
 
@@ -332,7 +334,7 @@ async def stream(task_id: str):
     # --- JSON STREAMING HANDLER ---
     if is_json:
 
-        async def json_generate():
+        async def _inner_json_generate():
             if data.get("pending_ocr"):
                 import base64
 
@@ -540,7 +542,26 @@ async def stream(task_id: str):
                 await asyncio.sleep(0.01)
 
             logger.info(f"[stream] {task_id}: json_generate finished")
-            redis_service.delete(f"task:{task_id}")
+            # Cleanup handled by wrapper
+
+        async def json_generate():
+            try:
+                async for item in _inner_json_generate():
+                    yield item
+            except Exception as e:
+                logger.error(f"[stream] {task_id}: Unexpected error in stream: {e}", exc_info=True)
+                yield f"event: message\ndata: {json.dumps({'type': 'error', 'message': 'Internal Server Error'})}\n\n"
+                yield "event: close\ndata: done\n\n"
+            except BaseException as e:
+                logger.error(
+                    f"[stream] {task_id}: Critical failures (BaseException): {type(e).__name__}: {e}",
+                    exc_info=True,
+                )
+                # Re-raise to ensure proper shutdown if it's a system exit or cancellation
+                raise e
+            finally:
+                redis_service.delete(f"task:{task_id}")
+                logger.info(f"[stream] {task_id}: Cleaned up task")
 
         return StreamingResponse(json_generate(), media_type="text/event-stream")
 

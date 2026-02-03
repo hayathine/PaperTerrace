@@ -15,7 +15,8 @@ const getFigTypeLabel = (t: any, label: string): string => {
     equation: "pdf.equation",
     image: "pdf.image",
   };
-  const key = keyMap[label.toLowerCase()] || "pdf.figure";
+  const normalizedLabel = (label || "").toLowerCase();
+  const key = keyMap[normalizedLabel] || "pdf.figure";
   return t(key);
 };
 
@@ -64,7 +65,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
   const { width, height, words, figures, image_url, page_num } = page;
 
   // Check for cached image in IndexedDB
-  const cachedImage = useLiveQuery(() => db.images.get(image_url), [image_url]);
+  const cachedImage = useLiveQuery(async () => {
+    if (!image_url) return undefined;
+    return await db.images.get(image_url);
+  }, [image_url]);
 
   const [displayUrl, setDisplayUrl] = useState(image_url);
 
@@ -125,17 +129,28 @@ const PDFPage: React.FC<PDFPageProps> = ({
         // x1, y1 etc are relative to page 'width' and 'height'.
 
         // Let's use % for position
-        const x1 = Math.min(...selectedWords.map((w) => w.bbox[0]));
-        const y1 = Math.min(...selectedWords.map((w) => w.bbox[1]));
-        const x2 = Math.max(...selectedWords.map((w) => w.bbox[2]));
-        const y2 = Math.max(...selectedWords.map((w) => w.bbox[3]));
+        const validWords = (selectedWords || []).filter(
+          (w) => w && w.bbox && w.bbox.length >= 4,
+        );
+        if (validWords.length === 0) {
+          setSelectionStart(null);
+          setSelectionEnd(null);
+          return;
+        }
 
-        const centerPctX = ((x1 + x2) / 2 / width) * 100;
-        // Place it slightly above the selection
-        const topPctY = (y1 / height) * 100;
+        const x1 = Math.min(...validWords.map((w) => w.bbox[0]));
+        const y1 = Math.min(...validWords.map((w) => w.bbox[1]));
+        const x2 = Math.max(...validWords.map((w) => w.bbox[2]));
+        const y2 = Math.max(...validWords.map((w) => w.bbox[3]));
 
-        const centerX = (x1 + x2) / 2 / width;
-        const centerY = (y1 + y2) / 2 / height;
+        const pageWidth = width || 1;
+        const pageHeight = height || 1;
+
+        const centerPctX = ((x1 + x2) / 2 / pageWidth) * 100;
+        const topPctY = (y1 / pageHeight) * 100;
+
+        const centerX = (x1 + x2) / 2 / pageWidth;
+        const centerY = (y1 + y2) / 2 / pageHeight;
 
         setSelectionMenu({
           x: centerPctX,
@@ -222,45 +237,51 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
         {/* Figure/Table Overlays (Overwrites text layer) */}
         <div className="absolute inset-0 w-full h-full z-15 pointer-events-none">
-          {figures?.map((fig, idx) => {
-            const [x1, y1, x2, y2] = fig.bbox;
-            if (
-              (x1 === 0 && y1 === 0 && x2 === 0 && y2 === 0) ||
-              !fig.image_url
-            )
-              return null;
+          {figures &&
+            figures.length > 0 &&
+            figures.map((fig, idx) => {
+              if (!fig || !fig.bbox || fig.bbox.length < 4) return null;
+              const [x1, y1, x2, y2] = fig.bbox;
+              if (
+                (x1 === 0 && y1 === 0 && x2 === 0 && y2 === 0) ||
+                !fig.image_url
+              )
+                return null;
 
-            const style = {
-              left: `${(x1 / width) * 100}%`,
-              top: `${(y1 / height) * 100}%`,
-              width: `${((x2 - x1) / width) * 100}%`,
-              height: `${((y2 - y1) / height) * 100}%`,
-            };
+              const pageWidth = width || 1;
+              const pageHeight = height || 1;
 
-            return (
-              <div
-                key={`fig-img-${idx}`}
-                className="absolute bg-white shadow-sm pointer-events-auto group"
-                style={style}
-              >
-                <img
-                  src={fig.image_url}
-                  className="w-full h-full object-contain"
-                  alt={fig.label}
-                />
-                <button
-                  className="absolute inset-0 bg-indigo-500/0 hover:bg-indigo-500/5 transition-colors"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onAskAI) {
-                      const typeName = getFigTypeLabel(t, fig.label || "");
-                      onAskAI(t("chat.explain_fig", { type: typeName }));
-                    }
-                  }}
-                />
-              </div>
-            );
-          })}
+              const style = {
+                left: `${(x1 / pageWidth) * 100}%`,
+                top: `${(y1 / pageHeight) * 100}%`,
+                width: `${((x2 - x1) / pageWidth) * 100}%`,
+                height: `${((y2 - y1) / pageHeight) * 100}%`,
+              };
+
+              return (
+                <div
+                  key={`fig-img-${idx}`}
+                  className="absolute bg-white shadow-sm pointer-events-auto group"
+                  style={style}
+                >
+                  <img
+                    src={fig.image_url}
+                    className="w-full h-full object-contain"
+                    alt={fig.label}
+                  />
+                  <button
+                    className="absolute inset-0 bg-indigo-500/0 hover:bg-indigo-500/5 transition-colors"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onAskAI) {
+                        const typeName = getFigTypeLabel(t, fig.label || "");
+                        onAskAI(t("chat.explain_fig", { type: typeName }));
+                      }
+                    }}
+                  />
+                </div>
+              );
+            })}
         </div>
 
         {/* Stamp Overlay */}
@@ -288,125 +309,137 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
         {/* Word Overlays */}
         <div className="absolute inset-0 w-full h-full z-10">
-          {words.map((w, idx) => {
-            const [x1, y1, x2, y2] = w.bbox;
-            const w_width = x2 - x1;
-            const w_height = y2 - y1;
+          {words &&
+            words.length > 0 &&
+            words.map((w, idx) => {
+              if (!w || !w.bbox || w.bbox.length < 4) return null;
+              const [x1, y1, x2, y2] = w.bbox;
+              const w_width = x2 - x1;
+              const w_height = y2 - y1;
 
-            const left = (x1 / width) * 100;
-            const top = (y1 / height) * 100;
-            const styleW = (w_width / width) * 100;
-            const styleH = (w_height / height) * 100;
+              const pageWidth = width || 1;
+              const pageHeight = height || 1;
 
-            const isSelected =
-              selectionStart !== null &&
-              selectionEnd !== null &&
-              ((idx >= selectionStart && idx <= selectionEnd) ||
-                (idx >= selectionEnd && idx <= selectionStart));
+              const left = (x1 / pageWidth) * 100;
+              const top = (y1 / pageHeight) * 100;
+              const styleW = (w_width / pageWidth) * 100;
+              const styleH = (w_height / pageHeight) * 100;
 
-            const centerX = (x1 + x2) / 2 / width;
-            const centerY = (y1 + y2) / 2 / height;
-            const cleanWord = w.word.replace(
-              /^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g,
-              "",
-            );
+              const isSelected =
+                selectionStart !== null &&
+                selectionEnd !== null &&
+                ((idx >= selectionStart && idx <= selectionEnd) ||
+                  (idx >= selectionEnd && idx <= selectionStart));
 
-            const isJumpHighlight =
-              jumpTarget &&
-              jumpTarget.page === page_num &&
-              // Use a small epsilon for coordinate matching
-              Math.abs(centerX - jumpTarget.x) < 0.005 &&
-              Math.abs(centerY - jumpTarget.y) < 0.005;
+              const centerX = (x1 + x2) / 2 / pageWidth;
+              const centerY = (y1 + y2) / 2 / pageHeight;
+              const cleanWord = (w.word || "").replace(
+                /^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g,
+                "",
+              );
 
-            return (
-              <div
-                key={`${idx}`}
-                className={`absolute rounded-sm group ${!isStampMode ? "cursor-pointer" : "pointer-events-none"} 
+              const isJumpHighlight =
+                jumpTarget &&
+                jumpTarget.page === page_num &&
+                // Use a small epsilon for coordinate matching
+                Math.abs(centerX - jumpTarget.x) < 0.005 &&
+                Math.abs(centerY - jumpTarget.y) < 0.005;
+
+              return (
+                <div
+                  key={`${idx}`}
+                  className={`absolute rounded-sm group ${!isStampMode ? "cursor-pointer" : "pointer-events-none"} 
                                     ${!isStampMode && !isSelected && !isJumpHighlight ? "hover:bg-yellow-300/30" : ""} 
                                     ${isSelected ? "bg-indigo-500/30 border border-indigo-500/50" : ""}
                                     ${isJumpHighlight ? "bg-yellow-400/60 border-2 border-yellow-600 shadow-[0_0_15px_rgba(250,204,21,0.5)] z-20 animate-bounce-subtle" : ""}`}
-                style={{
-                  left: `${left}%`,
-                  top: `${top}%`,
-                  width: `${styleW}%`,
-                  height: `${styleH}%`,
-                }}
-                onMouseDown={(e) => {
-                  if (isStampMode || isAreaMode) return;
-                  e.preventDefault();
-                  e.stopPropagation();
-                  setIsDragging(true);
-                  setSelectionStart(idx);
-                  setSelectionEnd(idx);
-                  setSelectionMenu(null); // Hide menu on new select start
-                }}
-                onMouseEnter={() => {
-                  if (isDragging && selectionStart !== null) {
+                  style={{
+                    left: `${left}%`,
+                    top: `${top}%`,
+                    width: `${styleW}%`,
+                    height: `${styleH}%`,
+                  }}
+                  onMouseDown={(e) => {
+                    if (isStampMode || isAreaMode) return;
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setIsDragging(true);
+                    setSelectionStart(idx);
                     setSelectionEnd(idx);
-                  }
-                }}
-                onClick={(e) => {
-                  e.stopPropagation(); // Stop propagation to document
-                  if (!isStampMode && onWordClick) {
-                    if (selectionStart === selectionEnd && !selectionMenu) {
-                      const start = Math.max(0, idx - 50);
-                      const end = Math.min(words.length, idx + 50);
-                      const context = words
-                        .slice(start, end)
-                        .map((w) => w.word)
-                        .join(" ");
-
-                      const wordCenterX = (x1 + x2) / 2 / width;
-                      const wordCenterY = (y1 + y2) / 2 / height;
-
-                      onWordClick(cleanWord, context, {
-                        page: page_num,
-                        x: wordCenterX,
-                        y: wordCenterY,
-                      });
+                    setSelectionMenu(null); // Hide menu on new select start
+                  }}
+                  onMouseEnter={() => {
+                    if (isDragging && selectionStart !== null) {
+                      setSelectionEnd(idx);
                     }
-                  }
-                }}
-                title={w.word}
-              />
-            );
-          })}
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation(); // Stop propagation to document
+                    if (!isStampMode && onWordClick) {
+                      if (selectionStart === selectionEnd && !selectionMenu) {
+                        const start = Math.max(0, idx - 50);
+                        const end = Math.min(words.length, idx + 50);
+                        const context = words
+                          .slice(start, end)
+                          .map((w) => w.word)
+                          .join(" ");
+
+                        const wordCenterX = (x1 + x2) / 2 / pageWidth;
+                        const wordCenterY = (y1 + y2) / 2 / pageHeight;
+
+                        onWordClick(cleanWord, context, {
+                          page: page_num,
+                          x: wordCenterX,
+                          y: wordCenterY,
+                        });
+                      }
+                    }
+                  }}
+                  title={w.word}
+                />
+              );
+            })}
         </div>
 
         {/* Note: Original figure click labels removed from z-20 as we now use z-30 images */}
 
         {/* Link Overlays */}
         <div className="absolute inset-0 w-full h-full z-20 pointer-events-none">
-          {page.links?.map((link, idx) => {
-            const [x1, y1, x2, y2] = link.bbox;
-            const l_width = x2 - x1;
-            const l_height = y2 - y1;
-            const left = (x1 / width) * 100;
-            const top = (y1 / height) * 100;
-            const styleW = (l_width / width) * 100;
-            const styleH = (l_height / height) * 100;
+          {page.links &&
+            page.links.length > 0 &&
+            page.links.map((link, idx) => {
+              if (!link || !link.bbox || link.bbox.length < 4) return null;
+              const [x1, y1, x2, y2] = link.bbox;
+              const l_width = x2 - x1;
+              const l_height = y2 - y1;
+              const pageWidth = width || 1;
+              const pageHeight = height || 1;
 
-            return (
-              <button
-                key={`link-${idx}`}
-                className="absolute cursor-pointer pointer-events-auto border border-blue-400/0 hover:border-blue-400/50 hover:bg-blue-400/10 transition-all rounded-sm z-30"
-                style={{
-                  left: `${left}%`,
-                  top: `${top}%`,
-                  width: `${styleW}%`,
-                  height: `${styleH}%`,
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (onWordClick) {
-                    onWordClick(link.url);
-                  }
-                  window.open(link.url, "_blank", "noopener,noreferrer");
-                }}
-                title={link.url}
-              />
-            );
-          })}
+              const left = (x1 / pageWidth) * 100;
+              const top = (y1 / pageHeight) * 100;
+              const styleW = (l_width / pageWidth) * 100;
+              const styleH = (l_height / pageHeight) * 100;
+
+              return (
+                <button
+                  key={`link-${idx}`}
+                  className="absolute cursor-pointer pointer-events-auto border border-blue-400/0 hover:border-blue-400/50 hover:bg-blue-400/10 transition-all rounded-sm z-30"
+                  style={{
+                    left: `${left}%`,
+                    top: `${top}%`,
+                    width: `${styleW}%`,
+                    height: `${styleH}%`,
+                  }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onWordClick) {
+                      onWordClick(link.url);
+                    }
+                    window.open(link.url, "_blank", "noopener,noreferrer");
+                  }}
+                  title={link.url}
+                />
+              );
+            })}
         </div>
 
         {/* Selection Menu */}

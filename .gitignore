@@ -16,6 +16,7 @@ __pycache__/
 tests/
 plans/
 migrations/
+*.pdf
 # C extensions
 *.so
 

@@ -8,13 +8,15 @@ from typing import AsyncGenerator, Optional
 import pdfplumber
 
 from src.crud import get_ocr_from_db, save_ocr_to_db
-from src.logger import logger
+from src.logger import get_service_logger, logger
 from src.providers import get_ai_provider
 from src.providers.image_storage import get_page_images, save_page_image
 from src.utils import _get_file_hash
 
 from .figure_service import FigureService
 from .language_service import LanguageService
+
+log = get_service_logger("OCR")
 
 
 class PDFOCRService:
@@ -43,14 +45,19 @@ class PDFOCRService:
 
         logger.info(f"--- AI OCR Streaming: {filename} ---")
 
-        # Save PDF to temporary file for libraries that need a path (like Camelot)
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
-            tmp.write(file_bytes)
-            tmp_path = tmp.name
-
+        tmp_path = None
         try:
+            logger.debug(f"[OCR] Creating temp file for {file_hash}")
+            # Save PDF to temporary file for libraries that need a path (like Camelot)
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+                tmp.write(file_bytes)
+                tmp_path = tmp.name
+            logger.debug(f"[OCR] Temp file created at {tmp_path}. Opening PDF...")
+
             with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
                 total_pages = len(pdf.pages)
+                logger.info(f"[OCR] PDF opened. Total pages: {total_pages}")
+
                 all_text_parts = []
                 all_layout_parts = []
 
@@ -75,7 +82,7 @@ class PDFOCRService:
             logger.error(f"OCR streaming failed: {e}")
             yield (0, 0, f"ERROR_API_FAILED: {str(e)}", True, file_hash, None, None)
         finally:
-            if "tmp_path" in locals() and os.path.exists(tmp_path):
+            if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
     async def _handle_cache(self, file_hash: str) -> Optional[list]:

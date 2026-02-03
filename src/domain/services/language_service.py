@@ -3,7 +3,9 @@ import io
 import pdfplumber
 
 from src.domain.prompts import PDF_DETECT_LANGUAGE_PROMPT
-from src.logger import logger
+from src.logger import get_service_logger
+
+log = get_service_logger("Language")
 
 
 class LanguageService:
@@ -18,45 +20,34 @@ class LanguageService:
         try:
             with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
                 # 1. Metadata check
-                logger.debug("[LanguageService] Checking PDF metadata for language")
                 metadata = pdf.metadata
                 if metadata and "Language" in metadata:
                     lang_code = metadata["Language"]
                     language = lang_code.split("-")[0].lower()
-                    logger.info(f"[LanguageService] Language detected from Metadata: {language}")
+                    log.info("detect", "Language from metadata", language=language)
                     return language
 
                 # 2. AI prediction fallback
-                logger.info(
-                    "[LanguageService] Metadata language missing. Falling back to AI detection"
-                )
+                log.info("detect", "Metadata missing, using AI detection")
                 if len(pdf.pages) > 0:
                     page = pdf.pages[0]
                     text = page.extract_text() or ""
                     text = text.strip()
                     if text:
-                        logger.debug(
-                            f"[LanguageService] Analyzing first 1000 chars: {text[:100]}..."
-                        )
                         prompt = PDF_DETECT_LANGUAGE_PROMPT.format(text=text[:1000])
                         detected = await self.ai_provider.generate(prompt, model=self.model)
                         detected = detected.strip().lower()
-                        # Expecting 2-letter code (en, ja, etc)
-                        if len(detected) <= 5:  # allow en-US or ja
+                        if len(detected) <= 5:
                             language = detected.split("-")[0]
-                            logger.info(f"[LanguageService] Language detected by AI: {language}")
+                            log.info("detect", "Language detected by AI", language=language)
                         else:
-                            logger.warning(
-                                f"[LanguageService] AI returned unexpected language format: {detected}"
-                            )
+                            log.warning("detect", "Unexpected AI response", response=detected)
                     else:
-                        logger.warning(
-                            "[LanguageService] Could not extract text from first page for language detection"
-                        )
+                        log.warning("detect", "No text on first page")
                 else:
-                    logger.warning("[LanguageService] PDF has no pages")
+                    log.warning("detect", "PDF has no pages")
 
         except Exception as e:
-            logger.error(f"[LanguageService] Language detection failed: {e}")
+            log.error("detect", "Language detection failed", error=str(e))
 
         return language

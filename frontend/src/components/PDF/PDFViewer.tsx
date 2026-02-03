@@ -231,6 +231,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           if (eventData.type === "page") {
             setPages((prev) => {
               const newData = eventData.data;
+              if (!newData || typeof newData.page_num === "undefined") {
+                console.warn(
+                  "[PDFViewer] Received malformed page data:",
+                  newData,
+                );
+                return prev;
+              }
               const index = prev.findIndex(
                 (p) => p.page_num === newData.page_num,
               );

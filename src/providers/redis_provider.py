@@ -5,7 +5,9 @@ from typing import Any, Optional
 
 import redis
 
-from src.logger import logger
+from src.logger import get_service_logger
+
+log = get_service_logger("Redis")
 
 # Singleton instance
 _redis_client: Optional[redis.Redis] = None
@@ -33,19 +35,16 @@ def get_redis_client() -> Optional[redis.Redis]:
     _last_connection_attempt = current_time
     try:
         client = redis.Redis(host=host, port=port, db=db, decode_responses=True, socket_timeout=5)
-        # Test connection
         client.ping()
         _redis_client = client
         if _redis_error_logged:
-            logger.info(f"Successfully connected to Redis at {host}:{port} (Recovered)")
+            log.info("connect", "Redis recovered", host=host, port=port)
             _redis_error_logged = False
         else:
-            logger.info(f"Connected to Redis at {host}:{port}")
+            log.info("connect", "Connected", host=host, port=port)
     except redis.ConnectionError as e:
         if not _redis_error_logged:
-            logger.warning(
-                f"Failed to connect to Redis: {e}. Falling back to in-memory storage. (This warning will only be shown once until successfully connected)"
-            )
+            log.warning("connect", "Connection failed, using memory fallback", error=str(e))
             _redis_error_logged = True
         _redis_client = None
 
@@ -60,7 +59,6 @@ class RedisService:
 
     def set(self, key: str, value: Any, expire: int | None = None) -> bool:
         """Set a value in Redis (or memory) with optional expiration."""
-        # JSON serialize for consistency
         if isinstance(value, (dict, list)):
             value_str = json.dumps(value)
         else:
@@ -71,12 +69,11 @@ class RedisService:
             try:
                 return client.set(key, value_str, ex=expire)
             except Exception as e:
-                logger.error(f"Redis SET failed for key {key}: {e}")
+                log.error("set", "Operation failed", key=key, error=str(e))
                 global _redis_client
                 _redis_client = None
                 return False
         else:
-            # Memory fallback (ignoring expire)
             self.memory_cache[key] = value_str
             return True
 
@@ -88,7 +85,7 @@ class RedisService:
             try:
                 value_str = client.get(key)
             except Exception as e:
-                logger.error(f"Redis GET failed for key {key}: {e}")
+                log.error("get", "Operation failed", key=key, error=str(e))
                 global _redis_client
                 _redis_client = None
                 return None
@@ -110,7 +107,7 @@ class RedisService:
             try:
                 return int(client.delete(key))  # type: ignore
             except Exception as e:
-                logger.error(f"Redis DELETE failed for key {key}: {e}")
+                log.error("delete", "Operation failed", key=key, error=str(e))
                 global _redis_client
                 _redis_client = None
                 return 0
@@ -127,7 +124,7 @@ class RedisService:
             try:
                 return bool(client.exists(key))
             except Exception as e:
-                logger.error(f"Redis EXISTS failed for key {key}: {e}")
+                log.error("exists", "Operation failed", key=key, error=str(e))
                 global _redis_client
                 _redis_client = None
                 return False

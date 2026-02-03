@@ -19,9 +19,11 @@ from src.domain.prompts import (
 )
 from src.domain.services import local_translator
 from src.domain.services.analysis_service import EnglishAnalysisService
-from src.logger import logger
+from src.logger import get_service_logger
 from src.logic import executor
 from src.providers import get_ai_provider, get_storage_provider
+
+log = get_service_logger("Translation")
 
 router = APIRouter(tags=["Translation"])
 
@@ -148,7 +150,7 @@ async def explain(
     # Robust element_id detection: Try query param, then fallback to HTMX header
     element_id = element_id or req.headers.get("HX-Trigger")
 
-    logger.debug(f"/explain called for {word}, element_id={element_id}")
+    log.debug("explain", f"Word lookup: {word}", element_id=element_id)
 
     loop = asyncio.get_event_loop()
     is_htmx = req.headers.get("HX-Request") == "true"
@@ -274,7 +276,7 @@ async def explain_deep(
                 if summary:
                     paper_context = f"\n[Paper Context / Summary]\n{summary}\n"
 
-        logger.info(f"[explain-deep] Gemini Call for '{lemma}'")
+        log.info("explain_deep", "Gemini call", lemma=lemma)
 
         is_phrase = " " in lemma.strip()
         if is_phrase:
@@ -324,7 +326,7 @@ async def explain_deep(
             )
         )
     except Exception as e:
-        logger.error(f"Gemini translation failed: {e}")
+        log.error("explain_deep", "Gemini translation failed", error=str(e))
         if not is_htmx:
             return JSONResponse(
                 {
@@ -389,7 +391,7 @@ async def explain_with_context(req: ExplainContextRequest):
             }
         )
     except Exception as e:
-        logger.error(f"Gemini context explanation failed: {e}")
+        log.error("explain_context", "Gemini context explanation failed", error=str(e))
         return JSONResponse(
             {
                 "word": req.word,

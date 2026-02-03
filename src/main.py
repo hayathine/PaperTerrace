@@ -193,6 +193,19 @@ async def get_config():
     return JSONResponse(content={"firebase_config": FIREBASE_CONFIG})
 
 
+# Dev: Serve test.pdf from dist folder
+@app.get("/test.pdf")
+async def serve_test_pdf():
+    test_pdf_path = os.path.join(dist_dir, "test.pdf")
+    if os.path.exists(test_pdf_path):
+        return FileResponse(test_pdf_path, media_type="application/pdf")
+    # Fallback to public folder
+    public_path = "frontend/public/test.pdf"
+    if os.path.exists(public_path):
+        return FileResponse(public_path, media_type="application/pdf")
+    return JSONResponse({"error": "test.pdf not found"}, status_code=404)
+
+
 @app.get("/{full_path:path}", response_class=HTMLResponse)
 async def serve_react_app(request: Request, full_path: str):
     # Allow other defined routes (like /papers, /chat) to handle their requests by returning None here?

@@ -10,8 +10,10 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from src.domain.features import ChatService
-from src.logger import logger
+from src.logger import get_service_logger
 from src.providers import RedisService, get_image_bytes, get_storage_provider
+
+log = get_service_logger("Chat")
 
 router = APIRouter(tags=["Chat"])
 
@@ -59,9 +61,11 @@ async def chat(request: ChatRequest):
             if figure and figure.get("image_url"):
                 try:
                     image_bytes = get_image_bytes(figure["image_url"])
-                    logger.info(f"Loaded image for figure_id {request.figure_id}")
+                    log.debug("chat", "Image loaded", figure_id=request.figure_id)
                 except Exception as e:
-                    logger.error(f"Failed to load image for figure {request.figure_id}: {e}")
+                    log.error(
+                        "chat", "Failed to load image", figure_id=request.figure_id, error=str(e)
+                    )
 
         response = await chat_service.chat(
             request.message,
