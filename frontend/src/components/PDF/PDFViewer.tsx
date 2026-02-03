@@ -235,9 +235,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                 (p) => p.page_num === newData.page_num,
               );
               if (index !== -1) {
-                // Replace existing page data (update)
+                // Merge existing page data (update)
                 const newPages = [...prev];
-                newPages[index] = newData;
+                newPages[index] = { ...newPages[index], ...newData };
                 return newPages;
               }
               // Append new page
@@ -596,7 +596,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
               );
               if (index !== -1) {
                 const newPages = [...prev];
-                newPages[index] = newData;
+                newPages[index] = { ...newPages[index], ...newData };
                 return newPages;
               }
               return [...prev, newData];

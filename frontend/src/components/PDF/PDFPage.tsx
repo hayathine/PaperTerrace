@@ -202,14 +202,66 @@ const PDFPage: React.FC<PDFPageProps> = ({
         </span>
       </div>
 
-      {/* Image Container */}
-      <div className="relative w-full">
-        <img
-          src={displayUrl}
-          alt={`Page ${page.page_num}`}
-          className="w-full h-auto block select-none"
-          loading="lazy"
-        />
+      {/* Main Viewport Container */}
+      <div
+        className="relative w-full overflow-hidden"
+        style={{
+          aspectRatio: width && height ? `${width}/${height}` : "auto",
+          backgroundColor: "#fff",
+        }}
+      >
+        {/* Page Image (Underlay) */}
+        {displayUrl && (
+          <img
+            src={displayUrl}
+            alt={`Page ${page.page_num}`}
+            className="w-full h-auto block select-none"
+            loading="lazy"
+          />
+        )}
+
+        {/* Figure/Table Overlays (Overwrites text layer) */}
+        <div className="absolute inset-0 w-full h-full z-15 pointer-events-none">
+          {figures?.map((fig, idx) => {
+            const [x1, y1, x2, y2] = fig.bbox;
+            if (
+              (x1 === 0 && y1 === 0 && x2 === 0 && y2 === 0) ||
+              !fig.image_url
+            )
+              return null;
+
+            const style = {
+              left: `${(x1 / width) * 100}%`,
+              top: `${(y1 / height) * 100}%`,
+              width: `${((x2 - x1) / width) * 100}%`,
+              height: `${((y2 - y1) / height) * 100}%`,
+            };
+
+            return (
+              <div
+                key={`fig-img-${idx}`}
+                className="absolute bg-white shadow-sm pointer-events-auto group"
+                style={style}
+              >
+                <img
+                  src={fig.image_url}
+                  className="w-full h-full object-contain"
+                  alt={fig.label}
+                />
+                <button
+                  className="absolute inset-0 bg-indigo-500/0 hover:bg-indigo-500/5 transition-colors"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    if (onAskAI) {
+                      const typeName = getFigTypeLabel(t, fig.label || "");
+                      onAskAI(t("chat.explain_fig", { type: typeName }));
+                    }
+                  }}
+                />
+              </div>
+            );
+          })}
+        </div>
 
         {/* Stamp Overlay */}
         <StampOverlay
@@ -321,60 +373,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
           })}
         </div>
 
-        {/* Figure/Equation Overlays */}
-        <div className="absolute inset-0 w-full h-full z-20 pointer-events-none">
-          {figures?.map((fig, idx) => {
-            const [x1, y1, x2, y2] = fig.bbox;
-            // Avoid rendering empty bboxes (like [0,0,0,0] from some native extractions)
-            if (x1 === 0 && y1 === 0 && x2 === 0 && y2 === 0) return null;
-
-            const f_width = x2 - x1;
-            const f_height = y2 - y1;
-
-            const left = (x1 / width) * 100;
-            const top = (y1 / height) * 100;
-            const styleW = (f_width / width) * 100;
-            const styleH = (f_height / height) * 100;
-
-            return (
-              <div
-                key={`fig-${idx}`}
-                className="absolute cursor-pointer pointer-events-auto border-2 border-transparent hover:border-indigo-500/40 hover:bg-indigo-500/5 transition-all rounded-lg group flex items-start justify-end p-2"
-                style={{
-                  left: `${left}%`,
-                  top: `${top}%`,
-                  width: `${styleW}%`,
-                  height: `${styleH}%`,
-                }}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (onAskAI) {
-                    const typeName = getFigTypeLabel(t, fig.label || "");
-                    onAskAI(t("chat.explain_fig", { type: typeName }));
-                  }
-                }}
-                title={`${fig.label || "figure"} click to explain`}
-              >
-                <div className="hidden group-hover:flex items-center gap-2 bg-slate-900/90 backdrop-blur-md text-white text-[10px] px-3 py-2 rounded-xl shadow-2xl font-bold border border-white/20 transform scale-90 group-hover:scale-100 transition-all duration-300 absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                  <div className="w-5 h-5 bg-indigo-500 rounded-lg flex items-center justify-center">
-                    <svg
-                      className="w-3 h-3"
-                      fill="currentColor"
-                      viewBox="0 0 20 20"
-                    >
-                      <path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
-                    </svg>
-                  </div>
-                  <span>
-                    {t("chat.explain_fig_btn", {
-                      type: getFigTypeLabel(t, fig.label || ""),
-                    })}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
+        {/* Note: Original figure click labels removed from z-20 as we now use z-30 images */}
 
         {/* Link Overlays */}
         <div className="absolute inset-0 w-full h-full z-20 pointer-events-none">
@@ -413,7 +412,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
         {/* Selection Menu */}
         {selectionMenu && (
           <div
-            className="absolute z-50 flex gap-1 bg-gray-900 text-white p-1.5 rounded-lg shadow-xl transform -translate-x-1/2 -translate-y-full"
+            className="absolute z-60 flex gap-1 bg-gray-900 text-white p-1.5 rounded-lg shadow-xl transform -translate-x-1/2 -translate-y-full"
             style={{
               left: `${selectionMenu.x}%`,
               top: `${selectionMenu.y}%`,

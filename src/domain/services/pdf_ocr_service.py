@@ -120,12 +120,39 @@ class PDFOCRService:
     async def _process_page_incremental(
         self, page, page_idx, total_pages, file_hash, pdf_path: Optional[str] = None
     ):
-        """Process a single page: render image, OCR, detect layout/figures."""
+        """Process a single page in 3 phases: Text, Image, Analysis."""
         page_num = page_idx + 1
+        is_last = page_idx == total_pages - 1
 
-        # 1. Render image (FAST)
-        resolution = 300  # Standard high-quality DPI
+        # We use a standard zoom for coordinates (72 dpi -> 300 dpi)
+        resolution = 300
         zoom = resolution / 72.0
+
+        # Phase 1: Native Text & Links (ULTRA FAST)
+        logger.debug(f"[OCR] Page {page_num}: Phase 1 - Extraction text/links")
+        native_words = page.extract_words(use_text_flow=True, x_tolerance=1, y_tolerance=3)
+        links = self._extract_links(page, zoom)
+
+        # Create initial layout data (coordinates only)
+        # pdfplumber page.width/height is in points (72dpi), scale it to zoom
+        layout_data = {
+            "width": float(page.width) * zoom,
+            "height": float(page.height) * zoom,
+            "words": [
+                {
+                    "word": w["text"],
+                    "bbox": [w["x0"] * zoom, w["top"] * zoom, w["x1"] * zoom, w["bottom"] * zoom],
+                }
+                for w in native_words
+            ],
+            "links": links,
+        }
+        page_text = page.extract_text()
+
+        yield (page_num, total_pages, page_text, is_last, file_hash, None, layout_data)
+
+        # Phase 2: Page Image (FAST)
+        logger.debug(f"[OCR] Page {page_num}: Phase 2 - Rendering image")
         page_img = page.to_image(resolution=resolution, antialias=True)
         img_pil = page_img.original.convert("RGB")
 
@@ -136,14 +163,10 @@ class PDFOCRService:
         page_image_b64 = base64.b64encode(img_bytes).decode("utf-8")
         image_url = save_page_image(file_hash, page_num, page_image_b64)
 
-        is_last = page_idx == total_pages - 1
+        yield (page_num, total_pages, page_text, is_last, file_hash, image_url, layout_data)
 
-        # Yield PHASE 1: Image Ready
-        logger.debug(f"[OCR] Page {page_num}: Image ready, yielding partial result")
-        yield (page_num, total_pages, None, is_last, file_hash, image_url, None)
-
-        # 2. Figure extraction (FIRST) - detect and extract figures/tables/equations
-        # This identifies regions that should NOT be treated as body text
+        # Phase 3: AI Figure Extraction (HEAVY)
+        logger.debug(f"[OCR] Page {page_num}: Phase 3 - AI Analysis")
         figures = await self.figure_service.detect_and_extract_figures(
             img_bytes,
             page_img,
@@ -154,30 +177,11 @@ class PDFOCRService:
             pdf_path=pdf_path,
         )
 
-        # 3. Extract Text (Filtered by figure regions)
-        # We pass figure bboxes (in zoom coordinates) to filter out their text
-        exclude_bboxes = [f["bbox"] for f in figures] if figures else []
-        page_text, layout_data = await self._extract_native_or_vision_text(
-            page, img_bytes, img_pil, zoom, exclude_bboxes=exclude_bboxes
-        )
-
-        if not layout_data:
-            layout_data = {"width": img_pil.width, "height": img_pil.height, "words": []}
-
         if figures:
-            logger.info(f"[OCR] Page {page_num}: Detected {len(figures)} figures/images")
             if "figures" not in layout_data:
                 layout_data["figures"] = []
             layout_data["figures"].extend(figures)
 
-        # 4. Extract hyperlinks from PDF metadata
-        links = self._extract_links(page, zoom)
-        if links:
-            logger.info(f"[OCR] Page {page_num}: Extracted {len(links)} hyperlinks from metadata")
-            layout_data["links"] = links
-
-        # Yield PHASE 2: Full analysis complete
-        logger.debug(f"[OCR] Page {page_num}: Full analysis complete")
         yield (page_num, total_pages, page_text, is_last, file_hash, image_url, layout_data)
 
     def _extract_links(self, page, zoom):
