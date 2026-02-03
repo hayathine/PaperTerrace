@@ -1,7 +1,7 @@
 # Cloud Run Module
 
 resource "google_cloud_run_v2_service" "main" {
-  name     = "paperterrace"
+  name     = var.service_name
   location = var.region
   project  = var.project_id
 
@@ -100,7 +100,7 @@ resource "google_cloud_run_v2_service" "main" {
     }
 
     scaling {
-      min_instance_count = 1
+      min_instance_count = var.min_instance_count
       max_instance_count = 10
     }
 

@@ -140,6 +140,10 @@ module "cloud_run" {
   # Pass service account email
   service_account_email = module.iam.service_account_email
 
+  # Pass new variables explicitly (optional since defaults are set)
+  service_name         = "paperterrace"
+  min_instance_count   = 1
+
   depends_on = [
     google_project_service.apis,
     module.cloud_sql,
@@ -147,6 +151,54 @@ module "cloud_run" {
     module.storage,
     module.networking,
     module.iam,
+  ]
+}
+
+# ============================================================================
+# Staging Environment
+# ============================================================================
+
+# Staging Database (Creates a new DB in the SAME instance)
+resource "google_sql_database" "staging" {
+  count    = var.enable_staging ? 1 : 0
+  name     = "paperterrace_staging"
+  instance = module.cloud_sql.instance_name
+  project  = var.project_id
+}
+
+# Staging Cloud Run Service
+module "cloud_run_staging" {
+  source = "./modules/cloud_run"
+  count  = var.enable_staging ? 1 : 0
+
+  project_id               = var.project_id
+  region                   = var.region
+  image_url                = var.image_url # Share same image or use different tag if needed
+  subnet_name              = module.networking.subnet_name
+  vpc_network_name         = module.networking.vpc_network_name
+  cloud_sql_connection     = module.cloud_sql.connection_name
+  gemini_api_key_secret_id = module.secrets.gemini_api_key_secret_id
+  db_password_secret_id    = module.secrets.db_password_secret_id
+  storage_bucket           = module.storage.bucket_name
+  db_host                  = module.cloud_sql.private_ip
+  
+  # Staging Specific Config
+  service_name          = "paperterrace-staging"
+  db_name               = google_sql_database.staging[0].name
+  db_user               = module.cloud_sql.database_user # Share same user
+  min_instance_count    = 0 # Scale to zero to save costs
+
+  # Pass service account email
+  service_account_email = module.iam.service_account_email
+
+  depends_on = [
+    google_project_service.apis,
+    module.cloud_sql,
+    module.secrets,
+    module.storage,
+    module.networking,
+    module.iam,
+    google_sql_database.staging,
   ]
 }
 

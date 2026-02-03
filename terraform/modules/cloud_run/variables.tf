@@ -8,6 +8,18 @@ variable "region" {
   type        = string
 }
 
+variable "service_name" {
+  description = "Cloud Run Service Name"
+  type        = string
+  default     = "paperterrace"
+}
+
+variable "min_instance_count" {
+  description = "Minimum number of instances"
+  type        = number
+  default     = 1
+}
+
 variable "image_url" {
   description = "Docker image URL"
   type        = string

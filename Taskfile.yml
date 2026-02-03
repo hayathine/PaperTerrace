@@ -2,8 +2,12 @@
 
 version: "3"
 
+dotenv: [".env"]
+
 vars:
   GREETING: Hello, world!
+  PROJECT_ID: gen-lang-client-0800253336
+  REGION: asia-northeast1
 
 tasks:
   default:
@@ -125,3 +129,29 @@ tasks:
     cmds:
       - sqlite3 ocr_reader.db "DELETE FROM ocr_reader;"
       - rm -rf src/static/paper_images/*
+
+  # ============================================================================
+  # Staging Environment Tasks
+  # ============================================================================
+
+  staging:deploy:
+    desc: "Deploy Staging Environment (Terraform enable_staging=true)"
+    cmds:
+      - echo "Deploying Staging Environment..."
+      - cd terraform && TF_VAR_gemini_api_key=$GEMINI_API_KEY TF_VAR_db_password=$DB_PASSWORD terraform apply -var="enable_staging=true" -auto-approve
+      - echo "Staging Environment Deployed."
+      - echo "Initial App Deploy to Staging..."
+      - gcloud builds submit --tag {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
+      - gcloud run deploy paperterrace-staging --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest --region {{.REGION}} --allow-unauthenticated
+
+  staging:destroy:
+    desc: "Destroy Staging Environment (Terraform enable_staging=false)"
+    cmds:
+      - echo "Destroying Staging Environment..."
+      - cd terraform && TF_VAR_gemini_api_key=$GEMINI_API_KEY TF_VAR_db_password=$DB_PASSWORD terraform apply -var="enable_staging=false" -auto-approve
+      - echo "Staging Environment Destroyed. Database 'paperterrace_staging' removed."
+
+  staging:logs:
+    desc: "Read Staging logs"
+    cmds:
+      - gcloud run services logs read paperterrace-staging --limit=100
