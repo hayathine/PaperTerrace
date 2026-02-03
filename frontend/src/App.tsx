@@ -4,6 +4,7 @@ import PDFViewer from "./components/PDF/PDFViewer";
 import { useAuth } from "./contexts/AuthContext";
 import Login from "./components/Auth/Login";
 import ErrorBoundary from "./components/Error/ErrorBoundary";
+import UploadScreen from "./components/Upload/UploadScreen";
 
 function App() {
   const { user, logout } = useAuth();
@@ -189,18 +190,22 @@ function App() {
     setCurrentPaperId(paper.paper_id);
   };
 
+  const handleDirectFileSelect = (file: File) => {
+    setUploadFile(file);
+    setCurrentPaperId(null);
+    // Reset all paper-specific states
+    setSelectedWord(undefined);
+    setSelectedContext(undefined);
+    setSelectedCoordinates(undefined);
+    setSelectedImage(undefined);
+    setPendingChatPrompt(null);
+    setPendingFigureId(null);
+    setActiveTab("chat");
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      setUploadFile(e.target.files[0]);
-      setCurrentPaperId(null);
-      // Reset all paper-specific states
-      setSelectedWord(undefined);
-      setSelectedContext(undefined);
-      setSelectedCoordinates(undefined);
-      setSelectedImage(undefined);
-      setPendingChatPrompt(null);
-      setPendingFigureId(null);
-      setActiveTab("chat");
+      handleDirectFileSelect(e.target.files[0]);
     }
   };
 
@@ -544,8 +549,8 @@ function App() {
                   />
                 </div>
               ) : (
-                <div className="bg-white p-8 rounded shadow text-center text-gray-400">
-                  Select a PDF to view
+                <div className="w-full h-full flex items-center justify-center p-4">
+                  <UploadScreen onFileSelect={handleDirectFileSelect} />
                 </div>
               )}
             </div>

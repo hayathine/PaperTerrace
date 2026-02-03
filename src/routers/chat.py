@@ -54,6 +54,15 @@ async def chat(request: ChatRequest):
         # or treat it as a special interaction.
         # For now, let's keep it separate or just return without history update.
     else:
+        # Check chat limit (max 10 turns)
+        user_msg_count = sum(1 for m in history if m.get("role") == "user")
+        if user_msg_count >= 10:
+            return JSONResponse(
+                {
+                    "response": "チャットの最大回数（10回）に達しました。新しいセッションを開始するか、履歴をクリアしてください。"
+                }
+            )
+
         # Fetch image if figure_id provided
         image_bytes = None
         if request.figure_id:
