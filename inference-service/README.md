@@ -144,11 +144,33 @@ Content-Type: application/json
 GET /health
 ```
 
+## ログ設定
+
+ServiceBは標準出力にログを出力するよう設定されています：
+
+- **開発環境**: カラー付きログで見やすく表示
+- **Cloud Run環境**: 構造化JSON形式でCloud Loggingに送信
+- **ログレベル**: 環境変数 `LOG_LEVEL` で制御（デフォルト: INFO）
+
+### ログ確認方法
+
+```bash
+# Cloud Runログ確認
+gcloud logs read --service=paperterrace-inference --limit=50
+
+# リアルタイムログ
+gcloud logs tail --service=paperterrace-inference
+
+# 特定の処理時間でフィルタ
+gcloud logs read --service=paperterrace-inference --filter="jsonPayload.processing_time>5"
+```
+
 ## 監視・ログ
 
-- **ログ**: Cloud Logging で確認
+- **ログ**: Cloud Logging で確認（標準出力から自動収集）
 - **メトリクス**: Cloud Monitoring で監視
 - **アラート**: CPU使用率90%、メモリ使用率80%、エラー率5%で設定
+- **構造化ログ**: 処理時間、エラー詳細を含むJSON形式
 
 ## トラブルシューティング
 

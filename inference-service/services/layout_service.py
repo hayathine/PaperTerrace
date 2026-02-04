@@ -6,6 +6,7 @@ ONNX Runtime を使用したPaddle-layout-m推論
 import asyncio
 import logging
 import os
+import sys
 from typing import List, Optional, Dict, Any
 import numpy as np
 import cv2
@@ -16,6 +17,12 @@ try:
 except ImportError:
     ort = None
 
+# ログ設定（標準出力）
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
 logger = logging.getLogger(__name__)
 
 

@@ -6,6 +6,7 @@
 import asyncio
 import logging
 import os
+import sys
 import time
 from contextlib import asynccontextmanager
 from typing import List, Optional
@@ -21,9 +22,43 @@ from slowapi.util import get_remote_address
 from services.layout_service import LayoutAnalysisService
 from services.translation_service import TranslationService
 
-# ログ設定
-logging.basicConfig(level=logging.INFO)
+# ログ設定（標準出力に出力）
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
 logger = logging.getLogger(__name__)
+
+# Cloud Run環境での設定
+if os.getenv('K_SERVICE'):
+    # Cloud Run環境では構造化ログを使用
+    import json
+    
+    class StructuredFormatter(logging.Formatter):
+        def format(self, record):
+            log_entry = {
+                'timestamp': self.formatTime(record),
+                'severity': record.levelname,
+                'message': record.getMessage(),
+                'service': 'paperterrace-inference',
+                'component': record.name
+            }
+            if hasattr(record, 'processing_time'):
+                log_entry['processing_time'] = record.processing_time
+            return json.dumps(log_entry)
+    
+    # 既存のハンドラーを削除して構造化ログハンドラーを追加
+    root_logger = logging.getLogger()
+    for handler in root_logger.handlers[:]:
+        root_logger.removeHandler(handler)
+    
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(StructuredFormatter())
+    root_logger.addHandler(handler)
+    root_logger.setLevel(logging.INFO)
 
 # レート制限設定
 limiter = Limiter(key_func=get_remote_address)
@@ -51,7 +86,7 @@ async def lifespan(app: FastAPI):
         await translation_service.initialize()
         
         init_time = time.time() - start_time
-        logger.info(f"推論サービス初期化完了 ({init_time:.2f}秒)")
+        logger.info(f"推論サービス初期化完了", extra={'processing_time': init_time})
         
         yield
         
@@ -255,9 +290,19 @@ async def translate_batch(request: Request, req: TranslationBatchRequest):
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
-    uvicorn.run(
-        "main:app",
-        host="0.0.0.0",
-        port=port,
-        log_level="info"
-    )
+    log_level = os.getenv("LOG_LEVEL", "info").lower()
+    
+    # Cloud Run環境での設定
+    uvicorn_config = {
+        "host": "0.0.0.0",
+        "port": port,
+        "log_level": log_level,
+        "access_log": True,
+        "use_colors": False,  # Cloud Runでは色付きログを無効化
+    }
+    
+    # 開発環境では色付きログを有効化
+    if not os.getenv('K_SERVICE'):
+        uvicorn_config["use_colors"] = True
+    
+    uvicorn.run("main:app", **uvicorn_config)
