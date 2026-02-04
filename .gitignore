@@ -17,6 +17,7 @@ tests/
 plans/
 migrations/
 *.pdf
+settings.json
 # C extensions
 *.so
 
