@@ -4,7 +4,7 @@ from typing import Any, Dict, List
 from src.domain.prompts import AGENT_CITE_INTENT_PROMPT, CORE_SYSTEM_PROMPT
 from src.logger import logger
 from src.providers import get_ai_provider
-from src.schemas.gemini import CitationAnalysisResponse
+from src.schemas.gemini_schema import CitationAnalysisResponse
 
 
 class CiteIntentService:

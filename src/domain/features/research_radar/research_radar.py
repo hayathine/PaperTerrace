@@ -10,7 +10,7 @@ from src.domain.prompts import (
 )
 from src.logger import logger
 from src.providers import get_ai_provider
-from src.schemas.gemini import (
+from src.schemas.gemini_schema import (
     SearchQueriesResponse,
     SimulatedSearchResponse,
 )

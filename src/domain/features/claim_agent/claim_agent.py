@@ -2,7 +2,7 @@ import os
 
 from src.logger import logger
 from src.providers import get_ai_provider
-from src.schemas.gemini import ClaimVerificationResponse
+from src.schemas.gemini_schema import ClaimVerificationResponse
 
 
 class ClaimVerificationService:

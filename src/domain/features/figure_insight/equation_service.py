@@ -6,7 +6,7 @@ import pdfplumber
 from src.domain.prompts import CORE_SYSTEM_PROMPT, VISION_ANALYZE_EQUATION_PROMPT
 from src.logger import logger
 from src.providers import get_ai_provider
-from src.schemas.gemini import EquationAnalysisResponse
+from src.schemas.gemini_schema import EquationAnalysisResponse
 
 
 class EquationService:
