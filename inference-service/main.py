@@ -1,0 +1,263 @@
+"""
+推論専用サービス（ServiceB）
+レイアウト解析と翻訳処理を担当
+"""
+
+import asyncio
+import logging
+import os
+import time
+from contextlib import asynccontextmanager
+from typing import List, Optional
+
+import uvicorn
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
+from slowapi.util import get_remote_address
+
+from services.layout_service import LayoutAnalysisService
+from services.translation_service import TranslationService
+
+# ログ設定
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# レート制限設定
+limiter = Limiter(key_func=get_remote_address)
+
+# グローバルサービスインスタンス
+layout_service: Optional[LayoutAnalysisService] = None
+translation_service: Optional[TranslationService] = None
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """アプリケーション起動・終了時の処理"""
+    global layout_service, translation_service
+    
+    logger.info("推論サービスを初期化中...")
+    start_time = time.time()
+    
+    try:
+        # サービス初期化
+        layout_service = LayoutAnalysisService()
+        translation_service = TranslationService()
+        
+        # モデルロード
+        await layout_service.initialize()
+        await translation_service.initialize()
+        
+        init_time = time.time() - start_time
+        logger.info(f"推論サービス初期化完了 ({init_time:.2f}秒)")
+        
+        yield
+        
+    except Exception as e:
+        logger.error(f"推論サービス初期化失敗: {e}")
+        raise
+    finally:
+        logger.info("推論サービスを終了中...")
+        if layout_service:
+            await layout_service.cleanup()
+        if translation_service:
+            await translation_service.cleanup()
+
+
+# FastAPIアプリケーション
+app = FastAPI(
+    title="PaperTerrace Inference Service",
+    description="レイアウト解析と翻訳処理専用サービス",
+    version="1.0.0",
+    lifespan=lifespan
+)
+
+# CORS設定
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 本番環境では適切に制限
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+# レート制限設定
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+
+# リクエスト・レスポンスモデル
+class LayoutAnalysisRequest(BaseModel):
+    pdf_path: str
+    pages: Optional[List[int]] = None
+
+
+class LayoutAnalysisResponse(BaseModel):
+    success: bool
+    results: List[dict]
+    processing_time: float
+    message: Optional[str] = None
+
+
+class TranslationRequest(BaseModel):
+    text: str
+    source_lang: str = "en"
+    target_lang: str = "ja"
+
+
+class TranslationBatchRequest(BaseModel):
+    texts: List[str]
+    source_lang: str = "en"
+    target_lang: str = "ja"
+
+
+class TranslationResponse(BaseModel):
+    success: bool
+    translation: str
+    processing_time: float
+    message: Optional[str] = None
+
+
+class TranslationBatchResponse(BaseModel):
+    success: bool
+    translations: List[str]
+    processing_time: float
+    message: Optional[str] = None
+
+
+# ヘルスチェック
+@app.get("/health")
+async def health_check():
+    """サービスの健全性チェック"""
+    return {
+        "status": "healthy",
+        "timestamp": time.time(),
+        "services": {
+            "layout_analysis": layout_service is not None,
+            "translation": translation_service is not None
+        }
+    }
+
+
+# レイアウト解析エンドポイント
+@app.post("/api/v1/layout-analysis", response_model=LayoutAnalysisResponse)
+@limiter.limit("10/minute")  # 1分間に10リクエスト（重い処理のため制限）
+async def analyze_layout(request: Request, req: LayoutAnalysisRequest):
+    """PDFのレイアウト解析を実行"""
+    if not layout_service:
+        raise HTTPException(status_code=503, detail="Layout analysis service not available")
+    
+    start_time = time.time()
+    
+    try:
+        logger.info(f"レイアウト解析開始: {req.pdf_path}")
+        
+        results = await layout_service.analyze_pdf(req.pdf_path, req.pages)
+        processing_time = time.time() - start_time
+        
+        logger.info(f"レイアウト解析完了: {processing_time:.2f}秒")
+        
+        return LayoutAnalysisResponse(
+            success=True,
+            results=results,
+            processing_time=processing_time
+        )
+        
+    except Exception as e:
+        processing_time = time.time() - start_time
+        logger.error(f"レイアウト解析エラー: {e}")
+        
+        return LayoutAnalysisResponse(
+            success=False,
+            results=[],
+            processing_time=processing_time,
+            message=str(e)
+        )
+
+
+# 翻訳エンドポイント
+@app.post("/api/v1/translate", response_model=TranslationResponse)
+@limiter.limit("100/minute")  # 1分間に100リクエスト
+async def translate_text(request: Request, req: TranslationRequest):
+    """テキストの翻訳を実行"""
+    if not translation_service:
+        raise HTTPException(status_code=503, detail="Translation service not available")
+    
+    start_time = time.time()
+    
+    try:
+        logger.info(f"翻訳開始: {req.text[:50]}...")
+        
+        translation = await translation_service.translate(
+            req.text, req.source_lang, req.target_lang
+        )
+        processing_time = time.time() - start_time
+        
+        logger.info(f"翻訳完了: {processing_time:.2f}秒")
+        
+        return TranslationResponse(
+            success=True,
+            translation=translation,
+            processing_time=processing_time
+        )
+        
+    except Exception as e:
+        processing_time = time.time() - start_time
+        logger.error(f"翻訳エラー: {e}")
+        
+        return TranslationResponse(
+            success=False,
+            translation="",
+            processing_time=processing_time,
+            message=str(e)
+        )
+
+
+# バッチ翻訳エンドポイント
+@app.post("/api/v1/translate-batch", response_model=TranslationBatchResponse)
+@limiter.limit("20/minute")  # 1分間に20リクエスト（バッチ処理のため制限）
+async def translate_batch(request: Request, req: TranslationBatchRequest):
+    """複数テキストの一括翻訳を実行"""
+    if not translation_service:
+        raise HTTPException(status_code=503, detail="Translation service not available")
+    
+    start_time = time.time()
+    
+    try:
+        logger.info(f"バッチ翻訳開始: {len(req.texts)}件")
+        
+        translations = await translation_service.translate_batch(
+            req.texts, req.source_lang, req.target_lang
+        )
+        processing_time = time.time() - start_time
+        
+        logger.info(f"バッチ翻訳完了: {processing_time:.2f}秒")
+        
+        return TranslationBatchResponse(
+            success=True,
+            translations=translations,
+            processing_time=processing_time
+        )
+        
+    except Exception as e:
+        processing_time = time.time() - start_time
+        logger.error(f"バッチ翻訳エラー: {e}")
+        
+        return TranslationBatchResponse(
+            success=False,
+            translations=[],
+            processing_time=processing_time,
+            message=str(e)
+        )
+
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8080))
+    uvicorn.run(
+        "main:app",
+        host="0.0.0.0",
+        port=port,
+        log_level="info"
+    )

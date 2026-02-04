@@ -1,14 +1,23 @@
-import os
+"""
+ローカル翻訳サービス（ServiceB連携版）
+翻訳処理をServiceBに委譲し、ServiceAは結果の取得のみを行う
+"""
 
-import ctranslate2
-import sentencepiece as spm
+import asyncio
+from typing import List, Optional
 
 from src.logger import get_service_logger
+from src.providers.inference_client import get_inference_client, InferenceServiceError, CircuitBreakerError
 
 log = get_service_logger("LocalTranslator")
 
 
 class LocalTranslator:
+    """
+    ローカル翻訳サービス（ServiceB連携版）
+    実際の翻訳処理はServiceBで実行し、このクラスはクライアントとして機能
+    """
+    
     _instance = None
 
     def __new__(cls):
@@ -21,88 +30,90 @@ class LocalTranslator:
         if self._initialized:
             return
 
-        self.model_path = os.getenv("LOCAL_MODEL_PATH", "models/m2m100_ct2")
-
-        self.translator: ctranslate2.Translator | None = None  # type: ignore[name-defined]
-        self.sp_model: spm.SentencePieceProcessor | None = None
-
-        if not os.path.exists(self.model_path):
-            log.warning(
-                "init",
-                f"Model not found at {self.model_path}. Local translation unavailable.",
-            )
-        else:
-            try:
-                # 8 vCPUを最大限活用するためのスレッド設定
-                self.translator = ctranslate2.Translator(  # type: ignore[attr-defined]
-                    self.model_path,
-                    device="cpu",
-                    compute_type="int8",
-                    inter_threads=int(os.getenv("CT2_INTER_THREADS", "1")),
-                    intra_threads=int(os.getenv("CT2_INTRA_THREADS", "4")),
-                )
-
-                # Load SentencePiece model for tokenization
-                spm_path = os.path.join(self.model_path, "sentencepiece.bpe.model")
-                if os.path.exists(spm_path):
-                    self.sp_model = spm.SentencePieceProcessor(model_file=spm_path)  # type: ignore[call-arg]
-                    log.info("init", f"Loaded SentencePiece model from {spm_path}")
-                else:
-                    log.error("init", f"SentencePiece model not found at {spm_path}")
-                    return
-
-                self._initialized = True
-                log.info("init", "M2M100 translator initialized successfully")
-            except Exception as e:
-                log.error("init", f"Failed to initialize: {e}")
+        self._initialized = True
+        log.info("init", "LocalTranslator initialized (ServiceB client mode)")
 
     async def prewarm(self):
-        """Pre-initialize models to avoid delay on first request."""
-        if not self._initialized:
-            log.info("prewarm", "Pre-warming M2M100 model...")
-            # Running in executor to not block the event loop
-            import asyncio
-            from concurrent.futures import ThreadPoolExecutor
+        """
+        ServiceBのウォームアップ（ヘルスチェック）
+        """
+        try:
+            client = await get_inference_client()
+            health_status = await client.health_check()
+            log.info("prewarm", f"ServiceB health check: {health_status}")
+        except Exception as e:
+            log.warning("prewarm", f"ServiceB warmup failed: {e}")
 
-            loop = asyncio.get_event_loop()
-            with ThreadPoolExecutor(max_workers=1) as pool:
-                await loop.run_in_executor(pool, self.__init__)
-
-    def translate(self, text: str, src_lang: str = "en", tgt_lang: str = "ja") -> str | None:
-        if not self._initialized or self.translator is None or self.sp_model is None:
-            return None
+    async def translate_async(self, text: str, src_lang: str = "en", tgt_lang: str = "ja") -> Optional[str]:
+        """
+        非同期翻訳（ServiceB経由）
+        """
+        if not text.strip():
+            return ""
 
         try:
-            # Get language tokens
-            src_token = f"__{src_lang}__"
-            tgt_token = f"__{tgt_lang}__"
-
-            # Tokenize using SentencePiece
-            pieces = self.sp_model.encode_as_pieces(text)  # type: ignore[attr-defined]
-            source_tokens = [src_token] + pieces + ["</s>"]
-
-            # Translate with optimized parameters
-            results = self.translator.translate_batch(
-                [source_tokens],
-                target_prefix=[[tgt_token]],
-                beam_size=4,
-                repetition_penalty=1.2,
-                max_decoding_length=256,
-                no_repeat_ngram_size=3,
-            )
-            target_tokens = results[0].hypotheses[0]
-
-            # Remove target language token if present
-            if target_tokens and target_tokens[0] == tgt_token:
-                target_tokens = target_tokens[1:]
-
-            # Detokenize using SentencePiece
-            translation = self.sp_model.decode_pieces(target_tokens)  # type: ignore[attr-defined]
-            return translation.strip()
-
+            log.debug("translate_async", f"Translating: {text[:50]}...")
+            
+            client = await get_inference_client()
+            translation = await client.translate_text(text, src_lang, tgt_lang)
+            
+            log.debug("translate_async", f"Translation result: {translation[:50]}...")
+            return translation
+            
+        except CircuitBreakerError as e:
+            log.error("translate_async", f"Circuit breaker error: {e}")
+            # フォールバック: 元のテキストを返す
+            return text
+            
+        except InferenceServiceError as e:
+            log.error("translate_async", f"Inference service error: {e}")
+            # フォールバック: 元のテキストを返す
+            return text
+            
         except Exception as e:
-            log.error("translate", f"Translation error for '{text}': {e}")
-            return None
+            log.error("translate_async", f"Unexpected error: {e}")
+            return text
+
+    async def translate_batch_async(self, texts: List[str], src_lang: str = "en", 
+                                  tgt_lang: str = "ja") -> List[str]:
+        """
+        バッチ翻訳（ServiceB経由）
+        """
+        if not texts:
+            return []
+
+        try:
+            log.info("translate_batch_async", f"Batch translating: {len(texts)} texts")
+            
+            client = await get_inference_client()
+            translations = await client.translate_batch(texts, src_lang, tgt_lang)
+            
+            log.info("translate_batch_async", f"Batch translation completed: {len(translations)} results")
+            return translations
+            
+        except CircuitBreakerError as e:
+            log.error("translate_batch_async", f"Circuit breaker error: {e}")
+            # フォールバック: 元のテキストリストを返す
+            return texts
+            
+        except InferenceServiceError as e:
+            log.error("translate_batch_async", f"Inference service error: {e}")
+            # フォールバック: 元のテキストリストを返す
+            return texts
+            
+        except Exception as e:
+            log.error("translate_batch_async", f"Unexpected error: {e}")
+            return texts
+
+    def translate(self, text: str, src_lang: str = "en", tgt_lang: str = "ja") -> Optional[str]:
+        """
+        同期版翻訳（後方互換性のため保持）
+        注意: この方法は非推奨。translate_asyncを使用してください。
+        """
+        log.warning("translate", "Synchronous translation is deprecated. Use translate_async instead.")
+        
+        # 同期版では元のテキストを返す（ServiceBは非同期のため）
+        return text
 
 
 def get_local_translator():

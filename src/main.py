@@ -63,7 +63,7 @@ async def lifespan(app: FastAPI):
             from src.domain.services.local_translator import get_local_translator
             from src.domain.services.nlp_service import NLPService
 
-            # Prewarm Local Translator (M2M100)
+            # Prewarm ServiceB (推論サービス)
             lt = get_local_translator()
             await lt.prewarm()
 

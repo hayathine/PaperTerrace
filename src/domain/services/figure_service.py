@@ -29,20 +29,38 @@ class FigureService:
         pdf_path: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """
-        Detect figures/tables/equations using local layout service and pdfplumber coordinates.
+        Detect figures/tables/equations using ServiceB layout service and pdfplumber coordinates.
         """
         candidates = []
 
-        # 0. Use local Paddle Layout if available (PRIORITY for CPU optimization)
-        local_results = self.layout_service.detect_layout(img_bytes)
-        for res in local_results:
-            if res["label"] in ["figure", "table", "equation", "chart"]:
-                label = res["label"] if res["label"] != "chart" else "figure"
-                # Convert pixel coordinates (at resolution) to PDF points
-                bbox = [b / zoom for b in res["bbox"]]
-                candidates.append({"bbox": bbox, "label": label})
+        # 0. Use ServiceB Layout Analysis if available (PRIORITY for CPU optimization)
+        try:
+            if pdf_path:
+                # ServiceBを使用した非同期レイアウト解析
+                local_results = await self.layout_service.detect_layout_async(pdf_path, [page_num])
+                for res in local_results:
+                    if res.get("class") in ["figure", "table", "equation"] and res.get("page") == page_num:
+                        label = res["class"]
+                        # Convert pixel coordinates to PDF points
+                        bbox = res["bbox"]
+                        if len(bbox) == 4:
+                            # bbox format: [x1, y1, x2, y2]
+                            bbox = [b / zoom for b in bbox]
+                            candidates.append({"bbox": bbox, "label": label})
+            else:
+                # フォールバック: 従来の同期処理（非推奨）
+                logger.warning("PDF path not provided, falling back to synchronous layout detection")
+                local_results = self.layout_service.detect_layout(img_bytes)
+                for res in local_results:
+                    if res["label"] in ["figure", "table", "equation", "chart"]:
+                        label = res["label"] if res["label"] != "chart" else "figure"
+                        # Convert pixel coordinates (at resolution) to PDF points
+                        bbox = [b / zoom for b in res["bbox"]]
+                        candidates.append({"bbox": bbox, "label": label})
+        except Exception as e:
+            logger.warning(f"ServiceB layout analysis failed: {e}, falling back to pdfplumber only")
 
-        # 1. Add native pdfplumber images if not already covered by local detector
+        # 1. Add native pdfplumber images if not already covered by layout detector
         for img in page.images:
             bbox = [img["x0"], img["top"], img["x1"], img["bottom"]]
             if self._is_new_candidate(bbox, candidates):

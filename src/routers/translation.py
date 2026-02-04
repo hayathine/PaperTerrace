@@ -189,15 +189,17 @@ async def explain(
             )
         )
 
-    # Stage 2: Local Machine Translation (M2M100)
+    # Stage 2: ServiceB Machine Translation (M2M100)
     translator = local_translator.get_local_translator()
     log.debug("explain", f"Translator initialized: {translator._initialized}", lemma=lemma)
 
     if translator._initialized:
-        local_translation = await loop.run_in_executor(
-            executor, translator.translate, lemma, "en", lang
-        )
-        log.debug("explain", f"Local translation result: {local_translation}", lemma=lemma)
+        try:
+            local_translation = await translator.translate_async(lemma, "en", lang)
+            log.debug("explain", f"ServiceB translation result: {local_translation}", lemma=lemma)
+        except Exception as e:
+            log.warning("explain", f"ServiceB translation failed: {e}", lemma=lemma)
+            local_translation = None
     else:
         local_translation = None
         log.warning("explain", "Local translator not initialized", lemma=lemma)
