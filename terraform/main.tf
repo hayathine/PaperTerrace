@@ -42,6 +42,7 @@ resource "google_project_service" "apis" {
     "servicenetworking.googleapis.com",
     "iam.googleapis.com", 
     "cloudtasks.googleapis.com",
+    "redis.googleapis.com",
   ])
 
   service            = each.value
@@ -144,6 +145,10 @@ module "cloud_run" {
   service_name         = "paperterrace"
   min_instance_count   = 1
 
+  # Redis configuration
+  redis_host = module.redis_production.redis_host
+  redis_port = tostring(module.redis_production.redis_port)
+
   depends_on = [
     google_project_service.apis,
     module.cloud_sql,
@@ -151,6 +156,7 @@ module "cloud_run" {
     module.storage,
     module.networking,
     module.iam,
+    module.redis_production,
   ]
 }
 
@@ -191,6 +197,10 @@ module "cloud_run_staging" {
   # Pass service account email
   service_account_email = module.iam.service_account_email
 
+  # Redis configuration for staging
+  redis_host = var.enable_staging ? module.redis_staging[0].redis_host : "localhost"
+  redis_port = var.enable_staging ? tostring(module.redis_staging[0].redis_port) : "6379"
+
   depends_on = [
     google_project_service.apis,
     module.cloud_sql,
@@ -199,6 +209,7 @@ module "cloud_run_staging" {
     module.networking,
     module.iam,
     google_sql_database.staging,
+    module.redis_staging,
   ]
 }
 
@@ -210,4 +221,53 @@ module "cloud_tasks" {
   region     = var.region
 
   depends_on = [google_project_service.apis]
+}
+
+# ============================================================================
+# Redis (Memorystore)
+# ============================================================================
+
+# Production Redis
+module "redis_production" {
+  source = "./modules/memorystore"
+
+  instance_name    = "paperterrace-redis-prod"
+  tier            = "STANDARD_HA"
+  memory_size_gb  = 2
+  region          = var.region
+  vpc_network_id  = module.networking.vpc_network_id
+  display_name    = "PaperTerrace Production Redis"
+  
+  labels = {
+    environment = "production"
+    application = "paperterrace"
+  }
+
+  depends_on = [
+    google_project_service.apis,
+    module.networking
+  ]
+}
+
+# Staging Redis (conditional)
+module "redis_staging" {
+  source = "./modules/memorystore"
+  count  = var.enable_staging ? 1 : 0
+
+  instance_name    = "paperterrace-redis-staging"
+  tier            = "BASIC"
+  memory_size_gb  = 1
+  region          = var.region
+  vpc_network_id  = module.networking.vpc_network_id
+  display_name    = "PaperTerrace Staging Redis"
+  
+  labels = {
+    environment = "staging"
+    application = "paperterrace"
+  }
+
+  depends_on = [
+    google_project_service.apis,
+    module.networking
+  ]
 }

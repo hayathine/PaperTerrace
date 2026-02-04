@@ -277,7 +277,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       const headers: HeadersInit = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const response = await fetch("/analyze-pdf-json", {
+      const response = await fetch("/api/analyze-pdf-json", {
         method: "POST",
         headers,
         body: formData,
@@ -292,123 +292,150 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       const { task_id, stream_url } = data;
       activeTaskIdRef.current = task_id;
 
-      // Close existing if any
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
-      }
-
-      setStatus("processing");
-      const es = new EventSource(stream_url);
-      eventSourceRef.current = es;
-
-      es.onmessage = (event) => {
-        try {
-          const eventData = JSON.parse(event.data);
-          console.debug("[PDFViewer] SSE Message:", eventData.type, eventData);
-
-          if (eventData.type === "page") {
-            setPages((prev) => {
-              const newData = eventData.data;
-              if (!newData || typeof newData.page_num === "undefined") {
-                console.warn(
-                  "[PDFViewer] Received malformed page data:",
-                  newData,
-                );
-                return prev;
-              }
-              const index = prev.findIndex(
-                (p) => p.page_num === newData.page_num,
-              );
-              if (index !== -1) {
-                // Merge existing page data (update)
-                const newPages = [...prev];
-                newPages[index] = { ...newPages[index], ...newData };
-                return newPages;
-              }
-              // Append new page
-              return [...prev, newData];
-            });
-          } else if (eventData.type === "done") {
-            setStatus("done");
-            if (eventData.paper_id) {
-              const pId = eventData.paper_id;
-              setLoadedPaperId(pId);
-
-              // Use ref to get the latest pages collected during streaming
-              const finalPages = pagesRef.current;
-
-              // Cache the final results
-              (async () => {
-                const imageUrls = finalPages.map((p) => p.image_url);
-                const ocrText = finalPages
-                  .map((p) => p.content)
-                  .join("\n\n---\n\n");
-                const layoutData = finalPages.map((p) => ({
-                  width: p.width,
-                  height: p.height,
-                  words: p.words,
-                  figures: p.figures,
-                  links: p.links,
-                }));
-
-                // Extract file_hash from image_url (e.g. /static/paper_images/{hash}/page_1.png)
-                let fileHash = "";
-                if (imageUrls.length > 0) {
-                  const match = imageUrls[0].match(
-                    /\/static\/paper_images\/([^/]+)\//,
-                  );
-                  if (match) fileHash = match[1];
-                }
-
-                await savePaperToCache({
-                  id: pId,
-                  file_hash: fileHash,
-                  title: processingFileRef.current?.name || "Untitled",
-                  ocr_text: ocrText,
-                  layout_json: JSON.stringify(layoutData),
-                  last_accessed: Date.now(),
-                });
-                // We don't block on image caching
-                cachePaperImages(pId, imageUrls);
-              })();
-            }
-            es.close();
-          } else if (eventData.type === "error") {
-            setStatus("error");
-            setErrorMsg(eventData.message);
-            es.close();
-            processingFileRef.current = null;
-            activeTaskIdRef.current = null;
-          }
-        } catch (e) {
-          // Ignore
-        }
-      };
-
-      es.onerror = (err) => {
-        console.error(
-          "SSE Error",
-          err,
-          "pages received:",
-          pagesRef.current.length,
-        );
-        es.close();
-        // Only show error if we haven't received any pages yet
-        // Use ref to get current value, not stale closure value
-        if (pagesRef.current.length === 0) {
-          setStatus("error");
-          setErrorMsg("Network error while streaming analysis");
-        } else {
-          // We got some pages, so just mark as done (partial success)
-          setStatus("done");
-        }
-        processingFileRef.current = null;
-        activeTaskIdRef.current = null;
-      };
+      // Start streaming with retry logic
+      await startStreaming(stream_url, 0);
     } catch (err: any) {
       setStatus("error");
       setErrorMsg(err.message);
+      processingFileRef.current = null;
+      activeTaskIdRef.current = null;
     }
+  };
+
+  const startStreaming = async (stream_url: string, retryCount: number = 0) => {
+    const maxRetries = 3;
+    const retryDelay = 1000 * Math.pow(2, retryCount); // Exponential backoff
+
+    // Close existing if any
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+
+    setStatus("processing");
+    const es = new EventSource(stream_url);
+    eventSourceRef.current = es;
+
+    es.onmessage = (event) => {
+      try {
+        const eventData = JSON.parse(event.data);
+        console.debug("[PDFViewer] SSE Message:", eventData.type, eventData);
+
+        if (eventData.type === "page") {
+          setPages((prev) => {
+            const newData = eventData.data;
+            if (!newData || typeof newData.page_num === "undefined") {
+              console.warn(
+                "[PDFViewer] Received malformed page data:",
+                newData,
+              );
+              return prev;
+            }
+            const index = prev.findIndex(
+              (p) => p.page_num === newData.page_num,
+            );
+            if (index !== -1) {
+              // Merge existing page data (update)
+              const newPages = [...prev];
+              newPages[index] = { ...newPages[index], ...newData };
+              return newPages;
+            }
+            // Append new page
+            return [...prev, newData];
+          });
+        } else if (eventData.type === "done") {
+          setStatus("done");
+          if (eventData.paper_id) {
+            const pId = eventData.paper_id;
+            setLoadedPaperId(pId);
+
+            // Use ref to get the latest pages collected during streaming
+            const finalPages = pagesRef.current;
+
+            // Cache the final results
+            (async () => {
+              const imageUrls = finalPages.map((p) => p.image_url);
+              const ocrText = finalPages
+                .map((p) => p.content)
+                .join("\n\n---\n\n");
+              const layoutData = finalPages.map((p) => ({
+                width: p.width,
+                height: p.height,
+                words: p.words,
+                figures: p.figures,
+                links: p.links,
+              }));
+
+              // Extract file_hash from image_url (e.g. /static/paper_images/{hash}/page_1.png)
+              let fileHash = "";
+              if (imageUrls.length > 0) {
+                const match = imageUrls[0].match(
+                  /\/static\/paper_images\/([^/]+)\//,
+                );
+                if (match) fileHash = match[1];
+              }
+
+              await savePaperToCache({
+                id: pId,
+                file_hash: fileHash,
+                title: processingFileRef.current?.name || "Untitled",
+                ocr_text: ocrText,
+                layout_json: JSON.stringify(layoutData),
+                last_accessed: Date.now(),
+              });
+              // We don't block on image caching
+              cachePaperImages(pId, imageUrls);
+            })();
+          }
+          es.close();
+          processingFileRef.current = null;
+          activeTaskIdRef.current = null;
+        } else if (eventData.type === "error") {
+          setStatus("error");
+          setErrorMsg(eventData.message);
+          es.close();
+          processingFileRef.current = null;
+          activeTaskIdRef.current = null;
+        }
+      } catch (e) {
+        // Ignore parsing errors
+      }
+    };
+
+    es.onerror = (err) => {
+      console.error(
+        "SSE Error",
+        err,
+        "pages received:",
+        pagesRef.current.length,
+        "retry count:",
+        retryCount,
+        "stream_url:",
+        stream_url,
+      );
+      
+      es.close();
+      
+      // If we have pages, consider it partial success
+      if (pagesRef.current.length > 0) {
+        setStatus("done");
+        processingFileRef.current = null;
+        activeTaskIdRef.current = null;
+        return;
+      }
+
+      // Retry logic for connection failures
+      if (retryCount < maxRetries) {
+        console.log(`[PDFViewer] Retrying connection in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+        setTimeout(() => {
+          startStreaming(stream_url, retryCount + 1);
+        }, retryDelay);
+      } else {
+        setStatus("error");
+        setErrorMsg(`ネットワークエラーが発生しました。接続を確認して再度お試しください。(URL: ${stream_url})`);
+        processingFileRef.current = null;
+        activeTaskIdRef.current = null;
+      }
+    };
   };
 
   const handleWordClick = useCallback(
@@ -477,7 +504,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           const headers: HeadersInit = {};
           if (token) headers["Authorization"] = `Bearer ${token}`;
 
-          const res = await fetch("/upload/image", {
+          const res = await fetch("/api/upload/image", {
             method: "POST",
             headers,
             body: formData,

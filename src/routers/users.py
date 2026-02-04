@@ -6,7 +6,8 @@ Handles public user profile viewing.
 from fastapi import APIRouter, HTTPException, status
 
 from src.logger import logger
-from src.models import PaperListResponse, PaperPublic, UserPublic
+from src.models.paper import PaperListResponse, PaperPublic
+from src.models.user import UserPublic
 from src.providers import get_storage_provider
 
 router = APIRouter(prefix="/users", tags=["Users"])

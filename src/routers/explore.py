@@ -6,7 +6,7 @@ Handles public paper discovery and search.
 from fastapi import APIRouter, Query
 
 from src.logger import logger
-from src.models import PaperListResponse, PaperPublic
+from src.models.paper import PaperListResponse, PaperPublic
 from src.providers import get_storage_provider
 
 router = APIRouter(prefix="/explore", tags=["Explore"])

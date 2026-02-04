@@ -20,8 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project
+RUN uv sync --frozen --no-install-project
 
 COPY src/scripts/ ./src/scripts/
 COPY src/__init__.py ./src/__init__.py
@@ -35,8 +34,7 @@ FROM python:3.12-slim AS runtime-builder
 WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 COPY pyproject.toml uv.lock ./
-RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --no-dev --frozen --no-install-project
+RUN uv sync --no-dev --frozen --no-install-project
 
 # --- Stage 4: Production Stage ---
 FROM python:3.12-slim AS production
@@ -58,7 +56,7 @@ COPY --from=builder /app/models ./models
 COPY --from=frontend-builder /app/frontend/dist ./src/static/dist
 
 COPY alembic.ini ./
-COPY migrations/ ./migrations/
+COPY migrations ./migrations
 COPY src/ ./src/
 
 ENV PATH="/app/.venv/bin:$PATH" \

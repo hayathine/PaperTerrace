@@ -28,5 +28,36 @@ output "storage_bucket_name" {
   value       = module.storage.bucket_name
 }
 
+# Redis (Memorystore)
+output "redis_production_host" {
+  description = "Production Redis host"
+  value       = module.redis_production.redis_host
+}
+
+output "redis_production_port" {
+  description = "Production Redis port"
+  value       = module.redis_production.redis_port
+}
+
+output "redis_production_connection_string" {
+  description = "Production Redis connection string"
+  value       = module.redis_production.redis_connection_string
+}
+
+output "redis_staging_host" {
+  description = "Staging Redis host"
+  value       = var.enable_staging ? module.redis_staging[0].redis_host : null
+}
+
+output "redis_staging_port" {
+  description = "Staging Redis port"
+  value       = var.enable_staging ? module.redis_staging[0].redis_port : null
+}
+
+output "redis_staging_connection_string" {
+  description = "Staging Redis connection string"
+  value       = var.enable_staging ? module.redis_staging[0].redis_connection_string : null
+}
+
 # Networking
 

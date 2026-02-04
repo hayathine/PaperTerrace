@@ -5,6 +5,7 @@ Main application entry point.
 
 import contextlib
 import os
+import time
 import traceback
 
 from dotenv import load_dotenv
@@ -171,26 +172,26 @@ async def init_db_manual():
 # Include all routers
 # ============================================================================
 
-# Auth & Users
-app.include_router(auth_router)
-app.include_router(users_router)
+# Auth & Users (auth router already has /auth prefix, so it becomes /api/auth)
+app.include_router(auth_router, prefix="/api")
+app.include_router(users_router, prefix="/api")
 
 # Grouped routers
-app.include_router(stamps_router)
-app.include_router(tasks_router)
-app.include_router(translation_router)
-app.include_router(explore_router)
-app.include_router(chat_router)
-app.include_router(note_router)
-app.include_router(papers_router)
-app.include_router(upload_router)
+app.include_router(stamps_router, prefix="/api")
+app.include_router(tasks_router, prefix="/api")
+app.include_router(translation_router, prefix="/api")
+app.include_router(explore_router, prefix="/api")
+app.include_router(chat_router, prefix="/api")
+app.include_router(note_router, prefix="/api")
+app.include_router(papers_router, prefix="/api")
+app.include_router(upload_router, prefix="/api")
 
 # PDF Analysis & Streaming
-app.include_router(pdf_router)
+app.include_router(pdf_router, prefix="/api")
 
 # Analysis Features
-app.include_router(analysis_router)
-app.include_router(figures_router)
+app.include_router(analysis_router, prefix="/api")
+app.include_router(figures_router, prefix="/api")
 
 
 # ============================================================================
@@ -220,7 +221,29 @@ if os.path.exists(dist_dir):
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok"}
+    """Health check endpoint with Redis status."""
+    from src.providers.redis_provider import get_redis_client
+    
+    health_status = {
+        "status": "ok",
+        "timestamp": time.time(),
+        "services": {
+            "redis": "unknown"
+        }
+    }
+    
+    # Check Redis connection
+    try:
+        redis_client = get_redis_client()
+        if redis_client:
+            redis_client.ping()
+            health_status["services"]["redis"] = "connected"
+        else:
+            health_status["services"]["redis"] = "fallback"
+    except Exception as e:
+        health_status["services"]["redis"] = f"error: {str(e)}"
+    
+    return health_status
 
 
 @app.get("/api/config")

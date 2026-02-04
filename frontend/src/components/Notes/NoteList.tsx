@@ -82,7 +82,7 @@ const NoteList: React.FC<NoteListProps> = ({
       const headers: HeadersInit = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch("/note", {
+      const res = await fetch("/api/note", {
         method: "POST",
         headers,
         body: JSON.stringify({

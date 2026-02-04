@@ -223,12 +223,13 @@ async def analyze_pdf_json(
             }
         )
 
-    redis_service.set(f"task:{task_id}", task_data, expire=3600)
+    # Set longer expiration for streaming tasks to prevent premature deletion
+    redis_service.set(f"task:{task_id}", task_data, expire=7200)  # 2 hours instead of 1
 
     total_elapsed = time.time() - start_time
     logger.info(f"[analyze-pdf-json] Task created: {task_id}, elapsed: {total_elapsed:.2f}s")
 
-    return JSONResponse({"task_id": task_id, "stream_url": f"/stream/{task_id}"})
+    return JSONResponse({"task_id": task_id, "stream_url": f"/api/stream/{task_id}"})
 
 
 @router.post("/analyze-paper/{paper_id}")
@@ -272,7 +273,7 @@ async def analyze_paper(
 
     redis_service.set(f"task:{task_id}", task_data, expire=3600)
 
-    return JSONResponse({"task_id": task_id, "stream_url": f"/stream/{task_id}"})
+    return JSONResponse({"task_id": task_id, "stream_url": f"/api/stream/{task_id}"})
 
 
 async def process_figure_auto_analysis(
@@ -320,9 +321,15 @@ async def stream(task_id: str):
 
     data = redis_service.get(f"task:{task_id}")
 
-    # Task not found
+    # Task not found - return proper error response instead of 204
     if not data:
-        return Response(status_code=204)
+        logger.warning(f"[stream] Task not found: {task_id}")
+        return Response(
+            content=f"data: {json.dumps({'type': 'error', 'message': 'Task not found or expired'})}\n\n",
+            media_type="text/plain",
+            status_code=200,
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+        )
 
     is_json = data.get("format") == "json"
     text = data.get("text", "")
@@ -559,6 +566,7 @@ async def stream(task_id: str):
             except asyncio.CancelledError:
                 # Client disconnected - this is normal, log at info level
                 logger.info(f"[stream] {task_id}: Client disconnected (CancelledError)")
+                # Don't delete task immediately - keep it for potential reconnection
             except Exception as e:
                 logger.error(f"[stream] {task_id}: Unexpected error in stream: {e}", exc_info=True)
                 try:
@@ -566,9 +574,13 @@ async def stream(task_id: str):
                     yield "event: close\ndata: done\n\n"
                 except Exception:
                     pass  # Client may already be disconnected
-            finally:
+                # Delete task only on actual errors, not client disconnects
                 redis_service.delete(f"task:{task_id}")
-                logger.info(f"[stream] {task_id}: Cleaned up task")
+                logger.info(f"[stream] {task_id}: Cleaned up task due to error")
+            else:
+                # Normal completion - delete task
+                redis_service.delete(f"task:{task_id}")
+                logger.info(f"[stream] {task_id}: Cleaned up task after normal completion")
 
         return StreamingResponse(json_generate(), media_type="text/event-stream")
 

@@ -74,3 +74,15 @@ variable "service_account_email" {
   description = "Service Account Email to run the service as"
   type        = string
 }
+
+variable "redis_host" {
+  description = "Redis host"
+  type        = string
+  default     = "localhost"
+}
+
+variable "redis_port" {
+  description = "Redis port"
+  type        = string
+  default     = "6379"
+}

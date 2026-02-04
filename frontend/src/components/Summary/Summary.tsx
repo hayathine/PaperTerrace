@@ -48,7 +48,7 @@ const Summary: React.FC<SummaryProps> = ({
       formData.append("lang", i18n.language);
       if (paperId) formData.append("paper_id", paperId);
 
-      const res = await fetch("/summarize", { method: "POST", body: formData });
+      const res = await fetch("/api/summarize", { method: "POST", body: formData });
       if (!res.ok) {
         const errorText = await res.text();
         throw new Error(errorText || `Status ${res.status}`);
@@ -78,7 +78,7 @@ const Summary: React.FC<SummaryProps> = ({
       const formData = new FormData();
       formData.append("session_id", sessionId);
       formData.append("lang", i18n.language);
-      const res = await fetch("/critique", { method: "POST", body: formData });
+      const res = await fetch("/api/critique", { method: "POST", body: formData });
 
       if (!res.ok) {
         const errorText = await res.text();
@@ -103,7 +103,7 @@ const Summary: React.FC<SummaryProps> = ({
       const formData = new FormData();
       formData.append("session_id", sessionId);
       formData.append("lang", i18n.language);
-      const res = await fetch("/research-radar", {
+      const res = await fetch("/api/research-radar", {
         method: "POST",
         body: formData,
       });

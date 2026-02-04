@@ -9,7 +9,7 @@ from fastapi import APIRouter, HTTPException, status
 
 from src.auth import CurrentUser
 from src.logger import logger
-from src.models import UserInDB, UserStats, UserUpdate
+from src.models.user import UserInDB, UserStats, UserUpdate
 from src.providers import get_storage_provider
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])

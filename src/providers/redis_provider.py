@@ -17,7 +17,7 @@ RETRY_DELAY = 60  # Retry every 60 seconds if failed
 
 
 def get_redis_client() -> Optional[redis.Redis]:
-    """Get or create a Redis client instance (singleton). Returns None if connection fails."""
+    """Get or create a Redis client instance optimized for Memorystore."""
     global _redis_client, _redis_error_logged, _last_connection_attempt
 
     if _redis_client is not None:
@@ -31,20 +31,38 @@ def get_redis_client() -> Optional[redis.Redis]:
     host = os.getenv("REDIS_HOST", "localhost")
     port = int(os.getenv("REDIS_PORT", "6379"))
     db = int(os.getenv("REDIS_DB", "0"))
+    
+    # Cloud environment optimized timeouts
+    socket_timeout = int(os.getenv("REDIS_SOCKET_TIMEOUT", "10"))
+    socket_connect_timeout = int(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "10"))
 
     _last_connection_attempt = current_time
     try:
-        client = redis.Redis(host=host, port=port, db=db, decode_responses=True, socket_timeout=5)
+        # Memorystore optimized settings
+        client = redis.Redis(
+            host=host, 
+            port=port, 
+            db=db, 
+            decode_responses=True,
+            socket_timeout=socket_timeout,
+            socket_connect_timeout=socket_connect_timeout,
+            retry_on_timeout=True,
+            health_check_interval=30
+        )
         client.ping()
         _redis_client = client
+        
         if _redis_error_logged:
             log.info("connect", "Redis recovered", host=host, port=port)
             _redis_error_logged = False
         else:
-            log.info("connect", "Connected", host=host, port=port)
+            log.info("connect", "Connected to Redis", host=host, port=port, 
+                    type="Memorystore" if host != "localhost" else "Local")
+            
     except redis.ConnectionError as e:
         if not _redis_error_logged:
-            log.warning("connect", "Connection failed, using memory fallback", error=str(e))
+            log.warning("connect", "Redis connection failed, using memory fallback", 
+                       host=host, port=port, error=str(e))
             _redis_error_logged = True
         _redis_client = None
 

@@ -90,7 +90,7 @@ function App() {
     if (user) {
       setShowLoginModal(false);
 
-      fetch("/papers")
+      fetch("/api/papers")
         .then((res) => res.json())
         .then((data) => {
           if (data && Array.isArray(data.papers)) {
@@ -114,9 +114,9 @@ function App() {
       formData.append("paper_id", paperId);
 
       if (navigator.sendBeacon) {
-        navigator.sendBeacon("/chat/cache/delete", formData);
+        navigator.sendBeacon("/api/chat/cache/delete", formData);
       } else {
-        fetch("/chat/cache/delete", {
+        fetch("/api/chat/cache/delete", {
           method: "POST",
           body: formData,
           keepalive: true,
@@ -185,7 +185,7 @@ function App() {
       Array.isArray(uploadedPapers) &&
       !uploadedPapers.some((p) => p?.paper_id === paperId)
     ) {
-      fetch("/papers")
+      fetch("/api/papers")
         .then((res) => res.json())
         .then((data) => {
           if (data && Array.isArray(data.papers)) {

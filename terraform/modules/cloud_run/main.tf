@@ -60,6 +60,21 @@ resource "google_cloud_run_v2_service" "main" {
         value = "cloudsql"
       }
 
+      env {
+        name  = "REDIS_HOST"
+        value = var.redis_host
+      }
+
+      env {
+        name  = "REDIS_PORT"
+        value = var.redis_port
+      }
+
+      env {
+        name  = "REDIS_DB"
+        value = "0"
+      }
+
       # Secrets from Secret Manager
       env {
         name = "GEMINI_API_KEY"
