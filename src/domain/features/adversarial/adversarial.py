@@ -13,7 +13,7 @@ from src.domain.prompts import (
 )
 from src.logger import logger
 from src.providers import get_ai_provider
-from src.schemas.adversarial import (
+from src.schemas.gemini import (
     AdversarialCritiqueResponse as CritiqueResponse,
 )
 

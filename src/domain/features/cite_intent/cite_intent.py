@@ -1,28 +1,10 @@
 import os
 from typing import Any, Dict, List
 
-from pydantic import BaseModel, Field
-
 from src.domain.prompts import AGENT_CITE_INTENT_PROMPT, CORE_SYSTEM_PROMPT
 from src.logger import logger
 from src.providers import get_ai_provider
-
-
-class CitationIntent(BaseModel):
-    """段落内の個別の引用の分析結果"""
-
-    citation: str = Field(..., description="The citation string as it appears in the text")
-    intent: str = Field(
-        ...,
-        description="Support | Use | Contrast | Criticize | Neutral",
-    )
-    reason: str = Field(..., description="1-sentence reason for classification in target language")
-
-
-class CitationAnalysisResponse(BaseModel):
-    """引用意図分析の全体レスポンス"""
-
-    citations: List[CitationIntent]
+from src.schemas.gemini import CitationAnalysisResponse
 
 
 class CiteIntentService:

@@ -9,8 +9,8 @@ from src.domain.prompts import (
 )
 from src.logger import logger
 from src.providers import get_ai_provider, get_storage_provider
-from src.schemas.summary import FullSummaryResponse
-from src.schemas.summary import SectionSummaryList as SectionSummariesResponse
+from src.schemas.gemini import FullSummaryResponse
+from src.schemas.gemini import SectionSummaryList as SectionSummariesResponse
 
 from ..translate import SUPPORTED_LANGUAGES
 

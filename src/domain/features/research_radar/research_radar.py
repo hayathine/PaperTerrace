@@ -2,7 +2,6 @@ import os
 from typing import Any, Dict, List
 
 import httpx
-from pydantic import BaseModel, Field
 
 from src.domain.prompts import (
     RADAR_GENERATE_QUERY_ABSTRACT_PROMPT,
@@ -11,24 +10,10 @@ from src.domain.prompts import (
 )
 from src.logger import logger
 from src.providers import get_ai_provider
-
-
-class SimulatedPaper(BaseModel):
-    title: str
-    authors: List[str]
-    year: int
-    abstract: str
-    url: str
-
-
-class SimulatedSearchResponse(BaseModel):
-    papers: List[SimulatedPaper]
-
-
-class SearchQueriesResponse(BaseModel):
-    """検索クエリ生成モデル"""
-
-    queries: List[str] = Field(..., description="検索クエリリスト（3-5件）")
+from src.schemas.gemini import (
+    SearchQueriesResponse,
+    SimulatedSearchResponse,
+)
 
 
 class ResearchRadarError(Exception):

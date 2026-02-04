@@ -1,26 +1,8 @@
 import os
-from typing import List
-
-from pydantic import BaseModel, Field
 
 from src.logger import logger
 from src.providers import get_ai_provider
-
-
-class ClaimVerificationResponse(BaseModel):
-    """結果報告のための構造化データモデル"""
-
-    status: str = Field(..., description="warning | verified | neutral")
-    summary: str = Field(
-        ..., description="Short summary of the verification result (max 100 chars)."
-    )
-    details: str = Field(
-        ...,
-        description="Detailed report citing sources found during search. Mention if reproducible or accepted, or highlight doubts.",
-    )
-    sources: List[str] = Field(
-        default_factory=list, description="List of URL or source names found"
-    )
+from src.schemas.gemini import ClaimVerificationResponse
 
 
 class ClaimVerificationService:

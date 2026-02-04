@@ -1,6 +1,4 @@
-from typing import Any, Dict, List, Optional
-
-from pydantic import BaseModel, Field
+from typing import Any, Dict, List
 
 from src.domain.prompts import (
     VISION_ANALYZE_FIGURE_PROMPT,
@@ -9,34 +7,11 @@ from src.domain.prompts import (
 )
 from src.logger import logger
 from src.providers import get_ai_provider
-
-
-class FigureAnalysisResponse(BaseModel):
-    """画像分析結果の構造化モデル"""
-
-    type_overview: str = Field(..., description="図の概要と種類")
-    key_findings: List[str] = Field(..., description="主な傾向やパターン")
-    interpretation: str = Field(..., description="数値や傾向の解釈")
-    implications: str = Field(..., description="論文の主張に対する裏付け")
-    highlights: List[str] = Field(..., description="特筆すべき点や異常値")
-
-
-class TableAnalysisResponse(BaseModel):
-    """表分析結果の構造化モデル"""
-
-    overview: str = Field(..., description="表の概要")
-    key_numbers: List[str] = Field(..., description="重要な数値と傾向")
-    comparisons: List[str] = Field(..., description="特筆すべき比較や差異")
-    conclusions: str = Field(..., description="表から導かれる結論")
-
-
-class FigureComparisonResponse(BaseModel):
-    """図表比較結果の構造化モデル"""
-
-    similarities: List[str] = Field(..., description="2つの図の類似点")
-    differences: List[str] = Field(..., description="2つの図の相違点")
-    relationship: str = Field(..., description="補完関係などの関連性")
-    contradictions: Optional[List[str]] = Field(None, description="矛盾点（ある場合）")
+from src.schemas.gemini import (
+    FigureAnalysisResponse,
+    FigureComparisonResponse,
+    TableAnalysisResponse,
+)
 
 
 class FigureInsightService:
