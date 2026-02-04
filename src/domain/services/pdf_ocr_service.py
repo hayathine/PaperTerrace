@@ -120,8 +120,15 @@ class PDFOCRService:
                     file_hash,
                     img_url,
                     layout,
+                    "phase2",  # Add phase information for cached data
                 )
             )
+        
+        # Add COORDINATES_READY event for cached data
+        pages.append(
+            (0, len(cached_images), "COORDINATES_READY", True, file_hash, None, None, "status")
+        )
+        
         return pages
 
     async def _process_page_incremental(

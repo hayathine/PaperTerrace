@@ -6,6 +6,7 @@ Structured logging configuration for PaperTerrace.
 
 import logging
 import sys
+from datetime import datetime, timedelta, timezone
 
 import structlog
 from structlog.typing import EventDict, WrappedLogger
@@ -42,12 +43,21 @@ def add_service_context(
     return event_dict
 
 
+def jst_timestamper(logger: WrappedLogger, method_name: str, event_dict: EventDict) -> EventDict:
+    """
+    タイムスタンプをJSTで付与するプロセッサ。
+    """
+    jst = timezone(timedelta(hours=9))
+    event_dict["timestamp"] = datetime.now(jst).isoformat()
+    return event_dict
+
+
 # 共通のプロセッサ定義
 shared_processors = [
     structlog.contextvars.merge_contextvars,
     structlog.stdlib.add_log_level,
     structlog.stdlib.add_logger_name,
-    structlog.processors.TimeStamper(fmt="iso"),
+    jst_timestamper,
     structlog.processors.StackInfoRenderer(),
     structlog.dev.set_exc_info,
     structlog.processors.format_exc_info,

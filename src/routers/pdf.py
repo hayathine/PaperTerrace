@@ -530,6 +530,10 @@ async def stream(task_id: str):
                         yield f"event: message\ndata: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
                         await asyncio.sleep(0.01)
 
+                    # キャッシュされたデータの場合もassist_mode_readyイベントを送信
+                    yield f"event: message\ndata: {json.dumps({'type': 'assist_mode_ready'})}\n\n"
+                    await asyncio.sleep(0.01)
+
                 # キャッシュ時もセッションコンテキストを保存（Summary等のため）
                 s_id = session_id or paper_id
                 if s_id and paper_data and paper_data.get("ocr_text"):

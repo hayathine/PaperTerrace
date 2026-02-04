@@ -37,3 +37,10 @@ terraform/
 *.log
 .env
 .env.*
+
+# Project Specific
+.agent/
+plans/
+frontend/node_modules/
+/models/
+docs/

@@ -5,12 +5,14 @@ Main application entry point.
 
 import contextlib
 import os
+import traceback
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 from .routers import (
@@ -110,10 +112,44 @@ app.mount("/static", StaticFiles(directory="src/static"), name="static")
 app.add_middleware(
     CORSMiddleware,  # type: ignore[arg-type]
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origin_regex=r"https://paperterrace.*\.run\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class LoggingMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        from src.logger import logger
+
+        logger.info(f"Incoming request: {request.method} {request.url.path}")
+        try:
+            response = await call_next(request)
+            logger.info(
+                f"Request completed: {request.method} {request.url.path} status={response.status_code}"
+            )
+            return response
+        except Exception as e:
+            logger.error(f"Request failed: {request.method} {request.url.path} error={str(e)}")
+            logger.error(traceback.format_exc())
+            return JSONResponse(
+                status_code=500, content={"error": "Internal Server Error", "message": str(e)}
+            )
+
+
+app.add_middleware(LoggingMiddleware)
+
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    from src.logger import logger
+
+    logger.error(f"Global exception: {request.method} {request.url.path}")
+    logger.error(traceback.format_exc())
+    return JSONResponse(
+        status_code=500, content={"error": "Internal Server Error", "message": str(exc)}
+    )
 
 
 @app.post("/api/debug/init-db")

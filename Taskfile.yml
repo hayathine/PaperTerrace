@@ -19,7 +19,7 @@ tasks:
   redis:
     desc: "Start Redis container"
     cmds:
-      - docker run -d --name paper-terrace-redis -p 6379:6379 redis:latest || docker start paper-terrace-redisU
+      - docker run -d --name paper-terrace-redis -p 6379:6379 redis:latest || docker start paper-terrace-redis
 
   run:
     desc: "Run local server"
@@ -134,24 +134,77 @@ tasks:
   # Staging Environment Tasks
   # ============================================================================
 
-  staging:deploy:
-    desc: "Deploy Staging Environment (Terraform enable_staging=true)"
+  staging:build:
+    desc: "Build and push staging image (no deploy)"
     cmds:
-      - echo "Deploying Staging Environment..."
-      - cd terraform && TF_VAR_gemini_api_key=$GEMINI_API_KEY TF_VAR_db_password=$DB_PASSWORD terraform apply -var="enable_staging=true" -auto-approve
-      - echo "Staging Environment Deployed."
-      - echo "Initial App Deploy to Staging..."
-      - gcloud builds submit --tag {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
+      - echo "🔨 Building Image Locally..."
+      - docker build -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
+      - echo "📤 Pushing Image to Artifact Registry..."
+      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
+      - echo "✅ Image pushed successfully!"
+
+  staging:deploy:
+    desc: "Deploy to Staging (build + push + deploy, skips Terraform for speed)"
+    cmds:
+      - echo "🔨 1. Building Image Locally (using cache)..."
+      - docker build -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
+      - echo "📤 2. Pushing Image to Artifact Registry..."
+      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
+      - echo "🚀 3. Deploying to Cloud Run..."
       - gcloud run deploy paperterrace-staging --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest --region {{.REGION}} --allow-unauthenticated
+      - echo "✅ Staging deployed!"
+
+  staging:deploy:full:
+    desc: "Full Staging deploy (includes Terraform infrastructure update)"
+    cmds:
+      - echo "🔨 1. Building Image Locally..."
+      - docker build -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
+      - echo "📤 2. Pushing Image to Artifact Registry..."
+      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
+      - echo "🏗️ 3. Applying Terraform Infrastructure..."
+      - cd terraform && TF_VAR_gemini_api_key=$GEMINI_API_KEY TF_VAR_db_password=$DB_PASSWORD terraform apply -var="enable_staging=true" -auto-approve
+      - echo "🚀 4. Deploying to Cloud Run..."
+      - gcloud run deploy paperterrace-staging --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest --region {{.REGION}} --allow-unauthenticated
+      - echo "✅ Full staging deploy complete!"
+
+  staging:rebuild:
+    desc: "Force rebuild without cache and deploy"
+    cmds:
+      - echo "🔨 Building Image (NO CACHE)..."
+      - docker build --no-cache -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
+      - echo "📤 Pushing Image to Artifact Registry..."
+      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
+      - echo "🚀 Deploying to Cloud Run..."
+      - gcloud run deploy paperterrace-staging --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest --region {{.REGION}} --allow-unauthenticated
+      - echo "✅ Staging rebuilt and deployed!"
 
   staging:stop:
     desc: "Stop Staging Environment (Terraform enable_staging=false)"
     cmds:
-      - echo "Stopping Staging Environment..."
+      - echo "🛑 Stopping Staging Environment..."
       - cd terraform && TF_VAR_gemini_api_key=$GEMINI_API_KEY TF_VAR_db_password=$DB_PASSWORD terraform apply -var="enable_staging=false" -auto-approve
-      - echo "Staging Environment Stopped. Database 'paperterrace_staging' removed."
+      - echo "✅ Staging Environment Stopped."
 
   staging:logs:
-    desc: "Read Staging logs"
+    desc: "Read Staging logs (App logs only, JST)"
     cmds:
-      - gcloud run services logs read paperterrace-staging --limit=100
+      - |
+        gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging" AND jsonPayload.logger:*' \
+          --project={{.PROJECT_ID}} \
+          --limit=50 \
+          --format="table(jsonPayload.timestamp.date('%Y-%m-%d %H:%M:%S'),jsonPayload.level,jsonPayload.event)"
+
+  staging:logs:all:
+    desc: "Read all Staging logs (including system logs)"
+    cmds:
+      - gcloud run services logs read paperterrace-staging --limit=50 --project {{.PROJECT_ID}} --region {{.REGION}}
+
+  staging:url:
+    desc: "Get Staging URL"
+    cmds:
+      - gcloud run services describe paperterrace-staging --region {{.REGION}} --format="value(status.url)"
+
+  clear-images:
+    desc: "====CAUTION==== Clear all images from GCS bucket"
+    cmds:
+      - gcloud storage rm gs://gen-lang-client-0800253336_cloudbuild/source/** --project={{.PROJECT_ID}}

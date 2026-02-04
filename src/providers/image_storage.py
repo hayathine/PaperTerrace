@@ -54,6 +54,19 @@ class LocalImageStorage(ImageStorageStrategy):
         logger.debug(f"Saved page image (Local): {relative_path}")
         return relative_path
 
+    def save_doc(self, file_hash: str, doc_bytes: bytes) -> str:
+        doc_dir = Path("src/static/pdfs")
+        doc_dir.mkdir(parents=True, exist_ok=True)
+        doc_path = doc_dir / f"{file_hash}.pdf"
+        doc_path.write_bytes(doc_bytes)
+        return str(doc_path)
+
+    def get_doc_path(self, file_hash: str) -> str:
+        path = Path(f"src/static/pdfs/{file_hash}.pdf")
+        if path.exists():
+            return str(path)
+        raise FileNotFoundError(f"PDF not found for hash: {file_hash}")
+
     def get_list(self, file_hash: str) -> List[str]:
         hash_dir = self.images_dir / file_hash
         if not hash_dir.exists():

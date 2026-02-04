@@ -57,6 +57,8 @@ COPY --from=runtime-builder /app/.venv /app/.venv
 COPY --from=builder /app/models ./models
 COPY --from=frontend-builder /app/frontend/dist ./src/static/dist
 
+COPY alembic.ini ./
+COPY migrations/ ./migrations/
 COPY src/ ./src/
 
 ENV PATH="/app/.venv/bin:$PATH" \
