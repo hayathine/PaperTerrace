@@ -223,15 +223,9 @@ if os.path.exists(dist_dir):
 async def health_check():
     """Health check endpoint with Redis status."""
     from src.providers.redis_provider import get_redis_client
-    
-    health_status = {
-        "status": "ok",
-        "timestamp": time.time(),
-        "services": {
-            "redis": "unknown"
-        }
-    }
-    
+
+    health_status = {"status": "ok", "timestamp": time.time(), "services": {"redis": "unknown"}}
+
     # Check Redis connection
     try:
         redis_client = get_redis_client()
@@ -242,7 +236,7 @@ async def health_check():
             health_status["services"]["redis"] = "fallback"
     except Exception as e:
         health_status["services"]["redis"] = f"error: {str(e)}"
-    
+
     return health_status
 
 

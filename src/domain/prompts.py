@@ -11,10 +11,11 @@ CORE_SYSTEM_PROMPT = """You are an expert academic research assistant.
 Your goal is to help users understand complex academic papers, translate technical terms accurately within context, and summarize research findings clearly.
 
 # Global Rules
-1. Always output in the requested language (e.g., if asked for Japanese, answer in Japanese).
+1. CRITICAL: Always output in the requested language (e.g., if asked for Japanese, answer ONLY in Japanese, never in English).
 2. When translating, prioritize accuracy and academic context. For specific terms, provide both a translation and a brief context-aware explanation.
 3. For summaries, capture the core essence, methods, and contributions.
 4. If the user asks for JSON, output ONLY valid JSON without Markdown formatting.
+5. NEVER mix languages in your response. Use only the requested language throughout.
 """
 
 # ==========================================
@@ -78,16 +79,20 @@ Please provide:
 """
 # 論文全体の要約、セクション別要約、アブストラクト生成に使用
 
-PAPER_SUMMARY_FULL_PROMPT = """TASK: Summarize the following paper
+PAPER_SUMMARY_FULL_PROMPT = """TASK: Summarize the following paper in {lang_name}
 PAPER_TEXT: {paper_text}
-* Output language must be {lang_name}.
-Overview_{lang_name}: (1-2 sentences summarizing the main theme)
-Key Contributions_{lang_name}: (2-4 bullet points)
-Methodology_{lang_name}: (Concise explanation of methods used)
-Conclusion_{lang_name}: (Key findings and implications)
+
+IMPORTANT: You MUST respond in {lang_name} language only. Do not use English.
+
+Overview_{lang_name}: (1-2 sentences summarizing the main theme in {lang_name})
+Key Contributions_{lang_name}: (2-4 bullet points in {lang_name})
+Methodology_{lang_name}: (Concise explanation of methods used in {lang_name})
+Conclusion_{lang_name}: (Key findings and implications in {lang_name})
 """
 
 PAPER_SUMMARY_SECTIONS_PROMPT = """Summarize the following paper section by section in {lang_name}.
+
+IMPORTANT: You MUST respond in {lang_name} language only. Do not use English.
 
 [Paper Text]
 {paper_text}
@@ -97,7 +102,7 @@ For each section, output the result in the following JSON format:
   {{"section": "Section Title", "summary": "Summary (2-3 sentences) in {lang_name}"}}
 ]
 
-Output ONLY valid JSON.
+Output ONLY valid JSON. All text must be in {lang_name}.
 """
 
 PAPER_SUMMARY_ABSTRACT_PROMPT = """Create an abstract of the following paper in {lang_name}.
@@ -346,28 +351,31 @@ PDF_EXTRACT_TEXT_OCR_PROMPT = (
 # ==========================================
 # PDF を直接 Gemini に渡して処理するためのプロンプト
 
-PAPER_SUMMARY_FROM_PDF_PROMPT = """TASK: Summarize the attached PDF paper.
-OUTPUT_LANGUAGE: {lang_name} * Output language must be {lang_name}.
+PAPER_SUMMARY_FROM_PDF_PROMPT = """TASK: Summarize the attached PDF paper in {lang_name}
+OUTPUT_LANGUAGE: {lang_name}
+
+IMPORTANT: You MUST respond in {lang_name} language only. Do not use English.
 
 # Instructions
 - Analyze the entire PDF including text, figures, tables, and equations.
 - Pay attention to visual elements and their captions.
 - Extract key information comprehensively.
+- Write everything in {lang_name} language.
 
 # Output Format
 Provide the following in {lang_name}:
 
 ## Overview
-(1-2 sentences summarizing the main theme)
+(1-2 sentences summarizing the main theme in {lang_name})
 
 ## Key Contributions
-- (2-4 bullet points)
+- (2-4 bullet points in {lang_name})
 
 ## Methodology
-(Concise explanation of methods used)
+(Concise explanation of methods used in {lang_name})
 
 ## Conclusion
-(Key findings and implications)
+(Key findings and implications in {lang_name})
 """
 
 ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT = """You are a rigorous reviewer. Analyze the attached PDF paper from a critical perspective and identify potential issues.

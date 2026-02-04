@@ -190,9 +190,18 @@ async def explain(
         )
 
     # Stage 2: Local Machine Translation (M2M100)
-    local_translation = await loop.run_in_executor(
-        executor, local_translator.get_local_translator, lemma
-    )
+    translator = local_translator.get_local_translator()
+    log.debug("explain", f"Translator initialized: {translator._initialized}", lemma=lemma)
+
+    if translator._initialized:
+        local_translation = await loop.run_in_executor(
+            executor, translator.translate, lemma, "en", lang
+        )
+        log.debug("explain", f"Local translation result: {local_translation}", lemma=lemma)
+    else:
+        local_translation = None
+        log.warning("explain", "Local translator not initialized", lemma=lemma)
+
     if local_translation:
         service.translation_cache[lemma] = local_translation
         service.word_cache[lemma] = False
@@ -217,28 +226,94 @@ async def explain(
             )
         )
 
-    # 見つからない場合もローカル翻訳の枠組みで「未発見」として返し、AIボタンを表示
-    if not is_htmx:
-        return JSONResponse(
-            {
-                "word": original_word,
-                "lemma": lemma,
-                "translation": "Not found in local dict",
-                "source": "Search",
-                "element_id": element_id,
-            }
+    # ローカル翻訳が失敗した場合、Gemini翻訳にフォールバック
+    log.info("explain", "Local translation failed, falling back to Gemini", lemma=lemma)
+
+    try:
+        lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
+        provider = get_ai_provider()
+
+        # Fetch paper summary context
+        paper_context = ""
+        if paper_id:
+            paper = storage.get_paper(paper_id)
+            if paper:
+                summary = paper.get("abstract") or paper.get("summary")
+                if summary:
+                    paper_context = f"\n[Paper Context / Summary]\n{summary}\n"
+
+        is_phrase = " " in lemma.strip()
+        if is_phrase:
+            prompt = DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT.format(
+                paper_context=paper_context, lang_name=lang_name, original_word=original_word
+            )
+        else:
+            prompt = DICT_TRANSLATE_WORD_SIMPLE_PROMPT.format(
+                paper_context=paper_context, lemma=lemma, lang_name=lang_name
+            )
+
+        translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
+        translation = (
+            (
+                await provider.generate(
+                    prompt, model=translate_model, system_instruction=CORE_SYSTEM_PROMPT
+                )
+            )
+            .strip()
+            .strip("'\"")
         )
-    return HTMLResponse(
-        build_dict_card_html(
-            original_word,
-            lemma,
-            "Not found in local dict",
-            "Search",
-            lang,
-            paper_id,
-            element_id=element_id,
+
+        service.translation_cache[lemma] = translation
+        service.word_cache[lemma] = False
+
+        if not is_htmx:
+            return JSONResponse(
+                {
+                    "word": original_word,
+                    "lemma": lemma,
+                    "translation": translation,
+                    "source": "Gemini",
+                    "element_id": element_id,
+                }
+            )
+
+        return HTMLResponse(
+            build_dict_card_html(
+                original_word,
+                lemma,
+                translation,
+                "Gemini AI",
+                lang,
+                paper_id,
+                element_id=element_id,
+            )
         )
-    )
+    except Exception as e:
+        log.error("explain", "Gemini fallback translation failed", error=str(e), lemma=lemma)
+
+        # 最終的にエラーの場合
+        if not is_htmx:
+            return JSONResponse(
+                {
+                    "word": original_word,
+                    "lemma": lemma,
+                    "translation": f"Translation failed: {str(e)}",
+                    "source": "Error",
+                    "element_id": element_id,
+                },
+                status_code=500,
+            )
+        return HTMLResponse(
+            build_dict_card_html(
+                original_word,
+                lemma,
+                f"Translation failed: {str(e)}",
+                "Error",
+                lang,
+                paper_id,
+                element_id=element_id,
+            )
+        )
 
 
 @router.get("/explain-deep/{word}")

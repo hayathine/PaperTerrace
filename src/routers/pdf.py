@@ -328,7 +328,7 @@ async def stream(task_id: str):
             content=f"data: {json.dumps({'type': 'error', 'message': 'Task not found or expired'})}\n\n",
             media_type="text/plain",
             status_code=200,
-            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"}
+            headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )
 
     is_json = data.get("format") == "json"

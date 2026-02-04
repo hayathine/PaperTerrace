@@ -31,7 +31,7 @@ def get_redis_client() -> Optional[redis.Redis]:
     host = os.getenv("REDIS_HOST", "localhost")
     port = int(os.getenv("REDIS_PORT", "6379"))
     db = int(os.getenv("REDIS_DB", "0"))
-    
+
     # Cloud environment optimized timeouts
     socket_timeout = int(os.getenv("REDIS_SOCKET_TIMEOUT", "10"))
     socket_connect_timeout = int(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "10"))
@@ -40,29 +40,39 @@ def get_redis_client() -> Optional[redis.Redis]:
     try:
         # Memorystore optimized settings
         client = redis.Redis(
-            host=host, 
-            port=port, 
-            db=db, 
+            host=host,
+            port=port,
+            db=db,
             decode_responses=True,
             socket_timeout=socket_timeout,
             socket_connect_timeout=socket_connect_timeout,
             retry_on_timeout=True,
-            health_check_interval=30
+            health_check_interval=30,
         )
         client.ping()
         _redis_client = client
-        
+
         if _redis_error_logged:
             log.info("connect", "Redis recovered", host=host, port=port)
             _redis_error_logged = False
         else:
-            log.info("connect", "Connected to Redis", host=host, port=port, 
-                    type="Memorystore" if host != "localhost" else "Local")
-            
+            log.info(
+                "connect",
+                "Connected to Redis",
+                host=host,
+                port=port,
+                type="Memorystore" if host != "localhost" else "Local",
+            )
+
     except redis.ConnectionError as e:
         if not _redis_error_logged:
-            log.warning("connect", "Redis connection failed, using memory fallback", 
-                       host=host, port=port, error=str(e))
+            log.warning(
+                "connect",
+                "Redis connection failed, using memory fallback",
+                host=host,
+                port=port,
+                error=str(e),
+            )
             _redis_error_logged = True
         _redis_client = None
 

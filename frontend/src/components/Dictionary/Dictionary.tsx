@@ -85,7 +85,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
         const res = await fetch(
-          `/explain/${encodeURIComponent(term)}?lang=${i18n.language}`,
+          `/api/explain/${encodeURIComponent(term)}?lang=${i18n.language}`,
           { headers },
         );
 
