@@ -31,6 +31,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=runtime-builder /app/.venv /app/.venv
 COPY --from=frontend-builder /app/frontend/dist ./app/static/dist
 
+# ONNXモデルファイルをコピー
+COPY inference-service/models/paddle2onnx/PP-DocLayout-L_infer.onnx ./models/PP-DocLayout-L_infer.onnx
+
 COPY backend/alembic.ini ./
 COPY backend/migrations ./migrations
 COPY backend/app/ ./app/

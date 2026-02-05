@@ -33,6 +33,9 @@ dependencies = [
     "alembic>=1.18.3",
     "sqlalchemy>=2.0.46",
     "google-cloud-tasks>=2.21.0",
+    "opencv-python>=4.8.0",
+    "onnxruntime>=1.16.0",
+    "numpy>=1.24.0",
 ]
 
 
