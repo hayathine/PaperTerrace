@@ -24,7 +24,8 @@ tasks:
   run:
     desc: "Run local server"
     cmds:
-      - PYTHONUNBUFFERED=1 uv run uvicorn src.main:app 2>&1 | tee logs/server.log
+      - PYTHONUNBUFFERED=1 uv run uvicorn app.main:app --reload
+    dir: backend
 
   build:
     desc: "Build frontend"
@@ -123,12 +124,13 @@ tasks:
     desc: "Run ruff"
     cmds:
       - uv run ruff check --fix .
+    dir: backend
 
   cache_clear:
     desc: "Clear cache"
     cmds:
       - sqlite3 ocr_reader.db "DELETE FROM ocr_reader;"
-      - rm -rf src/static/paper_images/*
+      - rm -rf backend/app/static/paper_images/*
 
   # ============================================================================
   # Staging Environment Tasks (Microservice Architecture)
@@ -169,7 +171,7 @@ tasks:
     desc: "Build ServiceA (Main Service) for staging"
     cmds:
       - echo "🔨 Building ServiceA Image..."
-      - docker build -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/main:staging .
+      - docker build -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/main:staging .
       - echo "📤 Pushing ServiceA Image..."
       - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/main:staging
       - echo "✅ ServiceA image built and pushed!"
@@ -294,7 +296,7 @@ tasks:
     desc: "Build and push staging image (no deploy)"
     cmds:
       - echo "🔨 Building Image Locally..."
-      - docker build -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
+      - docker build -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
       - echo "📤 Pushing Image to Artifact Registry..."
       - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
       - echo "✅ Image pushed successfully!"
@@ -303,7 +305,7 @@ tasks:
     desc: "Deploy to Staging (build + push + deploy, skips Terraform for speed)"
     cmds:
       - echo "🔨 1. Building Image Locally (using cache)..."
-      - docker build -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
+      - docker build -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
       - echo "📤 2. Pushing Image to Artifact Registry..."
       - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
       - echo "🚀 3. Deploying to Cloud Run..."
@@ -314,11 +316,11 @@ tasks:
     desc: "Full Staging deploy (includes Terraform infrastructure update)"
     cmds:
       - echo "🔨 1. Building Image Locally..."
-      - docker build -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
+      - docker build -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
       - echo "📤 2. Pushing Image to Artifact Registry..."
       - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
       - echo "🏗️ 3. Applying Terraform Infrastructure..."
-      - cd terraform && TF_VAR_gemini_api_key=$GEMINI_API_KEY TF_VAR_db_password=$DB_PASSWORD terraform apply -var="enable_staging=true" -auto-approve
+      - cd infrastructure && TF_VAR_gemini_api_key=$GEMINI_API_KEY TF_VAR_db_password=$DB_PASSWORD terraform apply -var="enable_staging=true" -auto-approve
       - echo "🚀 4. Deploying to Cloud Run..."
       - gcloud run deploy paperterrace-staging --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest --region {{.REGION}} --allow-unauthenticated
       - echo "✅ Full staging deploy complete!"
@@ -327,7 +329,7 @@ tasks:
     desc: "Force rebuild without cache and deploy"
     cmds:
       - echo "🔨 Building Image (NO CACHE)..."
-      - docker build --no-cache -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
+      - docker build --no-cache -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
       - echo "📤 Pushing Image to Artifact Registry..."
       - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
       - echo "🚀 Deploying to Cloud Run..."
