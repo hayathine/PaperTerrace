@@ -139,7 +139,7 @@ class PDFOCRService:
 
         # Phase 1: Native Text & Links (ULTRA FAST)
         logger.debug(f"[OCR] Page {page_num}: Phase 1 - Extraction text/links")
-        native_words = page.extract_words(use_text_flow=True, x_tolerance=1, y_tolerance=3)
+        native_words = page.extract_words(use_text_flow=True, x_tolerance=3, y_tolerance=3)
         links = self._extract_links(page, zoom)
 
         # Create initial layout data (coordinates only)
