@@ -14,6 +14,7 @@ resource "google_cloud_run_v2_service" "main" {
 
       ports {
         container_port = 8000
+        name = "http1"
       }
 
       resources {
@@ -75,6 +76,11 @@ resource "google_cloud_run_v2_service" "main" {
         value = "0"
       }
 
+      env {
+        name  = "INFERENCE_SERVICE_URL"
+        value = var.inference_service_url
+      }
+
       # Secrets from Secret Manager
       env {
         name = "GEMINI_API_KEY"
@@ -132,6 +138,10 @@ resource "google_cloud_run_v2_service" "main" {
     annotations = {
       "run.googleapis.com/cloudsql-instances" = var.cloud_sql_connection
       "run.googleapis.com/startup-cpu-boost" = "true"
+      "run.googleapis.com/execution-environment" = "gen2"
+      # アイドルタイムアウト設定（デフォルトは15分、最大60分）
+      "autoscaling.knative.dev/maxScale" = "10"
+      "run.googleapis.com/cpu-throttling" = "false"
     }
   }
 

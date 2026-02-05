@@ -57,7 +57,9 @@ class WordAnalysisService:
         # 3.5 Local Machine Translation (M2M100) - ServiceB経由
         try:
             local_translation = await self.local_translator.translate_async(lemma)
-            if local_translation and local_translation != lemma:  # 翻訳が成功し、元の単語と異なる場合
+            if (
+                local_translation and local_translation != lemma
+            ):  # 翻訳が成功し、元の単語と異なる場合
                 self.word_cache[lemma] = False
                 self.translation_cache[lemma] = local_translation
                 self.redis.set(f"trans:{lang}:{lemma}", local_translation, expire=604800)

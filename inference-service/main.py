@@ -3,7 +3,6 @@
 レイアウト解析と翻訳処理を担当
 """
 
-import asyncio
 import logging
 import os
 import sys
@@ -15,53 +14,53 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from services.layout_service import LayoutAnalysisService
+from services.translation_service import TranslationService
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-from services.layout_service import LayoutAnalysisService
-from services.translation_service import TranslationService
-
 # ログ設定（標準出力に出力）
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.StreamHandler(sys.stdout)
-    ]
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger(__name__)
 
 # Cloud Run環境での設定
-if os.getenv('K_SERVICE'):
+if os.getenv("K_SERVICE"):
     # Cloud Run環境では構造化ログを使用
     import json
-    
+
     class StructuredFormatter(logging.Formatter):
         def format(self, record):
             log_entry = {
-                'timestamp': self.formatTime(record),
-                'severity': record.levelname,
-                'message': record.getMessage(),
-                'service': 'paperterrace-inference',
-                'component': record.name
+                "timestamp": self.formatTime(record),
+                "severity": record.levelname,
+                "message": record.getMessage(),
+                "service": "paperterrace-inference",
+                "component": record.name,
             }
-            if hasattr(record, 'processing_time'):
-                log_entry['processing_time'] = record.processing_time
+            if hasattr(record, "processing_time"):
+                log_entry["processing_time"] = record.processing_time
             return json.dumps(log_entry)
-    
+
     # 既存のハンドラーを削除して構造化ログハンドラーを追加
     root_logger = logging.getLogger()
     for handler in root_logger.handlers[:]:
         root_logger.removeHandler(handler)
-    
+
     handler = logging.StreamHandler(sys.stdout)
     handler.setFormatter(StructuredFormatter())
     root_logger.addHandler(handler)
     root_logger.setLevel(logging.INFO)
 
 # レート制限設定
-limiter = Limiter(key_func=get_remote_address)
+# マイクロサービス間通信ではIPベースの制限が全ユーザー巻き添えの原因になるため、デフォルト無効化
+limiter = Limiter(
+    key_func=get_remote_address, enabled=os.getenv("ENABLE_RATE_LIMIT", "false").lower() == "true"
+)
 
 # グローバルサービスインスタンス
 layout_service: Optional[LayoutAnalysisService] = None
@@ -72,24 +71,24 @@ translation_service: Optional[TranslationService] = None
 async def lifespan(app: FastAPI):
     """アプリケーション起動・終了時の処理"""
     global layout_service, translation_service
-    
+
     logger.info("推論サービスを初期化中...")
     start_time = time.time()
-    
+
     try:
         # サービス初期化
         layout_service = LayoutAnalysisService()
         translation_service = TranslationService()
-        
+
         # モデルロード
         await layout_service.initialize()
         await translation_service.initialize()
-        
+
         init_time = time.time() - start_time
-        logger.info(f"推論サービス初期化完了", extra={'processing_time': init_time})
-        
+        logger.info("推論サービス初期化完了", extra={"processing_time": init_time})
+
         yield
-        
+
     except Exception as e:
         logger.error(f"推論サービス初期化失敗: {e}")
         raise
@@ -106,7 +105,7 @@ app = FastAPI(
     title="PaperTerrace Inference Service",
     description="レイアウト解析と翻訳処理専用サービス",
     version="1.0.0",
-    lifespan=lifespan
+    lifespan=lifespan,
 )
 
 # CORS設定
@@ -171,127 +170,112 @@ async def health_check():
         "timestamp": time.time(),
         "services": {
             "layout_analysis": layout_service is not None,
-            "translation": translation_service is not None
-        }
+            "translation": translation_service is not None,
+        },
     }
 
 
 # レイアウト解析エンドポイント
 @app.post("/api/v1/layout-analysis", response_model=LayoutAnalysisResponse)
-@limiter.limit("10/minute")  # 1分間に10リクエスト（重い処理のため制限）
+@limiter.limit(os.getenv("RATE_LIMIT_LAYOUT", "60/minute"))  # デフォルト: 1分間に60リクエスト
 async def analyze_layout(request: Request, req: LayoutAnalysisRequest):
     """PDFのレイアウト解析を実行"""
     if not layout_service:
         raise HTTPException(status_code=503, detail="Layout analysis service not available")
-    
+
     start_time = time.time()
-    
+
     try:
         logger.info(f"レイアウト解析開始: {req.pdf_path}")
-        
+
         results = await layout_service.analyze_pdf(req.pdf_path, req.pages)
         processing_time = time.time() - start_time
-        
+
         logger.info(f"レイアウト解析完了: {processing_time:.2f}秒")
-        
+
         return LayoutAnalysisResponse(
-            success=True,
-            results=results,
-            processing_time=processing_time
+            success=True, results=results, processing_time=processing_time
         )
-        
+
     except Exception as e:
         processing_time = time.time() - start_time
         logger.error(f"レイアウト解析エラー: {e}")
-        
+
         return LayoutAnalysisResponse(
-            success=False,
-            results=[],
-            processing_time=processing_time,
-            message=str(e)
+            success=False, results=[], processing_time=processing_time, message=str(e)
         )
 
 
 # 翻訳エンドポイント
 @app.post("/api/v1/translate", response_model=TranslationResponse)
-@limiter.limit("100/minute")  # 1分間に100リクエスト
+@limiter.limit(os.getenv("RATE_LIMIT_TRANSLATE", "300/minute"))  # デフォルト: 1分間に300リクエスト
 async def translate_text(request: Request, req: TranslationRequest):
     """テキストの翻訳を実行"""
     if not translation_service:
         raise HTTPException(status_code=503, detail="Translation service not available")
-    
+
     start_time = time.time()
-    
+
     try:
         logger.info(f"翻訳開始: {req.text[:50]}...")
-        
+
         translation = await translation_service.translate(
             req.text, req.source_lang, req.target_lang
         )
         processing_time = time.time() - start_time
-        
+
         logger.info(f"翻訳完了: {processing_time:.2f}秒")
-        
+
         return TranslationResponse(
-            success=True,
-            translation=translation,
-            processing_time=processing_time
+            success=True, translation=translation, processing_time=processing_time
         )
-        
+
     except Exception as e:
         processing_time = time.time() - start_time
         logger.error(f"翻訳エラー: {e}")
-        
+
         return TranslationResponse(
-            success=False,
-            translation="",
-            processing_time=processing_time,
-            message=str(e)
+            success=False, translation="", processing_time=processing_time, message=str(e)
         )
 
 
 # バッチ翻訳エンドポイント
 @app.post("/api/v1/translate-batch", response_model=TranslationBatchResponse)
-@limiter.limit("20/minute")  # 1分間に20リクエスト（バッチ処理のため制限）
+@limiter.limit(os.getenv("RATE_LIMIT_BATCH", "60/minute"))  # デフォルト: 1分間に60リクエスト
 async def translate_batch(request: Request, req: TranslationBatchRequest):
     """複数テキストの一括翻訳を実行"""
     if not translation_service:
         raise HTTPException(status_code=503, detail="Translation service not available")
-    
+
     start_time = time.time()
-    
+
     try:
         logger.info(f"バッチ翻訳開始: {len(req.texts)}件")
-        
+
         translations = await translation_service.translate_batch(
             req.texts, req.source_lang, req.target_lang
         )
         processing_time = time.time() - start_time
-        
+
         logger.info(f"バッチ翻訳完了: {processing_time:.2f}秒")
-        
+
         return TranslationBatchResponse(
-            success=True,
-            translations=translations,
-            processing_time=processing_time
+            success=True, translations=translations, processing_time=processing_time
         )
-        
+
     except Exception as e:
         processing_time = time.time() - start_time
         logger.error(f"バッチ翻訳エラー: {e}")
-        
+
         return TranslationBatchResponse(
-            success=False,
-            translations=[],
-            processing_time=processing_time,
-            message=str(e)
+            success=False, translations=[], processing_time=processing_time, message=str(e)
         )
 
 
 if __name__ == "__main__":
     port = int(os.getenv("PORT", 8080))
     log_level = os.getenv("LOG_LEVEL", "info").lower()
-    
+
     # Cloud Run環境での設定
     uvicorn_config = {
         "host": "0.0.0.0",
@@ -300,9 +284,9 @@ if __name__ == "__main__":
         "access_log": True,
         "use_colors": False,  # Cloud Runでは色付きログを無効化
     }
-    
+
     # 開発環境では色付きログを有効化
-    if not os.getenv('K_SERVICE'):
+    if not os.getenv("K_SERVICE"):
         uvicorn_config["use_colors"] = True
-    
+
     uvicorn.run("main:app", **uvicorn_config)

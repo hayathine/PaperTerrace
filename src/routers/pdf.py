@@ -13,7 +13,10 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingRes
 from src.auth import OptionalUser
 from src.domain.features import SummaryService
 from src.domain.services.analysis_service import EnglishAnalysisService
-from src.domain.services.cloud_tasks_service import get_cloud_tasks_service
+from src.domain.services.paper_processing import (
+    process_figure_analysis_task,
+    process_paper_summary_task,
+)
 from src.logger import get_service_logger, logger
 from src.providers import RedisService, get_storage_provider
 from src.utils import _get_file_hash
@@ -30,7 +33,6 @@ service = EnglishAnalysisService()
 summary_service = SummaryService()
 storage = get_storage_provider()
 redis_service = RedisService()
-cloud_tasks_service = get_cloud_tasks_service()
 
 
 @router.post("/analyze-pdf")
@@ -276,41 +278,6 @@ async def analyze_paper(
     return JSONResponse({"task_id": task_id, "stream_url": f"/api/stream/{task_id}"})
 
 
-async def process_figure_auto_analysis(
-    figure_id: str, image_url: str, label: str = "figure", target_lang: str = "ja"
-):
-    """
-    Background task to automatically analyze and explain a figure.
-    """
-    from src.domain.features.figure_insight import FigureInsightService
-    from src.utils import fetch_image_bytes_from_url
-
-    try:
-        image_bytes = await fetch_image_bytes_from_url(image_url)
-        if image_bytes:
-            insight_service = FigureInsightService()
-
-            if label == "equation":
-                from src.domain.features.figure_insight.equation_service import EquationService
-
-                eq_service = EquationService()
-                analysis = await eq_service._analyze_bbox_with_ai(
-                    image_bytes, target_lang=target_lang
-                )
-                if analysis:
-                    storage.update_figure_explanation(figure_id, analysis.explanation)
-                    storage.update_figure_latex(figure_id, analysis.latex)
-            else:
-                explanation = await insight_service.analyze_figure(
-                    image_bytes, caption="Figure from paper", target_lang=target_lang
-                )
-                storage.update_figure_explanation(figure_id, explanation)
-
-            logger.info(f"[Auto-Explain] Completed for {label} {figure_id}")
-    except Exception as e:
-        logger.error(f"[Auto-Explain] Failed for {label} {figure_id}: {e}")
-
-
 @router.get("/stream/{task_id}")
 async def stream(task_id: str):
     import json
@@ -458,9 +425,8 @@ async def stream(task_id: str):
                                 label=fig.get("label", "figure"),
                                 latex=fig.get("latex", ""),
                             )
-                            # Trigger figure analysis via Cloud Tasks if enabled
-                            if cloud_tasks_service.is_enabled:
-                                cloud_tasks_service.enqueue_figure_analysis(fid, fig["image_url"])
+                            # Trigger figure analysis via asyncio task
+                            asyncio.create_task(process_figure_analysis_task(fid, fig["image_url"]))
 
                 except Exception as e:
                     logger.error(f"Failed to save paper: {e}")
@@ -474,19 +440,7 @@ async def stream(task_id: str):
                     storage.save_session_context(s_id, new_paper_id)
 
                 # --- Auto-Summarization for Abstract ---
-                if cloud_tasks_service.is_enabled:
-                    cloud_tasks_service.enqueue_paper_summary(new_paper_id, lang=lang)
-                else:
-                    try:
-                        summary_full = await summary_service.summarize_full(
-                            target_lang=lang, pdf_bytes=pdf_content
-                        )
-                        if summary_full:
-                            storage.update_paper_abstract(new_paper_id, summary_full)
-                            logger.info(f"Full summary saved as abstract for paper {new_paper_id}")
-
-                    except Exception as e:
-                        logger.error(f"Auto-summary generation failed: {e}")
+                asyncio.create_task(process_paper_summary_task(new_paper_id, lang=lang))
 
                 logger.info(
                     f"Saved session context for: {s_id} (result: {res}, length: {len(full_text)})"
@@ -740,8 +694,8 @@ async def stream(task_id: str):
                             label=fig.get("label", "figure"),
                             latex=fig.get("latex", ""),
                         )
-                        if cloud_tasks_service.is_enabled:
-                            cloud_tasks_service.enqueue_figure_analysis(fid, fig["image_url"])
+                        if True:  # Always trigger async task
+                            asyncio.create_task(process_figure_analysis_task(fid, fig["image_url"]))
 
             except Exception as e:
                 logger.error(f"Failed to save paper: {e}")
@@ -753,18 +707,7 @@ async def stream(task_id: str):
                 storage.save_session_context(session_id, paper_id)
 
             # --- Auto-Summarization for Abstract ---
-            if cloud_tasks_service.is_enabled:
-                cloud_tasks_service.enqueue_paper_summary(paper_id, lang=lang)
-            else:
-                try:
-                    summary_full = await summary_service.summarize_full(
-                        target_lang=lang, pdf_bytes=pdf_content
-                    )
-                    if summary_full:
-                        storage.update_paper_abstract(paper_id, summary_full)
-                        logger.info(f"Full summary saved as abstract for paper {paper_id}")
-                except Exception as e:
-                    logger.error(f"Auto-summary generation failed: {e}")
+            asyncio.create_task(process_paper_summary_task(paper_id, lang=lang))
 
             # 完了処理
 

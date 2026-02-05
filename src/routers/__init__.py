@@ -12,7 +12,6 @@ from .note import router as note_router
 from .papers import router as papers_router
 from .pdf import router as pdf_router
 from .stamps import router as stamps_router
-from .tasks import router as tasks_router
 from .translation import router as translation_router
 from .upload import router as upload_router
 from .users import router as users_router
@@ -29,6 +28,5 @@ __all__ = [
     "note_router",
     "papers_router",
     "stamps_router",
-    "tasks_router",
     "upload_router",
 ]

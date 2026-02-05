@@ -39,7 +39,10 @@ class FigureService:
                 # ServiceBを使用した非同期レイアウト解析
                 local_results = await self.layout_service.detect_layout_async(pdf_path, [page_num])
                 for res in local_results:
-                    if res.get("class") in ["figure", "table", "equation"] and res.get("page") == page_num:
+                    if (
+                        res.get("class") in ["figure", "table", "equation"]
+                        and res.get("page") == page_num
+                    ):
                         label = res["class"]
                         # Convert pixel coordinates to PDF points
                         bbox = res["bbox"]
@@ -49,7 +52,9 @@ class FigureService:
                             candidates.append({"bbox": bbox, "label": label})
             else:
                 # フォールバック: 従来の同期処理（非推奨）
-                logger.warning("PDF path not provided, falling back to synchronous layout detection")
+                logger.warning(
+                    "PDF path not provided, falling back to synchronous layout detection"
+                )
                 local_results = self.layout_service.detect_layout(img_bytes)
                 for res in local_results:
                     if res["label"] in ["figure", "table", "equation", "chart"]:

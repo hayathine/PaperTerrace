@@ -41,7 +41,6 @@ resource "google_project_service" "apis" {
     "vpcaccess.googleapis.com",
     "servicenetworking.googleapis.com",
     "iam.googleapis.com", 
-    "cloudtasks.googleapis.com",
     "redis.googleapis.com",
   ])
 
@@ -172,6 +171,14 @@ resource "google_sql_database" "staging" {
   project  = var.project_id
 }
 
+# Get Inference Service URL (Service B) for proper linking
+# data "google_cloud_run_v2_service" "inference_staging" {
+#   count    = var.enable_staging ? 1 : 0
+#   name     = "paperterrace-inference-staging"
+#   location = var.region
+#   project  = var.project_id
+# }
+
 # Staging Cloud Run Service
 module "cloud_run_staging" {
   source = "./modules/cloud_run"
@@ -201,6 +208,10 @@ module "cloud_run_staging" {
   redis_host = var.enable_staging ? module.redis_staging[0].redis_host : "localhost"
   redis_port = var.enable_staging ? tostring(module.redis_staging[0].redis_port) : "6379"
 
+  # Inference Service Integration
+  # inference_service_url = var.enable_staging ? data.google_cloud_run_v2_service.inference_staging[0].uri : ""
+  inference_service_url = ""
+
   depends_on = [
     google_project_service.apis,
     module.cloud_sql,
@@ -213,15 +224,7 @@ module "cloud_run_staging" {
   ]
 }
 
-# Cloud Tasks
-module "cloud_tasks" {
-  source = "./modules/cloud_tasks"
 
-  project_id = var.project_id
-  region     = var.region
-
-  depends_on = [google_project_service.apis]
-}
 
 # ============================================================================
 # Redis (Memorystore)

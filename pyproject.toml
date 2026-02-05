@@ -7,7 +7,6 @@ requires-python = ">=3.12"
 dependencies = [
     "beautifulsoup4>=4.14.3",
     "chardet>=5.2.0",
-    "ctranslate2>=4.6.3",
     "datetime>=6.0",
     "dotenv>=0.9.9",
     "email-validator>=2.3.0",
@@ -29,15 +28,12 @@ dependencies = [
     "structlog>=24.1.0",
     "python-multipart>=0.0.21",
     "redis>=7.1.0",
-    "sentencepiece>=0.2.1",
     "spacy>=3.8.11",
     "tiktoken>=0.12.0",
     "uuid6>=2025.0.1",
     "uvicorn>=0.40.0",
     "Pillow>=10.4.0",
     "typer>=0.21.1",
-    "onnxruntime>=1.23.2",
-    "opencv-python-headless>=4.13.0.90",
     "alembic>=1.18.3",
     "sqlalchemy>=2.0.46",
     "google-cloud-tasks>=2.21.0",
@@ -56,6 +52,8 @@ dev = [
     "torch>=2.10.0",
     "transformers>=5.0.0",
     "git-filter-repo>=2.47.0",
+    "ctranslate2>=4.6.0",
+    "sentencepiece>=0.2.0",
 ]
 
 [tool.ruff]

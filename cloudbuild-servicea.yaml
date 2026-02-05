@@ -1,0 +1,45 @@
+# ServiceA（メインサービス）用Cloud Build設定
+steps:
+  # Docker イメージのビルド
+  - name: 'gcr.io/cloud-builders/docker'
+    args: [
+      'build',
+      '-t', 'gcr.io/$PROJECT_ID/paperterrace-main:$COMMIT_SHA',
+      '-t', 'gcr.io/$PROJECT_ID/paperterrace-main:latest',
+      '.'
+    ]
+
+  # Docker イメージのプッシュ
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/paperterrace-main:$COMMIT_SHA']
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', 'gcr.io/$PROJECT_ID/paperterrace-main:latest']
+
+  # Cloud Run へのデプロイ（軽量構成）
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: 'gcloud'
+    args: [
+      'run', 'deploy', 'paperterrace-main',
+      '--image', 'gcr.io/$PROJECT_ID/paperterrace-main:$COMMIT_SHA',
+      '--region', 'asia-northeast1',
+      '--platform', 'managed',
+      '--allow-unauthenticated',
+      '--memory', '1Gi',
+      '--cpu', '2',
+      '--min-instances', '0',
+      '--max-instances', '20',
+      '--concurrency', '80',
+      '--no-cpu-throttling',
+      '--set-env-vars', 'INFERENCE_SERVICE_URL=https://paperterrace-inference-xxx.run.app,INFERENCE_SERVICE_TIMEOUT=30,INFERENCE_SERVICE_RETRIES=3',
+      '--timeout', '300',
+      '--execution-environment', 'gen2'
+    ]
+
+# ビルド設定
+options:
+  machineType: 'E2_HIGHCPU_8'
+  diskSizeGb: 50
+
+# タイムアウト設定
+timeout: '900s'

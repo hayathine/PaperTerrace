@@ -17,7 +17,7 @@ variable "service_name" {
 variable "min_instance_count" {
   description = "Minimum number of instances"
   type        = number
-  default     = 1
+  default     = 0
 }
 
 variable "image_url" {
@@ -85,4 +85,22 @@ variable "redis_port" {
   description = "Redis port"
   type        = string
   default     = "6379"
+}
+
+variable "request_timeout" {
+  description = "Request timeout in seconds"
+  type        = string
+  default     = "300s"
+}
+
+variable "idle_timeout" {
+  description = "Idle timeout annotation (not directly supported in Cloud Run v2)"
+  type        = string
+  default     = "15m"
+}
+
+variable "inference_service_url" {
+  description = "URL of the inference service (Service B)"
+  type        = string
+  default     = ""
 }

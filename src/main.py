@@ -26,7 +26,6 @@ from .routers import (
     papers_router,
     pdf_router,
     stamps_router,
-    tasks_router,
     translation_router,
     upload_router,
     users_router,
@@ -178,7 +177,6 @@ app.include_router(users_router, prefix="/api")
 
 # Grouped routers
 app.include_router(stamps_router, prefix="/api")
-app.include_router(tasks_router, prefix="/api")
 app.include_router(translation_router, prefix="/api")
 app.include_router(explore_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
