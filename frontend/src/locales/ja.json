@@ -122,7 +122,9 @@
   },
   "menu": {
     "translate": "翻訳",
-    "note": "ノート"
+    "note": "ノート",
+    "ask_ai": "AIに聞く",
+    "close": "閉じる"
   },
   "search": {
     "placeholder": "検索...",

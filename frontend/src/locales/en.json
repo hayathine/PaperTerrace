@@ -122,7 +122,9 @@
   },
   "menu": {
     "translate": "Translate",
-    "note": "Note"
+    "note": "Note",
+    "ask_ai": "Ask AI",
+    "close": "Close"
   },
   "search": {
     "placeholder": "Search...",

@@ -2,10 +2,8 @@
 ServiceB（推論サービス）のサービスモジュール
 """
 
-from .layout_service import LayoutAnalysisService
-from .translation_service import TranslationService
+from .layout_detection.layout_service import LayoutAnalysisService
 
 __all__ = [
     "LayoutAnalysisService",
-    "TranslationService",
 ]

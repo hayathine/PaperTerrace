@@ -875,6 +875,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
               jumpTarget={jumpTarget}
               searchTerm={searchTerm}
               currentSearchMatch={currentSearchMatch}
+              isClickMode={mode === "text"}
             />
           ))}
         </div>

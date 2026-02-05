@@ -138,16 +138,9 @@ class GCSImageStorage(ImageStorageStrategy):
         # PaperTerraceの現状の実装では /static/... でアクセスしているため、
         # 本番では /static/ のマッピングを変えるか、署名付きURLを払い出すのが良い。
 
-        # 簡易実装: 署名付きURLを発行する (有効期限1時間など)
-        # ただし頻繁に発行すると遅いので、理想は Load Balancer + CDN
-        # ここでは取り急ぎ authenticated URL を返すか、リダイレクト用パスを返す
-
-        # FIXME: Cloud Run 上で static files として扱うには工夫が必要。
-        # 一旦、署名付きURLを返す実装にする（クライアントはそれをimg srcにする）
-        # ただし、現状のフロントエンドは /static/... を期待している箇所があるかもしれない。
-
-        # 既存互換性重視:
-        # フロントエンドがそのまま表示できるよう、署名付きURLを返す
+        # 署名付きURLを発行して画像にアクセス可能にする
+        # Cloud Run環境では静的ファイルの配信に制限があるため、
+        # GCSの署名付きURLを使用してクライアントが直接アクセスできるようにする
         import datetime
 
         url = blob.generate_signed_url(

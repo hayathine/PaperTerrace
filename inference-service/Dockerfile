@@ -1,10 +1,11 @@
 # ServiceB（推論サービス）用Dockerfile
+FROM ghcr.io/astral-sh/uv:latest AS uv
 FROM python:3.12-slim
 
 # 作業ディレクトリ設定
 WORKDIR /app
 
-# システムパッケージのインストール
+# システムパッケージのインストール（ML推論に必要な依存関係を追加）
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-dev \
     libglib2.0-0 \
@@ -13,11 +14,18 @@ RUN apt-get update && apt-get install -y \
     libxrender-dev \
     libgomp1 \
     libgcc-s1 \
+    libopenblas-dev \
+    liblapack-dev \
+    build-essential \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
-# Python依存関係のインストール
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# uvをコピー
+COPY --from=uv /uv /usr/local/bin/uv
+
+# Python依存関係のインストール（パッケージビルドなし）
+COPY pyproject.toml uv.lock* ./
+RUN uv sync --no-dev --frozen --no-install-project
 
 # アプリケーションコードのコピー
 COPY . .
@@ -36,4 +44,4 @@ ENV CT2_INTRA_THREADS=4
 EXPOSE 8080
 
 # アプリケーション起動
-CMD ["python", "main.py"]
+CMD ["uv", "run", "python", "main.py"]

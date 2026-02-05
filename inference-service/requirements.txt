@@ -1,6 +1,0 @@
-fastapi==0.115.6
-uvicorn[standard]==0.32.1
-pydantic==2.10.4
-slowapi==0.1.9
-numpy==1.26.4
-Pillow==11.0.0

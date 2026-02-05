@@ -5,357 +5,369 @@ version: "3"
 dotenv: [".env"]
 
 vars:
-  GREETING: Hello, world!
   PROJECT_ID: gen-lang-client-0800253336
   REGION: asia-northeast1
 
 tasks:
+  # ============================================================================
+  # Development Tasks
+  # ============================================================================
+  
   default:
-    desc: Print a greeting message
+    desc: "Show available tasks"
     cmds:
-      - echo "{{.GREETING}}"
+      - task --list
     silent: true
 
+  setup:
+    desc: "Setup development environment"
+    cmds:
+      - echo "🔧 Setting up development environment..."
+      - task: redis
+      - echo "✅ Development environment ready!"
+
   redis:
-    desc: "Start Redis container"
+    desc: "Start Redis container for local development"
     cmds:
       - docker run -d --name paper-terrace-redis -p 6379:6379 redis:latest || docker start paper-terrace-redis
 
   run:
-    desc: "Run local server"
+    desc: "Run backend server with hot reload"
     cmds:
-      - PYTHONUNBUFFERED=1 uv run uvicorn app.main:app --reload
-    dir: backend
-
-  build:
-    desc: "Build frontend"
-    cmds:
-      - cd frontend && npm run build
+      - PYTHONUNBUFFERED=1 uv run --directory backend uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
   dev:
     desc: "Run frontend dev server"
     cmds:
-      - cd frontend && npm run dev
+      - npm run dev
+    dir: frontend
 
-  read:info:
-    desc: "Run local server"
+  dev:full:
+    desc: "Run both backend and frontend in parallel"
+    deps: [redis]
     cmds:
-      - gcloud run services logs read paperterrace --limit=100
+      - echo "🚀 Starting full development environment..."
+      - |
+        # Start backend in background
+        PYTHONUNBUFFERED=1 uv run --directory backend uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
+        BACKEND_PID=$!
+        
+        # Start frontend in background  
+        cd frontend && npm run dev &
+        FRONTEND_PID=$!
+        
+        echo "Backend PID: $BACKEND_PID"
+        echo "Frontend PID: $FRONTEND_PID"
+        echo "Press Ctrl+C to stop both services"
+        
+        # Wait for interrupt
+        trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit" INT
+        wait
 
-  read:error:
-    desc: "Run local server"
+  build:
+    desc: "Build frontend for production"
     cmds:
-      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace" AND severity>=ERROR' --limit=50 --format=json
+      - npm run build
+    dir: frontend
 
-  tail:info:
-    desc: "Run local server"
+  test:
+    desc: "Run backend tests"
     cmds:
-      - gcloud beta run services logs tail paperterrace
+      - uv run --directory backend pytest
 
-  tail:error:
-    desc: "Run local server"
+  lint:
+    desc: "Run linting and formatting"
     cmds:
-      - gcloud logging tail 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace" AND severity>=ERROR' --limit=50 --format=json
+      - echo "🔍 Running backend linting..."
+      - uv run --directory backend ruff check --fix .
+      - echo "🔍 Running frontend linting..."
+      - cd frontend && npm run lint
 
-  get_iam:
-    desc: "Get IAM policy"
+  clean:
+    desc: "Clean cache and temporary files"
     cmds:
-      - gcloud run services get-iam-policy paperterrace
+      - echo "🧹 Cleaning cache..."
+      - rm -rf backend/.ruff_cache backend/__pycache__ backend/app/__pycache__
+      - rm -rf frontend/node_modules/.cache frontend/dist
+      - sqlite3 ocr_reader.db "DELETE FROM ocr_reader;" 2>/dev/null || true
+      - rm -rf backend/app/static/paper_images/* 2>/dev/null || true
+      - echo "✅ Cache cleared!"
 
-  add_all_users:
-    desc: "Add auth"
-    cmds:
-      - gcloud run services add-iam-policy-binding paperterrace --member="allUsers" --role="roles/run.invoker"
-
-  remove_all_users:
-    desc: "Remove IAM policy"
-    cmds:
-      - gcloud run services remove-iam-policy-binding paperterrace --member="allUsers" --role="roles/run.invoker"
-
-  db:stop:
-    desc: Stop Cloud SQL instance (save cost)
-    cmds:
-      - gcloud sql instances patch paperterrace-db --activation-policy=NEVER
-
-  db:start:
-    desc: Start Cloud SQL instance
-    cmds:
-      - gcloud sql instances patch paperterrace-db --activation-policy=ALWAYS
-
-  all_stop:
-    desc: Stop all services
-    deps: [remove_all_users, db:stop]
+  # ============================================================================
+  # Production Tasks
+  # ============================================================================
 
   deploy:
-    desc: Full deploy including infra checks
+    desc: "Deploy to production"
     cmds:
-      - ./deploy.sh
+      - echo "🚀 Deploying to production..."
+      - ./scripts/deployment/deploy.sh
+
   deploy:fast:
-    desc: Deploy application code fast (skips infra checks)
+    desc: "Fast deploy (skip infrastructure checks)"
     cmds:
-      - ./deploy.sh --skip-infra
+      - ./scripts/deployment/deploy.sh --skip-infra
+
+  # ============================================================================
+  # Database Tasks
+  # ============================================================================
+
+  db:start:
+    desc: "Start Cloud SQL instance"
+    cmds:
+      - echo "🔄 Starting Cloud SQL instance..."
+      - gcloud sql instances patch paperterrace-db --activation-policy=ALWAYS
+      - task: db:wait
+
+  db:stop:
+    desc: "Stop Cloud SQL instance (save cost)"
+    cmds:
+      - echo "⏹️ Stopping Cloud SQL instance..."
+      - gcloud sql instances patch paperterrace-db --activation-policy=NEVER
 
   db:wait:
-    desc: Wait for Cloud SQL to be RUNNABLE
+    desc: "Wait for Cloud SQL to be ready"
     cmds:
       - |
-        echo "Waiting for Cloud SQL to be RUNNABLE..."
-        for i in 1 2 3 4 5 6; do
-          STATUS=$(gcloud sql instances describe paperterrace-db \
-            --format="value(state)")
+        echo "⏳ Waiting for Cloud SQL to be RUNNABLE..."
+        for i in {1..6}; do
+          STATUS=$(gcloud sql instances describe paperterrace-db --format="value(state)")
           echo "Current state: $STATUS"
           if [ "$STATUS" = "RUNNABLE" ]; then
-            echo "Cloud SQL is ready"
+            echo "✅ Cloud SQL is ready"
             exit 0
           fi
           sleep 30
         done
-        echo "Cloud SQL did not become RUNNABLE"
+        echo "❌ Cloud SQL did not become RUNNABLE"
         exit 1
 
-  start:
-    desc: start db and deploy
-    deps:
-      - db:start
-      - db:wait
-      - deploy
-
-  ruff:
-    desc: "Run ruff"
+  db:migrate:
+    desc: "Run database migrations"
     cmds:
-      - uv run ruff check --fix .
-    dir: backend
-
-  cache_clear:
-    desc: "Clear cache"
-    cmds:
-      - sqlite3 ocr_reader.db "DELETE FROM ocr_reader;"
-      - rm -rf backend/app/static/paper_images/*
+      - echo "🔄 Running database migrations..."
+      - uv run --directory backend alembic upgrade head
 
   # ============================================================================
-  # Staging Environment Tasks (Microservice Architecture)
+  # Staging Environment Tasks
   # ============================================================================
 
-  staging:serviceb:build:
-    desc: "Build ServiceB (Inference Service) for staging"
+  staging:deploy:
+    desc: "Deploy to staging environment"
     cmds:
-      - echo "🔨 Building ServiceB Image..."
-      - cd inference-service && docker build -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/inference:staging .
-      - echo "📤 Pushing ServiceB Image..."
-      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/inference:staging
-      - echo "✅ ServiceB image built and pushed!"
+      - echo "🚀 Deploying to staging..."
+      - docker build -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:staging .
+      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:staging
+      - |
+        gcloud run deploy paperterrace-staging \
+          --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:staging \
+          --region {{.REGION}} \
+          --allow-unauthenticated \
+          --memory 1Gi \
+          --cpu 2 \
+          --min-instances 0 \
+          --max-instances 10 \
+          --timeout 300 \
+          --set-env-vars "GEMINI_API_KEY=${GEMINI_API_KEY},AI_PROVIDER=gemini,OCR_MODEL=gemini-1.5-flash"
+      - echo "✅ Staging deployed!"
+
+  staging:deploy:microservices:
+    desc: "Deploy microservices to staging"
+    cmds:
+      - task: staging:serviceb:deploy
+      - task: staging:servicea:deploy
+      - echo "🎉 Microservices deployed to staging!"
+      - task: staging:urls
 
   staging:serviceb:deploy:
-    desc: "Deploy ServiceB (Inference Service) to staging"
-    deps: [staging:serviceb:build]
+    desc: "Deploy inference service to staging"
     cmds:
-      - echo "🚀 Deploying ServiceB to staging..."
+      - echo "🔨 Building and deploying ServiceB..."
+      - docker build -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/inference:staging .
+      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/inference:staging
       - |
         gcloud run deploy paperterrace-inference-staging \
           --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/inference:staging \
           --region {{.REGION}} \
-          --platform managed \
           --allow-unauthenticated \
           --memory 4Gi \
           --cpu 4 \
           --min-instances 1 \
           --max-instances 5 \
           --concurrency 10 \
-          --no-cpu-throttling \
-          --set-env-vars "ORT_INTRA_THREADS=4,ORT_INTER_THREADS=2,CT2_INTER_THREADS=1,CT2_INTRA_THREADS=4,LOG_LEVEL=INFO" \
-          --timeout 300 \
-          --execution-environment gen2
-      - echo "✅ ServiceB deployed to staging!"
-
-  staging:servicea:build:
-    desc: "Build ServiceA (Main Service) for staging"
-    cmds:
-      - echo "🔨 Building ServiceA Image..."
-      - docker build -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/main:staging .
-      - echo "📤 Pushing ServiceA Image..."
-      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/main:staging
-      - echo "✅ ServiceA image built and pushed!"
+          --timeout 300
+      - echo "✅ ServiceB deployed!"
+    dir: inference-service
 
   staging:servicea:deploy:
-    desc: "Deploy ServiceA (Main Service) to staging"
-    deps: [staging:servicea:build]
+    desc: "Deploy main service to staging"
     cmds:
-      - echo "🔍 Getting ServiceB URL..."
+      - echo "🔨 Building and deploying ServiceA..."
+      - docker build -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/main:staging .
+      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/main:staging
       - |
-        SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)")
-        echo "ServiceB URL: $SERVICEB_URL"
-        echo "🚀 Deploying ServiceA to staging..."
+        SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null || echo "")
         gcloud run deploy paperterrace-main-staging \
           --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/main:staging \
           --region {{.REGION}} \
-          --platform managed \
           --allow-unauthenticated \
           --memory 1Gi \
           --cpu 2 \
           --min-instances 0 \
           --max-instances 10 \
           --concurrency 80 \
-          --no-cpu-throttling \
-          --set-env-vars "INFERENCE_SERVICE_URL=$SERVICEB_URL,INFERENCE_SERVICE_TIMEOUT=30,INFERENCE_SERVICE_RETRIES=3" \
           --timeout 300 \
-          --execution-environment gen2
-      - echo "✅ ServiceA deployed to staging!"
+          --set-env-vars "INFERENCE_SERVICE_URL=$SERVICEB_URL"
+      - echo "✅ ServiceA deployed!"
 
-  staging:deploy:microservices:
-    desc: "Deploy both ServiceA and ServiceB to staging"
-    cmds:
-      - task: staging:serviceb:deploy
-      - task: staging:servicea:deploy
-      - echo "🎉 Microservices deployed to staging!"
-      - echo "ServiceA URL:" && gcloud run services describe paperterrace-main-staging --region {{.REGION}} --format="value(status.url)"
-      - echo "ServiceB URL:" && gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)"
-
-  staging:health:
-    desc: "Check health of staging services"
-    cmds:
-      - echo "🔍 Checking ServiceB health..."
-      - |
-        SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)")
-        curl -f "$SERVICEB_URL/health" || echo "❌ ServiceB health check failed"
-      - echo "🔍 Checking ServiceA health..."
-      - |
-        SERVICEA_URL=$(gcloud run services describe paperterrace-main-staging --region {{.REGION}} --format="value(status.url)")
-        curl -f "$SERVICEA_URL/" || echo "❌ ServiceA health check failed"
-
-  staging:logs:servicea:
-    desc: "Read ServiceA staging logs"
-    cmds:
-      - gcloud run services logs read paperterrace-staging --limit=50 --project {{.PROJECT_ID}} --region {{.REGION}}
-
-  staging:logs:serviceb:
-    desc: "Read ServiceB staging logs"
-    cmds:
-      - gcloud run services logs read paperterrace-inference-staging --limit=50 --project {{.PROJECT_ID}} --region {{.REGION}}
-
-  staging:logs:tail:servicea:
-    desc: "Tail ServiceA staging logs"
-    cmds:
-      - gcloud run services logs tail paperterrace-staging --project {{.PROJECT_ID}} --region {{.REGION}}
-
-  staging:logs:tail:serviceb:
-    desc: "Tail ServiceB staging logs"
-    cmds:
-      - gcloud run services logs tail paperterrace-inference-staging --project {{.PROJECT_ID}} --region {{.REGION}}
-
-  staging:test:translation:
-    desc: "Test ServiceB translation endpoint"
-    cmds:
-      - |
-        SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)")
-        echo "Testing translation endpoint..."
-        curl -X POST "$SERVICEB_URL/api/v1/translate" \
-          -H "Content-Type: application/json" \
-          -d '{"text": "Hello world", "source_lang": "en", "target_lang": "ja"}' \
-          | jq .
-
-  staging:test:layout:
-    desc: "Test ServiceB layout analysis endpoint"
-    cmds:
-      - |
-        SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)")
-        echo "Testing layout analysis endpoint..."
-        curl -X POST "$SERVICEB_URL/api/v1/layout-analysis" \
-          -H "Content-Type: application/json" \
-          -d '{"pdf_path": "test.pdf", "pages": [1]}' \
-          | jq .
-
-  staging:stop:
-    desc: "Stop staging microservices"
-    cmds:
-      - echo "🛑 Stopping ServiceA..."
-      - gcloud run services delete paperterrace-main-staging --region {{.REGION}} --quiet || echo "ServiceA not found"
-      - echo "🛑 Stopping ServiceB..."
-      - gcloud run services delete paperterrace-inference-staging --region {{.REGION}} --quiet || echo "ServiceB not found"
-      - echo "✅ Staging microservices stopped!"
-
-  staging:test:all:
+  staging:test:
     desc: "Run comprehensive staging tests"
     cmds:
-      - ./scripts/staging-test.sh
+      - echo "🧪 Running staging tests..."
+      - task: staging:health
+      - task: staging:test:upload
+      - echo "✅ All staging tests passed!"
 
-  staging:test:load:
-    desc: "Run staging tests with load testing"
-    cmds:
-      - ./scripts/staging-test.sh --load-test
-
-  staging:urls:
-    desc: "Get staging service URLs"
-    cmds:
-      - echo "ServiceA URL:"
-      - gcloud run services describe paperterrace-main-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null || echo "ServiceA not deployed"
-      - echo "ServiceB URL:"
-      - gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null || echo "ServiceB not deployed"
-
-  # Legacy staging tasks (keeping for backward compatibility)
-  staging:build:
-    desc: "Build and push staging image (no deploy)"
-    cmds:
-      - echo "🔨 Building Image Locally..."
-      - docker build -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
-      - echo "📤 Pushing Image to Artifact Registry..."
-      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
-      - echo "✅ Image pushed successfully!"
-
-  staging:deploy:
-    desc: "Deploy to Staging (build + push + deploy, skips Terraform for speed)"
-    cmds:
-      - echo "🔨 1. Building Image Locally (using cache)..."
-      - docker build -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
-      - echo "📤 2. Pushing Image to Artifact Registry..."
-      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
-      - echo "🚀 3. Deploying to Cloud Run..."
-      - gcloud run deploy paperterrace-staging --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest --region {{.REGION}} --allow-unauthenticated
-      - echo "✅ Staging deployed!"
-
-  staging:deploy:full:
-    desc: "Full Staging deploy (includes Terraform infrastructure update)"
-    cmds:
-      - echo "🔨 1. Building Image Locally..."
-      - docker build -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
-      - echo "📤 2. Pushing Image to Artifact Registry..."
-      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
-      - echo "🏗️ 3. Applying Terraform Infrastructure..."
-      - cd infrastructure && TF_VAR_gemini_api_key=$GEMINI_API_KEY TF_VAR_db_password=$DB_PASSWORD terraform apply -var="enable_staging=true" -auto-approve
-      - echo "🚀 4. Deploying to Cloud Run..."
-      - gcloud run deploy paperterrace-staging --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest --region {{.REGION}} --allow-unauthenticated
-      - echo "✅ Full staging deploy complete!"
-
-  staging:rebuild:
-    desc: "Force rebuild without cache and deploy"
-    cmds:
-      - echo "🔨 Building Image (NO CACHE)..."
-      - docker build --no-cache -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest .
-      - echo "📤 Pushing Image to Artifact Registry..."
-      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest
-      - echo "🚀 Deploying to Cloud Run..."
-      - gcloud run deploy paperterrace-staging --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest --region {{.REGION}} --allow-unauthenticated
-      - echo "✅ Staging rebuilt and deployed!"
-
-  staging:logs:
-    desc: "Read Staging logs (App logs only, JST)"
+  staging:test:upload:
+    desc: "Test PDF upload with test.pdf"
     cmds:
       - |
-        gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging" AND jsonPayload.logger:*' \
-          --project={{.PROJECT_ID}} \
-          --limit=50 \
-          --format="table(jsonPayload.timestamp.date('%Y-%m-%d %H:%M:%S'),jsonPayload.level,jsonPayload.event)"
+        STAGING_URL=$(gcloud run services describe paperterrace-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
+        if [ -z "$STAGING_URL" ]; then
+          echo "❌ Staging service not found. Deploy first with: task staging:deploy"
+          exit 1
+        fi
+        
+        echo "📄 Testing PDF upload to: $STAGING_URL"
+        
+        # Check if test.pdf exists
+        if [ ! -f "frontend/public/test.pdf" ]; then
+          echo "❌ test.pdf not found in frontend/public/"
+          exit 1
+        fi
+        
+        # Test health endpoint first
+        echo "🔍 Testing health endpoint..."
+        curl -f "$STAGING_URL/api/health" || (echo "❌ Health check failed" && exit 1)
+        
+        # Test PDF upload with correct endpoint
+        echo "📤 Uploading test.pdf..."
+        RESPONSE=$(curl -s -w "%{http_code}" -o /tmp/upload_response.json -X POST "$STAGING_URL/api/analyze-pdf-json" \
+          -F "file=@frontend/public/test.pdf" \
+          -F "session_id=test-session-$(date +%s)" \
+          -F "lang=ja")
+        
+        echo "HTTP Status: $RESPONSE"
+        echo "Response:"
+        cat /tmp/upload_response.json
+        
+        # Check if upload was successful (HTTP 200)
+        if [ "$RESPONSE" = "200" ]; then
+          TASK_ID=$(cat /tmp/upload_response.json | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
+          if [ -n "$TASK_ID" ]; then
+            echo "✅ PDF upload successful! Task ID: $TASK_ID"
+            echo "🔄 Stream URL: $STAGING_URL/api/stream/$TASK_ID"
+          else
+            echo "⚠️ Upload response missing task_id"
+          fi
+        else
+          echo "❌ PDF upload failed with HTTP $RESPONSE"
+          exit 1
+        fi
 
-  staging:logs:all:
-    desc: "Read all Staging logs (including system logs)"
+  staging:health:
+    desc: "Check staging services health"
     cmds:
-      - gcloud run services logs read paperterrace-staging --limit=50 --project {{.PROJECT_ID}} --region {{.REGION}}
+      - echo "🔍 Checking staging services health..."
+      - |
+        # Check ServiceA (main)
+        SERVICEA_URL=$(gcloud run services describe paperterrace-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
+        if [ -n "$SERVICEA_URL" ]; then
+          echo "ServiceA: $SERVICEA_URL"
+          curl -f "$SERVICEA_URL/api/health" && echo "✅ ServiceA healthy" || echo "❌ ServiceA unhealthy"
+        else
+          echo "⚠️ ServiceA not deployed"
+        fi
+        
+        # Check ServiceB (inference)
+        SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
+        if [ -n "$SERVICEB_URL" ]; then
+          echo "ServiceB: $SERVICEB_URL"
+          curl -f "$SERVICEB_URL/health" && echo "✅ ServiceB healthy" || echo "❌ ServiceB unhealthy"
+        else
+          echo "⚠️ ServiceB not deployed"
+        fi
 
-  staging:url:
-    desc: "Get Staging URL"
+  staging:logs:
+    desc: "Show staging logs"
     cmds:
-      - gcloud run services describe paperterrace-staging --region {{.REGION}} --format="value(status.url)"
+      - echo "📋 Staging logs (last 50 entries):"
+      - gcloud run services logs read paperterrace-main-staging --limit=50 --region {{.REGION}} 2>/dev/null || echo "No ServiceA logs found"
 
-  clear-images:
-    desc: "====CAUTION==== Clear all images from GCS bucket"
+  staging:urls:
+    desc: "Show staging service URLs"
     cmds:
-      - gcloud storage rm gs://gen-lang-client-0800253336_cloudbuild/source/** --project={{.PROJECT_ID}}
+      - echo "🔗 Staging Service URLs:"
+      - |
+        SERVICEA_URL=$(gcloud run services describe paperterrace-main-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
+        SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
+        
+        if [ -n "$SERVICEA_URL" ]; then
+          echo "ServiceA (Main): $SERVICEA_URL"
+        else
+          echo "ServiceA: Not deployed"
+        fi
+        
+        if [ -n "$SERVICEB_URL" ]; then
+          echo "ServiceB (Inference): $SERVICEB_URL"
+        else
+          echo "ServiceB: Not deployed"
+        fi
+
+  staging:stop:
+    desc: "Stop staging services"
+    cmds:
+      - echo "🛑 Stopping staging services..."
+      - gcloud run services delete paperterrace-main-staging --region {{.REGION}} --quiet 2>/dev/null || echo "ServiceA already stopped"
+      - gcloud run services delete paperterrace-inference-staging --region {{.REGION}} --quiet 2>/dev/null || echo "ServiceB already stopped"
+      - echo "✅ Staging services stopped!"
+
+  # ============================================================================
+  # Monitoring & Logs
+  # ============================================================================
+
+  logs:prod:
+    desc: "Show production logs"
+    cmds:
+      - gcloud run services logs read paperterrace --limit=100 --region {{.REGION}}
+
+  logs:prod:tail:
+    desc: "Tail production logs"
+    cmds:
+      - gcloud run services logs tail paperterrace --region {{.REGION}}
+
+  logs:errors:
+    desc: "Show error logs"
+    cmds:
+      - gcloud logging read 'resource.type="cloud_run_revision" AND severity>=ERROR' --limit=50 --format=json
+
+  # ============================================================================
+  # Utility Tasks
+  # ============================================================================
+
+  iam:add:
+    desc: "Add public access to production service"
+    cmds:
+      - gcloud run services add-iam-policy-binding paperterrace --member="allUsers" --role="roles/run.invoker"
+
+  iam:remove:
+    desc: "Remove public access from production service"
+    cmds:
+      - gcloud run services remove-iam-policy-binding paperterrace --member="allUsers" --role="roles/run.invoker"
+
+  cleanup:
+    desc: "Clean up unused Docker images and containers"
+    cmds:
+      - echo "🧹 Cleaning up Docker resources..."
+      - docker system prune -f
+      - echo "✅ Docker cleanup complete!"

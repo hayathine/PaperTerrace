@@ -105,8 +105,8 @@ app = FastAPI(
 )
 
 # Templates and static files
-templates = Jinja2Templates(directory="src/templates")
-app.mount("/static", StaticFiles(directory="src/static"), name="static")
+templates = Jinja2Templates(directory="app/templates")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # CORS configuration for React development
 app.add_middleware(
@@ -199,7 +199,7 @@ app.include_router(figures_router, prefix="/api")
 
 # Serve React assets
 # Determine dist directory (Docker vs Local)
-dist_dir = "src/static/dist"
+dist_dir = "app/static/dist"
 if not os.path.exists(dist_dir) and os.path.exists("frontend/dist"):
     dist_dir = "frontend/dist"
 
@@ -247,6 +247,11 @@ async def get_config():
 # Dev: Serve test.pdf from dist folder
 @app.get("/test.pdf")
 async def serve_test_pdf():
+    # Determine dist directory (Docker vs Local)
+    dist_dir = "app/static/dist"
+    if not os.path.exists(dist_dir) and os.path.exists("frontend/dist"):
+        dist_dir = "frontend/dist"
+        
     test_pdf_path = os.path.join(dist_dir, "test.pdf")
     if os.path.exists(test_pdf_path):
         return FileResponse(test_pdf_path, media_type="application/pdf")
@@ -264,6 +269,11 @@ async def serve_react_app(request: Request, full_path: str):
     # But since it's defined LAST (after routers), it only catches what routers didn't catch.
     # However, include_router adds routes.
     # So if I put this at the very end, it catches 404s.
+
+    # Determine dist directory (Docker vs Local)
+    dist_dir = "app/static/dist"
+    if not os.path.exists(dist_dir) and os.path.exists("frontend/dist"):
+        dist_dir = "frontend/dist"
 
     # Check if index.html exists
     index_file = os.path.join(dist_dir, "index.html")

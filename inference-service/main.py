@@ -72,30 +72,32 @@ async def lifespan(app: FastAPI):
     """アプリケーション起動・終了時の処理"""
     global layout_service, translation_service
 
+    print("推論サービスを初期化中...")  # Cloud Runで確実に表示されるようにprint使用
     logger.info("推論サービスを初期化中...")
     start_time = time.time()
 
     try:
         # サービス初期化
-        layout_service = LayoutAnalysisService()
+        layout_service = LayoutAnalysisService(lang='en')
         translation_service = TranslationService()
 
-        # モデルロード
-        await layout_service.initialize()
+        # 翻訳サービスのみ初期化が必要
+        print("翻訳サービスを初期化中...")
         await translation_service.initialize()
 
         init_time = time.time() - start_time
+        print(f"推論サービス初期化完了: {init_time:.2f}秒")
         logger.info("推論サービス初期化完了", extra={"processing_time": init_time})
 
         yield
 
     except Exception as e:
+        print(f"推論サービス初期化失敗: {e}")
         logger.error(f"推論サービス初期化失敗: {e}")
         raise
     finally:
+        print("推論サービスを終了中...")
         logger.info("推論サービスを終了中...")
-        if layout_service:
-            await layout_service.cleanup()
         if translation_service:
             await translation_service.cleanup()
 
@@ -188,7 +190,8 @@ async def analyze_layout(request: Request, req: LayoutAnalysisRequest):
     try:
         logger.info(f"レイアウト解析開始: {req.pdf_path}")
 
-        results = await layout_service.analyze_pdf(req.pdf_path, req.pages)
+        # 新しいAPIを使用してレイアウト解析を実行
+        results = await layout_service.analyze_async(req.pdf_path)
         processing_time = time.time() - start_time
 
         logger.info(f"レイアウト解析完了: {processing_time:.2f}秒")

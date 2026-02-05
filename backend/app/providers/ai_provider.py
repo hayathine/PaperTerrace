@@ -785,9 +785,9 @@ class VertexAIProvider(AIProviderInterface):
         system_instruction: str | None = None,
         ttl_minutes: int = 60,
     ) -> str:
-        """Create a Vertex AI context cache (placeholder)."""
+        """Create a Vertex AI context cache."""
         # Vertex AI also supports caching but through slightly different API/params in genai SDK.
-        # For now, we implement it for Gemini direct API.
+        # This implementation uses the Gemini direct API for caching.
         try:
             logger.info(f"Creating Vertex context cache for model {model}")
 

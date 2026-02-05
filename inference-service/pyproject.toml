@@ -1,0 +1,27 @@
+[project]
+name = "paperterrace-inference"
+version = "0.1.0"
+description = "PaperTerrace Inference Service - Layout Analysis and Translation"
+readme = "../README.md"
+authors = [
+    {name = "PaperTerrace Team"}
+]
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=1.26.4",
+    "Pillow>=11.0.0",
+    "slowapi>=0.1.9",
+    # ML推論ライブラリ
+    "ctranslate2>=4.4.0",
+    "sentencepiece>=0.2.0",
+    "paddlepaddle>=2.6.0",
+    "paddle2onnx>=2.1.0",
+    "onnxruntime>=1.23.2",
+    "opencv-python-headless>=4.13.0.92",
+    "onnx-graphsurgeon>=0.5.8",
+    "pydantic>=2.0.0",
+    "pdfplumber>=0.10.0",
+]
+
+[dependency-groups]
+dev = []

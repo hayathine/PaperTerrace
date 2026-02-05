@@ -47,6 +47,32 @@ PaperTerraceは、単なる翻訳を超えた「理解」をサポートする�
 
 ---
 
+## 🏗️ プロジェクト構成
+
+PaperTerraceは、uvのワークスペース機能を使用したモノレポ構成を採用しています。
+
+### ワークスペース構造
+
+```
+paperterrace/
+├── pyproject.toml          # ワークスペースルート設定
+├── uv.lock                 # 統一された依存関係ロックファイル
+├── backend/                # メインAPIサービス
+│   ├── pyproject.toml     # バックエンド固有の設定
+│   └── app/               # FastAPIアプリケーション
+├── inference-service/      # 推論サービス（レイアウト解析・翻訳）
+│   ├── pyproject.toml     # 推論サービス固有の設定
+│   └── services/          # ML推論ロジック
+└── frontend/              # React TypeScriptフロントエンド
+    └── package.json       # フロントエンド依存関係
+```
+
+### 依存関係管理
+
+- **統一管理**: ルートの`uv.lock`ですべてのPython依存関係を一元管理
+- **サービス分離**: 各サービスは独自の`pyproject.toml`を持ち、必要な依存関係のみを定義
+- **バージョン統一**: 共通ライブラリ（FastAPI、Pydanticなど）のバージョンを自動的に統一
+
 ## 🛠️ 前提条件
 
 このプロジェクトを実行するには以下の環境が必要です：

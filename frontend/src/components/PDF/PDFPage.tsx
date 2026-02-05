@@ -50,6 +50,8 @@ interface PDFPageProps {
   // 検索関連props
   searchTerm?: string;
   currentSearchMatch?: { page: number; wordIndex: number } | null;
+  // Click mode (text mode) flag
+  isClickMode?: boolean;
 }
 
 const PDFPage: React.FC<PDFPageProps> = ({
@@ -65,6 +67,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
   jumpTarget,
   searchTerm,
   currentSearchMatch,
+  isClickMode = false,
 }) => {
   const { t } = useTranslation();
   const { width, height, words, figures, image_url, page_num } = page;
@@ -101,6 +104,12 @@ const PDFPage: React.FC<PDFPageProps> = ({
     text: string;
     context: string;
     coords: any;
+  } | null>(null);
+
+  // Figure lightbox state
+  const [lightboxFigure, setLightboxFigure] = React.useState<{
+    image_url: string;
+    label: string;
   } | null>(null);
 
   const handleMouseUp = () => {
@@ -266,7 +275,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
               return (
                 <div
                   key={`fig-img-${idx}`}
-                  className="absolute bg-white shadow-sm pointer-events-auto group"
+                  className={`absolute bg-white shadow-sm group ${
+                    isClickMode ? "pointer-events-auto cursor-pointer" : "pointer-events-none"
+                  }`}
                   style={style}
                 >
                   <img
@@ -274,16 +285,31 @@ const PDFPage: React.FC<PDFPageProps> = ({
                     className="w-full h-full object-contain"
                     alt={fig.label}
                   />
-                  <button
-                    className="absolute inset-0 bg-indigo-500/0 hover:bg-indigo-500/5 transition-colors"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      if (onAskAI) {
-                        const typeName = getFigTypeLabel(t, fig.label || "");
-                        onAskAI(t("chat.explain_fig", { type: typeName }));
-                      }
-                    }}
-                  />
+                  {isClickMode && (
+                    <>
+                      {/* Hover overlay for visual feedback */}
+                      <div className="absolute inset-0 bg-indigo-500/0 hover:bg-indigo-500/10 transition-colors border-2 border-transparent hover:border-indigo-400 rounded-sm" />
+                      
+                      {/* Click handler */}
+                      <button
+                        className="absolute inset-0 w-full h-full opacity-0"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Open in lightbox
+                          setLightboxFigure({
+                            image_url: fig.image_url,
+                            label: fig.label || `Figure ${idx + 1}`,
+                          });
+                        }}
+                        title={`Click to view ${getFigTypeLabel(t, fig.label || "figure")}`}
+                      />
+                      
+                      {/* Small icon indicator */}
+                      <div className="absolute top-1 right-1 bg-indigo-600 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                        🔍
+                      </div>
+                    </>
+                  )}
                 </div>
               );
             })}
@@ -509,6 +535,63 @@ const PDFPage: React.FC<PDFPageProps> = ({
           </div>
         )}
       </div>
+
+      {/* Figure Lightbox Modal */}
+      {lightboxFigure && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4"
+          onClick={() => setLightboxFigure(null)}
+        >
+          <div
+            className="relative max-w-[90vw] max-h-[90vh] bg-white rounded-lg overflow-hidden shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Header */}
+            <div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
+              <h3 className="font-semibold text-gray-800">
+                {lightboxFigure.label}
+              </h3>
+              <button
+                onClick={() => setLightboxFigure(null)}
+                className="text-gray-500 hover:text-gray-700 text-xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 transition-colors"
+              >
+                ×
+              </button>
+            </div>
+            
+            {/* Image */}
+            <div className="p-4">
+              <img
+                src={lightboxFigure.image_url}
+                alt={lightboxFigure.label}
+                className="max-w-full max-h-[70vh] object-contain mx-auto"
+              />
+            </div>
+            
+            {/* Actions */}
+            <div className="bg-gray-50 px-4 py-3 border-t flex gap-2 justify-end">
+              {onAskAI && (
+                <button
+                  onClick={() => {
+                    const typeName = getFigTypeLabel(t, lightboxFigure.label || "");
+                    onAskAI(t("chat.explain_fig", { type: typeName }));
+                    setLightboxFigure(null);
+                  }}
+                  className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors text-sm font-medium"
+                >
+                  {t("menu.ask_ai")}
+                </button>
+              )}
+              <button
+                onClick={() => setLightboxFigure(null)}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors text-sm font-medium"
+              >
+                {t("menu.close")}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
