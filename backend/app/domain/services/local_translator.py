@@ -3,6 +3,7 @@
 翻訳処理をServiceBに委譲し、ServiceAは結果の取得のみを行う
 """
 
+import os
 from typing import List, Optional
 
 from app.logger import get_service_logger
@@ -40,6 +41,11 @@ class LocalTranslator:
         """
         ServiceBのウォームアップ（ヘルスチェック）
         """
+        # Skip inference service warmup if disabled
+        if os.getenv("SKIP_INFERENCE_SERVICE_WARMUP", "false").lower() == "true":
+            log.info("prewarm", "Skipping ServiceB warmup (disabled by environment variable)")
+            return
+            
         try:
             client = await get_inference_client()
             health_status = await client.health_check()

@@ -12,7 +12,7 @@ tasks:
   # ============================================================================
   # Development Tasks
   # ============================================================================
-  
+
   default:
     desc: "Show available tasks"
     cmds:
@@ -34,7 +34,7 @@ tasks:
   run:
     desc: "Run backend server with hot reload"
     cmds:
-      - PYTHONUNBUFFERED=1 uv run --directory backend uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+      - PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
   dev:
     desc: "Run frontend dev server"
@@ -49,17 +49,17 @@ tasks:
       - echo "🚀 Starting full development environment..."
       - |
         # Start backend in background
-        PYTHONUNBUFFERED=1 uv run --directory backend uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
+        PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
         BACKEND_PID=$!
-        
+
         # Start frontend in background  
         cd frontend && npm run dev &
         FRONTEND_PID=$!
-        
+
         echo "Backend PID: $BACKEND_PID"
         echo "Frontend PID: $FRONTEND_PID"
         echo "Press Ctrl+C to stop both services"
-        
+
         # Wait for interrupt
         trap "kill $BACKEND_PID $FRONTEND_PID 2>/dev/null; exit" INT
         wait
@@ -237,30 +237,30 @@ tasks:
           echo "❌ Staging service not found. Deploy first with: task staging:deploy"
           exit 1
         fi
-        
+
         echo "📄 Testing PDF upload to: $STAGING_URL"
-        
+
         # Check if test.pdf exists
         if [ ! -f "frontend/public/test.pdf" ]; then
           echo "❌ test.pdf not found in frontend/public/"
           exit 1
         fi
-        
+
         # Test health endpoint first
         echo "🔍 Testing health endpoint..."
         curl -f "$STAGING_URL/api/health" || (echo "❌ Health check failed" && exit 1)
-        
+
         # Test PDF upload with correct endpoint
         echo "📤 Uploading test.pdf..."
         RESPONSE=$(curl -s -w "%{http_code}" -o /tmp/upload_response.json -X POST "$STAGING_URL/api/analyze-pdf-json" \
           -F "file=@frontend/public/test.pdf" \
           -F "session_id=test-session-$(date +%s)" \
           -F "lang=ja")
-        
+
         echo "HTTP Status: $RESPONSE"
         echo "Response:"
         cat /tmp/upload_response.json
-        
+
         # Check if upload was successful (HTTP 200)
         if [ "$RESPONSE" = "200" ]; then
           TASK_ID=$(cat /tmp/upload_response.json | grep -o '"task_id":"[^"]*"' | cut -d'"' -f4)
@@ -288,7 +288,7 @@ tasks:
         else
           echo "⚠️ ServiceA not deployed"
         fi
-        
+
         # Check ServiceB (inference)
         SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
         if [ -n "$SERVICEB_URL" ]; then
@@ -311,13 +311,13 @@ tasks:
       - |
         SERVICEA_URL=$(gcloud run services describe paperterrace-main-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
         SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
-        
+
         if [ -n "$SERVICEA_URL" ]; then
           echo "ServiceA (Main): $SERVICEA_URL"
         else
           echo "ServiceA: Not deployed"
         fi
-        
+
         if [ -n "$SERVICEB_URL" ]; then
           echo "ServiceB (Inference): $SERVICEB_URL"
         else

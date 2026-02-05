@@ -26,6 +26,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
   searchTerm,
   currentSearchMatch,
 }) => {
+  const [imageError, setImageError] = React.useState(false);
   const [selectionMenu, setSelectionMenu] = React.useState<{
     x: number;
     y: number;
@@ -106,87 +107,146 @@ const TextModePage: React.FC<TextModePageProps> = ({
       </div>
 
       {/* Content Container */}
-      <div className="relative w-full overflow-hidden">
-        {/* PDF Image (Base Layer) */}
-        <img
-          src={page.image_url}
-          alt={`Page ${page.page_num}`}
-          className="w-full h-auto block select-none pointer-events-none"
-          loading="lazy"
-        />
+      <div className="relative w-full overflow-hidden min-h-[600px] bg-white">
+        {!imageError ? (
+          <>
+            {/* PDF Image (Base Layer) */}
+            <img
+              src={page.image_url}
+              alt={`Page ${page.page_num}`}
+              className="w-full h-auto block select-none pointer-events-none"
+              loading="lazy"
+              onError={() => {
+                console.warn('Image failed to load:', page.image_url);
+                setImageError(true);
+              }}
+              onLoad={() => {
+                setImageError(false);
+              }}
+            />
 
-        {/* Transparent Text Layer (Overlay Layer) */}
-        <div
-          className="absolute inset-0 z-10 w-full h-full cursor-text selection:bg-indigo-600/30"
-          style={{ userSelect: "text" }}
-        >
-          {(() => {
-            // グローバルwordインデックスを計算するためのカウンター
-            let globalWordIndex = 0;
+            {/* Transparent Text Layer (Overlay Layer) */}
+            <div
+              className="absolute inset-0 z-10 w-full h-full cursor-text selection:bg-indigo-600/30"
+              style={{ userSelect: "text" }}
+            >
+              {(() => {
+                // グローバルwordインデックスを計算するためのカウンター
+                let globalWordIndex = 0;
 
-            return page.lines.map((line, lIdx) => {
-              const [lx1, ly1, lx2, ly2] = line.bbox;
-              const pWidth = page.width || 1;
-              const pHeight = page.height || 1;
-              const lTop = (ly1 / pHeight) * 100;
-              const lLeft = (lx1 / pWidth) * 100;
-              const lWidth = ((lx2 - lx1) / pWidth) * 100;
-              const lHeight = ((ly2 - ly1) / pHeight) * 100;
+                return page.lines.map((line, lIdx) => {
+                  const [lx1, ly1, lx2, ly2] = line.bbox;
+                  const pWidth = page.width || 1;
+                  const pHeight = page.height || 1;
+                  const lTop = (ly1 / pHeight) * 100;
+                  const lLeft = (lx1 / pWidth) * 100;
+                  const lWidth = ((lx2 - lx1) / pWidth) * 100;
+                  const lHeight = ((ly2 - ly1) / pHeight) * 100;
 
-              return (
-                <div
-                  key={lIdx}
-                  className="absolute text-transparent whitespace-pre flex items-center"
-                  style={{
-                    top: `${lTop}%`,
-                    left: `${lLeft}%`,
-                    width: `${lWidth}%`,
-                    height: `${lHeight}%`,
-                    fontSize: `${lHeight * 0.8}cqw`,
-                    letterSpacing: "-0.05em",
-                  }}
-                >
-                  {line.words.map((w, wIdx) => {
-                    const currentGlobalIndex = globalWordIndex++;
+                  return (
+                    <div
+                      key={lIdx}
+                      className="absolute text-transparent whitespace-pre flex items-center hover:text-slate-800 hover:bg-white/80 transition-colors duration-200"
+                      style={{
+                        top: `${lTop}%`,
+                        left: `${lLeft}%`,
+                        width: `${lWidth}%`,
+                        height: `${lHeight}%`,
+                        fontSize: `${lHeight * 0.8}cqw`,
+                        letterSpacing: "-0.05em",
+                      }}
+                    >
+                      {line.words.map((w, wIdx) => {
+                        const currentGlobalIndex = globalWordIndex++;
 
-                    const isJumpHighlight =
-                      jumpTarget &&
-                      jumpTarget.page === page.page_num &&
-                      jumpTarget.term &&
-                      w.word
-                        .toLowerCase()
-                        .includes(jumpTarget.term.toLowerCase());
+                        const isJumpHighlight =
+                          jumpTarget &&
+                          jumpTarget.page === page.page_num &&
+                          jumpTarget.term &&
+                          w.word
+                            .toLowerCase()
+                            .includes(jumpTarget.term.toLowerCase());
 
-                    // 検索マッチのハイライト
-                    const isSearchMatch =
-                      searchTerm &&
-                      searchTerm.length >= 2 &&
-                      w.word.toLowerCase().includes(searchTerm.toLowerCase());
+                        // 検索マッチのハイライト
+                        const isSearchMatch =
+                          searchTerm &&
+                          searchTerm.length >= 2 &&
+                          w.word.toLowerCase().includes(searchTerm.toLowerCase());
 
-                    // 現在フォーカスされている検索マッチかどうか
-                    const isCurrentSearchMatch =
-                      currentSearchMatch &&
-                      currentSearchMatch.page === page.page_num &&
-                      currentSearchMatch.wordIndex === currentGlobalIndex;
+                        // 現在フォーカスされている検索マッチかどうか
+                        const isCurrentSearchMatch =
+                          currentSearchMatch &&
+                          currentSearchMatch.page === page.page_num &&
+                          currentSearchMatch.wordIndex === currentGlobalIndex;
 
-                    return (
-                      <span
-                        key={wIdx}
-                        className={`transition-all 
-                          ${isJumpHighlight ? "bg-yellow-400/40 border-b border-yellow-600" : ""}
-                          ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 rounded" : ""}
-                          ${isCurrentSearchMatch ? "bg-orange-500/60 rounded ring-2 ring-orange-400" : ""}`}
-                        style={{ pointerEvents: "auto" }}
-                      >
-                        {w.word}{" "}
-                      </span>
-                    );
-                  })}
-                </div>
-              );
-            });
-          })()}
-        </div>
+                        return (
+                          <span
+                            key={wIdx}
+                            className={`transition-all 
+                              ${isJumpHighlight ? "bg-yellow-400/40 border-b border-yellow-600" : ""}
+                              ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 rounded" : ""}
+                              ${isCurrentSearchMatch ? "bg-orange-500/60 rounded ring-2 ring-orange-400" : ""}`}
+                            style={{ pointerEvents: "auto" }}
+                          >
+                            {w.word}{" "}
+                          </span>
+                        );
+                      })}
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          </>
+        ) : (
+          /* Fallback: Text-only display when image fails to load */
+          <div className="p-8 bg-gray-50 min-h-[600px]">
+            <div className="prose max-w-none">
+              <h3 className="text-lg font-semibold mb-4 text-gray-700">
+                Page {page.page_num} - Text Content
+              </h3>
+              <div className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
+                {page.lines.map((line, lIdx) => (
+                  <div key={lIdx} className="mb-2">
+                    {line.words.map((w, wIdx) => {
+                      const isJumpHighlight =
+                        jumpTarget &&
+                        jumpTarget.page === page.page_num &&
+                        jumpTarget.term &&
+                        w.word
+                          .toLowerCase()
+                          .includes(jumpTarget.term.toLowerCase());
+
+                      const isSearchMatch =
+                        searchTerm &&
+                        searchTerm.length >= 2 &&
+                        w.word.toLowerCase().includes(searchTerm.toLowerCase());
+
+                      return (
+                        <span
+                          key={wIdx}
+                          className={`${isJumpHighlight ? "bg-yellow-400/60 px-1 rounded" : ""} ${isSearchMatch ? "bg-amber-300/60 px-1 rounded" : ""}`}
+                          onClick={() => {
+                            if (onWordClick) {
+                              onWordClick(w.word, undefined, {
+                                page: page.page_num,
+                                x: 0.5,
+                                y: 0.5,
+                              });
+                            }
+                          }}
+                          style={{ cursor: "pointer" }}
+                        >
+                          {w.word}{" "}
+                        </span>
+                      );
+                    })}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Selection Menu */}

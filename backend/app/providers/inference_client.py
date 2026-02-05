@@ -50,7 +50,7 @@ class InferenceServiceClient:
     def __init__(self):
         self.base_url = os.getenv("INFERENCE_SERVICE_URL", "http://localhost:8080")
         self.timeout = int(os.getenv("INFERENCE_SERVICE_TIMEOUT", "30"))
-        self.max_retries = int(os.getenv("INFERENCE_SERVICE_RETRIES", "3"))
+        self.max_retries = int(os.getenv("INFERENCE_SERVICE_RETRIES", "1"))  # Reduced from 3 to 1
 
         # 回路ブレーカー設定
         self.failure_count = 0
@@ -217,9 +217,15 @@ class InferenceServiceClient:
     async def health_check(self) -> Dict[str, Any]:
         """推論サービスのヘルスチェック"""
         try:
-            response = await self._make_request_with_retry("GET", "/health")
-            return response
+            # Health check with reduced retries (1 attempt only)
+            url = f"{self.base_url}/health"
+            response = await self.client.get(url, timeout=5.0)  # 5 second timeout
+            response.raise_for_status()
+            
+            self._record_success()
+            return response.json()
         except Exception as e:
+            self._record_failure()
             logger.error(f"ヘルスチェックエラー: {e}")
             raise
 
