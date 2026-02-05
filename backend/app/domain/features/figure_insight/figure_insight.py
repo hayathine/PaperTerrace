@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any
 
 from app.domain.prompts import (
     VISION_ANALYZE_FIGURE_PROMPT,
@@ -171,7 +171,7 @@ class FigureInsightService:
 
     async def extract_equations(
         self, file_bytes: bytes, page_num: int, target_lang: str = "ja"
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         PDFページ内の数式を抽出してLaTeX化する。
         """

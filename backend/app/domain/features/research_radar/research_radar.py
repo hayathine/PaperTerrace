@@ -1,8 +1,7 @@
 import os
-from typing import Any, Dict, List
+from typing import Any
 
 import httpx
-
 from app.domain.prompts import (
     RADAR_GENERATE_QUERY_ABSTRACT_PROMPT,
     RADAR_GENERATE_QUERY_CONTEXT_PROMPT,
@@ -47,7 +46,7 @@ class ResearchRadarService:
         query: str,
         year_min: int = 2020,
         limit: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Consensus APIを使用して論文を検索する。
 
@@ -84,7 +83,7 @@ class ResearchRadarService:
             logger.exception(f"Unexpected error in paper_search: {e}")
             return []
 
-    async def author_search(self, query: str, limit: int = 5) -> List[Dict[str, Any]]:
+    async def author_search(self, query: str, limit: int = 5) -> list[dict[str, Any]]:
         """著者検索を実行する。"""
         if not self.api_key:
             return []
@@ -100,7 +99,7 @@ class ResearchRadarService:
             logger.error(f"Author search failed: {e}")
             return []
 
-    async def _simulate_paper_search(self, query: str) -> List[Dict[str, Any]]:
+    async def _simulate_paper_search(self, query: str) -> list[dict[str, Any]]:
         """API利用不可時にAIによる検索結果シミュレーションを行う。"""
         prompt = RADAR_SIMULATE_SEARCH_PROMPT.format(query=query)
         try:
@@ -112,7 +111,7 @@ class ResearchRadarService:
             logger.error(f"Simulation failed: {e}")
             return []
 
-    async def find_related_papers(self, abstract: str) -> List[Dict[str, Any]]:
+    async def find_related_papers(self, abstract: str) -> list[dict[str, Any]]:
         """
         アブストラクトからクエリを生成して関連論文を検索する。
         """
@@ -124,7 +123,7 @@ class ResearchRadarService:
         # 2. 検索実行
         return await self.paper_search(search_query)
 
-    async def get_author_profile_and_papers(self, author_name: str) -> Dict[str, Any]:
+    async def get_author_profile_and_papers(self, author_name: str) -> dict[str, Any]:
         """
         ペルソナ生成のために著者プロフィールと主要論文を取得する。
         """
@@ -148,7 +147,7 @@ class ResearchRadarService:
 
         return {"profile": authors[0], "papers": []}
 
-    async def generate_search_queries(self, context: str) -> List[str]:
+    async def generate_search_queries(self, context: str) -> list[str]:
         """関連研究探索用の検索クエリを生成する。"""
         prompt = RADAR_GENERATE_QUERY_CONTEXT_PROMPT.format(context=context[:6000])
         try:
@@ -160,6 +159,6 @@ class ResearchRadarService:
             logger.error(f"Query generation failed: {e}")
             return []
 
-    async def analyze_citations(self, context: str) -> Dict[str, Any]:
+    async def analyze_citations(self, context: str) -> dict[str, Any]:
         """引用ネットワークの分析（未実装）"""
         return {"status": "not_implemented_yet", "message": "Citation analysis logic pending."}

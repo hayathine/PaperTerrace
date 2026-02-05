@@ -1,5 +1,4 @@
 import spacy
-
 from app.logger import logger
 
 try:

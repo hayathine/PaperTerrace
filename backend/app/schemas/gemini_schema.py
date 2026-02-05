@@ -1,4 +1,4 @@
-from typing import List, Literal, Optional
+from typing import Literal
 
 from pydantic import BaseModel, Field
 
@@ -9,41 +9,41 @@ class FigureAnalysisResponse(BaseModel):
     """画像分析結果の構造化モデル"""
 
     type_overview: str = Field(..., description="図の概要と種類")
-    key_findings: List[str] = Field(..., description="主な傾向やパターン")
+    key_findings: list[str] = Field(..., description="主な傾向やパターン")
     interpretation: str = Field(..., description="数値や傾向の解釈")
     implications: str = Field(..., description="論文の主張に対する裏付け")
-    highlights: List[str] = Field(..., description="特筆すべき点や異常値")
+    highlights: list[str] = Field(..., description="特筆すべき点や異常値")
 
 
 class TableAnalysisResponse(BaseModel):
     """表分析結果の構造化モデル"""
 
     overview: str = Field(..., description="表の概要")
-    key_numbers: List[str] = Field(..., description="重要な数値と傾向")
-    comparisons: List[str] = Field(..., description="特筆すべき比較や差異")
+    key_numbers: list[str] = Field(..., description="重要な数値と傾向")
+    comparisons: list[str] = Field(..., description="特筆すべき比較や差異")
     conclusions: str = Field(..., description="表から導かれる結論")
 
 
 class FigureComparisonResponse(BaseModel):
     """図表比較結果の構造化モデル"""
 
-    similarities: List[str] = Field(..., description="2つの図の類似点")
-    differences: List[str] = Field(..., description="2つの図の相違点")
+    similarities: list[str] = Field(..., description="2つの図の類似点")
+    differences: list[str] = Field(..., description="2つの図の相違点")
     relationship: str = Field(..., description="補完関係などの関連性")
-    contradictions: Optional[List[str]] = Field(None, description="矛盾点（ある場合）")
+    contradictions: list[str] | None = Field(None, description="矛盾点（ある場合）")
 
 
 class FigureBox(BaseModel):
     """Represents a bounding box for a detected figure, table, or equation."""
 
     label: str = Field(description="Type of item: figure, table, or equation")
-    box_2d: List[float] = Field(description="[ymin, xmin, ymax, xmax] normalized coordinates 0-1")
+    box_2d: list[float] = Field(description="[ymin, xmin, ymax, xmax] normalized coordinates 0-1")
 
 
 class FigureDetectionResponse(BaseModel):
     """Response schema for figure detection."""
 
-    figures: List[FigureBox] = Field(description="List of detected figures, tables, and equations")
+    figures: list[FigureBox] = Field(description="List of detected figures, tables, and equations")
 
 
 class PageFigureBox(BaseModel):
@@ -51,7 +51,7 @@ class PageFigureBox(BaseModel):
 
     page: int = Field(description="1-indexed page number")
     label: str = Field(description="Type of item: figure, table, or equation")
-    box_2d: List[float] = Field(
+    box_2d: list[float] = Field(
         description="[ymin, xmin, ymax, xmax] normalized coordinates 0-1000"
     )
 
@@ -59,13 +59,13 @@ class PageFigureBox(BaseModel):
 class WholePDFDetectionResponse(BaseModel):
     """Response schema for figure detection across an entire PDF."""
 
-    items: List[PageFigureBox] = Field(description="List of detected items across all pages")
+    items: list[PageFigureBox] = Field(description="List of detected items across all pages")
 
 
 class BboxResponse(BaseModel):
     label: str
-    bbox: List[float]
-    polygon: List[List[float]]
+    bbox: list[float]
+    polygon: list[list[float]]
     confidence: float = 1.0
 
 
@@ -84,20 +84,20 @@ class EquationAnalysisResponse(BaseModel):
 
 class SimulatedPaper(BaseModel):
     title: str
-    authors: List[str]
+    authors: list[str]
     year: int
     abstract: str
     url: str
 
 
 class SimulatedSearchResponse(BaseModel):
-    papers: List[SimulatedPaper]
+    papers: list[SimulatedPaper]
 
 
 class SearchQueriesResponse(BaseModel):
     """検索クエリ生成モデル"""
 
-    queries: List[str] = Field(..., description="検索クエリリスト（3-5件）")
+    queries: list[str] = Field(..., description="検索クエリリスト（3-5件）")
 
 
 # --- Citations & Claims ---
@@ -117,7 +117,7 @@ class CitationIntent(BaseModel):
 class CitationAnalysisResponse(BaseModel):
     """引用意図分析の全体レスポンス"""
 
-    citations: List[CitationIntent]
+    citations: list[CitationIntent]
 
 
 class ClaimVerificationResponse(BaseModel):
@@ -131,7 +131,7 @@ class ClaimVerificationResponse(BaseModel):
         ...,
         description="Detailed report citing sources found during search. Mention if reproducible or accepted, or highlight doubts.",
     )
-    sources: List[str] = Field(
+    sources: list[str] = Field(
         default_factory=list, description="List of URL or source names found"
     )
 
@@ -166,10 +166,10 @@ class MethodologyConcern(BaseModel):
 class AdversarialCritiqueResponse(BaseModel):
     """Structured response for adversarial critique of a paper."""
 
-    hidden_assumptions: List[HiddenAssumption]
-    unverified_conditions: List[UnverifiedCondition]
-    reproducibility_risks: List[ReproducibilityRisk]
-    methodology_concerns: List[MethodologyConcern]
+    hidden_assumptions: list[HiddenAssumption]
+    unverified_conditions: list[UnverifiedCondition]
+    reproducibility_risks: list[ReproducibilityRisk]
+    methodology_concerns: list[MethodologyConcern]
     overall_assessment: str
 
 
@@ -184,7 +184,7 @@ class ParagraphExplanationResponse(BaseModel):
         ..., description="Prerequisites or technical terms needed to understand this"
     )
     logic_flow: str = Field(..., description="How the argument or logic is developed")
-    key_points: List[str] = Field(..., description="Important implications or things to note")
+    key_points: list[str] = Field(..., description="Important implications or things to note")
 
 
 class TermExplanation(BaseModel):
@@ -198,7 +198,7 @@ class TermExplanation(BaseModel):
 class TerminologyList(BaseModel):
     """List of technical terms with explanations."""
 
-    terms: List[TermExplanation] = Field(
+    terms: list[TermExplanation] = Field(
         ..., description="List of extracted technical terms", max_length=10
     )
 
@@ -213,14 +213,14 @@ class SectionSummary(BaseModel):
 class SectionSummaryList(BaseModel):
     """List of section summaries."""
 
-    sections: List[SectionSummary] = Field(description="List of section summaries")
+    sections: list[SectionSummary] = Field(description="List of section summaries")
 
 
 class FullSummaryResponse(BaseModel):
     """Paper full summary model."""
 
     overview: str = Field(..., description="Abstract or overview of the main theme (1-2 sentences)")
-    key_contributions: List[str] = Field(..., description="List of 3-5 key contributions")
+    key_contributions: list[str] = Field(..., description="List of 3-5 key contributions")
     methodology: str = Field(..., description="Concise explanation of the methodology")
     conclusion: str = Field(..., description="Key findings and implications")
 
@@ -235,8 +235,8 @@ class VisualElement(BaseModel):
     type: str = Field(..., description="'figure', 'table', or 'equation'")
     page_num: int = Field(..., description="1-indexed page number")
     # Gemini's normalized [ymin, xmin, ymax, xmax] (0-1000)
-    box_2d: List[int] = Field(..., description="Normalized bounding box [ymin, xmin, ymax, xmax]")
-    description: Optional[str] = Field(None, description="Brief context of the element")
+    box_2d: list[int] = Field(..., description="Normalized bounding box [ymin, xmin, ymax, xmax]")
+    description: str | None = Field(None, description="Brief context of the element")
 
 
 class SummarySection(BaseModel):
@@ -244,7 +244,7 @@ class SummarySection(BaseModel):
 
     content: str = Field(..., description="The summary text in the target language")
     # Reference to labels in all_detected_items
-    evidence_labels: List[str] = Field(
+    evidence_labels: list[str] = Field(
         default_factory=list,
         description="Labels of visual elements that support this summary point",
     )
@@ -254,7 +254,7 @@ class IntegratedAnalysisResponse(BaseModel):
     """The unified response containing structured summary and grounded coordinates."""
 
     overview: str = Field(..., description="A 1-2 sentence overview of the paper")
-    key_contributions: List[SummarySection] = Field(
+    key_contributions: list[SummarySection] = Field(
         ..., description="3-5 key contributions with visual grounding"
     )
     methodology: SummarySection = Field(
@@ -263,6 +263,6 @@ class IntegratedAnalysisResponse(BaseModel):
     conclusion: SummarySection = Field(..., description="Main findings and implications")
 
     # Master list of all detected visual structures
-    all_detected_items: List[VisualElement] = Field(
+    all_detected_items: list[VisualElement] = Field(
         ..., description="List of all figures, tables, and equations found"
     )

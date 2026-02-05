@@ -1,6 +1,6 @@
 import os
 from abc import ABC, abstractmethod
-from typing import Any, Type, TypedDict
+from typing import Any, TypedDict
 
 from dotenv import load_dotenv
 from google import genai
@@ -48,7 +48,7 @@ class AIProviderInterface(ABC):
         context: str = "",
         model: str | None = None,
         enable_search: bool = False,
-        response_model: Type[BaseModel] | None = None,
+        response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
     ) -> Any:
@@ -62,7 +62,7 @@ class AIProviderInterface(ABC):
         image_bytes: bytes,
         mime_type: str = "image/png",
         model: str | None = None,
-        response_model: Type[BaseModel] | None = None,
+        response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
     ) -> Any:
@@ -87,7 +87,7 @@ class AIProviderInterface(ABC):
         images_list: list[bytes],
         mime_type: str = "image/png",
         model: str | None = None,
-        response_model: Type[BaseModel] | None = None,
+        response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
     ) -> Any:
@@ -133,7 +133,7 @@ class GeminiProvider(AIProviderInterface):
         context: str = "",
         model: str | None = None,
         enable_search: bool = False,
-        response_model: Type[BaseModel] | None = None,
+        response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
     ) -> Any:
@@ -225,7 +225,7 @@ class GeminiProvider(AIProviderInterface):
         image_bytes: bytes,
         mime_type: str = "image/png",
         model: str | None = None,
-        response_model: Type[BaseModel] | None = None,
+        response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
     ) -> Any:
@@ -320,7 +320,7 @@ class GeminiProvider(AIProviderInterface):
         images_list: list[bytes],
         mime_type: str = "image/png",
         model: str | None = None,
-        response_model: Type[BaseModel] | None = None,
+        response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
     ) -> Any:
@@ -533,7 +533,7 @@ class VertexAIProvider(AIProviderInterface):
         context: str = "",
         model: str | None = None,
         enable_search: bool = False,
-        response_model: Type[BaseModel] | None = None,
+        response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
     ) -> Any:
@@ -610,7 +610,7 @@ class VertexAIProvider(AIProviderInterface):
         image_bytes: bytes,
         mime_type: str = "image/png",
         model: str | None = None,
-        response_model: Type[BaseModel] | None = None,
+        response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
     ) -> Any:
@@ -676,7 +676,7 @@ class VertexAIProvider(AIProviderInterface):
         images_list: list[bytes],
         mime_type: str = "image/png",
         model: str | None = None,
-        response_model: Type[BaseModel] | None = None,
+        response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
     ) -> Any:

@@ -4,7 +4,6 @@
 """
 
 import os
-from typing import List, Optional
 
 from app.logger import get_service_logger
 from app.providers.inference_client import (
@@ -26,7 +25,7 @@ class LocalTranslator:
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(LocalTranslator, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
 
@@ -45,7 +44,7 @@ class LocalTranslator:
         if os.getenv("SKIP_INFERENCE_SERVICE_WARMUP", "false").lower() == "true":
             log.info("prewarm", "Skipping ServiceB warmup (disabled by environment variable)")
             return
-            
+
         try:
             client = await get_inference_client()
             health_status = await client.health_check()
@@ -55,7 +54,7 @@ class LocalTranslator:
 
     async def translate_async(
         self, text: str, src_lang: str = "en", tgt_lang: str = "ja"
-    ) -> Optional[str]:
+    ) -> str | None:
         """
         非同期翻訳（ServiceB経由）
         """
@@ -86,8 +85,8 @@ class LocalTranslator:
             return text
 
     async def translate_batch_async(
-        self, texts: List[str], src_lang: str = "en", tgt_lang: str = "ja"
-    ) -> List[str]:
+        self, texts: list[str], src_lang: str = "en", tgt_lang: str = "ja"
+    ) -> list[str]:
         """
         バッチ翻訳（ServiceB経由）
         """
@@ -119,7 +118,7 @@ class LocalTranslator:
             log.error("translate_batch_async", f"Unexpected error: {e}")
             return texts
 
-    def translate(self, text: str, src_lang: str = "en", tgt_lang: str = "ja") -> Optional[str]:
+    def translate(self, text: str, src_lang: str = "en", tgt_lang: str = "ja") -> str | None:
         """
         同期版翻訳（後方互換性のため保持）
         注意: この方法は非推奨。translate_asyncを使用してください。

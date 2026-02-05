@@ -4,7 +4,7 @@ Handles coordinate-based text extraction for image-based PDFs.
 """
 
 import os
-from typing import Any, Dict, Optional, Tuple
+from typing import Any
 
 from google.cloud import vision
 
@@ -26,7 +26,7 @@ class VisionOCRService:
 
     async def detect_text_with_layout(
         self, image_bytes: bytes
-    ) -> Tuple[str, Optional[Dict[str, Any]]]:
+    ) -> tuple[str, dict[str, Any] | None]:
         """
         Detect text using Vision API and return full text and layout data (words + bboxes).
 

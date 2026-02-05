@@ -213,67 +213,72 @@ async def detect_layout(
 ):
     """
     画像からレイアウト要素（図、表、数式など）を検出
-    
+
     Parameters
     ----------
     file : UploadFile
         解析対象のPDF画像ファイル（PNG, JPEG対応）
     page_number : int
         ページ番号（参照用）
-        
+
     Returns
     -------
     JSONResponse
         検出されたレイアウト要素のリスト
     """
     # ファイル形式チェック
-    if not file.content_type or not file.content_type.startswith('image/'):
+    if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(
-            status_code=400, 
-            detail=f"Invalid file type: {file.content_type}. Only image files are supported."
+            status_code=400,
+            detail=f"Invalid file type: {file.content_type}. Only image files are supported.",
         )
-    
+
     try:
-        
-        logger.info(f"Layout detection request: file={file.filename}, page={page_number}, type={file.content_type}")
-        
+        logger.info(
+            f"Layout detection request: file={file.filename}, page={page_number}, type={file.content_type}"
+        )
+
         # 一時ファイルに保存
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.png') as temp_file:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
             content = await file.read()
             temp_file.write(content)
             temp_file_path = temp_file.name
-        
+
         try:
             # レイアウト解析実行
             layout_items = layout_service.analyze_image(temp_file_path)
-            
+
             # レスポンス形式に変換
             results = []
             for item in layout_items:
-                results.append({
-                    "class_name": item.class_name,
-                    "confidence": item.score,
-                    "bbox": {
-                        "x_min": item.bbox.x_min,
-                        "y_min": item.bbox.y_min,
-                        "x_max": item.bbox.x_max,
-                        "y_max": item.bbox.y_max,
+                results.append(
+                    {
+                        "class_name": item.class_name,
+                        "confidence": item.score,
+                        "bbox": {
+                            "x_min": item.bbox.x_min,
+                            "y_min": item.bbox.y_min,
+                            "x_max": item.bbox.x_max,
+                            "y_max": item.bbox.y_max,
+                        },
                     }
-                })
-            
+                )
+
             logger.info(f"Layout detection completed: {len(results)} elements detected")
-            
-            return JSONResponse({
-                "success": True,
-                "page_number": page_number,
-                "total_elements": len(results),
-                "elements": results
-            })
-            
+
+            return JSONResponse(
+                {
+                    "success": True,
+                    "page_number": page_number,
+                    "total_elements": len(results),
+                    "elements": results,
+                }
+            )
+
         finally:
             # 一時ファイルを削除
             Path(temp_file_path).unlink(missing_ok=True)
-            
+
     except Exception as e:
         logger.error(f"Layout detection failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Layout detection failed: {str(e)}")

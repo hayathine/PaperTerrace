@@ -1,8 +1,7 @@
 import io
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import pdfplumber
-
 from app.domain.prompts import CORE_SYSTEM_PROMPT, VISION_ANALYZE_EQUATION_PROMPT
 from app.logger import logger
 from app.providers import get_ai_provider
@@ -18,7 +17,7 @@ class EquationService:
 
     async def detect_and_convert_equations(
         self, file_bytes: bytes, page_num: int, target_lang: str = "ja"
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         1. Identify potential equation areas using pdfplumber heuristics.
         2. Crop and analyze these areas using AI.
@@ -74,7 +73,7 @@ class EquationService:
 
     def _identify_potential_equation_areas(
         self, file_bytes: bytes, page_num: int
-    ) -> List[List[float]]:
+    ) -> list[list[float]]:
         """
         Heuristic detection using pdfplumber:
         - Identify large vertical gaps between text lines.
@@ -144,14 +143,14 @@ class EquationService:
             logger.error(f"Heuristic detection failed: {e}")
             return []
 
-    def _get_bbox_from_chars(self, chars: List[Dict]) -> List[float]:
+    def _get_bbox_from_chars(self, chars: list[dict]) -> list[float]:
         x0 = min(c["x0"] for c in chars)
         top = min(c["top"] for c in chars)
         x1 = max(c["x1"] for c in chars)
         bottom = max(c["bottom"] for c in chars)
         return [x0, top, x1, bottom]
 
-    def _sanitize_bboxes(self, bboxes: List[List[float]]) -> List[List[float]]:
+    def _sanitize_bboxes(self, bboxes: list[list[float]]) -> list[list[float]]:
         # Remove overlaps and small bboxes
         if not bboxes:
             return []
@@ -177,7 +176,7 @@ class EquationService:
 
     async def _analyze_bbox_with_ai(
         self, img_bytes: bytes, target_lang: str
-    ) -> Optional[EquationAnalysisResponse]:
+    ) -> EquationAnalysisResponse | None:
         from ..translate import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)

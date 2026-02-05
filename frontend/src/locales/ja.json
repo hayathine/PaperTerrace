@@ -59,6 +59,8 @@
       "area_mode": "切り抜き",
       "stamp_mode": "スタンプ"
     },
+    "image_not_available": "画像を読み込めません",
+    "text_mode_hint": "テキストモードでコンテンツを表示できます",
     "dictionary": {
       "ready": "辞書の準備ができました！",
       "click_hint": "単語をクリックして意味を調べられます。",

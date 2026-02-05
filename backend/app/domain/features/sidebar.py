@@ -3,7 +3,6 @@ sidebarに用語やノートを表示・保存する機能を提供するモジ�
 """
 
 import uuid6
-
 from app.logger import logger
 from app.providers import get_storage_provider
 

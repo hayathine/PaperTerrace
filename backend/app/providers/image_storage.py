@@ -7,7 +7,6 @@ import base64
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List
 
 from dotenv import load_dotenv
 
@@ -22,7 +21,7 @@ class ImageStorageStrategy(ABC):
         pass
 
     @abstractmethod
-    def get_list(self, file_hash: str) -> List[str]:
+    def get_list(self, file_hash: str) -> list[str]:
         pass
 
     @abstractmethod
@@ -67,7 +66,7 @@ class LocalImageStorage(ImageStorageStrategy):
             return str(path)
         raise FileNotFoundError(f"PDF not found for hash: {file_hash}")
 
-    def get_list(self, file_hash: str) -> List[str]:
+    def get_list(self, file_hash: str) -> list[str]:
         hash_dir = self.images_dir / file_hash
         if not hash_dir.exists():
             return []
@@ -150,7 +149,7 @@ class GCSImageStorage(ImageStorageStrategy):
         logger.debug(f"Saved page image (GCS): {blob_name}")
         return url
 
-    def get_list(self, file_hash: str) -> List[str]:
+    def get_list(self, file_hash: str) -> list[str]:
         # GCSからprefix検索
         blobs = self.client.list_blobs(self.bucket, prefix=f"paper_images/{file_hash}/")
 
@@ -233,7 +232,7 @@ def save_page_image(file_hash: str, page_num: int | str, image_b64: str) -> str:
     return _get_instance().save(file_hash, page_num, image_b64)
 
 
-def get_page_images(file_hash: str) -> List[str]:
+def get_page_images(file_hash: str) -> list[str]:
     return _get_instance().get_list(file_hash)
 
 

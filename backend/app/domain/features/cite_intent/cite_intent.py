@@ -1,5 +1,5 @@
 import os
-from typing import Any, Dict, List
+from typing import Any
 
 from app.domain.prompts import AGENT_CITE_INTENT_PROMPT, CORE_SYSTEM_PROMPT
 from app.logger import logger
@@ -55,7 +55,7 @@ class CiteIntentService:
 
     async def analyze_paragraph_citations(
         self, paragraph: str, lang: str = "ja"
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         段落内の引用を特定し、その意図を分類して詳細情報を付与する。
         """

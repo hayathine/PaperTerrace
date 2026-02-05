@@ -2,7 +2,6 @@ import logging
 import os
 
 import httpx
-
 from app.domain.features.figure_insight import FigureInsightService
 from app.domain.features.summary import SummaryService
 from app.providers import get_storage_provider

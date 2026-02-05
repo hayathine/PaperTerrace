@@ -3,10 +3,9 @@ import io
 import json
 import os
 import tempfile
-from typing import AsyncGenerator, Optional
+from collections.abc import AsyncGenerator
 
 import pdfplumber
-
 from app.crud import get_ocr_from_db, save_ocr_to_db
 from app.logger import get_service_logger, logger
 from app.providers import get_ai_provider
@@ -85,7 +84,7 @@ class PDFOCRService:
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
-    async def _handle_cache(self, file_hash: str) -> Optional[list]:
+    async def _handle_cache(self, file_hash: str) -> list | None:
         """Check if OCR is cached and return formatted pages if so."""
         logger.debug(f"[OCR] Checking cache for hash: {file_hash}")
         cache_data = get_ocr_from_db(file_hash)
@@ -132,7 +131,7 @@ class PDFOCRService:
         return pages
 
     async def _process_page_incremental(
-        self, page, page_idx, total_pages, file_hash, pdf_path: Optional[str] = None
+        self, page, page_idx, total_pages, file_hash, pdf_path: str | None = None
     ):
         """Process a single page in 3 phases: Text, Image, Analysis."""
         page_num = page_idx + 1

@@ -79,11 +79,13 @@ const PDFPage: React.FC<PDFPageProps> = ({
   }, [image_url]);
 
   const [displayUrl, setDisplayUrl] = useState(image_url);
+  const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     if (cachedImage && cachedImage.blob) {
       const blobUrl = URL.createObjectURL(cachedImage.blob);
       setDisplayUrl(blobUrl);
+      setImageError(false);
       return () => {
         URL.revokeObjectURL(blobUrl);
       };
@@ -240,13 +242,32 @@ const PDFPage: React.FC<PDFPageProps> = ({
         }}
       >
         {/* Page Image (Underlay) */}
-        {displayUrl && (
+        {!imageError && displayUrl ? (
           <img
             src={displayUrl}
             alt={`Page ${page.page_num}`}
             className="w-full h-auto block select-none"
             loading="lazy"
+            onError={() => {
+              console.warn("PDFPage: Image failed to load:", displayUrl);
+              setImageError(true);
+            }}
+            onLoad={() => setImageError(false)}
           />
+        ) : (
+          /* Fallback: Show message when image fails to load */
+          <div className="w-full min-h-[600px] bg-slate-50 flex flex-col items-center justify-center p-8 text-slate-500">
+            <div className="text-4xl mb-4">📄</div>
+            <p className="text-sm font-medium mb-2">
+              {t("viewer.image_not_available", "画像を読み込めません")}
+            </p>
+            <p className="text-xs text-slate-400">
+              {t(
+                "viewer.text_mode_hint",
+                "テキストモードでコンテンツを表示できます",
+              )}
+            </p>
+          </div>
         )}
 
         {/* Figure/Table Overlays (Overwrites text layer) */}
@@ -276,7 +297,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
                 <div
                   key={`fig-img-${idx}`}
                   className={`absolute bg-white shadow-sm group ${
-                    isClickMode ? "pointer-events-auto cursor-pointer" : "pointer-events-none"
+                    isClickMode
+                      ? "pointer-events-auto cursor-pointer"
+                      : "pointer-events-none"
                   }`}
                   style={style}
                 >
@@ -289,7 +312,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
                     <>
                       {/* Hover overlay for visual feedback */}
                       <div className="absolute inset-0 bg-indigo-500/0 hover:bg-indigo-500/10 transition-colors border-2 border-transparent hover:border-indigo-400 rounded-sm" />
-                      
+
                       {/* Click handler */}
                       <button
                         className="absolute inset-0 w-full h-full opacity-0"
@@ -303,7 +326,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
                         }}
                         title={`Click to view ${getFigTypeLabel(t, fig.label || "figure")}`}
                       />
-                      
+
                       {/* Small icon indicator */}
                       <div className="absolute top-1 right-1 bg-indigo-600 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
                         🔍
@@ -558,7 +581,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
                 ×
               </button>
             </div>
-            
+
             {/* Image */}
             <div className="p-4">
               <img
@@ -567,13 +590,16 @@ const PDFPage: React.FC<PDFPageProps> = ({
                 className="max-w-full max-h-[70vh] object-contain mx-auto"
               />
             </div>
-            
+
             {/* Actions */}
             <div className="bg-gray-50 px-4 py-3 border-t flex gap-2 justify-end">
               {onAskAI && (
                 <button
                   onClick={() => {
-                    const typeName = getFigTypeLabel(t, lightboxFigure.label || "");
+                    const typeName = getFigTypeLabel(
+                      t,
+                      lightboxFigure.label || "",
+                    );
                     onAskAI(t("chat.explain_fig", { type: typeName }));
                     setLightboxFigure(null);
                   }}

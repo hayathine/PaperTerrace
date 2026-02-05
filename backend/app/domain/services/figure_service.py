@@ -1,13 +1,14 @@
 import base64
 import io
-from typing import Any, Dict, List, Optional, Sequence
+from collections.abc import Sequence
+from typing import Any
+
+from app.logger import logger
+from app.providers.image_storage import save_page_image
 
 # pdfplumber related imports for type hinting and functionality
 from pdfplumber.display import PageImage
 from pdfplumber.page import Page
-
-from app.logger import logger
-from app.providers.image_storage import save_page_image
 
 from .paddle_layout_service import get_layout_service
 
@@ -26,8 +27,8 @@ class FigureService:
         file_hash: str,
         page_num: int,
         zoom: float = 1.0,
-        pdf_path: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        pdf_path: str | None = None,
+    ) -> list[dict[str, Any]]:
         """
         Detect figures/tables/equations using ServiceB layout service and pdfplumber coordinates.
         """
@@ -130,7 +131,7 @@ class FigureService:
     def _is_new_candidate(
         self,
         bbox: Sequence[float],
-        existing: List[Dict],
+        existing: list[dict],
         key: str = "bbox",
         iou_threshold: float = 0.8,
     ) -> bool:
@@ -149,13 +150,13 @@ class FigureService:
                     return False
         return True
 
-    def _cluster_objects(self, objs: List[Dict], threshold: float = 10.0) -> List[List[float]]:
+    def _cluster_objects(self, objs: list[dict], threshold: float = 10.0) -> list[list[float]]:
         """Simple clustering of objects based on proximity of their bboxes."""
         if not objs:
             return []
 
         bboxes = [(o["x0"], o["top"], o["x1"], o["bottom"]) for o in objs]
-        clusters: List[List[float]] = []
+        clusters: list[list[float]] = []
 
         for bbox in bboxes:
             merged = False
@@ -177,7 +178,7 @@ class FigureService:
             if not merged:
                 clusters.append(list(bbox))
 
-        final_clusters: List[List[float]] = []
+        final_clusters: list[list[float]] = []
         for cluster in clusters:
             merged = False
             for i, f_cluster in enumerate(final_clusters):

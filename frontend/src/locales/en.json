@@ -59,6 +59,8 @@
       "area_mode": "Crop Area",
       "stamp_mode": "Stamps"
     },
+    "image_not_available": "Image not available",
+    "text_mode_hint": "Use Text Mode to view content",
     "dictionary": {
       "ready": "Dictionary Ready!",
       "click_hint": "Click any word in the PDF to see its definition here.",

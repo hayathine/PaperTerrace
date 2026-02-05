@@ -4,10 +4,9 @@ import sys
 # Add project root to path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
+from app.models.orm import Base
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
-
-from app.models.orm import Base
 
 load_dotenv()
 

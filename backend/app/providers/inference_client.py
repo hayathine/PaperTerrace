@@ -7,7 +7,7 @@ import asyncio
 import logging
 import os
 import time
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 import httpx
 from pydantic import BaseModel
@@ -29,7 +29,7 @@ class CircuitBreakerError(Exception):
 
 class LayoutAnalysisRequest(BaseModel):
     pdf_path: str
-    pages: Optional[List[int]] = None
+    pages: list[int] | None = None
 
 
 class TranslationRequest(BaseModel):
@@ -39,7 +39,7 @@ class TranslationRequest(BaseModel):
 
 
 class TranslationBatchRequest(BaseModel):
-    texts: List[str]
+    texts: list[str]
     source_lang: str = "en"
     target_lang: str = "ja"
 
@@ -105,7 +105,7 @@ class InferenceServiceClient:
 
     async def _make_request_with_retry(
         self, method: str, endpoint: str, **kwargs
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """リトライ機能付きリクエスト"""
         self._check_circuit_breaker()
 
@@ -137,8 +137,8 @@ class InferenceServiceClient:
         raise InferenceServiceError(f"推論サービスへのリクエストが失敗しました: {last_exception}")
 
     async def analyze_layout(
-        self, pdf_path: str, pages: Optional[List[int]] = None
-    ) -> List[Dict[str, Any]]:
+        self, pdf_path: str, pages: list[int] | None = None
+    ) -> list[dict[str, Any]]:
         """レイアウト解析の実行"""
         request_data = LayoutAnalysisRequest(pdf_path=pdf_path, pages=pages)
 
@@ -188,8 +188,8 @@ class InferenceServiceClient:
             raise
 
     async def translate_batch(
-        self, texts: List[str], source_lang: str = "en", target_lang: str = "ja"
-    ) -> List[str]:
+        self, texts: list[str], source_lang: str = "en", target_lang: str = "ja"
+    ) -> list[str]:
         """複数テキストの一括翻訳"""
         request_data = TranslationBatchRequest(
             texts=texts, source_lang=source_lang, target_lang=target_lang
@@ -214,14 +214,14 @@ class InferenceServiceClient:
             logger.error(f"バッチ翻訳エラー: {e}")
             raise
 
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> dict[str, Any]:
         """推論サービスのヘルスチェック"""
         try:
             # Health check with reduced retries (1 attempt only)
             url = f"{self.base_url}/health"
             response = await self.client.get(url, timeout=5.0)  # 5 second timeout
             response.raise_for_status()
-            
+
             self._record_success()
             return response.json()
         except Exception as e:
@@ -231,7 +231,7 @@ class InferenceServiceClient:
 
 
 # シングルトンインスタンス
-_inference_client: Optional[InferenceServiceClient] = None
+_inference_client: InferenceServiceClient | None = None
 
 
 async def get_inference_client() -> InferenceServiceClient:

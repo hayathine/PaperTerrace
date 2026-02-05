@@ -4,8 +4,6 @@ Generates a persona based on an author's research history and style,
 allowing the user to 'chat' with the author.
 """
 
-from typing import Dict, List
-
 from app.domain.features.research_radar import ResearchRadarService
 from app.domain.prompts import AGENT_AUTHOR_PERSONA_PROMPT, CORE_SYSTEM_PROMPT
 from app.logger import logger
@@ -52,7 +50,7 @@ class AuthorAgentService:
     async def chat_with_author(
         self,
         message: str,
-        history: List[Dict[str, str]],
+        history: list[dict[str, str]],
         system_instruction: str,
         pdf_bytes: bytes | None = None,
     ) -> str:

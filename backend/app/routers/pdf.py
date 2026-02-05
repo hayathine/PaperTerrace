@@ -5,7 +5,6 @@ Handles PDF upload, OCR processing, and streaming text analysis.
 
 import asyncio
 import uuid
-from typing import Optional
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
@@ -39,7 +38,7 @@ redis_service = RedisService()
 async def analyze_pdf(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    session_id: Optional[str] = Form(None),
+    session_id: str | None = Form(None),
     lang: str = Form("ja"),
     user: OptionalUser = None,
 ):
@@ -119,7 +118,7 @@ async def analyze_pdf(
 async def analyze_pdf_json(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
-    session_id: Optional[str] = Form(None),
+    session_id: str | None = Form(None),
     lang: str = Form("ja"),
     user: OptionalUser = None,
 ):
@@ -237,7 +236,7 @@ async def analyze_pdf_json(
 @router.post("/analyze-paper/{paper_id}")
 async def analyze_paper(
     paper_id: str,
-    session_id: Optional[str] = Form(None),
+    session_id: str | None = Form(None),
     user: OptionalUser = None,
 ):
     """
@@ -391,6 +390,15 @@ async def stream(task_id: str):
 
                 # End of OCR
                 logger.info(f"[stream] {task_id}: OCR complete. Pages processed: {page_count}")
+
+                # Send coordinates ready event (Phase 2 completion)
+                yield f"event: message\ndata: {json.dumps({'type': 'coordinates_ready', 'page_count': page_count})}\n\n"
+                await asyncio.sleep(0.01)
+
+                # Send assist mode ready event
+                yield f"event: message\ndata: {json.dumps({'type': 'assist_mode_ready'})}\n\n"
+                await asyncio.sleep(0.01)
+
                 full_text = "\n\n---\n\n".join(full_text_fragments)
                 new_paper_id = str(uuid6.uuid7())
 
@@ -490,6 +498,10 @@ async def stream(task_id: str):
 
                         yield f"event: message\ndata: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
                         await asyncio.sleep(0.01)
+
+                    # キャッシュされたデータの場合、座標は既に準備済み
+                    yield f"event: message\ndata: {json.dumps({'type': 'coordinates_ready', 'page_count': len(cached_images)})}\n\n"
+                    await asyncio.sleep(0.01)
 
                     # キャッシュされたデータの場合もassist_mode_readyイベントを送信
                     yield f"event: message\ndata: {json.dumps({'type': 'assist_mode_ready'})}\n\n"

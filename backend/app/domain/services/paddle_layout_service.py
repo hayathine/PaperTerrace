@@ -4,7 +4,7 @@
 """
 
 import asyncio
-from typing import Any, Dict, List, Optional
+from typing import Any
 
 from app.logger import get_service_logger
 from app.providers.inference_client import (
@@ -26,7 +26,7 @@ class PaddleLayoutService:
 
     def __new__(cls):
         if cls._instance is None:
-            cls._instance = super(PaddleLayoutService, cls).__new__(cls)
+            cls._instance = super().__new__(cls)
             cls._instance._initialized = False
         return cls._instance
 
@@ -51,8 +51,8 @@ class PaddleLayoutService:
         log.info("init", "PaddleLayoutService initialized (ServiceB client mode)")
 
     async def detect_layout_async(
-        self, pdf_path: str, pages: Optional[List[int]] = None
-    ) -> List[Dict[str, Any]]:
+        self, pdf_path: str, pages: list[int] | None = None
+    ) -> list[dict[str, Any]]:
         """
         PDFのレイアウト解析を非同期で実行（ServiceB経由）
 
@@ -133,7 +133,7 @@ class PaddleLayoutService:
             log.error("detect_layout_async", f"Unexpected error: {e}")
             return []
 
-    def detect_layout(self, image_bytes: bytes) -> List[Dict[str, Any]]:
+    def detect_layout(self, image_bytes: bytes) -> list[dict[str, Any]]:
         """
         同期版レイアウト検出（後方互換性のため保持）
         注意: この方法は非推奨。detect_layout_asyncを使用してください。
@@ -147,8 +147,8 @@ class PaddleLayoutService:
         return []
 
     async def analyze_pdf_layout(
-        self, pdf_path: str, pages: Optional[List[int]] = None
-    ) -> List[Dict[str, Any]]:
+        self, pdf_path: str, pages: list[int] | None = None
+    ) -> list[dict[str, Any]]:
         """
         PDF全体のレイアウト解析
         """

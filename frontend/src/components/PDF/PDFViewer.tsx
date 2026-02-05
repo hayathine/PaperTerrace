@@ -89,6 +89,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   );
   const [stamps, setStamps] = useState<Stamp[]>([]);
   const [selectedStamp, setSelectedStamp] = useState<StampType>("👍");
+  
+  // Progressive loading states
+  const [assistModeReady, setAssistModeReady] = useState(false);
+  const [coordinatesReady, setCoordinatesReady] = useState(false);
 
   const pagesRef = useRef<PageData[]>([]);
 
@@ -263,6 +267,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     setPages([]);
     setLoadedPaperId(null);
     setStamps([]);
+    
+    // Reset progressive loading states
+    setAssistModeReady(false);
+    setCoordinatesReady(false);
 
     const formData = new FormData();
     formData.append("file", file);
@@ -389,6 +397,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           es.close();
           processingFileRef.current = null;
           activeTaskIdRef.current = null;
+        } else if (eventData.type === "coordinates_ready") {
+          console.log("[PDFViewer] Coordinates ready, enabling assist mode");
+          setCoordinatesReady(true);
+          setAssistModeReady(true);
+        } else if (eventData.type === "assist_mode_ready") {
+          console.log("[PDFViewer] Assist mode ready");
+          setAssistModeReady(true);
         } else if (eventData.type === "error") {
           setStatus("error");
           setErrorMsg(eventData.message);
@@ -617,6 +632,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           if (cachedPages.length > 0) {
             setPages(cachedPages);
             setStatus("done");
+            // Cached papers have coordinates ready
+            setCoordinatesReady(true);
+            setAssistModeReady(true);
             // If we have content, we could stop here.
             // Optional: Background check with server to ensure consistency.
             return;
@@ -668,6 +686,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
             if (fullPages.length > 0) {
               setPages(fullPages);
               setStatus("done");
+              // Full paper data has coordinates ready
+              setCoordinatesReady(true);
+              setAssistModeReady(true);
 
               // Cache images in background
               cachePaperImages(
@@ -800,44 +821,62 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
             <button
               onClick={() => setMode("text")}
+              disabled={!assistModeReady}
               className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
-                mode === "text"
-                  ? "bg-indigo-600 text-white shadow-none"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                !assistModeReady
+                  ? "text-slate-300 cursor-not-allowed bg-slate-50"
+                  : mode === "text"
+                    ? "bg-indigo-600 text-white shadow-none"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
               }`}
             >
               <span className="text-sm">📄</span>
               <span className="hidden sm:inline">
-                {t("viewer.toolbar.click_mode")}
+                {assistModeReady 
+                  ? t("viewer.toolbar.click_mode")
+                  : "支援モード⏳準備中"
+                }
               </span>
             </button>
 
             <div className="w-[1px] h-4 bg-slate-200 mx-1 hidden sm:block" />
             <button
               onClick={() => setMode("area")}
+              disabled={!coordinatesReady}
               className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
-                mode === "area"
-                  ? "bg-indigo-600 text-white shadow-none"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                !coordinatesReady
+                  ? "text-slate-300 cursor-not-allowed bg-slate-50"
+                  : mode === "area"
+                    ? "bg-indigo-600 text-white shadow-none"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
               }`}
             >
               <span className="text-sm">✂️</span>
               <span className="hidden sm:inline">
-                {t("viewer.toolbar.area_mode")}
+                {coordinatesReady 
+                  ? t("viewer.toolbar.area_mode")
+                  : "切り取り⏳準備中"
+                }
               </span>
             </button>
 
             <button
               onClick={() => setMode("stamp")}
+              disabled={!coordinatesReady}
               className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
-                mode === "stamp"
-                  ? "bg-indigo-600 text-white shadow-none"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                !coordinatesReady
+                  ? "text-slate-300 cursor-not-allowed bg-slate-50"
+                  : mode === "stamp"
+                    ? "bg-indigo-600 text-white shadow-none"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
               }`}
             >
               <span className="text-sm">👍</span>
               <span className="hidden sm:inline">
-                {t("viewer.toolbar.stamp_mode")}
+                {coordinatesReady 
+                  ? t("viewer.toolbar.stamp_mode")
+                  : "スタンプ⏳準備中"
+                }
               </span>
             </button>
           </div>

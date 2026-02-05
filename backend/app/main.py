@@ -251,7 +251,7 @@ async def serve_test_pdf():
     dist_dir = "app/static/dist"
     if not os.path.exists(dist_dir) and os.path.exists("frontend/dist"):
         dist_dir = "frontend/dist"
-        
+
     test_pdf_path = os.path.join(dist_dir, "test.pdf")
     if os.path.exists(test_pdf_path):
         return FileResponse(test_pdf_path, media_type="application/pdf")

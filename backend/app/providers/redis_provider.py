@@ -1,7 +1,7 @@
 import json
 import os
 import time
-from typing import Any, Optional
+from typing import Any
 
 import redis
 
@@ -10,13 +10,13 @@ from app.logger import get_service_logger
 log = get_service_logger("Redis")
 
 # Singleton instance
-_redis_client: Optional[redis.Redis] = None
+_redis_client: redis.Redis | None = None
 _redis_error_logged = False
 _last_connection_attempt = 0.0
 RETRY_DELAY = 60  # Retry every 60 seconds if failed
 
 
-def get_redis_client() -> Optional[redis.Redis]:
+def get_redis_client() -> redis.Redis | None:
     """Get or create a Redis client instance optimized for Memorystore."""
     global _redis_client, _redis_error_logged, _last_connection_attempt
 
