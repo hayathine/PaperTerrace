@@ -59,7 +59,7 @@ async def analyze_pdf(
     file_hash = _get_file_hash(content)
 
     # Language detection
-    detected_lang = await service.ocr_service.detect_language_from_pdf(content)
+    detected_lang = await service.ocr_service.language_service.detect_language(content)
     if detected_lang and detected_lang != "en":
         logger.warning(f"Unsupported language detected: {detected_lang}")
         return Response(
@@ -144,7 +144,7 @@ async def analyze_pdf_json(
     logger.info(f"[analyze-pdf-json] session_id={session_id}, file_hash={file_hash}")
 
     # Detect PDF language
-    detected_lang = await service.ocr_service.detect_language_from_pdf(content)
+    detected_lang = await service.ocr_service.language_service.detect_language(content)
     if detected_lang and detected_lang != "en":
         logger.warning(f"Unsupported language detected: {detected_lang}")
         return JSONResponse(

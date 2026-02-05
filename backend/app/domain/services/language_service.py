@@ -1,7 +1,6 @@
 import io
 
 import pdfplumber
-from app.domain.prompts import PDF_DETECT_LANGUAGE_PROMPT
 from app.logger import get_service_logger
 
 log = get_service_logger("Language")
@@ -25,26 +24,6 @@ class LanguageService:
                     language = lang_code.split("-")[0].lower()
                     log.info("detect", "Language from metadata", language=language)
                     return language
-
-                # 2. AI prediction fallback
-                log.info("detect", "Metadata missing, using AI detection")
-                if len(pdf.pages) > 0:
-                    page = pdf.pages[0]
-                    text = page.extract_text() or ""
-                    text = text.strip()
-                    if text:
-                        prompt = PDF_DETECT_LANGUAGE_PROMPT.format(text=text[:1000])
-                        detected = await self.ai_provider.generate(prompt, model=self.model)
-                        detected = detected.strip().lower()
-                        if len(detected) <= 5:
-                            language = detected.split("-")[0]
-                            log.info("detect", "Language detected by AI", language=language)
-                        else:
-                            log.warning("detect", "Unexpected AI response", response=detected)
-                    else:
-                        log.warning("detect", "No text on first page")
-                else:
-                    log.warning("detect", "PDF has no pages")
 
         except Exception as e:
             log.error("detect", "Language detection failed", error=str(e))

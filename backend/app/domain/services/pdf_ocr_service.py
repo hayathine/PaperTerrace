@@ -25,10 +25,6 @@ class PDFOCRService:
         self.figure_service = FigureService(self.ai_provider, self.model)
         self.language_service = LanguageService(self.ai_provider, self.model)
 
-    async def detect_language_from_pdf(self, file_bytes: bytes) -> str:
-        """Detect language using specialized service."""
-        return await self.language_service.detect_language(file_bytes)
-
     async def extract_text_streaming(
         self, file_bytes: bytes, filename: str = "unknown.pdf", user_plan: str = "free"
     ) -> AsyncGenerator:
@@ -176,9 +172,30 @@ class PDFOCRService:
         page_image_b64 = base64.b64encode(img_bytes).decode("utf-8")
         image_url = save_page_image(file_hash, page_num, page_image_b64)
 
+        # Update layout data using actual image dimensions to ensure alignment
+        scale_x = img_pil.width / float(page.width)
+        scale_y = img_pil.height / float(page.height)
+
+        layout_data["width"] = float(img_pil.width)
+        layout_data["height"] = float(img_pil.height)
+
+        # Re-scale words with precise factors
+        layout_data["words"] = [
+            {
+                "word": w["text"],
+                "bbox": [
+                    w["x0"] * scale_x,
+                    w["top"] * scale_y,
+                    w["x1"] * scale_x,
+                    w["bottom"] * scale_y,
+                ],
+            }
+            for w in native_words
+        ]
+
+        # Phase 2 yield with synchronized layout and image
         yield (page_num, total_pages, page_text, is_last, file_hash, image_url, layout_data)
 
-        # Phase 3: AI Figure Extraction (HEAVY)
         logger.debug(f"[OCR] Page {page_num}: Phase 3 - AI Analysis")
         figures = await self.figure_service.detect_and_extract_figures(
             img_bytes,
