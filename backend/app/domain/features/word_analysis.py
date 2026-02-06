@@ -7,10 +7,11 @@ from app.domain.prompts import (
     CORE_SYSTEM_PROMPT,
 )
 from app.domain.services.local_translator import get_local_translator
-from common.logger import logger
 from app.providers import RedisService, get_ai_provider
 from app.providers.dictionary_provider import get_dictionary_provider
-from app.utils import truncate_context
+
+from common.logger import logger
+from common.utils.text import truncate_context
 
 from .translate import SUPPORTED_LANGUAGES
 
