@@ -14,8 +14,8 @@ import uvicorn
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from services.layout_service import LayoutAnalysisService
-from services.translation_service import TranslationService
+from services.layout_detection.layout_service import LayoutAnalysisService
+from services.translation.translation_service import TranslationService
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -59,7 +59,8 @@ if os.getenv("K_SERVICE"):
 # レート制限設定
 # マイクロサービス間通信ではIPベースの制限が全ユーザー巻き添えの原因になるため、デフォルト無効化
 limiter = Limiter(
-    key_func=get_remote_address, enabled=os.getenv("ENABLE_RATE_LIMIT", "false").lower() == "true"
+    key_func=get_remote_address,
+    enabled=os.getenv("ENABLE_RATE_LIMIT", "false").lower() == "true",
 )
 
 # グローバルサービスインスタンス
@@ -78,7 +79,7 @@ async def lifespan(app: FastAPI):
 
     try:
         # サービス初期化
-        layout_service = LayoutAnalysisService(lang='en')
+        layout_service = LayoutAnalysisService(lang="en")
         translation_service = TranslationService()
 
         # 翻訳サービスのみ初期化が必要
@@ -177,13 +178,81 @@ async def health_check():
     }
 
 
-# レイアウト解析エンドポイント
+# レイアウト解析エンドポイント（画像アップロード版）
+@app.post("/api/v1/analyze-image")
+@limiter.limit(os.getenv("RATE_LIMIT_LAYOUT", "60/minute"))
+async def analyze_layout_image(request: Request, file: UploadFile = File(...)):
+    """画像からレイアウト解析を実行"""
+    if not layout_service:
+        raise HTTPException(
+            status_code=503, detail="Layout analysis service not available"
+        )
+
+    start_time = time.time()
+    temp_file_path = None
+
+    try:
+        logger.info(f"レイアウト画像解析開始: {file.filename}")
+
+        # 一時ファイルに保存
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
+            shutil.copyfileobj(file.file, temp_file)
+            temp_file_path = temp_file.name
+
+        # 解析実行 (スレッドプールで実行してイベントループをブロックしない)
+        # analyze_image は dict ではなく LayoutItem オブジェクトを返す
+        results = await run_in_threadpool(layout_service.analyze_image, temp_file_path)
+
+        processing_time = time.time() - start_time
+        logger.info(f"レイアウト画像解析完了: {processing_time:.2f}秒")
+
+        # LayoutItemオブジェクトを辞書に変換
+        serializable_results = []
+        for item in results:
+            serializable_results.append(
+                {
+                    "bbox": {
+                        "x_min": item.bbox.x_min,
+                        "y_min": item.bbox.y_min,
+                        "x_max": item.bbox.x_max,
+                        "y_max": item.bbox.y_max,
+                    },
+                    "class_name": item.class_name,
+                    "score": item.score,
+                }
+            )
+
+        return {
+            "success": True,
+            "results": serializable_results,
+            "processing_time": processing_time,
+        }
+
+    except Exception as e:
+        processing_time = time.time() - start_time
+        logger.error(f"レイアウト画像解析エラー: {e}")
+        return {
+            "success": False,
+            "results": [],
+            "processing_time": processing_time,
+            "message": str(e),
+        }
+    finally:
+        if temp_file_path:
+            Path(temp_file_path).unlink(missing_ok=True)
+
+
+# レイアウト解析エンドポイント（PDFパス版）
 @app.post("/api/v1/layout-analysis", response_model=LayoutAnalysisResponse)
-@limiter.limit(os.getenv("RATE_LIMIT_LAYOUT", "60/minute"))  # デフォルト: 1分間に60リクエスト
+@limiter.limit(
+    os.getenv("RATE_LIMIT_LAYOUT", "60/minute")
+)  # デフォルト: 1分間に60リクエスト
 async def analyze_layout(request: Request, req: LayoutAnalysisRequest):
     """PDFのレイアウト解析を実行"""
     if not layout_service:
-        raise HTTPException(status_code=503, detail="Layout analysis service not available")
+        raise HTTPException(
+            status_code=503, detail="Layout analysis service not available"
+        )
 
     start_time = time.time()
 
@@ -211,7 +280,9 @@ async def analyze_layout(request: Request, req: LayoutAnalysisRequest):
 
 # 翻訳エンドポイント
 @app.post("/api/v1/translate", response_model=TranslationResponse)
-@limiter.limit(os.getenv("RATE_LIMIT_TRANSLATE", "300/minute"))  # デフォルト: 1分間に300リクエスト
+@limiter.limit(
+    os.getenv("RATE_LIMIT_TRANSLATE", "300/minute")
+)  # デフォルト: 1分間に300リクエスト
 async def translate_text(request: Request, req: TranslationRequest):
     """テキストの翻訳を実行"""
     if not translation_service:
@@ -238,13 +309,18 @@ async def translate_text(request: Request, req: TranslationRequest):
         logger.error(f"翻訳エラー: {e}")
 
         return TranslationResponse(
-            success=False, translation="", processing_time=processing_time, message=str(e)
+            success=False,
+            translation="",
+            processing_time=processing_time,
+            message=str(e),
         )
 
 
 # バッチ翻訳エンドポイント
 @app.post("/api/v1/translate-batch", response_model=TranslationBatchResponse)
-@limiter.limit(os.getenv("RATE_LIMIT_BATCH", "60/minute"))  # デフォルト: 1分間に60リクエスト
+@limiter.limit(
+    os.getenv("RATE_LIMIT_BATCH", "60/minute")
+)  # デフォルト: 1分間に60リクエスト
 async def translate_batch(request: Request, req: TranslationBatchRequest):
     """複数テキストの一括翻訳を実行"""
     if not translation_service:
@@ -271,7 +347,10 @@ async def translate_batch(request: Request, req: TranslationBatchRequest):
         logger.error(f"バッチ翻訳エラー: {e}")
 
         return TranslationBatchResponse(
-            success=False, translations=[], processing_time=processing_time, message=str(e)
+            success=False,
+            translations=[],
+            processing_time=processing_time,
+            message=str(e),
         )
 
 

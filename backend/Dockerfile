@@ -9,15 +9,13 @@ RUN npm run build
 # --- Stage 2: Runtime Builder ---
 FROM python:3.12-slim AS runtime-builder
 WORKDIR /app
+
+# Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+# 依存関係ファイルのコピー
+COPY backend/pyproject.toml ./
 
-# Copy workspace files
-COPY pyproject.toml uv.lock ./
-COPY backend/pyproject.toml ./backend/pyproject.toml
-COPY inference-service/pyproject.toml ./inference-service/pyproject.toml
-
-# Sync the entire workspace including all members
-RUN uv sync --frozen --no-dev --all-packages
+RUN uv sync --no-dev
 
 # --- Stage 3: Production Stage ---
 FROM python:3.12-slim AS production
@@ -38,7 +36,7 @@ COPY --from=runtime-builder /app/.venv /app/.venv
 COPY --from=frontend-builder /app/frontend/dist ./app/static/dist
 
 # ONNXモデルファイルをコピー
-COPY inference-service/models/paddle2onnx/PP-DocLayout-L_infer.onnx ./inference-service/models/paddle2onnx/PP-DocLayout-L_infer.onnx
+COPY inference-service/models/paddle2onnx/PP-DocLayout-L_infer.onnx ./models/paddle2onnx/PP-DocLayout-L_infer.onnx
 
 COPY backend/alembic.ini ./
 COPY backend/migrations ./migrations
@@ -47,7 +45,7 @@ COPY backend/app/ ./app/
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
     PYTHONUNBUFFERED=1 \
-    LAYOUT_MODEL_PATH="/app/inference-service/models/paddle2onnx/PP-DocLayout-L_infer.onnx"
+    LAYOUT_MODEL_PATH="/app/models/paddle2onnx/PP-DocLayout-L_infer.onnx"
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

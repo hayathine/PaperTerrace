@@ -153,12 +153,19 @@ tasks:
   # ============================================================================
 
   staging:deploy:
-    desc: "Deploy to staging environment"
+    desc: "Deploy backend to staging environment"
     cmds:
-      - echo "🚀 Deploying to staging..."
-      - docker build -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:staging .
+      - echo "🚀 Deploying backend to staging..."
+      - gcloud auth configure-docker {{.REGION}}-docker.pkg.dev --quiet
+      - docker build --platform linux/amd64 -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:staging .
       - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:staging
       - |
+        SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null || echo "")
+        if [ -z "$SERVICEB_URL" ]; then
+          echo "⚠️ ServiceB not found. Deploy inference service first with: task staging:inference:deploy"
+          SERVICEB_URL="https://paperterrace-inference-staging-placeholder.run.app"
+        fi
+        
         gcloud run deploy paperterrace-staging \
           --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:staging \
           --region {{.REGION}} \
@@ -166,24 +173,19 @@ tasks:
           --memory 1Gi \
           --cpu 2 \
           --min-instances 0 \
-          --max-instances 10 \
+          --max-instances 20 \
+          --concurrency 80 \
           --timeout 300 \
-          --set-env-vars "GEMINI_API_KEY=${GEMINI_API_KEY},AI_PROVIDER=gemini,OCR_MODEL=gemini-1.5-flash,LOG_LEVEL=INFO,ACCESS_LOG_LEVEL=INFO"
-      - echo "✅ Staging deployed!"
-
-  staging:deploy:microservices:
-    desc: "Deploy microservices to staging"
-    cmds:
-      - task: staging:serviceb:deploy
-      - task: staging:servicea:deploy
-      - echo "🎉 Microservices deployed to staging!"
+          --set-env-vars "GEMINI_API_KEY=${GEMINI_API_KEY},AI_PROVIDER=gemini,OCR_MODEL=gemini-1.5-flash,LOG_LEVEL=INFO,ACCESS_LOG_LEVEL=INFO,INFERENCE_SERVICE_URL=$SERVICEB_URL,INFERENCE_SERVICE_TIMEOUT=30,SKIP_INFERENCE_SERVICE_WARMUP=false"
+      - echo "✅ Backend deployed to staging!"
       - task: staging:urls
 
-  staging:serviceb:deploy:
+  staging:inference:deploy:
     desc: "Deploy inference service to staging"
     cmds:
-      - echo "🔨 Building and deploying ServiceB..."
-      - docker build -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/inference:staging .
+      - echo "🔨 Building and deploying inference service..."
+      - gcloud auth configure-docker {{.REGION}}-docker.pkg.dev --quiet
+      - docker build --platform linux/amd64 -f inference-service/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/inference:staging .
       - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/inference:staging
       - |
         gcloud run deploy paperterrace-inference-staging \
@@ -192,41 +194,69 @@ tasks:
           --allow-unauthenticated \
           --memory 4Gi \
           --cpu 4 \
-          --min-instances 1 \
-          --max-instances 5 \
-          --concurrency 10 \
-          --timeout 300
-      - echo "✅ ServiceB deployed!"
-    dir: inference-service
-
-  staging:servicea:deploy:
-    desc: "Deploy main service to staging"
-    cmds:
-      - echo "🔨 Building and deploying ServiceA..."
-      - docker build -f backend/Dockerfile -t {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/main:staging .
-      - docker push {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/main:staging
-      - |
-        SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null || echo "")
-        gcloud run deploy paperterrace-main-staging \
-          --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/main:staging \
-          --region {{.REGION}} \
-          --allow-unauthenticated \
-          --memory 1Gi \
-          --cpu 2 \
           --min-instances 0 \
           --max-instances 10 \
-          --concurrency 80 \
+          --concurrency 10 \
           --timeout 300 \
-          --set-env-vars "INFERENCE_SERVICE_URL=$SERVICEB_URL"
-      - echo "✅ ServiceA deployed!"
+          --set-env-vars "LOG_LEVEL=INFO,DEV_MODE=false,SKIP_MODEL_LOADING=false,LOCAL_MODEL_PATH=/app/models/m2m100_ct2"
+      - echo "✅ Inference service deployed to staging!"
+      - task: staging:urls
+
+  staging:deploy:all:
+    desc: "Deploy both backend and inference to staging"
+    cmds:
+      - echo "🚀 Deploying all services to staging..."
+      - task: staging:inference:deploy
+      - echo "⏳ Waiting 10 seconds for inference service to be ready..."
+      - sleep 10
+      - task: staging:deploy
+      - echo "🎉 All services deployed to staging!"
 
   staging:test:
     desc: "Run comprehensive staging tests"
     cmds:
       - echo "🧪 Running staging tests..."
       - task: staging:health
-      - task: staging:test:upload
+      - task: staging:test:translation
       - echo "✅ All staging tests passed!"
+
+  staging:test:translation:
+    desc: "Test translation functionality"
+    cmds:
+      - echo "🔤 Testing translation..."
+      - |
+        SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
+        if [ -z "$SERVICEB_URL" ]; then
+          echo "❌ Inference service not found. Deploy first with: task staging:inference:deploy"
+          exit 1
+        fi
+
+        echo "Testing translation endpoint: $SERVICEB_URL/api/v1/translate"
+        
+        RESPONSE=$(curl -s -X POST "$SERVICEB_URL/api/v1/translate" \
+          -H "Content-Type: application/json" \
+          -d '{"text": "Hello world", "source_lang": "en", "target_lang": "ja"}' \
+          -w "\n%{http_code}")
+        
+        HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+        BODY=$(echo "$RESPONSE" | head -n-1)
+        
+        echo "HTTP Status: $HTTP_CODE"
+        echo "Response: $BODY"
+        
+        if [ "$HTTP_CODE" = "200" ]; then
+          SUCCESS=$(echo "$BODY" | grep -o '"success":[^,}]*' | cut -d':' -f2)
+          if [ "$SUCCESS" = "true" ]; then
+            TRANSLATION=$(echo "$BODY" | grep -o '"translation":"[^"]*"' | cut -d'"' -f4)
+            echo "✅ Translation successful: Hello world → $TRANSLATION"
+          else
+            echo "❌ Translation returned success=false"
+            exit 1
+          fi
+        else
+          echo "❌ Translation test failed with HTTP $HTTP_CODE"
+          exit 1
+        fi
 
   staging:test:upload:
     desc: "Test PDF upload with test.pdf"
@@ -280,22 +310,30 @@ tasks:
     cmds:
       - echo "🔍 Checking staging services health..."
       - |
-        # Check ServiceA (main)
-        SERVICEA_URL=$(gcloud run services describe paperterrace-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
-        if [ -n "$SERVICEA_URL" ]; then
-          echo "ServiceA: $SERVICEA_URL"
-          curl -f "$SERVICEA_URL/api/health" && echo "✅ ServiceA healthy" || echo "❌ ServiceA unhealthy"
+        # Check Backend
+        BACKEND_URL=$(gcloud run services describe paperterrace-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
+        if [ -n "$BACKEND_URL" ]; then
+          echo "Backend: $BACKEND_URL"
+          if curl -f -s "$BACKEND_URL/api/health" > /dev/null 2>&1; then
+            echo "✅ Backend healthy"
+          else
+            echo "❌ Backend unhealthy"
+          fi
         else
-          echo "⚠️ ServiceA not deployed"
+          echo "⚠️ Backend not deployed"
         fi
 
-        # Check ServiceB (inference)
-        SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
-        if [ -n "$SERVICEB_URL" ]; then
-          echo "ServiceB: $SERVICEB_URL"
-          curl -f "$SERVICEB_URL/health" && echo "✅ ServiceB healthy" || echo "❌ ServiceB unhealthy"
+        # Check Inference Service
+        INFERENCE_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
+        if [ -n "$INFERENCE_URL" ]; then
+          echo "Inference: $INFERENCE_URL"
+          if curl -f -s "$INFERENCE_URL/health" > /dev/null 2>&1; then
+            echo "✅ Inference service healthy"
+          else
+            echo "❌ Inference service unhealthy"
+          fi
         else
-          echo "⚠️ ServiceB not deployed"
+          echo "⚠️ Inference service not deployed"
         fi
 
   staging:logs:
@@ -305,61 +343,61 @@ tasks:
       - gcloud run services logs read paperterrace-staging --limit=50 --region {{.REGION}} --format=json 2>/dev/null | python3 -c "import sys, json; [print(json.dumps(json.loads(line), ensure_ascii=False, indent=2)) for line in sys.stdin if line.strip()]"
 
   staging:logs:servicea:
-    desc: "Show ServiceA (main) logs with details"
+    desc: "Show backend logs"
     cmds:
-      - echo "📋 ServiceA logs (last 50 entries):"
-      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging"' --limit=50 --format=json --region={{.REGION}} 2>/dev/null | python3 -c "import sys, json; [print(json.dumps(json.loads(line), ensure_ascii=False, indent=2)) for line in sys.stdin if line.strip()]"
+      - echo "📋 Backend logs (last 50 entries):"
+      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging"' --limit=50 --format=json 2>/dev/null | python3 -c "import sys, json; [print(json.dumps(json.loads(line), ensure_ascii=False, indent=2)) for line in sys.stdin if line.strip()]"
 
   staging:logs:serviceb:
-    desc: "Show ServiceB (inference) logs with details"
+    desc: "Show inference service logs"
     cmds:
-      - echo "📋 ServiceB logs (last 50 entries):"
-      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-inference-staging"' --limit=50 --format=json --region={{.REGION}} 2>/dev/null | python3 -c "import sys, json; [print(json.dumps(json.loads(line), ensure_ascii=False, indent=2)) for line in sys.stdin if line.strip()]"
+      - echo "📋 Inference service logs (last 50 entries):"
+      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-inference-staging"' --limit=50 --format=json 2>/dev/null | python3 -c "import sys, json; [print(json.dumps(json.loads(line), ensure_ascii=False, indent=2)) for line in sys.stdin if line.strip()]"
 
   staging:logs:tail:servicea:
-    desc: "Tail ServiceA logs in real-time"
+    desc: "Tail backend logs in real-time"
     cmds:
-      - echo "📋 Tailing ServiceA logs (Ctrl+C to stop)..."
-      - gcloud logging tail 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging"' --format=json --region={{.REGION}}
+      - echo "📋 Tailing backend logs (Ctrl+C to stop)..."
+      - gcloud logging tail 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging"' --format=json
 
   staging:logs:tail:serviceb:
-    desc: "Tail ServiceB logs in real-time"
+    desc: "Tail inference service logs in real-time"
     cmds:
-      - echo "📋 Tailing ServiceB logs (Ctrl+C to stop)..."
-      - gcloud logging tail 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-inference-staging"' --format=json --region={{.REGION}}
+      - echo "📋 Tailing inference service logs (Ctrl+C to stop)..."
+      - gcloud logging tail 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-inference-staging"' --format=json
 
   staging:logs:errors:
     desc: "Show only error logs from staging"
     cmds:
       - echo "🔴 Error logs from staging:"
-      - gcloud logging read 'resource.type="cloud_run_revision" AND (resource.labels.service_name="paperterrace-staging" OR resource.labels.service_name="paperterrace-inference-staging") AND severity>=ERROR' --limit=20 --format=json --region={{.REGION}} 2>/dev/null | python3 -c "import sys, json; [print(json.dumps(json.loads(line), ensure_ascii=False, indent=2)) for line in sys.stdin if line.strip()]"
+      - gcloud logging read 'resource.type="cloud_run_revision" AND (resource.labels.service_name="paperterrace-staging" OR resource.labels.service_name="paperterrace-inference-staging") AND severity>=ERROR' --limit=20 --format=json 2>/dev/null | python3 -c "import sys, json; [print(json.dumps(json.loads(line), ensure_ascii=False, indent=2)) for line in sys.stdin if line.strip()]"
 
   staging:urls:
     desc: "Show staging service URLs"
     cmds:
       - echo "🔗 Staging Service URLs:"
       - |
-        SERVICEA_URL=$(gcloud run services describe paperterrace-main-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
-        SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
+        BACKEND_URL=$(gcloud run services describe paperterrace-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
+        INFERENCE_URL=$(gcloud run services describe paperterrace-inference-staging --region {{.REGION}} --format="value(status.url)" 2>/dev/null)
 
-        if [ -n "$SERVICEA_URL" ]; then
-          echo "ServiceA (Main): $SERVICEA_URL"
+        if [ -n "$BACKEND_URL" ]; then
+          echo "Backend: $BACKEND_URL"
         else
-          echo "ServiceA: Not deployed"
+          echo "Backend: Not deployed"
         fi
 
-        if [ -n "$SERVICEB_URL" ]; then
-          echo "ServiceB (Inference): $SERVICEB_URL"
+        if [ -n "$INFERENCE_URL" ]; then
+          echo "Inference: $INFERENCE_URL"
         else
-          echo "ServiceB: Not deployed"
+          echo "Inference: Not deployed"
         fi
 
   staging:stop:
     desc: "Stop staging services"
     cmds:
       - echo "🛑 Stopping staging services..."
-      - gcloud run services delete paperterrace-main-staging --region {{.REGION}} --quiet 2>/dev/null || echo "ServiceA already stopped"
-      - gcloud run services delete paperterrace-inference-staging --region {{.REGION}} --quiet 2>/dev/null || echo "ServiceB already stopped"
+      - gcloud run services delete paperterrace-staging --region {{.REGION}} --quiet 2>/dev/null || echo "Backend already stopped"
+      - gcloud run services delete paperterrace-inference-staging --region {{.REGION}} --quiet 2>/dev/null || echo "Inference service already stopped"
       - echo "✅ Staging services stopped!"
 
   # ============================================================================

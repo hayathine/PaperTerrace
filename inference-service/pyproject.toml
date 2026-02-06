@@ -8,9 +8,6 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    "numpy>=1.26.4",
-    "Pillow>=11.0.0",
-    "slowapi>=0.1.9",
     # ML推論ライブラリ
     "ctranslate2>=4.4.0",
     "sentencepiece>=0.2.0",
@@ -19,9 +16,26 @@ dependencies = [
     "onnxruntime>=1.23.2",
     "opencv-python-headless>=4.13.0.92",
     "onnx-graphsurgeon>=0.5.8",
-    "pydantic>=2.0.0",
-    "pdfplumber>=0.10.0",
+    "slowapi>=0.1.9",
+
+    # Web Framework & Common (from root)
+    "fastapi>=0.128.0",
+    "uvicorn[standard]>=0.32.1",
+    "pydantic>=2.10.4",
+    "python-multipart>=0.0.9",
+    "httpx>=0.24.0",
+    "numpy>=1.26.4",
+    "Pillow>=11.0.0",
+    "structlog>=24.1.0",
+    "chardet>=5.2.0",
+    "datetime>=6.0",
+    "dotenv>=0.9.9",
+    "pip>=25.3",
 ]
 
 [dependency-groups]
-dev = []
+dev = [
+    "pytest>=8.0.0",
+    "pytest-asyncio>=0.23.0",
+    "ruff>=0.4.0",
+]

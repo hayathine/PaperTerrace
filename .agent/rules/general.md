@@ -34,6 +34,9 @@ Ensure consistency with these technologies:
 - `src/routers/`: API endpoint definitions.
 - `src/schemas/`: Pydantic data models.
 - `src/utils/`: Pure utility functions.
+- **Dependency Management**:
+  - `pyproject.toml` locations: `./`, `./backend`, `./inference-service`.
+  - **Common Libraries**: Managed in the root (`./`) `pyproject.toml`.
 
 ### 2. Naming Conventions
 

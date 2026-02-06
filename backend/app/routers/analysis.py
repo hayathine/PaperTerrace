@@ -41,7 +41,9 @@ def _get_context(session_id: str) -> str | None:
     # 1. Try Redis
     context = redis_service.get(f"session:{session_id}")
     if context:
-        logger.debug(f"[_get_context] Redis HIT for session {session_id} (len={len(context)})")
+        logger.debug(
+            f"[_get_context] Redis HIT for session {session_id} (len={len(context)})"
+        )
         return context
 
     logger.info(
@@ -93,7 +95,8 @@ async def summarize(
     if not context:
         logger.warning(f"[summarize] Context not found for session {session_id}")
         return JSONResponse(
-            {"error": f"論文が読み込まれていません (session_id: {session_id})"}, status_code=400
+            {"error": f"論文が読み込まれていません (session_id: {session_id})"},
+            status_code=400,
         )
 
     # Resolve paper_id if missing
@@ -125,7 +128,9 @@ async def summarize(
 
         return JSONResponse({"abstract": abstract})
     else:
-        summary = await summary_service.summarize_full(context, target_lang=lang, paper_id=paper_id)
+        summary = await summary_service.summarize_full(
+            context, target_lang=lang, paper_id=paper_id
+        )
         return JSONResponse({"summary": summary})
 
 
@@ -246,7 +251,7 @@ async def detect_layout(
 
         try:
             # レイアウト解析実行
-            layout_items = layout_service.analyze_image(temp_file_path)
+            layout_items = await layout_service.analyze_image(temp_file_path)
 
             # レスポンス形式に変換
             results = []
@@ -281,7 +286,9 @@ async def detect_layout(
 
     except Exception as e:
         logger.error(f"Layout detection failed: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Layout detection failed: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Layout detection failed: {str(e)}"
+        )
 
 
 # ============================================================================
@@ -291,5 +298,7 @@ async def detect_layout(
 
 @router.post("/cite-intent")
 async def analyze_cite_intent(paragraph: str = Form(...), lang: str = Form("ja")):
-    intents = await cite_intent_service.analyze_paragraph_citations(paragraph, lang=lang)
+    intents = await cite_intent_service.analyze_paragraph_citations(
+        paragraph, lang=lang
+    )
     return JSONResponse({"citations": intents})
