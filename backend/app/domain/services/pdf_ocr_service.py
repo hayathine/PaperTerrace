@@ -31,33 +31,39 @@ class PDFOCRService:
         """Processes PDF pages one by one and streams results."""
         file_hash = _get_file_hash(file_bytes)
 
+        log.info("extract_start", f"Starting OCR extraction for {filename}", 
+                 file_hash=file_hash, file_size=len(file_bytes), user_plan=user_plan)
+
         # 1. Cache handling
         cached_result = await self._handle_cache(file_hash)
         if cached_result:
+            log.info("cache_hit", f"Using cached OCR for {filename}", file_hash=file_hash)
             for page in cached_result:
                 yield page
             return
 
-        logger.info(f"--- AI OCR Streaming: {filename} ---")
+        log.info("cache_miss", f"No cache found, starting AI OCR for {filename}", file_hash=file_hash)
 
         tmp_path = None
         try:
-            logger.debug(f"[OCR] Creating temp file for {file_hash}")
+            log.debug("temp_file_create", f"Creating temp file for {file_hash}")
             # Save PDF to temporary file for libraries that need a path (like Camelot)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                 tmp.write(file_bytes)
                 tmp_path = tmp.name
-            logger.debug(f"[OCR] Temp file created at {tmp_path}. Opening PDF...")
+            log.debug("temp_file_created", f"Temp file created at {tmp_path}")
 
             with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
                 total_pages = len(pdf.pages)
-                logger.info(f"[OCR] PDF opened. Total pages: {total_pages}")
+                log.info("pdf_opened", f"PDF opened successfully", 
+                        file_hash=file_hash, total_pages=total_pages, filename=filename)
 
                 all_text_parts = []
                 all_layout_parts = []
 
                 for page_num in range(total_pages):
-                    logger.debug(f"[OCR] Starting processing page {page_num + 1}/{total_pages}")
+                    log.debug("page_start", f"Processing page {page_num + 1}/{total_pages}", 
+                             page_num=page_num + 1, total_pages=total_pages)
 
                     async for result in self._process_page_incremental(
                         pdf.pages[page_num], page_num, total_pages, file_hash, pdf_path=tmp_path
@@ -68,17 +74,25 @@ class PDFOCRService:
                             layout_data = result[6]
                             all_text_parts.append(page_text)
                             all_layout_parts.append(layout_data)
+                            log.info("page_complete", f"Page {page_num + 1} processed", 
+                                   page_num=page_num + 1, text_length=len(page_text))
                         yield result
 
             # 2. Finalize and save to DB
+            log.info("finalize_start", "Finalizing OCR and saving to DB", file_hash=file_hash)
             self._finalize_ocr(file_hash, filename, all_text_parts, all_layout_parts)
+            log.info("extract_complete", f"OCR extraction completed for {filename}", 
+                    file_hash=file_hash, total_pages=total_pages)
 
         except Exception as e:
-            logger.error(f"OCR streaming failed: {e}")
+            log.error("extract_failed", f"OCR streaming failed: {str(e)}", 
+                     file_hash=file_hash, error_type=type(e).__name__)
+            logger.error(f"Full traceback: {e}", exc_info=True)
             yield (0, 0, f"ERROR_API_FAILED: {str(e)}", True, file_hash, None, None)
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
+                log.debug("temp_file_cleanup", f"Temp file removed: {tmp_path}")
 
     async def _handle_cache(self, file_hash: str) -> list | None:
         """Check if OCR is cached and return formatted pages if so."""
@@ -264,7 +278,7 @@ class PDFOCRService:
         page_num = page.page_number
         logger.debug(f"[OCR] p.{page_num}: Attempting native word extraction")
 
-        words = page.extract_words(use_text_flow=True, x_tolerance=1, y_tolerance=3)
+        words = page.extract_words(use_text_flow=True, x_tolerance=3, y_tolerance=3)
         if words:
             # Filter words that are inside any figure bbox
             if exclude_bboxes:

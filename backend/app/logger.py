@@ -68,6 +68,11 @@ shared_processors = [
 
 def configure_logging(log_level: str = "INFO"):
     """ロギングを設定する"""
+    import os
+    
+    # 環境変数からログレベルを取得（デフォルトはINFO）
+    env_log_level = os.getenv("LOG_LEVEL", log_level).upper()
+    
     structlog.configure(
         processors=shared_processors + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
         logger_factory=structlog.stdlib.LoggerFactory(),
@@ -87,13 +92,13 @@ def configure_logging(log_level: str = "INFO"):
     for h in root_logger.handlers[:]:
         root_logger.removeHandler(h)
 
-    handler = logging.StreamHandler(sys.stderr)
+    handler = logging.StreamHandler(sys.stdout)  # stderrからstdoutに変更
     handler.setFormatter(formatter)
 
     root_logger.addHandler(handler)
-    root_logger.setLevel(getattr(logging, log_level.upper()))
+    root_logger.setLevel(getattr(logging, env_log_level))
 
-    logging.getLogger("app_logger").setLevel(getattr(logging, log_level.upper()))
+    logging.getLogger("app_logger").setLevel(getattr(logging, env_log_level))
 
     # uvicornのログ設定
     for logger_name in ["uvicorn", "uvicorn.error"]:
@@ -101,8 +106,12 @@ def configure_logging(log_level: str = "INFO"):
         uv_logger.handlers = []
         uv_logger.propagate = True
 
-    # 静的ファイルアクセスログを抑制（DEBUGレベルに変更）
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    # 静的ファイルアクセスログの設定（環境変数で制御）
+    access_log_level = os.getenv("ACCESS_LOG_LEVEL", "WARNING").upper()
+    logging.getLogger("uvicorn.access").setLevel(getattr(logging, access_log_level))
+    
+    # 設定されたログレベルを出力
+    print(f"Logging configured: level={env_log_level}, access_log={access_log_level}", file=sys.stdout, flush=True)
 
 
 # 初期化実行

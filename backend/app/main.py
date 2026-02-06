@@ -123,15 +123,40 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         from app.logger import logger
 
-        logger.info(f"Incoming request: {request.method} {request.url.path}")
+        start_time = time.time()
+        
+        # リクエスト情報を詳細にログ出力
+        logger.info(
+            "request_started",
+            method=request.method,
+            path=request.url.path,
+            query_params=str(request.query_params),
+            client_host=request.client.host if request.client else "unknown",
+        )
+        
         try:
             response = await call_next(request)
+            duration = time.time() - start_time
+            
+            # レスポンス情報を詳細にログ出力
             logger.info(
-                f"Request completed: {request.method} {request.url.path} status={response.status_code}"
+                "request_completed",
+                method=request.method,
+                path=request.url.path,
+                status_code=response.status_code,
+                duration_ms=round(duration * 1000, 2),
             )
             return response
         except Exception as e:
-            logger.error(f"Request failed: {request.method} {request.url.path} error={str(e)}")
+            duration = time.time() - start_time
+            logger.error(
+                "request_failed",
+                method=request.method,
+                path=request.url.path,
+                error=str(e),
+                error_type=type(e).__name__,
+                duration_ms=round(duration * 1000, 2),
+            )
             logger.error(traceback.format_exc())
             return JSONResponse(
                 status_code=500, content={"error": "Internal Server Error", "message": str(e)}
