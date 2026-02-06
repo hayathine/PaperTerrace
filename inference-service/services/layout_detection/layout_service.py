@@ -11,53 +11,16 @@ from typing import Any
 import cv2
 import numpy as np
 import onnxruntime as ort
-from pydantic import BaseModel
 
 from common.logger import logger
-
-
-class BBox(BaseModel):
-    """バウンディングボックス"""
-
-    x_min: float
-    y_min: float
-    x_max: float
-    y_max: float
-
-    @classmethod
-    def from_list(cls, coord: list[float]) -> "BBox":
-        return cls(
-            x_min=coord[0],
-            y_min=coord[1],
-            x_max=coord[2],
-            y_max=coord[3],
-        )
-
-
-class LayoutItem(BaseModel):
-    """レイアウト要素"""
-
-    bbox: BBox
-    class_name: str
-    score: float
+from common.schemas.layout import LAYOUT_LABELS, BBox, LayoutItem
 
 
 class LayoutAnalysisService:
     """レイアウト解析サービス"""
 
     # ラベルマップ (PP-DocLayoutの標準クラス)
-    LABELS = [
-        "Text",
-        "Title",
-        "Figure",
-        "Figure caption",
-        "Table",
-        "Table caption",
-        "Header",
-        "Footer",
-        "Reference",
-        "Equation",
-    ]
+    LABELS = LAYOUT_LABELS
 
     def __init__(self, lang: str = "en", model_path: str | None = None):
         """

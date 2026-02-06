@@ -9,26 +9,10 @@ from pathlib import Path
 from typing import List
 
 import httpx
-from pydantic import BaseModel
+
+from common.schemas.layout import BBox, LayoutItem
 
 logger = logging.getLogger(__name__)
-
-
-class BBox(BaseModel):
-    """バウンディングボックス"""
-
-    x_min: float
-    y_min: float
-    x_max: float
-    y_max: float
-
-
-class LayoutItem(BaseModel):
-    """レイアウト要素"""
-
-    bbox: BBox
-    class_name: str
-    score: float
 
 
 class LayoutAnalysisService:

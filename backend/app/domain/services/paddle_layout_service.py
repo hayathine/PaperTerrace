@@ -6,12 +6,14 @@
 import asyncio
 from typing import Any
 
-from common.logger import get_service_logger
 from app.providers.inference_client import (
     CircuitBreakerError,
     InferenceServiceError,
     get_inference_client,
 )
+
+from common.logger import get_service_logger
+from common.schemas.layout import LAYOUT_LABELS
 
 log = get_service_logger("LayoutService")
 
@@ -34,17 +36,9 @@ class PaddleLayoutService:
         if self._initialized:
             return
 
+        # 共通ラベルからマップを作成
         self.label_map = {
-            0: "text",
-            1: "title",
-            2: "figure",
-            3: "figure_caption",
-            4: "table",
-            5: "table_caption",
-            6: "header",
-            7: "footer",
-            8: "reference",
-            9: "equation",
+            i: label.lower().replace(" ", "_") for i, label in enumerate(LAYOUT_LABELS)
         }
 
         self._initialized = True

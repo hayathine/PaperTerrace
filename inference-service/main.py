@@ -9,13 +9,12 @@ import tempfile
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import List, Optional
+from typing import Optional
 
 import uvicorn
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 from services.layout_detection.layout_service import LayoutAnalysisService
 from services.translation.translation_service import TranslationService
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -23,6 +22,14 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
 from common.logger import configure_logging, logger
+from common.schemas.inference import (
+    LayoutAnalysisRequest,
+    LayoutAnalysisResponse,
+    TranslationBatchRequest,
+    TranslationBatchResponse,
+    TranslationRequest,
+    TranslationResponse,
+)
 
 # ログ設定（共通モジュールを使用）
 configure_logging()
@@ -96,43 +103,7 @@ app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 
-# リクエスト・レスポンスモデル
-class LayoutAnalysisRequest(BaseModel):
-    pdf_path: str
-    pages: Optional[List[int]] = None
-
-
-class LayoutAnalysisResponse(BaseModel):
-    success: bool
-    results: List[dict]
-    processing_time: float
-    message: Optional[str] = None
-
-
-class TranslationRequest(BaseModel):
-    text: str
-    source_lang: str = "en"
-    target_lang: str = "ja"
-
-
-class TranslationBatchRequest(BaseModel):
-    texts: List[str]
-    source_lang: str = "en"
-    target_lang: str = "ja"
-
-
-class TranslationResponse(BaseModel):
-    success: bool
-    translation: str
-    processing_time: float
-    message: Optional[str] = None
-
-
-class TranslationBatchResponse(BaseModel):
-    success: bool
-    translations: List[str]
-    processing_time: float
-    message: Optional[str] = None
+# ヘルスチェック
 
 
 # ヘルスチェック

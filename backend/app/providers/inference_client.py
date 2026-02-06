@@ -10,9 +10,12 @@ import time
 from typing import Any
 
 import httpx
-from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
+from common.schemas.inference import (
+    LayoutAnalysisRequest,
+    TranslationBatchRequest,
+    TranslationRequest,
+)
 
 
 class InferenceServiceError(Exception):
@@ -27,21 +30,7 @@ class CircuitBreakerError(Exception):
     pass
 
 
-class LayoutAnalysisRequest(BaseModel):
-    pdf_path: str
-    pages: list[int] | None = None
-
-
-class TranslationRequest(BaseModel):
-    text: str
-    source_lang: str = "en"
-    target_lang: str = "ja"
-
-
-class TranslationBatchRequest(BaseModel):
-    texts: list[str]
-    source_lang: str = "en"
-    target_lang: str = "ja"
+logger = logging.getLogger(__name__)
 
 
 class InferenceServiceClient:
