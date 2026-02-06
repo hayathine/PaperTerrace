@@ -365,7 +365,9 @@ class SQLiteStorage(StorageInterface):
     def get_paper(self, paper_id: str) -> dict | None:
         """Get a paper by ID."""
         with self._get_connection() as conn:
-            row = conn.execute("SELECT * FROM papers WHERE paper_id = ?", (paper_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM papers WHERE paper_id = ?", (paper_id,)
+            ).fetchone()
             if row:
                 data = dict(row)
                 # Parse tags JSON
@@ -382,7 +384,9 @@ class SQLiteStorage(StorageInterface):
     def get_paper_by_hash(self, file_hash: str) -> dict | None:
         """Get a paper by file hash."""
         with self._get_connection() as conn:
-            row = conn.execute("SELECT * FROM papers WHERE file_hash = ?", (file_hash,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM papers WHERE file_hash = ?", (file_hash,)
+            ).fetchone()
             return dict(row) if row else None
 
     def list_papers(self, limit: int = 50) -> list[dict]:
@@ -529,7 +533,9 @@ class SQLiteStorage(StorageInterface):
                 # If user is logged in, show their notes.
                 # Also include session notes if they haven't been claimed yet (implied by design logic, but simplistic here)
                 # Ideally, simple logic: user_id = ? OR (user_id IS NULL AND session_id = ?)
-                where_clauses.append("(user_id = ? OR (user_id IS NULL AND session_id = ?))")
+                where_clauses.append(
+                    "(user_id = ? OR (user_id IS NULL AND session_id = ?))"
+                )
                 query_params.extend([user_id, session_id])
             else:
                 # Guest user: show notes for this session
@@ -726,7 +732,9 @@ class SQLiteStorage(StorageInterface):
         import json
 
         with self._get_connection() as conn:
-            row = conn.execute("SELECT * FROM paper_figures WHERE id = ?", (figure_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM paper_figures WHERE id = ?", (figure_id,)
+            ).fetchone()
             if row:
                 d = dict(row)
                 if d.get("bbox_json"):
@@ -793,7 +801,9 @@ class SQLiteStorage(StorageInterface):
         import json
 
         with self._get_connection() as conn:
-            row = conn.execute("SELECT * FROM users WHERE id = ?", (user_id,)).fetchone()
+            row = conn.execute(
+                "SELECT * FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
             if row:
                 data = dict(row)
                 data["is_public"] = bool(data.get("is_public", 1))
@@ -828,7 +838,9 @@ class SQLiteStorage(StorageInterface):
 
         values.append(user_id)
         with self._get_connection() as conn:
-            cursor = conn.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = ?", values)
+            cursor = conn.execute(
+                f"UPDATE users SET {', '.join(fields)} WHERE id = ?", values
+            )
             conn.commit()
             return cursor.rowcount > 0
 
@@ -873,7 +885,9 @@ class SQLiteStorage(StorageInterface):
                     (session_id, paper_id, datetime.now().isoformat()),
                 )
                 conn.commit()
-            log.info("db", f"[Storage] Session context saved: {session_id} -> {paper_id}")
+            log.info(
+                "db", f"[Storage] Session context saved: {session_id} -> {paper_id}"
+            )
         except Exception as e:
             log.error("db", f"[Storage] Failed to save session context: {e}")
 
@@ -960,7 +974,14 @@ class SQLiteStorage(StorageInterface):
                    WHERE visibility = 'public' 
                    AND (title LIKE ? OR authors LIKE ? OR abstract LIKE ? OR filename LIKE ?)
                    ORDER BY created_at DESC LIMIT ? OFFSET ?""",
-                (search_pattern, search_pattern, search_pattern, search_pattern, per_page, offset),
+                (
+                    search_pattern,
+                    search_pattern,
+                    search_pattern,
+                    search_pattern,
+                    per_page,
+                    offset,
+                ),
             ).fetchall()
             return [dict(row) for row in rows], total
 
@@ -973,7 +994,8 @@ class SQLiteStorage(StorageInterface):
         """Get cached OCR text and layout."""
         with self._get_connection() as conn:
             row = conn.execute(
-                "SELECT ocr_text, layout_json FROM ocr_reader WHERE file_hash = ?", (file_hash,)
+                "SELECT ocr_text, layout_json FROM ocr_reader WHERE file_hash = ?",
+                (file_hash,),
             ).fetchone()
             if row:
                 return {"ocr_text": row[0], "layout_json": row[1]}

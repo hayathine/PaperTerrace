@@ -196,7 +196,9 @@ async def analyze_pdf_json(
     if session_id and paper_id and paper_id != "pending":
         try:
             storage.save_session_context(session_id, paper_id)
-            logger.info(f"[analyze-pdf-json] Pre-saved session context: {session_id} -> {paper_id}")
+            logger.info(
+                f"[analyze-pdf-json] Pre-saved session context: {session_id} -> {paper_id}"
+            )
         except Exception as e:
             logger.error(f"[analyze-pdf-json] Failed to pre-save session context: {e}")
 
@@ -228,7 +230,9 @@ async def analyze_pdf_json(
     redis_service.set(f"task:{task_id}", task_data, expire=7200)  # 2 hours instead of 1
 
     total_elapsed = time.time() - start_time
-    logger.info(f"[analyze-pdf-json] Task created: {task_id}, elapsed: {total_elapsed:.2f}s")
+    logger.info(
+        f"[analyze-pdf-json] Task created: {task_id}, elapsed: {total_elapsed:.2f}s"
+    )
 
     return JSONResponse({"task_id": task_id, "stream_url": f"/api/stream/{task_id}"})
 
@@ -248,7 +252,9 @@ async def analyze_paper(
 
     file_hash = paper.get("file_hash")
     if not file_hash:
-        return JSONResponse({"error": "Paper record is corrupt (missing hash)"}, status_code=400)
+        return JSONResponse(
+            {"error": "Paper record is corrupt (missing hash)"}, status_code=400
+        )
 
     task_id = str(uuid.uuid4())
     task_data = {
@@ -328,7 +334,9 @@ async def stream(task_id: str):
                     if user_data:
                         user_plan = user_data.get("plan", "free")
 
-                logger.info(f"[stream] {task_id}: Starting OCR extraction for {filename}")
+                logger.info(
+                    f"[stream] {task_id}: Starting OCR extraction for {filename}"
+                )
 
                 # Collect figures to save later
                 collected_figures = []
@@ -389,7 +397,9 @@ async def stream(task_id: str):
                     await asyncio.sleep(0.01)
 
                 # End of OCR
-                logger.info(f"[stream] {task_id}: OCR complete. Pages processed: {page_count}")
+                logger.info(
+                    f"[stream] {task_id}: OCR complete. Pages processed: {page_count}"
+                )
 
                 # Send coordinates ready event (Phase 2 completion)
                 yield f"event: message\ndata: {json.dumps({'type': 'coordinates_ready', 'page_count': page_count})}\n\n"
@@ -434,7 +444,9 @@ async def stream(task_id: str):
                                 latex=fig.get("latex", ""),
                             )
                             # Trigger figure analysis via asyncio task
-                            asyncio.create_task(process_figure_analysis_task(fid, fig["image_url"]))
+                            asyncio.create_task(
+                                process_figure_analysis_task(fid, fig["image_url"])
+                            )
 
                 except Exception as e:
                     logger.error(f"Failed to save paper: {e}")
@@ -479,7 +491,9 @@ async def stream(task_id: str):
                 )
                 if f_hash:
                     cached_images = get_page_images(f_hash)
-                    logger.info(f"[stream] {task_id}: Found {len(cached_images)} cached images")
+                    logger.info(
+                        f"[stream] {task_id}: Found {len(cached_images)} cached images"
+                    )
                     for i, img_url in enumerate(cached_images):
                         page_payload = {
                             "page_num": i + 1,
@@ -510,7 +524,9 @@ async def stream(task_id: str):
                 # キャッシュ時もセッションコンテキストを保存（Summary等のため）
                 s_id = session_id or paper_id
                 if s_id and paper_data and paper_data.get("ocr_text"):
-                    res = redis_service.set(f"session:{s_id}", paper_data["ocr_text"], expire=86400)
+                    res = redis_service.set(
+                        f"session:{s_id}", paper_data["ocr_text"], expire=86400
+                    )
                     # DBにも保存
                     storage.save_session_context(s_id, paper_id)
                     logger.info(f"Restored session context for: {s_id} (result: {res})")
@@ -534,7 +550,10 @@ async def stream(task_id: str):
                 logger.info(f"[stream] {task_id}: Client disconnected (CancelledError)")
                 # Don't delete task immediately - keep it for potential reconnection
             except Exception as e:
-                logger.error(f"[stream] {task_id}: Unexpected error in stream: {e}", exc_info=True)
+                logger.error(
+                    f"[stream] {task_id}: Unexpected error in stream: {e}",
+                    exc_info=True,
+                )
                 try:
                     yield f"event: message\ndata: {json.dumps({'type': 'error', 'message': 'Internal Server Error'})}\n\n"
                     yield "event: close\ndata: done\n\n"
@@ -546,7 +565,9 @@ async def stream(task_id: str):
             else:
                 # Normal completion - delete task
                 redis_service.delete(f"task:{task_id}")
-                logger.info(f"[stream] {task_id}: Cleaned up task after normal completion")
+                logger.info(
+                    f"[stream] {task_id}: Cleaned up task after normal completion"
+                )
 
         return StreamingResponse(json_generate(), media_type="text/event-stream")
 
@@ -707,7 +728,9 @@ async def stream(task_id: str):
                             latex=fig.get("latex", ""),
                         )
                         if True:  # Always trigger async task
-                            asyncio.create_task(process_figure_analysis_task(fid, fig["image_url"]))
+                            asyncio.create_task(
+                                process_figure_analysis_task(fid, fig["image_url"])
+                            )
 
             except Exception as e:
                 logger.error(f"Failed to save paper: {e}")

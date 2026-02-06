@@ -28,7 +28,8 @@ async def upload_image(file: UploadFile = File(...)):
     try:
         if not file.content_type.startswith("image/"):
             return JSONResponse(
-                {"error": "Invalid file type. Only images are allowed."}, status_code=400
+                {"error": "Invalid file type. Only images are allowed."},
+                status_code=400,
             )
 
         # Generate unique filename

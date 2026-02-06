@@ -8,12 +8,8 @@ import logging
 import os
 import sys
 
-try:
-    import ctranslate2
-    import sentencepiece as spm
-except ImportError:
-    ctranslate2 = None
-    spm = None
+import ctranslate2
+import sentencepiece as spm
 
 # ログ設定（標準出力）
 logging.basicConfig(
@@ -68,13 +64,6 @@ class TranslationService:
             error_msg = "CTranslate2 または SentencePiece が利用できません。"
             print(f"エラー: {error_msg}")
             logger.error(error_msg)
-
-            # 開発環境では警告のみでスキップ
-            if os.getenv("DEV_MODE", "false").lower() == "true":
-                print("開発モードのため、翻訳モデル初期化エラーを無視します")
-                logger.warning("開発モードのため、翻訳モデル初期化エラーを無視します")
-                return
-
             raise RuntimeError(error_msg)
 
         # モデルファイルの存在確認
@@ -82,13 +71,6 @@ class TranslationService:
             error_msg = f"モデルディレクトリが見つかりません: {self.model_path}"
             print(f"エラー: {error_msg}")
             logger.error(error_msg)
-
-            # 開発環境では警告のみでスキップ
-            if os.getenv("DEV_MODE", "false").lower() == "true":
-                print("開発モードのため、翻訳モデルディレクトリエラーを無視します")
-                logger.warning("開発モードのため、翻訳モデルディレクトリエラーを無視します")
-                return
-
             raise FileNotFoundError(error_msg)
 
         # SentencePiece トークナイザーの読み込み
@@ -97,13 +79,6 @@ class TranslationService:
             error_msg = f"トークナイザーが見つかりません: {tokenizer_path}"
             print(f"エラー: {error_msg}")
             logger.error(error_msg)
-
-            # 開発環境では警告のみでスキップ
-            if os.getenv("DEV_MODE", "false").lower() == "true":
-                print("開発モードのため、トークナイザーエラーを無視します")
-                logger.warning("開発モードのため、トークナイザーエラーを無視します")
-                return
-
             raise FileNotFoundError(error_msg)
 
         try:
@@ -146,7 +121,9 @@ class TranslationService:
             self.tokenizer = None
         logger.info("翻訳サービスをクリーンアップしました")
 
-    def _prepare_input(self, text: str, source_lang: str, target_lang: str) -> list[str]:
+    def _prepare_input(
+        self, text: str, source_lang: str, target_lang: str
+    ) -> list[str]:
         """入力テキストの準備"""
         # 言語コード変換
 
@@ -171,7 +148,9 @@ class TranslationService:
 
         return text
 
-    async def translate(self, text: str, source_lang: str = "en", target_lang: str = "ja") -> str:
+    async def translate(
+        self, text: str, source_lang: str = "en", target_lang: str = "ja"
+    ) -> str:
         """単一テキストの翻訳"""
         if not self.translator or not self.tokenizer:
             # 開発モードではダミー翻訳を返す
@@ -281,7 +260,10 @@ class TranslationService:
             # 開発モードではダミー翻訳を返す
             if os.getenv("DEV_MODE", "false").lower() == "true":
                 logger.warning("開発モード: バッチ翻訳エラーのためダミー翻訳を返します")
-                return [f"[バッチ翻訳エラー・ダミー] {text} -> {target_lang}" for text in texts]
+                return [
+                    f"[バッチ翻訳エラー・ダミー] {text} -> {target_lang}"
+                    for text in texts
+                ]
             raise RuntimeError(f"バッチ翻訳処理に失敗しました: {e}") from e
 
     async def get_supported_languages(self) -> list[str]:

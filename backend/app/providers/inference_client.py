@@ -50,7 +50,9 @@ class InferenceServiceClient:
     def __init__(self):
         self.base_url = os.getenv("INFERENCE_SERVICE_URL", "http://localhost:8080")
         self.timeout = int(os.getenv("INFERENCE_SERVICE_TIMEOUT", "30"))
-        self.max_retries = int(os.getenv("INFERENCE_SERVICE_RETRIES", "1"))  # Reduced from 3 to 1
+        self.max_retries = int(
+            os.getenv("INFERENCE_SERVICE_RETRIES", "1")
+        )  # Reduced from 3 to 1
 
         # 回路ブレーカー設定
         self.failure_count = 0
@@ -134,7 +136,9 @@ class InferenceServiceClient:
                     self._record_failure()
 
         # 全ての試行が失敗
-        raise InferenceServiceError(f"推論サービスへのリクエストが失敗しました: {last_exception}")
+        raise InferenceServiceError(
+            f"推論サービスへのリクエストが失敗しました: {last_exception}"
+        )
 
     async def analyze_layout(
         self, pdf_path: str, pages: list[int] | None = None
@@ -150,7 +154,9 @@ class InferenceServiceClient:
             )
 
             if response.get("success"):
-                logger.info(f"レイアウト解析完了: {response.get('processing_time', 0):.2f}秒")
+                logger.info(
+                    f"レイアウト解析完了: {response.get('processing_time', 0):.2f}秒"
+                )
                 return response.get("results", [])
             else:
                 error_msg = response.get("message", "不明なエラー")
@@ -204,7 +210,9 @@ class InferenceServiceClient:
 
             if response.get("success"):
                 translations = response.get("translations", [])
-                logger.info(f"バッチ翻訳完了: {response.get('processing_time', 0):.2f}秒")
+                logger.info(
+                    f"バッチ翻訳完了: {response.get('processing_time', 0):.2f}秒"
+                )
                 return translations
             else:
                 error_msg = response.get("message", "不明なエラー")

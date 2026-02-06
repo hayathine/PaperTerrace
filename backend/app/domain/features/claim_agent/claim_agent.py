@@ -64,14 +64,18 @@ class ClaimVerificationService:
             else:
                 # 従来のテキストベース方式
                 logger.info(f"Verifying paragraph claims with model: {self.model}")
-                prompt = AGENT_CLAIM_VERIFY_PROMPT.format(paragraph=paragraph, lang_name=lang_name)
+                prompt = AGENT_CLAIM_VERIFY_PROMPT.format(
+                    paragraph=paragraph, lang_name=lang_name
+                )
 
                 # Call AI with search enabled and structured output
-                verification: ClaimVerificationResponse = await self.ai_provider.generate(
-                    prompt,
-                    model=self.model,
-                    response_model=ClaimVerificationResponse,
-                    system_instruction=CORE_SYSTEM_PROMPT,
+                verification: ClaimVerificationResponse = (
+                    await self.ai_provider.generate(
+                        prompt,
+                        model=self.model,
+                        response_model=ClaimVerificationResponse,
+                        system_instruction=CORE_SYSTEM_PROMPT,
+                    )
                 )
 
                 return verification.model_dump()

@@ -59,7 +59,9 @@ class WordAnalysisService:
             ):  # 翻訳が成功し、元の単語と異なる場合
                 self.word_cache[lemma] = False
                 self.translation_cache[lemma] = local_translation
-                self.redis.set(f"trans:{lang}:{lemma}", local_translation, expire=604800)
+                self.redis.set(
+                    f"trans:{lang}:{lemma}", local_translation, expire=604800
+                )
                 return {
                     "word": lemma,
                     "translation": local_translation,
@@ -74,7 +76,9 @@ class WordAnalysisService:
 
         return None
 
-    async def batch_translate(self, words: list[str], lang: str = "ja") -> dict[str, str]:
+    async def batch_translate(
+        self, words: list[str], lang: str = "ja"
+    ) -> dict[str, str]:
         """
         Batch translate multiple words.
         """
@@ -92,7 +96,9 @@ class WordAnalysisService:
         result = {}
         try:
             response_text = await self.ai_provider.generate(
-                prompt, model=self.translate_model, system_instruction=CORE_SYSTEM_PROMPT
+                prompt,
+                model=self.translate_model,
+                system_instruction=CORE_SYSTEM_PROMPT,
             )
 
             for line in response_text.split("\n"):
@@ -130,7 +136,9 @@ class WordAnalysisService:
 
         try:
             translation = await self.ai_provider.generate(
-                prompt, model=self.translate_model, system_instruction=CORE_SYSTEM_PROMPT
+                prompt,
+                model=self.translate_model,
+                system_instruction=CORE_SYSTEM_PROMPT,
             )
             translation = translation.strip()
 

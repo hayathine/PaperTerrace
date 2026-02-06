@@ -191,12 +191,18 @@ async def explain(
 
     # Stage 2: ServiceB Machine Translation (M2M100)
     translator = local_translator.get_local_translator()
-    log.debug("explain", f"Translator initialized: {translator._initialized}", lemma=lemma)
+    log.debug(
+        "explain", f"Translator initialized: {translator._initialized}", lemma=lemma
+    )
 
     if translator._initialized:
         try:
             local_translation = await translator.translate_async(lemma, "en", lang)
-            log.debug("explain", f"ServiceB translation result: {local_translation}", lemma=lemma)
+            log.debug(
+                "explain",
+                f"ServiceB translation result: {local_translation}",
+                lemma=lemma,
+            )
         except Exception as e:
             log.warning("explain", f"ServiceB translation failed: {e}", lemma=lemma)
             local_translation = None
@@ -247,7 +253,9 @@ async def explain(
         is_phrase = " " in lemma.strip()
         if is_phrase:
             prompt = DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT.format(
-                paper_context=paper_context, lang_name=lang_name, original_word=original_word
+                paper_context=paper_context,
+                lang_name=lang_name,
+                original_word=original_word,
             )
         else:
             prompt = DICT_TRANSLATE_WORD_SIMPLE_PROMPT.format(
@@ -291,7 +299,9 @@ async def explain(
             )
         )
     except Exception as e:
-        log.error("explain", "Gemini fallback translation failed", error=str(e), lemma=lemma)
+        log.error(
+            "explain", "Gemini fallback translation failed", error=str(e), lemma=lemma
+        )
 
         # 最終的にエラーの場合
         if not is_htmx:
@@ -336,7 +346,9 @@ async def explain_deep(
     if not clean_input:
         clean_input = word.strip()
 
-    lemma = await asyncio.get_event_loop().run_in_executor(executor, service.lemmatize, clean_input)
+    lemma = await asyncio.get_event_loop().run_in_executor(
+        executor, service.lemmatize, clean_input
+    )
     original_word = word
 
     # Stage 3: Gemini translation
@@ -358,7 +370,9 @@ async def explain_deep(
         is_phrase = " " in lemma.strip()
         if is_phrase:
             prompt = DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT.format(
-                paper_context=paper_context, lang_name=lang_name, original_word=original_word
+                paper_context=paper_context,
+                lang_name=lang_name,
+                original_word=original_word,
             )
         else:
             prompt = DICT_TRANSLATE_WORD_SIMPLE_PROMPT.format(
@@ -451,7 +465,10 @@ async def explain_with_context(req: ExplainContextRequest):
                 summary_context = f"\n[Document Summary]\n{paper['abstract']}\n"
 
     prompt = DICT_EXPLAIN_WORD_CONTEXT_PROMPT.format(
-        word=req.word, lang_name=lang_name, summary_context=summary_context, context=req.context
+        word=req.word,
+        lang_name=lang_name,
+        summary_context=summary_context,
+        context=req.context,
     )
     translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
 

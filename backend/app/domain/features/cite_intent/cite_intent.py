@@ -63,9 +63,13 @@ class CiteIntentService:
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
-        prompt = AGENT_CITE_INTENT_PROMPT.format(paragraph=paragraph, lang_name=lang_name)
+        prompt = AGENT_CITE_INTENT_PROMPT.format(
+            paragraph=paragraph, lang_name=lang_name
+        )
         try:
-            logger.info(f"Analyzing citation intent for paragraph with model: {self.model}")
+            logger.info(
+                f"Analyzing citation intent for paragraph with model: {self.model}"
+            )
 
             # 使用するモデルを指定して構造化出力を依頼
             analysis: CitationAnalysisResponse = await self.ai_provider.generate(

@@ -16,21 +16,28 @@ class AuthorAgentService:
         self.research_service = ResearchRadarService()
         self.model = "gemini-1.5-flash"  # Explicitly set or get from env
 
-    async def generate_author_persona(self, author_name: str, current_paper_title: str) -> str:
+    async def generate_author_persona(
+        self, author_name: str, current_paper_title: str
+    ) -> str:
         """
         Generate a system instruction that mimics the author's style.
         """
         logger.info(f"Generating persona for author: {author_name}")
 
         # 1. Consensus APIを使って著者の情報を検索
-        author_data = await self.research_service.get_author_profile_and_papers(author_name)
+        author_data = await self.research_service.get_author_profile_and_papers(
+            author_name
+        )
 
         papers = author_data.get("papers", [])
 
         papers_text = ""
         if papers:
             papers_text = "【過去の主要論文】\n" + "\n".join(
-                [f"- {p.get('title', 'Untitled')} ({p.get('year', 'Unknown')})" for p in papers[:5]]
+                [
+                    f"- {p.get('title', 'Untitled')} ({p.get('year', 'Unknown')})"
+                    for p in papers[:5]
+                ]
             )
         else:
             papers_text = "（著者の詳細な論文リストはAPIから取得できませんでした。一般的なこの分野の研究者として振る舞ってください）"

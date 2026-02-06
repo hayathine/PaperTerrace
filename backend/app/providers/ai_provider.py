@@ -165,7 +165,9 @@ class GeminiProvider(AIProviderInterface):
                 config_params["tools"] = tools
             if response_model:
                 config_params["response_mime_type"] = "application/json"
-                config_params["response_json_schema"] = response_model.model_json_schema()
+                config_params["response_json_schema"] = (
+                    response_model.model_json_schema()
+                )
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction
@@ -249,7 +251,9 @@ class GeminiProvider(AIProviderInterface):
             }
             if response_model:
                 config_params["response_mime_type"] = "application/json"
-                config_params["response_json_schema"] = response_model.model_json_schema()
+                config_params["response_json_schema"] = (
+                    response_model.model_json_schema()
+                )
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction
@@ -293,7 +297,9 @@ class GeminiProvider(AIProviderInterface):
                         text_to_parse = text_to_parse[3:].strip("` \n")
                     return response_model.model_validate_json(text_to_parse)
                 except Exception as parse_err:
-                    logger.error(f"Failed to parse structured image output: {parse_err}")
+                    logger.error(
+                        f"Failed to parse structured image output: {parse_err}"
+                    )
                     text_to_parse = response.text or ""
                     # Try cleaning again just in case
                     text_to_parse = text_to_parse.strip()
@@ -343,7 +349,9 @@ class GeminiProvider(AIProviderInterface):
             }
             if response_model:
                 config_params["response_mime_type"] = "application/json"
-                config_params["response_json_schema"] = response_model.model_json_schema()
+                config_params["response_json_schema"] = (
+                    response_model.model_json_schema()
+                )
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction
@@ -357,7 +365,9 @@ class GeminiProvider(AIProviderInterface):
             else:
                 contents = []
                 for img_bytes in images_list:
-                    contents.append(types.Part.from_bytes(data=img_bytes, mime_type=mime_type))
+                    contents.append(
+                        types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
+                    )
                 contents.append(prompt)
 
             response = await self.client.aio.models.generate_content(
@@ -380,7 +390,9 @@ class GeminiProvider(AIProviderInterface):
                         text_to_parse = text_to_parse[7:].strip("` \n")
                     return response_model.model_validate_json(text_to_parse)
                 except Exception as parse_err:
-                    logger.error(f"Failed to parse structured multi-image output: {parse_err}")
+                    logger.error(
+                        f"Failed to parse structured multi-image output: {parse_err}"
+                    )
                     return response_model.model_validate_json(response.text or "{}")
 
             return (response.text or "").strip()
@@ -446,7 +458,9 @@ class GeminiProvider(AIProviderInterface):
         """Count tokens using Gemini API."""
         target_model = model or self.model
         try:
-            resp = await self.client.aio.models.count_tokens(model=target_model, contents=contents)
+            resp = await self.client.aio.models.count_tokens(
+                model=target_model, contents=contents
+            )
             return int(resp.total_tokens or 0)
         except Exception as e:
             logger.error(f"Token counting failed: {e}")
@@ -461,14 +475,18 @@ class GeminiProvider(AIProviderInterface):
     ) -> str:
         """Create a Gemini context cache."""
         try:
-            logger.info(f"Creating Gemini context cache for model {model} (TTL: {ttl_minutes}m)")
+            logger.info(
+                f"Creating Gemini context cache for model {model} (TTL: {ttl_minutes}m)"
+            )
 
             # contents can be a list of parts or a single string
             if isinstance(contents, str):
                 parts = [types.Part.from_text(text=contents)]
             elif isinstance(contents, bytes):
                 # Assume PDF if bytes
-                parts = [types.Part.from_bytes(data=contents, mime_type="application/pdf")]
+                parts = [
+                    types.Part.from_bytes(data=contents, mime_type="application/pdf")
+                ]
             else:
                 parts = contents
 
@@ -543,7 +561,9 @@ class VertexAIProvider(AIProviderInterface):
             # Construct content parts
             # Simplified content construction to fix type errors and match GeminiProvider style
             contents = (
-                prompt if cached_content_name else (f"{context}\n\n{prompt}" if context else prompt)
+                prompt
+                if cached_content_name
+                else (f"{context}\n\n{prompt}" if context else prompt)
             )
 
             # Configure tools
@@ -559,7 +579,9 @@ class VertexAIProvider(AIProviderInterface):
                 config_params["tools"] = tools
             if response_model:
                 config_params["response_mime_type"] = "application/json"
-                config_params["response_json_schema"] = response_model.model_json_schema()
+                config_params["response_json_schema"] = (
+                    response_model.model_json_schema()
+                )
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction
@@ -590,7 +612,9 @@ class VertexAIProvider(AIProviderInterface):
                     text_to_parse = response.text or ""
                     return response_model.model_validate_json(text_to_parse)
                 except Exception as parse_err:
-                    logger.error(f"Failed to parse structured output from Vertex: {parse_err}")
+                    logger.error(
+                        f"Failed to parse structured output from Vertex: {parse_err}"
+                    )
                     text_to_parse = response.text or ""
                     text_to_parse = text_to_parse.strip()
                     if text_to_parse.startswith("```json"):
@@ -629,7 +653,9 @@ class VertexAIProvider(AIProviderInterface):
             config_params: GenConfig = {"temperature": 0.7, "max_output_tokens": 1024}
             if response_model:
                 config_params["response_mime_type"] = "application/json"
-                config_params["response_json_schema"] = response_model.model_json_schema()
+                config_params["response_json_schema"] = (
+                    response_model.model_json_schema()
+                )
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction
@@ -667,7 +693,9 @@ class VertexAIProvider(AIProviderInterface):
             return (response.text or "").strip()
 
         except Exception as e:
-            logger.exception("Vertex AI image generation failed", extra={"error": str(e)})
+            logger.exception(
+                "Vertex AI image generation failed", extra={"error": str(e)}
+            )
             raise AIGenerationError(f"Vertex image analysis failed: {e}") from e
 
     async def generate_with_images(
@@ -688,13 +716,17 @@ class VertexAIProvider(AIProviderInterface):
             else:
                 contents = []
                 for img_bytes in images_list:
-                    contents.append(types.Part.from_bytes(data=img_bytes, mime_type=mime_type))
+                    contents.append(
+                        types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
+                    )
                 contents.append(prompt)
 
             config_params: GenConfig = {"temperature": 0.1, "max_output_tokens": 1024}
             if response_model:
                 config_params["response_mime_type"] = "application/json"
-                config_params["response_json_schema"] = response_model.model_json_schema()
+                config_params["response_json_schema"] = (
+                    response_model.model_json_schema()
+                )
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction
@@ -772,7 +804,9 @@ class VertexAIProvider(AIProviderInterface):
         """Count tokens using Vertex AI API."""
         target_model = model or self.model
         try:
-            resp = await self.client.aio.models.count_tokens(model=target_model, contents=contents)
+            resp = await self.client.aio.models.count_tokens(
+                model=target_model, contents=contents
+            )
             return int(resp.total_tokens or 0)
         except Exception as e:
             logger.error(f"Token counting failed (Vertex): {e}")
@@ -794,7 +828,9 @@ class VertexAIProvider(AIProviderInterface):
             if isinstance(contents, str):
                 parts = [types.Part.from_text(text=contents)]
             elif isinstance(contents, bytes):
-                parts = [types.Part.from_bytes(data=contents, mime_type="application/pdf")]
+                parts = [
+                    types.Part.from_bytes(data=contents, mime_type="application/pdf")
+                ]
             else:
                 parts = contents
 

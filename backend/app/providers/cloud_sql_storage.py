@@ -32,7 +32,9 @@ class CloudSQLStorage(StorageInterface):
         self.port = os.getenv("DB_PORT", "5432")
         self.instance_connection_name = os.getenv("CLOUDSQL_CONNECTION_NAME")
 
-        logger.info(f"CloudSQLStorage initialized - host: {self.host}, db: {self.db_name}")
+        logger.info(
+            f"CloudSQLStorage initialized - host: {self.host}, db: {self.db_name}"
+        )
 
     def _get_connection(self):
         """
@@ -265,7 +267,9 @@ class CloudSQLStorage(StorageInterface):
                     params.append(paper_id)
 
                 if user_id:
-                    conditions.append("(user_id = %s OR (user_id IS NULL AND session_id = %s))")
+                    conditions.append(
+                        "(user_id = %s OR (user_id IS NULL AND session_id = %s))"
+                    )
                     params.extend([user_id, session_id])
                 else:
                     conditions.append("session_id = %s")
@@ -304,7 +308,16 @@ class CloudSQLStorage(StorageInterface):
                     INSERT INTO paper_stamps (id, paper_id, user_id, stamp_type, page_number, x, y, created_at)
                     VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
                     """,
-                    (stamp_id, paper_id, user_id, stamp_type, page_number, x, y, datetime.now()),
+                    (
+                        stamp_id,
+                        paper_id,
+                        user_id,
+                        stamp_type,
+                        page_number,
+                        x,
+                        y,
+                        datetime.now(),
+                    ),
                 )
             conn.commit()
         return stamp_id
@@ -530,7 +543,9 @@ class CloudSQLStorage(StorageInterface):
                         try:
                             # Postgres TEXT might come as string
                             if isinstance(data["research_fields"], str):
-                                data["research_fields"] = json.loads(data["research_fields"])
+                                data["research_fields"] = json.loads(
+                                    data["research_fields"]
+                                )
                         except json.JSONDecodeError:
                             data["research_fields"] = []
                     else:
@@ -557,7 +572,9 @@ class CloudSQLStorage(StorageInterface):
         values.append(user_id)
         with self._get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(f"UPDATE users SET {', '.join(fields)} WHERE id = %s", values)
+                cur.execute(
+                    f"UPDATE users SET {', '.join(fields)} WHERE id = %s", values
+                )
             conn.commit()
             return cur.rowcount > 0
 
@@ -571,7 +588,9 @@ class CloudSQLStorage(StorageInterface):
     def get_user_stats(self, user_id: str) -> dict:
         with self._get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute("SELECT COUNT(*) FROM papers WHERE owner_id = %s", (user_id,))
+                cur.execute(
+                    "SELECT COUNT(*) FROM papers WHERE owner_id = %s", (user_id,)
+                )
                 total = cur.fetchone()[0]
                 cur.execute(
                     "SELECT COUNT(*) FROM papers WHERE owner_id = %s AND visibility = 'public'",
@@ -616,7 +635,8 @@ class CloudSQLStorage(StorageInterface):
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT paper_id FROM app_sessions WHERE session_id = %s", (session_id,)
+                    "SELECT paper_id FROM app_sessions WHERE session_id = %s",
+                    (session_id,),
                 )
                 row = cur.fetchone()
                 return row[0] if row else None
@@ -627,7 +647,9 @@ class CloudSQLStorage(StorageInterface):
         offset = (page - 1) * per_page
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("SELECT COUNT(*) FROM papers WHERE owner_id = %s", (user_id,))
+                cur.execute(
+                    "SELECT COUNT(*) FROM papers WHERE owner_id = %s", (user_id,)
+                )
                 total = cur.fetchone()["count"]
                 cur.execute(
                     """SELECT * FROM papers WHERE owner_id = %s 

@@ -37,13 +37,17 @@ class FigureBox(BaseModel):
     """Represents a bounding box for a detected figure, table, or equation."""
 
     label: str = Field(description="Type of item: figure, table, or equation")
-    box_2d: list[float] = Field(description="[ymin, xmin, ymax, xmax] normalized coordinates 0-1")
+    box_2d: list[float] = Field(
+        description="[ymin, xmin, ymax, xmax] normalized coordinates 0-1"
+    )
 
 
 class FigureDetectionResponse(BaseModel):
     """Response schema for figure detection."""
 
-    figures: list[FigureBox] = Field(description="List of detected figures, tables, and equations")
+    figures: list[FigureBox] = Field(
+        description="List of detected figures, tables, and equations"
+    )
 
 
 class PageFigureBox(BaseModel):
@@ -59,7 +63,9 @@ class PageFigureBox(BaseModel):
 class WholePDFDetectionResponse(BaseModel):
     """Response schema for figure detection across an entire PDF."""
 
-    items: list[PageFigureBox] = Field(description="List of detected items across all pages")
+    items: list[PageFigureBox] = Field(
+        description="List of detected items across all pages"
+    )
 
 
 class BboxResponse(BaseModel):
@@ -106,12 +112,16 @@ class SearchQueriesResponse(BaseModel):
 class CitationIntent(BaseModel):
     """段落内の個別の引用の分析結果"""
 
-    citation: str = Field(..., description="The citation string as it appears in the text")
+    citation: str = Field(
+        ..., description="The citation string as it appears in the text"
+    )
     intent: str = Field(
         ...,
         description="Support | Use | Contrast | Criticize | Neutral",
     )
-    reason: str = Field(..., description="1-sentence reason for classification in target language")
+    reason: str = Field(
+        ..., description="1-sentence reason for classification in target language"
+    )
 
 
 class CitationAnalysisResponse(BaseModel):
@@ -179,12 +189,16 @@ class AdversarialCritiqueResponse(BaseModel):
 class ParagraphExplanationResponse(BaseModel):
     """Paragraph explanation result model."""
 
-    main_claim: str = Field(..., description="The core argument or content of this paragraph")
+    main_claim: str = Field(
+        ..., description="The core argument or content of this paragraph"
+    )
     background_knowledge: str = Field(
         ..., description="Prerequisites or technical terms needed to understand this"
     )
     logic_flow: str = Field(..., description="How the argument or logic is developed")
-    key_points: list[str] = Field(..., description="Important implications or things to note")
+    key_points: list[str] = Field(
+        ..., description="Important implications or things to note"
+    )
 
 
 class TermExplanation(BaseModel):
@@ -192,7 +206,9 @@ class TermExplanation(BaseModel):
 
     term: str = Field(..., description="The technical term")
     explanation: str = Field(..., description="Concise explanation of the term")
-    importance: Literal["high", "medium", "low"] = Field(..., description="Importance level")
+    importance: Literal["high", "medium", "low"] = Field(
+        ..., description="Importance level"
+    )
 
 
 class TerminologyList(BaseModel):
@@ -219,8 +235,12 @@ class SectionSummaryList(BaseModel):
 class FullSummaryResponse(BaseModel):
     """Paper full summary model."""
 
-    overview: str = Field(..., description="Abstract or overview of the main theme (1-2 sentences)")
-    key_contributions: list[str] = Field(..., description="List of 3-5 key contributions")
+    overview: str = Field(
+        ..., description="Abstract or overview of the main theme (1-2 sentences)"
+    )
+    key_contributions: list[str] = Field(
+        ..., description="List of 3-5 key contributions"
+    )
     methodology: str = Field(..., description="Concise explanation of the methodology")
     conclusion: str = Field(..., description="Key findings and implications")
 
@@ -231,11 +251,15 @@ class FullSummaryResponse(BaseModel):
 class VisualElement(BaseModel):
     """Represents a visual item (figure, table, equation) with coordinates."""
 
-    label: str = Field(..., description="Identifier like 'Figure 1', 'Table 2', or 'Eq. (5)'")
+    label: str = Field(
+        ..., description="Identifier like 'Figure 1', 'Table 2', or 'Eq. (5)'"
+    )
     type: str = Field(..., description="'figure', 'table', or 'equation'")
     page_num: int = Field(..., description="1-indexed page number")
     # Gemini's normalized [ymin, xmin, ymax, xmax] (0-1000)
-    box_2d: list[int] = Field(..., description="Normalized bounding box [ymin, xmin, ymax, xmax]")
+    box_2d: list[int] = Field(
+        ..., description="Normalized bounding box [ymin, xmin, ymax, xmax]"
+    )
     description: str | None = Field(None, description="Brief context of the element")
 
 
@@ -260,7 +284,9 @@ class IntegratedAnalysisResponse(BaseModel):
     methodology: SummarySection = Field(
         ..., description="Technical explanation with visual grounding"
     )
-    conclusion: SummarySection = Field(..., description="Main findings and implications")
+    conclusion: SummarySection = Field(
+        ..., description="Main findings and implications"
+    )
 
     # Master list of all detected visual structures
     all_detected_items: list[VisualElement] = Field(

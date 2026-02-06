@@ -40,9 +40,13 @@ class EnglishAnalysisService:
         async for chunk in self.tokenization.tokenize_stream(*args, **kwargs):
             yield chunk
 
-    async def get_translation(self, lemma: str, context: str | None = None, lang: str = "ja"):
+    async def get_translation(
+        self, lemma: str, context: str | None = None, lang: str = "ja"
+    ):
         """Get translation for a lemma, optionally using context."""
-        return await self.word_analysis.lookup_or_translate(lemma, lang=lang, context=context)
+        return await self.word_analysis.lookup_or_translate(
+            lemma, lang=lang, context=context
+        )
 
     # Legacy accessors
     def get_word_cache(self):

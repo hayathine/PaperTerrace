@@ -12,7 +12,9 @@ import structlog
 from structlog.typing import EventDict, WrappedLogger
 
 
-def flatten_extra(logger: WrappedLogger, method_name: str, event_dict: EventDict) -> EventDict:
+def flatten_extra(
+    logger: WrappedLogger, method_name: str, event_dict: EventDict
+) -> EventDict:
     """
     'extra' 引数が渡された場合（標準logging互換）、
     その内容をフラットに展開してJSONのルートに含めるプロセッサ。
@@ -43,7 +45,9 @@ def add_service_context(
     return event_dict
 
 
-def jst_timestamper(logger: WrappedLogger, method_name: str, event_dict: EventDict) -> EventDict:
+def jst_timestamper(
+    logger: WrappedLogger, method_name: str, event_dict: EventDict
+) -> EventDict:
     """
     タイムスタンプをJSTで付与するプロセッサ。
     """
@@ -69,12 +73,13 @@ shared_processors = [
 def configure_logging(log_level: str = "INFO"):
     """ロギングを設定する"""
     import os
-    
+
     # 環境変数からログレベルを取得（デフォルトはINFO）
     env_log_level = os.getenv("LOG_LEVEL", log_level).upper()
-    
+
     structlog.configure(
-        processors=shared_processors + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
+        processors=shared_processors
+        + [structlog.stdlib.ProcessorFormatter.wrap_for_formatter],
         logger_factory=structlog.stdlib.LoggerFactory(),
         wrapper_class=structlog.stdlib.BoundLogger,
         cache_logger_on_first_use=True,
@@ -109,9 +114,13 @@ def configure_logging(log_level: str = "INFO"):
     # 静的ファイルアクセスログの設定（環境変数で制御）
     access_log_level = os.getenv("ACCESS_LOG_LEVEL", "WARNING").upper()
     logging.getLogger("uvicorn.access").setLevel(getattr(logging, access_log_level))
-    
+
     # 設定されたログレベルを出力
-    print(f"Logging configured: level={env_log_level}, access_log={access_log_level}", file=sys.stdout, flush=True)
+    print(
+        f"Logging configured: level={env_log_level}, access_log={access_log_level}",
+        file=sys.stdout,
+        flush=True,
+    )
 
 
 # 初期化実行

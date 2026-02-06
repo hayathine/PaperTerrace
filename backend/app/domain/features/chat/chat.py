@@ -61,7 +61,9 @@ class ChatService:
         """
         # Build conversation context
         recent_history = history[-10:] if len(history) > 10 else history
-        current_conversation = recent_history + [{"role": "user", "content": user_message}]
+        current_conversation = recent_history + [
+            {"role": "user", "content": user_message}
+        ]
         history_text_for_prompt = "\n".join(
             [f"{msg['role']}: {msg['content']}" for msg in current_conversation]
         )
@@ -75,7 +77,10 @@ class ChatService:
             if pdf_bytes:
                 logger.debug(
                     "Processing chat request with PDF",
-                    extra={"message_length": len(user_message), "pdf_size": len(pdf_bytes)},
+                    extra={
+                        "message_length": len(user_message),
+                        "pdf_size": len(pdf_bytes),
+                    },
                 )
                 prompt = CHAT_GENERAL_FROM_PDF_PROMPT.format(
                     lang_name=lang_name,
@@ -89,7 +94,10 @@ class ChatService:
                 # 画像付きチャット
                 logger.debug(
                     "Processing chat request with image",
-                    extra={"message_length": len(user_message), "image_size": len(image_bytes)},
+                    extra={
+                        "message_length": len(user_message),
+                        "image_size": len(image_bytes),
+                    },
                 )
                 context = document_context if document_context else "No paper context."
                 prompt = CHAT_WITH_FIGURE_PROMPT.format(
@@ -105,7 +113,10 @@ class ChatService:
                 # 従来のテキストベース方式
                 logger.debug(
                     "Processing chat request with text",
-                    extra={"message_length": len(user_message), "history_size": len(history)},
+                    extra={
+                        "message_length": len(user_message),
+                        "history_size": len(history),
+                    },
                 )
                 context = document_context if document_context else "No paper loaded."
 
@@ -125,14 +136,20 @@ class ChatService:
                                 ttl_minutes=self.cache_ttl_minutes,
                             )
                             self.redis.set(
-                                cache_key, cache_name, expire=self.cache_ttl_minutes * 60
+                                cache_key,
+                                cache_name,
+                                expire=self.cache_ttl_minutes * 60,
                             )
                         except Exception as e:
-                            logger.warning(f"Failed to create context cache for {paper_id}: {e}")
+                            logger.warning(
+                                f"Failed to create context cache for {paper_id}: {e}"
+                            )
 
                 prompt = CHAT_GENERAL_RESPONSE_PROMPT.format(
                     lang_name=lang_name,
-                    document_context=context[:20000] if not cache_name else "See Context Cache",
+                    document_context=context[:20000]
+                    if not cache_name
+                    else "See Context Cache",
                     history_text=history_text_for_prompt,
                     user_message=user_message,  # Added
                 )
@@ -192,9 +209,14 @@ class ChatService:
             if pdf_bytes:
                 logger.debug(
                     "Generating author agent response from PDF",
-                    extra={"question_length": len(question), "pdf_size": len(pdf_bytes)},
+                    extra={
+                        "question_length": len(question),
+                        "pdf_size": len(pdf_bytes),
+                    },
                 )
-                prompt = CHAT_AUTHOR_FROM_PDF_PROMPT.format(lang_name=lang_name, question=question)
+                prompt = CHAT_AUTHOR_FROM_PDF_PROMPT.format(
+                    lang_name=lang_name, question=question
+                )
                 response = await self.ai_provider.generate_with_pdf(
                     prompt, pdf_bytes, model=self.model
                 )
@@ -202,10 +224,15 @@ class ChatService:
                 # 従来のテキストベース方式
                 logger.debug(
                     "Generating author agent response from text",
-                    extra={"question_length": len(question), "paper_length": len(paper_text)},
+                    extra={
+                        "question_length": len(question),
+                        "paper_length": len(paper_text),
+                    },
                 )
                 prompt = CHAT_AUTHOR_PERSONA_PROMPT.format(
-                    lang_name=lang_name, paper_text=paper_text[:20000], question=question
+                    lang_name=lang_name,
+                    paper_text=paper_text[:20000],
+                    question=question,
                 )
                 response = await self.ai_provider.generate(prompt, model=self.model)
 

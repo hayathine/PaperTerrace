@@ -112,10 +112,14 @@ class EquationService:
                                 current_block.append(c)
                             else:
                                 # Close current block and start new
-                                potential_bboxes.append(self._get_bbox_from_chars(current_block))
+                                potential_bboxes.append(
+                                    self._get_bbox_from_chars(current_block)
+                                )
                                 current_block = [c]
                     if current_block:
-                        potential_bboxes.append(self._get_bbox_from_chars(current_block))
+                        potential_bboxes.append(
+                            self._get_bbox_from_chars(current_block)
+                        )
 
                 # 2. Look for large gaps (whitespace analysis)
                 # Group text into lines

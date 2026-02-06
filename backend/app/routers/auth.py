@@ -55,7 +55,9 @@ async def register_user(
         )
         return UserInDB(**user_data)
     except Exception as e:
-        logger.exception("Failed to register user", extra={"uid": user.uid, "error": str(e)})
+        logger.exception(
+            "Failed to register user", extra={"uid": user.uid, "error": str(e)}
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="ユーザー登録に失敗しました",
@@ -100,7 +102,9 @@ async def update_current_user_profile(
         logger.info("User profile updated", extra={"uid": user.uid})
         return UserInDB(**updated_user)
     except Exception as e:
-        logger.exception("Failed to update user", extra={"uid": user.uid, "error": str(e)})
+        logger.exception(
+            "Failed to update user", extra={"uid": user.uid, "error": str(e)}
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="プロフィールの更新に失敗しました",
@@ -116,7 +120,9 @@ async def get_current_user_stats(user: CurrentUser):
         stats = storage.get_user_stats(user.uid)
         return UserStats(**stats)
     except Exception as e:
-        logger.exception("Failed to get user stats", extra={"uid": user.uid, "error": str(e)})
+        logger.exception(
+            "Failed to get user stats", extra={"uid": user.uid, "error": str(e)}
+        )
         return UserStats()
 
 
@@ -134,7 +140,9 @@ async def delete_current_user(user: CurrentUser):
         storage.delete_user(user.uid)
         logger.info("User deleted", extra={"uid": user.uid})
     except Exception as e:
-        logger.exception("Failed to delete user", extra={"uid": user.uid, "error": str(e)})
+        logger.exception(
+            "Failed to delete user", extra={"uid": user.uid, "error": str(e)}
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="アカウント削除に失敗しました",

@@ -12,7 +12,9 @@ def save_ocr_to_db(
     model_name: str = "unknown",
     layout_json: str | None = None,
 ) -> None:
-    get_storage_provider().save_ocr_cache(file_hash, ocr_text, filename, model_name, layout_json)
+    get_storage_provider().save_ocr_cache(
+        file_hash, ocr_text, filename, model_name, layout_json
+    )
 
 
 def save_figure_to_db(

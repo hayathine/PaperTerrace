@@ -342,9 +342,7 @@ Text Sample:
 {text}
 """
 
-PDF_EXTRACT_TEXT_OCR_PROMPT = (
-    "Transcribe the text from this PDF page preserving the structure as much as possible."
-)
+PDF_EXTRACT_TEXT_OCR_PROMPT = "Transcribe the text from this PDF page preserving the structure as much as possible."
 
 # ==========================================
 # PDF Direct Input Prompts

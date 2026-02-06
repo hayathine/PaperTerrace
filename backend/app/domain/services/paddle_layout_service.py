@@ -71,7 +71,10 @@ class PaddleLayoutService:
                     with pdfplumber.open(pdf_path) as pdf:
                         total_pages = len(pdf.pages)
                         target_pages = list(range(total_pages))
-                        log.info("detect_layout_async", f"Total pages detected: {total_pages}")
+                        log.info(
+                            "detect_layout_async",
+                            f"Total pages detected: {total_pages}",
+                        )
                 except Exception as e:
                     log.error("detect_layout_async", f"Failed to count pages: {e}")
                     # ページ数取得に失敗した場合は、従来通り一括で送る（ServiceB側での処理に任せる）
@@ -94,13 +97,20 @@ class PaddleLayoutService:
 
                 # 全チャンクを並列実行
                 if tasks:
-                    log.info("detect_layout_async", f"Executing {len(tasks)} chunks in parallel...")
+                    log.info(
+                        "detect_layout_async",
+                        f"Executing {len(tasks)} chunks in parallel...",
+                    )
                     # return_exceptions=Trueで一部失敗しても全体を止めない
-                    chunk_results_list = await asyncio.gather(*tasks, return_exceptions=True)
+                    chunk_results_list = await asyncio.gather(
+                        *tasks, return_exceptions=True
+                    )
 
                     for i, result in enumerate(chunk_results_list):
                         if isinstance(result, Exception):
-                            log.error("detect_layout_async", f"Chunk {i} failed: {result}")
+                            log.error(
+                                "detect_layout_async", f"Chunk {i} failed: {result}"
+                            )
                             # 失敗したチャンクはスキップ（または再試行ロジックを入れるか）
                         elif isinstance(result, list):
                             all_results.extend(result)

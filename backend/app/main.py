@@ -124,7 +124,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
         from app.logger import logger
 
         start_time = time.time()
-        
+
         # リクエスト情報を詳細にログ出力
         logger.info(
             "request_started",
@@ -133,11 +133,11 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             query_params=str(request.query_params),
             client_host=request.client.host if request.client else "unknown",
         )
-        
+
         try:
             response = await call_next(request)
             duration = time.time() - start_time
-            
+
             # レスポンス情報を詳細にログ出力
             logger.info(
                 "request_completed",
@@ -159,7 +159,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             )
             logger.error(traceback.format_exc())
             return JSONResponse(
-                status_code=500, content={"error": "Internal Server Error", "message": str(e)}
+                status_code=500,
+                content={"error": "Internal Server Error", "message": str(e)},
             )
 
 
@@ -187,9 +188,14 @@ async def init_db_manual():
         if hasattr(storage, "init_tables"):
             storage.init_tables()
             return {"status": "ok", "message": "Tables initialized"}
-        return {"status": "skipped", "message": "Storage provider does not support init_tables"}
+        return {
+            "status": "skipped",
+            "message": "Storage provider does not support init_tables",
+        }
     except Exception as e:
-        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+        return JSONResponse(
+            status_code=500, content={"status": "error", "message": str(e)}
+        )
 
 
 # ============================================================================
@@ -247,7 +253,11 @@ async def health_check():
     """Health check endpoint with Redis status."""
     from app.providers.redis_provider import get_redis_client
 
-    health_status = {"status": "ok", "timestamp": time.time(), "services": {"redis": "unknown"}}
+    health_status = {
+        "status": "ok",
+        "timestamp": time.time(),
+        "services": {"redis": "unknown"},
+    }
 
     # Check Redis connection
     try:

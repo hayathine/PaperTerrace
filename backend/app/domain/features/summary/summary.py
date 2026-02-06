@@ -44,7 +44,9 @@ class SummaryService:
         if count <= self.token_limit:
             return text
 
-        logger.warning(f"Token limit exceeded: {count} > {self.token_limit}. Truncating...")
+        logger.warning(
+            f"Token limit exceeded: {count} > {self.token_limit}. Truncating..."
+        )
 
         # 簡易的な反復切り詰め
         current_text = text
@@ -106,7 +108,9 @@ class SummaryService:
                             page_img.original.save(buf, format="PNG")
                             images.append(buf.getvalue())
 
-                        logger.info(f"Converted {len(images)} PDF pages to images for summary")
+                        logger.info(
+                            f"Converted {len(images)} PDF pages to images for summary"
+                        )
                 except Exception as ex:
                     logger.error(f"Failed to convert PDF to images: {ex}")
                     # 失敗した場合はテキストベースにフォールバック... はここでは難しいのでエラー
@@ -123,7 +127,10 @@ class SummaryService:
 
                 logger.info(
                     "Full summary generated from PDF images",
-                    extra={"image_count": len(images), "output_length": len(formatted_text)},
+                    extra={
+                        "image_count": len(images),
+                        "output_length": len(formatted_text),
+                    },
                 )
             else:
                 # 従来のテキストベース方式
@@ -132,7 +139,9 @@ class SummaryService:
                     extra={"text_length": len(text)},
                 )
                 safe_text = await self._truncate_to_token_limit(text)
-                prompt = PAPER_SUMMARY_FULL_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
+                prompt = PAPER_SUMMARY_FULL_PROMPT.format(
+                    lang_name=lang_name, paper_text=safe_text
+                )
 
                 analysis: FullSummaryResponse = await self.ai_provider.generate(
                     prompt,
@@ -153,7 +162,10 @@ class SummaryService:
 
                 logger.info(
                     "Full summary generated from text",
-                    extra={"input_length": len(text), "output_length": len(formatted_text)},
+                    extra={
+                        "input_length": len(text),
+                        "output_length": len(formatted_text),
+                    },
                 )
 
             # Save to cache
@@ -187,12 +199,16 @@ class SummaryService:
                     logger.info(f"Section summary cache HIT for {paper_id}")
                     return cached_sections
                 except json.JSONDecodeError:
-                    logger.warning(f"Invalid JSON in section summary cache for {paper_id}")
+                    logger.warning(
+                        f"Invalid JSON in section summary cache for {paper_id}"
+                    )
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         safe_text = await self._truncate_to_token_limit(text)
-        prompt = PAPER_SUMMARY_SECTIONS_PROMPT.format(lang_name=lang_name, paper_text=safe_text)
+        prompt = PAPER_SUMMARY_SECTIONS_PROMPT.format(
+            lang_name=lang_name, paper_text=safe_text
+        )
 
         try:
             logger.debug(

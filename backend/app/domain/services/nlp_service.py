@@ -4,14 +4,18 @@ from app.logger import logger
 try:
     # Get lemma using parser for better accuracy
     nlp = spacy.load("en_core_web_sm", disable=["ner"])
-    logger.info("Loaded spaCy model: en_core_web_sm (with parser for better lemmatization)")
+    logger.info(
+        "Loaded spaCy model: en_core_web_sm (with parser for better lemmatization)"
+    )
 except OSError:
     try:
         # Fallback
         nlp = spacy.load("en_core_web_sm", disable=["ner", "parser"])
         logger.info("Loaded spaCy model: en_core_web_sm (fallback)")
     except OSError:
-        logger.error("No spaCy model found. Please run 'python -m spacy download en_core_web_sm'.")
+        logger.error(
+            "No spaCy model found. Please run 'python -m spacy download en_core_web_sm'."
+        )
         raise
 
 

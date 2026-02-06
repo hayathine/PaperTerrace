@@ -12,7 +12,9 @@ figure_insight = FigureInsightService()
 summary_service = SummaryService(storage=storage)
 
 
-async def process_figure_analysis_task(figure_id: str, image_url: str, lang: str = "ja"):
+async def process_figure_analysis_task(
+    figure_id: str, image_url: str, lang: str = "ja"
+):
     """
     Background task to analyze figure.
     """
@@ -52,10 +54,14 @@ async def process_figure_analysis_task(figure_id: str, image_url: str, lang: str
 
         # Equation service logic
         if label == "equation":
-            from app.domain.features.figure_insight.equation_service import EquationService
+            from app.domain.features.figure_insight.equation_service import (
+                EquationService,
+            )
 
             eq_service = EquationService()
-            analysis = await eq_service._analyze_bbox_with_ai(image_bytes, target_lang=lang)
+            analysis = await eq_service._analyze_bbox_with_ai(
+                image_bytes, target_lang=lang
+            )
             if analysis:
                 storage.update_figure_explanation(figure_id, analysis.explanation)
                 storage.update_figure_latex(figure_id, analysis.latex)

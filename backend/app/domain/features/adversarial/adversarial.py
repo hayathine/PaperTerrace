@@ -55,8 +55,12 @@ class AdversarialReviewService:
                     "Generating adversarial critique from PDF",
                     extra={"pdf_size": len(pdf_bytes)},
                 )
-                prompt = ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT.format(lang_name=lang_name)
-                raw_response = await self.ai_provider.generate_with_pdf(prompt, pdf_bytes)
+                prompt = ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT.format(
+                    lang_name=lang_name
+                )
+                raw_response = await self.ai_provider.generate_with_pdf(
+                    prompt, pdf_bytes
+                )
 
                 # JSON解析を試みる
                 import json
@@ -78,7 +82,9 @@ class AdversarialReviewService:
                     )
                     return critique
                 except json.JSONDecodeError:
-                    logger.warning("Failed to parse JSON from PDF critique, returning raw text")
+                    logger.warning(
+                        "Failed to parse JSON from PDF critique, returning raw text"
+                    )
                     return {
                         "hidden_assumptions": [],
                         "unverified_conditions": [],
@@ -97,7 +103,9 @@ class AdversarialReviewService:
                 )
 
                 critique = await self.ai_provider.generate(
-                    prompt, response_model=CritiqueResponse, system_instruction=CORE_SYSTEM_PROMPT
+                    prompt,
+                    response_model=CritiqueResponse,
+                    system_instruction=CORE_SYSTEM_PROMPT,
                 )
 
                 issue_count = (

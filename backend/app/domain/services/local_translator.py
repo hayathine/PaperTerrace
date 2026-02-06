@@ -42,7 +42,9 @@ class LocalTranslator:
         """
         # Skip inference service warmup if disabled
         if os.getenv("SKIP_INFERENCE_SERVICE_WARMUP", "false").lower() == "true":
-            log.info("prewarm", "Skipping ServiceB warmup (disabled by environment variable)")
+            log.info(
+                "prewarm", "Skipping ServiceB warmup (disabled by environment variable)"
+            )
             return
 
         try:
@@ -100,7 +102,8 @@ class LocalTranslator:
             translations = await client.translate_batch(texts, src_lang, tgt_lang)
 
             log.info(
-                "translate_batch_async", f"Batch translation completed: {len(translations)} results"
+                "translate_batch_async",
+                f"Batch translation completed: {len(translations)} results",
             )
             return translations
 
@@ -118,13 +121,16 @@ class LocalTranslator:
             log.error("translate_batch_async", f"Unexpected error: {e}")
             return texts
 
-    def translate(self, text: str, src_lang: str = "en", tgt_lang: str = "ja") -> str | None:
+    def translate(
+        self, text: str, src_lang: str = "en", tgt_lang: str = "ja"
+    ) -> str | None:
         """
         同期版翻訳（後方互換性のため保持）
         注意: この方法は非推奨。translate_asyncを使用してください。
         """
         log.warning(
-            "translate", "Synchronous translation is deprecated. Use translate_async instead."
+            "translate",
+            "Synchronous translation is deprecated. Use translate_async instead.",
         )
 
         # 同期版では元のテキストを返す（ServiceBは非同期のため）

@@ -31,18 +31,29 @@ class PDFOCRService:
         """Processes PDF pages one by one and streams results."""
         file_hash = _get_file_hash(file_bytes)
 
-        log.info("extract_start", f"Starting OCR extraction for {filename}", 
-                 file_hash=file_hash, file_size=len(file_bytes), user_plan=user_plan)
+        log.info(
+            "extract_start",
+            f"Starting OCR extraction for {filename}",
+            file_hash=file_hash,
+            file_size=len(file_bytes),
+            user_plan=user_plan,
+        )
 
         # 1. Cache handling
         cached_result = await self._handle_cache(file_hash)
         if cached_result:
-            log.info("cache_hit", f"Using cached OCR for {filename}", file_hash=file_hash)
+            log.info(
+                "cache_hit", f"Using cached OCR for {filename}", file_hash=file_hash
+            )
             for page in cached_result:
                 yield page
             return
 
-        log.info("cache_miss", f"No cache found, starting AI OCR for {filename}", file_hash=file_hash)
+        log.info(
+            "cache_miss",
+            f"No cache found, starting AI OCR for {filename}",
+            file_hash=file_hash,
+        )
 
         tmp_path = None
         try:
@@ -55,18 +66,31 @@ class PDFOCRService:
 
             with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
                 total_pages = len(pdf.pages)
-                log.info("pdf_opened", f"PDF opened successfully", 
-                        file_hash=file_hash, total_pages=total_pages, filename=filename)
+                log.info(
+                    "pdf_opened",
+                    "PDF opened successfully",
+                    file_hash=file_hash,
+                    total_pages=total_pages,
+                    filename=filename,
+                )
 
                 all_text_parts = []
                 all_layout_parts = []
 
                 for page_num in range(total_pages):
-                    log.debug("page_start", f"Processing page {page_num + 1}/{total_pages}", 
-                             page_num=page_num + 1, total_pages=total_pages)
+                    log.debug(
+                        "page_start",
+                        f"Processing page {page_num + 1}/{total_pages}",
+                        page_num=page_num + 1,
+                        total_pages=total_pages,
+                    )
 
                     async for result in self._process_page_incremental(
-                        pdf.pages[page_num], page_num, total_pages, file_hash, pdf_path=tmp_path
+                        pdf.pages[page_num],
+                        page_num,
+                        total_pages,
+                        file_hash,
+                        pdf_path=tmp_path,
                     ):
                         # result is (page_num+1, total_pages, page_text, is_last, file_hash, img_url, layout_data)
                         if result[2] is not None:  # Final result per page
@@ -74,19 +98,33 @@ class PDFOCRService:
                             layout_data = result[6]
                             all_text_parts.append(page_text)
                             all_layout_parts.append(layout_data)
-                            log.info("page_complete", f"Page {page_num + 1} processed", 
-                                   page_num=page_num + 1, text_length=len(page_text))
+                            log.info(
+                                "page_complete",
+                                f"Page {page_num + 1} processed",
+                                page_num=page_num + 1,
+                                text_length=len(page_text),
+                            )
                         yield result
 
             # 2. Finalize and save to DB
-            log.info("finalize_start", "Finalizing OCR and saving to DB", file_hash=file_hash)
+            log.info(
+                "finalize_start", "Finalizing OCR and saving to DB", file_hash=file_hash
+            )
             self._finalize_ocr(file_hash, filename, all_text_parts, all_layout_parts)
-            log.info("extract_complete", f"OCR extraction completed for {filename}", 
-                    file_hash=file_hash, total_pages=total_pages)
+            log.info(
+                "extract_complete",
+                f"OCR extraction completed for {filename}",
+                file_hash=file_hash,
+                total_pages=total_pages,
+            )
 
         except Exception as e:
-            log.error("extract_failed", f"OCR streaming failed: {str(e)}", 
-                     file_hash=file_hash, error_type=type(e).__name__)
+            log.error(
+                "extract_failed",
+                f"OCR streaming failed: {str(e)}",
+                file_hash=file_hash,
+                error_type=type(e).__name__,
+            )
             logger.error(f"Full traceback: {e}", exc_info=True)
             yield (0, 0, f"ERROR_API_FAILED: {str(e)}", True, file_hash, None, None)
         finally:
@@ -110,7 +148,9 @@ class PDFOCRService:
             try:
                 layout_data_list = json.loads(layout_json)
             except Exception:
-                logger.warning(f"Failed to parse layout_json from cache for {file_hash}")
+                logger.warning(
+                    f"Failed to parse layout_json from cache for {file_hash}"
+                )
 
         # Basic split by separator
         pages_text = ocr_text.split("\n\n---\n\n")
@@ -135,7 +175,16 @@ class PDFOCRService:
 
         # Add COORDINATES_READY event for cached data
         pages.append(
-            (0, len(cached_images), "COORDINATES_READY", True, file_hash, None, None, "status")
+            (
+                0,
+                len(cached_images),
+                "COORDINATES_READY",
+                True,
+                file_hash,
+                None,
+                None,
+                "status",
+            )
         )
 
         return pages
@@ -153,7 +202,9 @@ class PDFOCRService:
 
         # Phase 1: Native Text & Links (ULTRA FAST)
         logger.debug(f"[OCR] Page {page_num}: Phase 1 - Extraction text/links")
-        native_words = page.extract_words(use_text_flow=True, x_tolerance=3, y_tolerance=3)
+        native_words = page.extract_words(
+            use_text_flow=True, x_tolerance=3, y_tolerance=3
+        )
         links = self._extract_links(page, zoom)
 
         # Create initial layout data (coordinates only)
@@ -164,7 +215,12 @@ class PDFOCRService:
             "words": [
                 {
                     "word": w["text"],
-                    "bbox": [w["x0"] * zoom, w["top"] * zoom, w["x1"] * zoom, w["bottom"] * zoom],
+                    "bbox": [
+                        w["x0"] * zoom,
+                        w["top"] * zoom,
+                        w["x1"] * zoom,
+                        w["bottom"] * zoom,
+                    ],
                 }
                 for w in native_words
             ],
@@ -208,7 +264,15 @@ class PDFOCRService:
         ]
 
         # Phase 2 yield with synchronized layout and image
-        yield (page_num, total_pages, page_text, is_last, file_hash, image_url, layout_data)
+        yield (
+            page_num,
+            total_pages,
+            page_text,
+            is_last,
+            file_hash,
+            image_url,
+            layout_data,
+        )
 
         logger.debug(f"[OCR] Page {page_num}: Phase 3 - AI Analysis")
         figures = await self.figure_service.detect_and_extract_figures(
@@ -226,7 +290,15 @@ class PDFOCRService:
                 layout_data["figures"] = []
             layout_data["figures"].extend(figures)
 
-        yield (page_num, total_pages, page_text, is_last, file_hash, image_url, layout_data)
+        yield (
+            page_num,
+            total_pages,
+            page_text,
+            is_last,
+            file_hash,
+            image_url,
+            layout_data,
+        )
 
     def _extract_links(self, page, zoom):
         """Extract hyperlinks from the PDF page metadata using pdfplumber."""
@@ -304,12 +376,21 @@ class PDFOCRService:
             word_list = [
                 {
                     "word": w["text"],
-                    "bbox": [w["x0"] * zoom, w["top"] * zoom, w["x1"] * zoom, w["bottom"] * zoom],
+                    "bbox": [
+                        w["x0"] * zoom,
+                        w["top"] * zoom,
+                        w["x1"] * zoom,
+                        w["bottom"] * zoom,
+                    ],
                 }
                 for w in words
             ]
             page_text = " ".join([w["text"] for w in words])
-            layout = {"width": img_pil.width, "height": img_pil.height, "words": word_list}
+            layout = {
+                "width": img_pil.width,
+                "height": img_pil.height,
+                "words": word_list,
+            }
             return page_text, layout
 
         # Try secondary native extraction if words is empty but text exists
@@ -323,7 +404,9 @@ class PDFOCRService:
             return text_fallback, layout
 
         # Fallback to Vision OCR
-        logger.warning(f"[OCR] p.{page_num}: No native text found. Falling back to Vision API")
+        logger.warning(
+            f"[OCR] p.{page_num}: No native text found. Falling back to Vision API"
+        )
         try:
             from app.providers.vision_ocr import VisionOCRService
 
@@ -336,7 +419,9 @@ class PDFOCRService:
                     layout.update({"width": img_pil.width, "height": img_pil.height})
                     return text, layout
                 else:
-                    logger.warning(f"[OCR] p.{page_num}: Vision API returned no layout/text")
+                    logger.warning(
+                        f"[OCR] p.{page_num}: Vision API returned no layout/text"
+                    )
             else:
                 logger.warning(
                     f"[OCR] p.{page_num}: Vision API is not available (check credentials)"
@@ -355,7 +440,9 @@ class PDFOCRService:
                 PDF_EXTRACT_TEXT_OCR_PROMPT, img_bytes, "image/png", model=self.model
             )
             if text and text.strip():
-                logger.info(f"[OCR] p.{page_num}: Gemini OCR successful (length: {len(text)})")
+                logger.info(
+                    f"[OCR] p.{page_num}: Gemini OCR successful (length: {len(text)})"
+                )
                 return text, None
             else:
                 logger.error(f"[OCR] p.{page_num}: Gemini OCR returned empty text")

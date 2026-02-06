@@ -20,7 +20,9 @@ class AuthenticatedUser:
         self.email_verified: bool = decoded_token.get("email_verified", False)
         self.name: str = decoded_token.get("name", "")
         self.picture: str = decoded_token.get("picture", "")
-        self.provider: str = decoded_token.get("firebase", {}).get("sign_in_provider", "")
+        self.provider: str = decoded_token.get("firebase", {}).get(
+            "sign_in_provider", ""
+        )
         self._raw_token = decoded_token
 
     def __repr__(self):

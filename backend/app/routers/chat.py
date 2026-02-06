@@ -73,7 +73,10 @@ async def chat(request: ChatRequest):
                     log.debug("chat", "Image loaded", figure_id=request.figure_id)
                 except Exception as e:
                     log.error(
-                        "chat", "Failed to load image", figure_id=request.figure_id, error=str(e)
+                        "chat",
+                        "Failed to load image",
+                        figure_id=request.figure_id,
+                        error=str(e),
                     )
 
         response = await chat_service.chat(
@@ -131,4 +134,6 @@ async def delete_cache(session_id: str = Form(...), paper_id: str | None = Form(
         await chat_service.delete_paper_cache(paper_id)
         return JSONResponse({"status": "ok"})
 
-    return JSONResponse({"status": "error", "message": "No paper_id provided"}, status_code=400)
+    return JSONResponse(
+        {"status": "error", "message": "No paper_id provided"}, status_code=400
+    )

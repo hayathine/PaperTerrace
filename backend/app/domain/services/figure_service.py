@@ -38,7 +38,9 @@ class FigureService:
         try:
             if pdf_path:
                 # ServiceBを使用した非同期レイアウト解析
-                local_results = await self.layout_service.detect_layout_async(pdf_path, [page_num])
+                local_results = await self.layout_service.detect_layout_async(
+                    pdf_path, [page_num]
+                )
                 for res in local_results:
                     if (
                         res.get("class") in ["figure", "table", "equation"]
@@ -64,7 +66,9 @@ class FigureService:
                         bbox = [b / zoom for b in res["bbox"]]
                         candidates.append({"bbox": bbox, "label": label})
         except Exception as e:
-            logger.warning(f"ServiceB layout analysis failed: {e}, falling back to pdfplumber only")
+            logger.warning(
+                f"ServiceB layout analysis failed: {e}, falling back to pdfplumber only"
+            )
 
         # 1. Add native pdfplumber images if not already covered by layout detector
         for img in page.images:
@@ -123,7 +127,9 @@ class FigureService:
                     }
                 )
             except Exception as e:
-                logger.warning(f"Extraction failed for {cand['label']} on p.{page_num}: {e}")
+                logger.warning(
+                    f"Extraction failed for {cand['label']} on p.{page_num}: {e}"
+                )
                 continue
 
         return [{k: v for k, v in f.items() if k != "bbox_pt"} for f in final_areas]
@@ -150,7 +156,9 @@ class FigureService:
                     return False
         return True
 
-    def _cluster_objects(self, objs: list[dict], threshold: float = 10.0) -> list[list[float]]:
+    def _cluster_objects(
+        self, objs: list[dict], threshold: float = 10.0
+    ) -> list[list[float]]:
         """Simple clustering of objects based on proximity of their bboxes."""
         if not objs:
             return []

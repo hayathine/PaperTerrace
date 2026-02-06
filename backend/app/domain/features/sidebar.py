@@ -112,7 +112,9 @@ class SidebarNoteService:
             List of notes
         """
         try:
-            notes = self.storage.get_notes(session_id, paper_id=paper_id, user_id=user_id)
+            notes = self.storage.get_notes(
+                session_id, paper_id=paper_id, user_id=user_id
+            )
             logger.info(
                 "Notes retrieved",
                 extra={

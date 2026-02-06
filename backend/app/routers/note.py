@@ -38,7 +38,9 @@ async def get_notes(session_id: str, user: OptionalUser, paper_id: str | None = 
     if not paper_id:
         paper_id = storage.get_session_paper_id(session_id)
 
-    notes = sidebar_note_service.get_notes(session_id, paper_id=paper_id, user_id=user_id)
+    notes = sidebar_note_service.get_notes(
+        session_id, paper_id=paper_id, user_id=user_id
+    )
     return JSONResponse({"notes": jsonable_encoder(notes)})
 
 

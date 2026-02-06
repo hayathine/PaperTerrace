@@ -59,7 +59,9 @@ class VisionOCRService:
 
             # 1. Build full text
             full_text = response.full_text_annotation.text
-            logger.info(f"[VisionOCR] Received response (text length: {len(full_text)})")
+            logger.info(
+                f"[VisionOCR] Received response (text length: {len(full_text)})"
+            )
 
             # 2. Build layout data
             # Vision API returns bounds in pixels relative to the image size.
@@ -72,7 +74,9 @@ class VisionOCRService:
                 for block in page.blocks:
                     for paragraph in block.paragraphs:
                         for word in paragraph.words:
-                            word_text = "".join([symbol.text for symbol in word.symbols])
+                            word_text = "".join(
+                                [symbol.text for symbol in word.symbols]
+                            )
 
                             # Get bounding box
                             # vertices typically 4 points: TL, TR, BR, BL
@@ -90,7 +94,12 @@ class VisionOCRService:
                             word_list.append(
                                 {
                                     "word": word_text,
-                                    "bbox": [float(x0), float(y0), float(x1), float(y1)],
+                                    "bbox": [
+                                        float(x0),
+                                        float(y0),
+                                        float(x1),
+                                        float(y1),
+                                    ],
                                 }
                             )
 

@@ -44,15 +44,22 @@ class FigureInsightService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
         caption_hint = f"\n[Caption]\n{caption}" if caption else ""
 
-        prompt = VISION_ANALYZE_FIGURE_PROMPT.format(lang_name=lang_name, caption_hint=caption_hint)
+        prompt = VISION_ANALYZE_FIGURE_PROMPT.format(
+            lang_name=lang_name, caption_hint=caption_hint
+        )
 
         try:
             logger.debug(
                 "Analyzing figure",
                 extra={"image_size": len(image_bytes), "mime_type": mime_type},
             )
-            analysis: FigureAnalysisResponse = await self.ai_provider.generate_with_image(
-                prompt, image_bytes, mime_type, response_model=FigureAnalysisResponse
+            analysis: FigureAnalysisResponse = (
+                await self.ai_provider.generate_with_image(
+                    prompt,
+                    image_bytes,
+                    mime_type,
+                    response_model=FigureAnalysisResponse,
+                )
             )
 
             # NOTE: フロントエンド表示用に整形したテキストを返す
@@ -178,4 +185,6 @@ class FigureInsightService:
         from .equation_service import EquationService
 
         service = EquationService()
-        return await service.detect_and_convert_equations(file_bytes, page_num, target_lang)
+        return await service.detect_and_convert_equations(
+            file_bytes, page_num, target_lang
+        )

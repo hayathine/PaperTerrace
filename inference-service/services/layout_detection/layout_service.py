@@ -136,7 +136,7 @@ class LayoutAnalysisService:
 
             # モデル情報をログ出力
             inputs = self.session.get_inputs()
-            outputs = self.session.get_outputs()
+            self.session.get_outputs()
 
             # 入力名を特定
             for input_info in inputs:

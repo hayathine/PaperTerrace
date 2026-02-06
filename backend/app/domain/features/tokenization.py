@@ -69,12 +69,18 @@ class TokenizationService:
                         else:
                             # Try Local Machine Translation
                             local_trans = await loop.run_in_executor(
-                                executor, self.word_analysis.local_translator.translate, lemma
+                                executor,
+                                self.word_analysis.local_translator.translate,
+                                lemma,
                             )
                             if local_trans:
                                 self.word_analysis.word_cache[lemma] = False
-                                self.word_analysis.translation_cache[lemma] = local_trans
-                                self.redis.set(f"trans:{lang}:{lemma}", local_trans, expire=604800)
+                                self.word_analysis.translation_cache[lemma] = (
+                                    local_trans
+                                )
+                                self.redis.set(
+                                    f"trans:{lang}:{lemma}", local_trans, expire=604800
+                                )
                             else:
                                 self.word_analysis.word_cache[lemma] = False
                                 unknown_words.add(lemma)
