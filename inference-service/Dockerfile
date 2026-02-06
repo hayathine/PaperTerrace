@@ -5,9 +5,12 @@ WORKDIR /app
 # uvのインストール
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-COPY inference-service/pyproject.toml ./
+# ワークスペース構造をコピー（親と子のpyproject.toml）
+COPY pyproject.toml uv.lock ./
+COPY inference-service/pyproject.toml ./inference-service/
 
-RUN uv sync --no-dev
+# ワークスペース全体の依存関係をインストール（--packageフラグなし）
+RUN uv sync --frozen --no-dev
 
 # --- Production Stage ---
 FROM python:3.12-slim
@@ -31,6 +34,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=runtime-builder /app/.venv /app/.venv
 COPY inference-service/*.py ./
 COPY inference-service/services ./services
+COPY common ./common
 
 # m2m100モデルファイルをコピー
 COPY inference-service/models/m2m100_ct2 ./models/m2m100_ct2

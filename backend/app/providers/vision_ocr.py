@@ -8,7 +8,7 @@ from typing import Any
 
 from google.cloud import vision
 
-from app.logger import logger
+from common.logger import logger
 
 
 class VisionOCRService:

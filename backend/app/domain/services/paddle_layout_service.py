@@ -6,7 +6,7 @@
 import asyncio
 from typing import Any
 
-from app.logger import get_service_logger
+from common.logger import get_service_logger
 from app.providers.inference_client import (
     CircuitBreakerError,
     InferenceServiceError,

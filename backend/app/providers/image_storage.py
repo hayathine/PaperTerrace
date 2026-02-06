@@ -10,7 +10,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from ..logger import logger
+from common.logger import logger
 
 load_dotenv()
 

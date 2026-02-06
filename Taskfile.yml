@@ -34,7 +34,7 @@ tasks:
   run:
     desc: "Run backend server with hot reload"
     cmds:
-      - PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+      - PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
   dev:
     desc: "Run frontend dev server"
@@ -49,7 +49,7 @@ tasks:
       - echo "🚀 Starting full development environment..."
       - |
         # Start backend in background
-        PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
+        PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
         BACKEND_PID=$!
 
         # Start frontend in background  
@@ -165,7 +165,7 @@ tasks:
           echo "⚠️ ServiceB not found. Deploy inference service first with: task staging:inference:deploy"
           SERVICEB_URL="https://paperterrace-inference-staging-placeholder.run.app"
         fi
-        
+
         gcloud run deploy paperterrace-staging \
           --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:staging \
           --region {{.REGION}} \
@@ -232,18 +232,18 @@ tasks:
         fi
 
         echo "Testing translation endpoint: $SERVICEB_URL/api/v1/translate"
-        
+
         RESPONSE=$(curl -s -X POST "$SERVICEB_URL/api/v1/translate" \
           -H "Content-Type: application/json" \
           -d '{"text": "Hello world", "source_lang": "en", "target_lang": "ja"}' \
           -w "\n%{http_code}")
-        
+
         HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
         BODY=$(echo "$RESPONSE" | head -n-1)
-        
+
         echo "HTTP Status: $HTTP_CODE"
         echo "Response: $BODY"
-        
+
         if [ "$HTTP_CODE" = "200" ]; then
           SUCCESS=$(echo "$BODY" | grep -o '"success":[^,}]*' | cut -d':' -f2)
           if [ "$SUCCESS" = "true" ]; then
@@ -340,37 +340,37 @@ tasks:
     desc: "Show staging logs"
     cmds:
       - echo "📋 Staging logs (last 50 entries):"
-      - gcloud run services logs read paperterrace-staging --limit=50 --region {{.REGION}} --format=json 2>/dev/null | python3 -c "import sys, json; [print(json.dumps(json.loads(line), ensure_ascii=False, indent=2)) for line in sys.stdin if line.strip()]"
+      - gcloud run services logs read paperterrace-staging --limit=50 --region {{.REGION}} --format=json 2>/dev/null | python3 scripts/format_logs.py
 
   staging:logs:servicea:
     desc: "Show backend logs"
     cmds:
       - echo "📋 Backend logs (last 50 entries):"
-      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging"' --limit=50 --format=json 2>/dev/null | python3 -c "import sys, json; [print(json.dumps(json.loads(line), ensure_ascii=False, indent=2)) for line in sys.stdin if line.strip()]"
+      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging"' --limit=50 --format=json 2>/dev/null | python3 scripts/format_logs.py
 
   staging:logs:serviceb:
     desc: "Show inference service logs"
     cmds:
       - echo "📋 Inference service logs (last 50 entries):"
-      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-inference-staging"' --limit=50 --format=json 2>/dev/null | python3 -c "import sys, json; [print(json.dumps(json.loads(line), ensure_ascii=False, indent=2)) for line in sys.stdin if line.strip()]"
+      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-inference-staging"' --limit=50 --format=json 2>/dev/null | python3 scripts/format_logs.py
 
   staging:logs:tail:servicea:
     desc: "Tail backend logs in real-time"
     cmds:
       - echo "📋 Tailing backend logs (Ctrl+C to stop)..."
-      - gcloud logging tail 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging"' --format=json
+      - gcloud logging tail 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging"' --format="table(timestamp,severity,textPayload)"
 
   staging:logs:tail:serviceb:
     desc: "Tail inference service logs in real-time"
     cmds:
       - echo "📋 Tailing inference service logs (Ctrl+C to stop)..."
-      - gcloud logging tail 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-inference-staging"' --format=json
+      - gcloud logging tail 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-inference-staging"' --format="table(timestamp,severity,textPayload)"
 
   staging:logs:errors:
     desc: "Show only error logs from staging"
     cmds:
       - echo "🔴 Error logs from staging:"
-      - gcloud logging read 'resource.type="cloud_run_revision" AND (resource.labels.service_name="paperterrace-staging" OR resource.labels.service_name="paperterrace-inference-staging") AND severity>=ERROR' --limit=20 --format=json 2>/dev/null | python3 -c "import sys, json; [print(json.dumps(json.loads(line), ensure_ascii=False, indent=2)) for line in sys.stdin if line.strip()]"
+      - gcloud logging read 'resource.type="cloud_run_revision" AND (resource.labels.service_name="paperterrace-staging" OR resource.labels.service_name="paperterrace-inference-staging") AND severity>=ERROR' --limit=20 --format=json 2>/dev/null | python3 scripts/format_logs.py
 
   staging:urls:
     desc: "Show staging service URLs"
@@ -417,7 +417,7 @@ tasks:
   logs:errors:
     desc: "Show error logs"
     cmds:
-      - gcloud logging read 'resource.type="cloud_run_revision" AND severity>=ERROR' --limit=50 --format=json
+      - gcloud logging read 'resource.type="cloud_run_revision" AND severity>=ERROR' --limit=50 --format="table(timestamp,severity,resource.labels.service_name,textPayload)" 2>/dev/null || echo "No error logs found"
 
   # ============================================================================
   # Utility Tasks

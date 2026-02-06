@@ -11,7 +11,7 @@ from pathlib import Path
 from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import JSONResponse
 
-from app.logger import logger
+from common.logger import logger
 
 router = APIRouter(tags=["Upload"])
 

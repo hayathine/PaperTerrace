@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import Depends, Header, HTTPException, status
 
 from app.auth.firebase import FirebaseAuth, FirebaseAuthError, get_firebase_auth
-from app.logger import logger
+from common.logger import logger
 
 
 class AuthenticatedUser:

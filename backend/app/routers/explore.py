@@ -5,7 +5,7 @@ Handles public paper discovery and search.
 
 from fastapi import APIRouter, Query
 
-from app.logger import logger
+from common.logger import logger
 from app.models.paper import PaperListResponse, PaperPublic
 from app.providers import get_storage_provider
 

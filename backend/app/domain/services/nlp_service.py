@@ -1,5 +1,5 @@
 import spacy
-from app.logger import logger
+from common.logger import logger
 
 try:
     # Get lemma using parser for better accuracy

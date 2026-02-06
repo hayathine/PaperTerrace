@@ -11,7 +11,7 @@ from app.domain.prompts import (
     AGENT_ADVERSARIAL_CRITIQUE_PROMPT,
     CORE_SYSTEM_PROMPT,
 )
-from app.logger import logger
+from common.logger import logger
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import (
     AdversarialCritiqueResponse as CritiqueResponse,

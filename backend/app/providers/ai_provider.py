@@ -7,7 +7,7 @@ from google import genai
 from google.genai import types
 from pydantic import BaseModel
 
-from app.logger import logger
+from common.logger import logger
 
 load_dotenv()
 

@@ -1,6 +1,6 @@
 import os
 
-from app.logger import logger
+from common.logger import logger
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import ClaimVerificationResponse
 

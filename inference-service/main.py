@@ -3,10 +3,8 @@
 レイアウト解析と翻訳処理を担当
 """
 
-import logging
 import os
 import shutil
-import sys
 import tempfile
 import time
 from contextlib import asynccontextmanager
@@ -24,41 +22,10 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
-# ログ設定（標準出力に出力）
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-logger = logging.getLogger(__name__)
+from common.logger import configure_logging, logger
 
-# Cloud Run環境での設定
-if os.getenv("K_SERVICE"):
-    # Cloud Run環境では構造化ログを使用
-    import json
-
-    class StructuredFormatter(logging.Formatter):
-        def format(self, record):
-            log_entry = {
-                "timestamp": self.formatTime(record),
-                "severity": record.levelname,
-                "message": record.getMessage(),
-                "service": "paperterrace-inference",
-                "component": record.name,
-            }
-            if hasattr(record, "processing_time"):
-                log_entry["processing_time"] = record.processing_time
-            return json.dumps(log_entry)
-
-    # 既存のハンドラーを削除して構造化ログハンドラーを追加
-    root_logger = logging.getLogger()
-    for handler in root_logger.handlers[:]:
-        root_logger.removeHandler(handler)
-
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(StructuredFormatter())
-    root_logger.addHandler(handler)
-    root_logger.setLevel(logging.INFO)
+# ログ設定（共通モジュールを使用）
+configure_logging()
 
 # レート制限設定
 # マイクロサービス間通信ではIPベースの制限が全ユーザー巻き添えの原因になるため、デフォルト無効化

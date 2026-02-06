@@ -19,7 +19,7 @@ from app.domain.prompts import (
 )
 from app.domain.services import local_translator
 from app.domain.services.analysis_service import EnglishAnalysisService
-from app.logger import get_service_logger
+from common.logger import get_service_logger
 from app.logic import executor
 from app.providers import get_ai_provider, get_storage_provider
 

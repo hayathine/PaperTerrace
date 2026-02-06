@@ -1,6 +1,6 @@
 import hashlib
 
-from .logger import logger
+from common.logger import logger
 
 
 def _get_file_hash(file_bytes: bytes) -> str:

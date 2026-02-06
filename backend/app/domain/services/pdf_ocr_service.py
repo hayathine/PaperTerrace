@@ -7,7 +7,7 @@ from collections.abc import AsyncGenerator
 
 import pdfplumber
 from app.crud import get_ocr_from_db, save_ocr_to_db
-from app.logger import get_service_logger, logger
+from common.logger import get_service_logger, logger
 from app.providers import get_ai_provider
 from app.providers.image_storage import get_page_images, save_page_image
 from app.utils import _get_file_hash

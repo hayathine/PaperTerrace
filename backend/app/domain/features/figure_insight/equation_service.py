@@ -3,7 +3,7 @@ from typing import Any
 
 import pdfplumber
 from app.domain.prompts import CORE_SYSTEM_PROMPT, VISION_ANALYZE_EQUATION_PROMPT
-from app.logger import logger
+from common.logger import logger
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import EquationAnalysisResponse
 

@@ -1,7 +1,7 @@
 import io
 
 import pdfplumber
-from app.logger import get_service_logger
+from common.logger import get_service_logger
 
 log = get_service_logger("Language")
 

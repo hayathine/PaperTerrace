@@ -4,7 +4,7 @@ from fastapi.responses import JSONResponse
 from app.auth import OptionalUser
 from app.crud import get_storage_provider
 from app.domain.features.figure_insight import FigureInsightService
-from app.logger import logger
+from common.logger import logger
 
 router = APIRouter(tags=["Figures"])
 storage = get_storage_provider()

@@ -3,7 +3,6 @@
 PP-DocLayout-L を使用したONNX推論による図表・数式検出
 """
 
-import logging
 import os
 import time
 from pathlib import Path
@@ -14,7 +13,7 @@ import numpy as np
 import onnxruntime as ort
 from pydantic import BaseModel
 
-logger = logging.getLogger(__name__)
+from common.logger import logger
 
 
 class BBox(BaseModel):

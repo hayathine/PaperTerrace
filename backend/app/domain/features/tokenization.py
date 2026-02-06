@@ -6,7 +6,7 @@ import re
 from concurrent.futures import ThreadPoolExecutor
 
 from app.domain.services.nlp_service import NLPService
-from app.logger import logger
+from common.logger import logger
 from app.providers import get_storage_provider
 from app.utils import clean_text_for_tokenization
 

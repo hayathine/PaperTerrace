@@ -52,7 +52,7 @@ async def lifespan(app: FastAPI):
     Lifespan event handler for FastAPI.
     Handles startup and shutdown events.
     """
-    from app.logger import configure_logging, logger
+    from common.logger import configure_logging, logger
 
     # Re-configure logging to ensure it survives uvicorn's setup
     configure_logging()
@@ -121,7 +121,7 @@ app.add_middleware(
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        from app.logger import logger
+        from common.logger import logger
 
         start_time = time.time()
 
@@ -169,7 +169,7 @@ app.add_middleware(LoggingMiddleware)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    from app.logger import logger
+    from common.logger import logger
 
     logger.error(f"Global exception: {request.method} {request.url.path}")
     logger.error(traceback.format_exc())

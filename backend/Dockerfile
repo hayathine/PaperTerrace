@@ -41,6 +41,7 @@ COPY inference-service/models/paddle2onnx/PP-DocLayout-L_infer.onnx ./models/pad
 COPY backend/alembic.ini ./
 COPY backend/migrations ./migrations
 COPY backend/app/ ./app/
+COPY common/ ./common/
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \

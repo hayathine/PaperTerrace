@@ -7,7 +7,7 @@ from app.domain.prompts import (
     PAPER_SUMMARY_FULL_PROMPT,
     PAPER_SUMMARY_SECTIONS_PROMPT,
 )
-from app.logger import logger
+from common.logger import logger
 from app.providers import get_ai_provider, get_storage_provider
 from app.schemas.gemini_schema import FullSummaryResponse
 from app.schemas.gemini_schema import SectionSummaryList as SectionSummariesResponse

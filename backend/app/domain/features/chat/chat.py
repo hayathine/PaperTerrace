@@ -13,7 +13,7 @@ from app.domain.prompts import (
     CHAT_WITH_FIGURE_PROMPT,
     CORE_SYSTEM_PROMPT,
 )
-from app.logger import logger
+from common.logger import logger
 from app.providers import get_ai_provider
 from app.providers.redis_provider import RedisService
 

@@ -19,7 +19,7 @@ from app.domain.features import (
     SummaryService,
 )
 from app.domain.services.layout_service import get_layout_service
-from app.logger import logger
+from common.logger import logger
 from app.providers import RedisService, get_storage_provider
 
 router = APIRouter(tags=["Analysis"])

@@ -7,7 +7,7 @@ from app.domain.prompts import (
     RADAR_GENERATE_QUERY_CONTEXT_PROMPT,
     RADAR_SIMULATE_SEARCH_PROMPT,
 )
-from app.logger import logger
+from common.logger import logger
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import (
     SearchQueriesResponse,

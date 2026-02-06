@@ -9,7 +9,7 @@ from functools import lru_cache
 import firebase_admin
 from firebase_admin import auth, credentials
 
-from app.logger import logger
+from common.logger import logger
 
 
 class FirebaseAuthError(Exception):

@@ -3,7 +3,7 @@ import io
 from collections.abc import Sequence
 from typing import Any
 
-from app.logger import logger
+from common.logger import logger
 from app.providers.image_storage import save_page_image
 
 # pdfplumber related imports for type hinting and functionality

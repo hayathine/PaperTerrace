@@ -56,10 +56,23 @@ def jst_timestamper(
     return event_dict
 
 
+def add_severity_level(
+    logger: WrappedLogger, method_name: str, event_dict: EventDict
+) -> EventDict:
+    """
+    Cloud Logging 用に 'severity' フィールドを追加する。
+    structlog の 'level' を GCP が期待する 'severity' (大文字) にマッピングする。
+    """
+    if "level" in event_dict:
+        event_dict["severity"] = event_dict["level"].upper()
+    return event_dict
+
+
 # 共通のプロセッサ定義
 shared_processors = [
     structlog.contextvars.merge_contextvars,
     structlog.stdlib.add_log_level,
+    add_severity_level,  # severityを追加
     structlog.stdlib.add_logger_name,
     jst_timestamper,
     structlog.processors.StackInfoRenderer(),

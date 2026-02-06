@@ -10,7 +10,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.domain.features import ChatService
-from app.logger import get_service_logger
+from common.logger import get_service_logger
 from app.providers import RedisService, get_image_bytes, get_storage_provider
 
 log = get_service_logger("Chat")

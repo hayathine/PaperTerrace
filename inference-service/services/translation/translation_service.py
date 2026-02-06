@@ -4,20 +4,12 @@ CTranslate2 を使用したM2M100推論
 """
 
 import asyncio
-import logging
 import os
-import sys
 
 import ctranslate2
 import sentencepiece as spm
 
-# ログ設定（標準出力）
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
-    handlers=[logging.StreamHandler(sys.stdout)],
-)
-logger = logging.getLogger(__name__)
+from common.logger import logger
 
 
 class TranslationService:

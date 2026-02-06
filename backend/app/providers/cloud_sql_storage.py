@@ -11,7 +11,7 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 
-from app.logger import logger
+from common.logger import logger
 
 from .storage_provider import StorageInterface
 
