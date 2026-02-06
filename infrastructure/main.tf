@@ -41,7 +41,7 @@ resource "google_project_service" "apis" {
     "vpcaccess.googleapis.com",
     "servicenetworking.googleapis.com",
     "iam.googleapis.com", 
-    "redis.googleapis.com",
+    # "redis.googleapis.com", # Redis API disabled to save cost
   ])
 
   service            = each.value
@@ -144,9 +144,9 @@ module "cloud_run" {
   service_name         = "paperterrace"
   min_instance_count   = 1
 
-  # Redis configuration
-  redis_host = module.redis_production.redis_host
-  redis_port = tostring(module.redis_production.redis_port)
+  # Redis configuration (Disabled to save cost)
+  # redis_host = module.redis_production.redis_host
+  # redis_port = tostring(module.redis_production.redis_port)
 
   depends_on = [
     google_project_service.apis,
@@ -155,7 +155,7 @@ module "cloud_run" {
     module.storage,
     module.networking,
     module.iam,
-    module.redis_production,
+    # module.redis_production, # Disabled
   ]
 }
 
@@ -204,9 +204,9 @@ module "cloud_run_staging" {
   # Pass service account email
   service_account_email = module.iam.service_account_email
 
-  # Redis configuration for staging
-  redis_host = var.enable_staging ? module.redis_staging[0].redis_host : "localhost"
-  redis_port = var.enable_staging ? tostring(module.redis_staging[0].redis_port) : "6379"
+  # Redis configuration for staging (Disabled to save cost)
+  # redis_host = var.enable_staging ? module.redis_staging[0].redis_host : "localhost"
+  # redis_port = var.enable_staging ? tostring(module.redis_staging[0].redis_port) : "6379"
 
   # Inference Service Integration
   # inference_service_url = var.enable_staging ? data.google_cloud_run_v2_service.inference_staging[0].uri : ""
@@ -220,57 +220,55 @@ module "cloud_run_staging" {
     module.networking,
     module.iam,
     google_sql_database.staging,
-    module.redis_staging,
+    # module.redis_staging, # Disabled
   ]
 }
 
-
-
 # ============================================================================
-# Redis (Memorystore)
+# Redis (Memorystore) - DISABLED TO SAVE COST
 # ============================================================================
 
 # Production Redis
-module "redis_production" {
-  source = "./modules/memorystore"
-
-  instance_name    = "paperterrace-redis-prod"
-  tier            = "STANDARD_HA"
-  memory_size_gb  = 2
-  region          = var.region
-  vpc_network_id  = module.networking.vpc_network_id
-  display_name    = "PaperTerrace Production Redis"
-  
-  labels = {
-    environment = "production"
-    application = "paperterrace"
-  }
-
-  depends_on = [
-    google_project_service.apis,
-    module.networking
-  ]
-}
+# module "redis_production" {
+#   source = "./modules/memorystore"
+#
+#   instance_name    = "paperterrace-redis-prod"
+#   tier            = "Basic"
+#   memory_size_gb  = 1
+#   region          = var.region
+#   vpc_network_id  = module.networking.vpc_network_id
+#   display_name    = "PaperTerrace Production Redis"
+#   
+#   labels = {
+#     environment = "production"
+#     application = "paperterrace"
+#   }
+#
+#   depends_on = [
+#     google_project_service.apis,
+#     module.networking
+#   ]
+# }
 
 # Staging Redis (conditional)
-module "redis_staging" {
-  source = "./modules/memorystore"
-  count  = var.enable_staging ? 1 : 0
-
-  instance_name    = "paperterrace-redis-staging"
-  tier            = "BASIC"
-  memory_size_gb  = 1
-  region          = var.region
-  vpc_network_id  = module.networking.vpc_network_id
-  display_name    = "PaperTerrace Staging Redis"
-  
-  labels = {
-    environment = "staging"
-    application = "paperterrace"
-  }
-
-  depends_on = [
-    google_project_service.apis,
-    module.networking
-  ]
-}
+# module "redis_staging" {
+#   source = "./modules/memorystore"
+#   count  = var.enable_staging ? 1 : 0
+#
+#   instance_name    = "paperterrace-redis-staging"
+#   tier            = "BASIC"
+#   memory_size_gb  = 1
+#   region          = var.region
+#   vpc_network_id  = module.networking.vpc_network_id
+#   display_name    = "PaperTerrace Staging Redis"
+#   
+#   labels = {
+#     environment = "staging"
+#     application = "paperterrace"
+#   }
+#
+#   depends_on = [
+#     google_project_service.apis,
+#     module.networking
+#   ]
+# }
