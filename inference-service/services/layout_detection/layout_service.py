@@ -211,6 +211,10 @@ class LayoutAnalysisService:
         img = img.transpose(2, 0, 1)
         img = np.expand_dims(img, axis=0).astype(np.float32)
 
+        logger.info(
+            f"Preprocess complete - ori_shape: {ori_h}x{ori_w}, scale_factor: {scale_factor}, target_img_shape: {img.shape}"
+        )
+
         return img, (ori_h, ori_w), scale_factor
 
     def _inference(
@@ -230,6 +234,10 @@ class LayoutAnalysisService:
         if self.im_shape_input_name:
             input_feed[self.im_shape_input_name] = im_shape
 
+        logger.info(f"Inference - input_feed keys: {list(input_feed.keys())}")
+        for k, v in input_feed.items():
+            logger.info(f"Inference - input '{k}' shape: {v.shape}, dtype: {v.dtype}")
+
         outputs = self.session.run(None, input_feed)
         return outputs
 
@@ -244,6 +252,27 @@ class LayoutAnalysisService:
         predictions = outputs[0]
         ori_h, ori_w = ori_shape
 
+        # デバッグログ追加: 推論データの生の状態を確認
+        logger.info(f"Postprocess - predictions shape: {predictions.shape}")
+        if predictions.shape[0] > 0:
+            max_score = np.max(predictions[:, 1])
+            logger.info(f"Postprocess - max score in all predictions: {max_score:.4f}")
+
+            # スコアの分布を確認
+            for t in [0.1, 0.2, 0.3, 0.4, 0.5]:
+                count = np.sum(predictions[:, 1] >= t)
+                logger.info(
+                    f"Postprocess - elements count above threshold {t}: {count}"
+                )
+
+            # 上位5つの生データを詳しく出力 (座標系の把握のため)
+            top_indices = np.argsort(predictions[:, 1])[-5:][::-1]
+            for i, idx in enumerate(top_indices):
+                p = predictions[idx]
+                logger.info(
+                    f"Postprocess - top {i + 1} prediction: class_id={int(p[0])}, score={p[1]:.4f}, raw_bbox={p[2:]}"
+                )
+
         # 有効な予測を抽出
         valid_mask = predictions[:, 1] >= threshold
         valid_predictions = predictions[valid_mask]
@@ -251,20 +280,17 @@ class LayoutAnalysisService:
         results = []
 
         if len(valid_predictions) > 0:
-            # スケールファクターを決定
-            scale_x = target_size[0] / ori_w
-            scale_y = target_size[1] / ori_h
+            # ログ分析の結果、PP-DocLayout-L ONNXは座標を 0-10000 のスケールで返していることが判明
+            # (推論時の target_size(640) ではなく、正規化された 10000 分率であるため、ori_w/h を掛けて 10000 で割る)
 
             for res in valid_predictions:
                 class_id, score, xmin, ymin, xmax, ymax = res
 
-                # 座標を元のサイズに復元（正しい変換: 推論サイズ → 元画像サイズ）
-                # xmin, ymin, xmax, ymaxは推論時のサイズ（target_size）での座標
-                # 元画像サイズに戻すには scale で割る（または 1/scale を掛ける）
-                x1 = max(0, min(ori_w, int(xmin / scale_x)))
-                y1 = max(0, min(ori_h, int(ymin / scale_y)))
-                x2 = max(0, min(ori_w, int(xmax / scale_x)))
-                y2 = max(0, min(ori_h, int(ymax / scale_y)))
+                # 座標を元のサイズに復元 (0-10000 スケールからピクセルへ変換)
+                x1 = max(0, min(ori_w, int(xmin * ori_w / 10000.0)))
+                y1 = max(0, min(ori_h, int(ymin * ori_h / 10000.0)))
+                x2 = max(0, min(ori_w, int(xmax * ori_w / 10000.0)))
+                y2 = max(0, min(ori_h, int(ymax * ori_h / 10000.0)))
 
                 box = [x1, y1, x2, y2]
 

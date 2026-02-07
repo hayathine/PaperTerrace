@@ -3,12 +3,13 @@ import io
 from collections.abc import Sequence
 from typing import Any
 
-from common.logger import logger
 from app.providers.image_storage import save_page_image
 
 # pdfplumber related imports for type hinting and functionality
 from pdfplumber.display import PageImage
 from pdfplumber.page import Page
+
+from common.logger import logger
 
 from .paddle_layout_service import get_layout_service
 
@@ -42,7 +43,7 @@ class FigureService:
             )
             for res in local_results:
                 # 結果の形式: {"bbox": {"x_min": ..., "y_min": ..., "x_max": ..., "y_max": ...}, "class_name": ..., "score": ...}
-                class_name = res.get("class_name", "")
+                class_name = res.get("class_name", "").lower()
                 if class_name in ["figure", "table", "equation"]:
                     label = class_name
                     # Convert pixel coordinates to PDF points
