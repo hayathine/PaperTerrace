@@ -15,7 +15,9 @@ from app.domain.prompts import (
 )
 from common.logger import logger
 from app.providers import get_ai_provider
-from app.providers.redis_provider import RedisService  # RedisService now uses in-memory cache
+from app.providers.redis_provider import (
+    RedisService,
+)  # RedisService now uses in-memory cache
 
 
 class ChatError(Exception):

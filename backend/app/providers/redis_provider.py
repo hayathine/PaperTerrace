@@ -1,5 +1,4 @@
 import json
-import os
 from typing import Any
 
 from common.logger import get_service_logger
@@ -24,7 +23,7 @@ class RedisService:
     def __init__(self):
         # Use shared cache to maintain state across service instances
         self.memory_cache = RedisService._shared_cache
-        if not hasattr(RedisService, '_initialized'):
+        if not hasattr(RedisService, "_initialized"):
             log.info("init", "Using in-memory cache (Redis disabled)")
             RedisService._initialized = True
 

@@ -11,7 +11,11 @@ from pydantic import BaseModel
 
 from app.domain.features import ChatService
 from common.logger import get_service_logger
-from app.providers import RedisService, get_image_bytes, get_storage_provider  # RedisService now uses in-memory cache
+from app.providers import (
+    RedisService,
+    get_image_bytes,
+    get_storage_provider,
+)  # RedisService now uses in-memory cache
 
 log = get_service_logger("Chat")
 

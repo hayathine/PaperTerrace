@@ -174,9 +174,7 @@ class PaddleLayoutService:
             return []
 
         except InferenceServiceError as e:
-            log.error(
-                "detect_layout_from_image_async", f"Inference service error: {e}"
-            )
+            log.error("detect_layout_from_image_async", f"Inference service error: {e}")
             return []
 
         except Exception as e:

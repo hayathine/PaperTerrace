@@ -280,17 +280,17 @@ class LayoutAnalysisService:
         results = []
 
         if len(valid_predictions) > 0:
-            # ログ分析の結果、PP-DocLayout-L ONNXは座標を 0-10000 のスケールで返していることが判明
-            # (推論時の target_size(640) ではなく、正規化された 10000 分率であるため、ori_w/h を掛けて 10000 で割る)
+            # ONNXモデルは im_shape 引数を受け取り、座標をそのスケール（元画像のピクセルサイズ）で返す。
+            # そのため、xmin / ymin などをそのままピクセル座標として利用可能。
 
             for res in valid_predictions:
-                class_id, score, xmin, ymin, xmax, ymax = res
+                class_id, score, xxmin, yymin, xxmax, yymax = res
 
-                # 座標を元のサイズに復元 (0-10000 スケールからピクセルへ変換)
-                x1 = max(0, min(ori_w, int(xmin * ori_w / 10000.0)))
-                y1 = max(0, min(ori_h, int(ymin * ori_h / 10000.0)))
-                x2 = max(0, min(ori_w, int(xmax * ori_w / 10000.0)))
-                y2 = max(0, min(ori_h, int(ymax * ori_h / 10000.0)))
+                # 座標を元のサイズに復元 (im_shapeにより既にピクセルスケールになっている)
+                x1 = max(0, min(ori_w, int(xxmin)))
+                y1 = max(0, min(ori_h, int(yymin)))
+                x2 = max(0, min(ori_w, int(xxmax)))
+                y2 = max(0, min(ori_h, int(yymax)))
 
                 box = [x1, y1, x2, y2]
 

@@ -19,7 +19,10 @@ from app.domain.features import (
     SummaryService,
 )
 from app.domain.services.layout_service import get_layout_service
-from app.providers import RedisService, get_storage_provider  # RedisService now uses in-memory cache
+from app.providers import (
+    RedisService,
+    get_storage_provider,
+)  # RedisService now uses in-memory cache
 from common.logger import logger
 
 router = APIRouter(tags=["Analysis"])
