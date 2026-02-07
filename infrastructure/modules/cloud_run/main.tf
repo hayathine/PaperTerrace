@@ -19,8 +19,8 @@ resource "google_cloud_run_v2_service" "main" {
 
       resources {
         limits = {
-          cpu    = "2"
-          memory = "4Gi"
+          cpu    = "1"
+          memory = "1Gi"
         }
         cpu_idle = true
       }
@@ -61,6 +61,7 @@ resource "google_cloud_run_v2_service" "main" {
         value = "cloudsql"
       }
 
+/*
       env {
         name  = "REDIS_HOST"
         value = var.redis_host
@@ -75,6 +76,7 @@ resource "google_cloud_run_v2_service" "main" {
         name  = "REDIS_DB"
         value = "0"
       }
+*/
 
       env {
         name  = "INFERENCE_SERVICE_URL"

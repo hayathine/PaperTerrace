@@ -39,7 +39,7 @@ resource "google_project_service" "apis" {
     "vpcaccess.googleapis.com",
     "servicenetworking.googleapis.com",
     "iam.googleapis.com", 
-    "redis.googleapis.com",
+#    "redis.googleapis.com",
   ])
 
   service            = each.value
@@ -116,13 +116,14 @@ module "storage" {
   depends_on = [google_project_service.apis, module.iam]
 }
 
+/*
 # Redis Production
 module "redis_production" {
   source = "../../modules/memorystore"
 
   instance_name    = "paperterrace-redis-prod"
   tier            = "STANDARD_HA"
-  memory_size_gb  = 2
+  memory_size_gb  = 1
   region          = var.region
   vpc_network_id  = module.networking.vpc_network_id
   display_name    = "PaperTerrace Production Redis"
@@ -137,6 +138,7 @@ module "redis_production" {
     module.networking
   ]
 }
+*/
 
 # Cloud Run
 module "cloud_run" {
@@ -160,8 +162,8 @@ module "cloud_run" {
   service_name         = "paperterrace"
   min_instance_count   = 0
 
-  redis_host = module.redis_production.redis_host
-  redis_port = tostring(module.redis_production.redis_port)
+  # redis_host = module.redis_production.redis_host
+  # redis_port = tostring(module.redis_production.redis_port)
 
   depends_on = [
     google_project_service.apis,
@@ -170,6 +172,6 @@ module "cloud_run" {
     module.storage,
     module.networking,
     module.iam,
-    module.redis_production,
+    # module.redis_production,
   ]
 }

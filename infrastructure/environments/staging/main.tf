@@ -44,6 +44,7 @@ resource "google_sql_database" "staging" {
   project  = var.project_id
 }
 
+/*
 # Staging Redis
 module "redis_staging" {
   source = "../../modules/memorystore"
@@ -60,6 +61,7 @@ module "redis_staging" {
     application = "paperterrace"
   }
 }
+*/
 
 # Cloud Run Staging
 module "cloud_run_staging" {
@@ -83,8 +85,8 @@ module "cloud_run_staging" {
   min_instance_count    = 0
   
   # Redis
-  redis_host = module.redis_staging.redis_host
-  redis_port = tostring(module.redis_staging.redis_port)
+  # redis_host = module.redis_staging.redis_host
+  # redis_port = tostring(module.redis_staging.redis_port)
 
   service_account_email = data.terraform_remote_state.production.outputs.service_account_email
 }

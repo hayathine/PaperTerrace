@@ -28,6 +28,7 @@ output "storage_bucket_name" {
   value       = module.storage.bucket_name
 }
 
+/*
 # Redis (Memorystore)
 output "redis_production_host" {
   description = "Production Redis host"
@@ -58,6 +59,7 @@ output "redis_staging_connection_string" {
   description = "Staging Redis connection string"
   value       = var.enable_staging ? module.redis_staging[0].redis_connection_string : null
 }
+*/
 
 # Networking
 

@@ -75,6 +75,7 @@ variable "service_account_email" {
   type        = string
 }
 
+/*
 variable "redis_host" {
   description = "Redis host"
   type        = string
@@ -86,6 +87,7 @@ variable "redis_port" {
   type        = string
   default     = "6379"
 }
+*/
 
 variable "request_timeout" {
   description = "Request timeout in seconds"

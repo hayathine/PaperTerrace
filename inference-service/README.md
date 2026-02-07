@@ -89,9 +89,9 @@ gcloud run deploy paperterrace-inference \
   --region ${GCP_REGION} \
   --platform managed \
   --allow-unauthenticated \
-  --memory 8Gi \
-  --cpu 4 \
-  --min-instances 1 \
+  --memory 2Gi \
+  --cpu 2 \
+  --min-instances 0 \
   --max-instances 10 \
   --concurrency 10 \
   --no-cpu-throttling \

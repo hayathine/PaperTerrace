@@ -64,6 +64,7 @@ output "db_password_secret_id" {
   value       = module.secrets.db_password_secret_id
 }
 
+/*
 output "redis_production_host" {
   description = "Production Redis host"
   value       = module.redis_production.redis_host
@@ -78,3 +79,4 @@ output "redis_production_connection_string" {
   description = "Production Redis connection string"
   value       = module.redis_production.redis_connection_string
 }
+*/
