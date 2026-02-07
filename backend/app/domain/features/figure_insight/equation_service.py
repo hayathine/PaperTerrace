@@ -7,6 +7,8 @@ from app.providers import get_ai_provider
 from app.schemas.gemini_schema import EquationAnalysisResponse
 
 from common.logger import logger
+from common.schemas.bbox import BBoxModel
+from common.utils.bbox import get_bbox_from_items, sanitize_bboxes
 
 
 class EquationService:
@@ -75,7 +77,7 @@ class EquationService:
                     if analysis and analysis.is_equation and analysis.confidence > 0.6:
                         results.append(
                             {
-                                "bbox": bbox,
+                                "bbox": BBoxModel.from_list(bbox),
                                 "latex": analysis.latex,
                                 "explanation": analysis.explanation,
                                 "page_num": page_num,
@@ -85,7 +87,10 @@ class EquationService:
         except Exception as e:
             logger.error(f"Equation extraction failed: {e}")
 
-        return results
+        return [
+            {k: (v.to_list() if isinstance(v, BBoxModel) else v) for k, v in r.items()}
+            for r in results
+        ]
 
     def _identify_potential_equation_areas(
         self, file_bytes: bytes, page_num: int
@@ -129,13 +134,11 @@ class EquationService:
                             else:
                                 # Close current block and start new
                                 potential_bboxes.append(
-                                    self._get_bbox_from_chars(current_block)
+                                    get_bbox_from_items(current_block)
                                 )
                                 current_block = [c]
                     if current_block:
-                        potential_bboxes.append(
-                            self._get_bbox_from_chars(current_block)
-                        )
+                        potential_bboxes.append(get_bbox_from_items(current_block))
 
                 # 2. Look for large gaps (whitespace analysis)
                 # Group text into lines
@@ -158,41 +161,10 @@ class EquationService:
                             )
 
                 # Filter and deduplicate bboxes
-                return self._sanitize_bboxes(potential_bboxes)
+                return sanitize_bboxes(potential_bboxes)
         except Exception as e:
             logger.error(f"Heuristic detection failed: {e}")
             return []
-
-    def _get_bbox_from_chars(self, chars: list[dict]) -> list[float]:
-        x0 = min(c["x0"] for c in chars)
-        top = min(c["top"] for c in chars)
-        x1 = max(c["x1"] for c in chars)
-        bottom = max(c["bottom"] for c in chars)
-        return [x0, top, x1, bottom]
-
-    def _sanitize_bboxes(self, bboxes: list[list[float]]) -> list[list[float]]:
-        # Remove overlaps and small bboxes
-        if not bboxes:
-            return []
-
-        # Merge overlapping or very close bboxes
-        bboxes.sort(key=lambda x: x[1])
-        merged = []
-        if bboxes:
-            curr = bboxes[0]
-            for next_bbox in bboxes[1:]:
-                # If they overlap vertically significantly
-                if next_bbox[1] < curr[3] + 5:
-                    curr[0] = min(curr[0], next_bbox[0])
-                    curr[1] = min(curr[1], next_bbox[1])
-                    curr[2] = max(curr[2], next_bbox[2])
-                    curr[3] = max(curr[3], next_bbox[3])
-                else:
-                    merged.append(curr)
-                    curr = next_bbox
-            merged.append(curr)
-
-        return [b for b in merged if (b[2] - b[0]) > 5 and (b[3] - b[1]) > 5]
 
     async def _analyze_bbox_with_ai(
         self, img_bytes: bytes, target_lang: str

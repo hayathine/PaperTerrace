@@ -13,7 +13,7 @@ import numpy as np
 import onnxruntime as ort
 
 from common.logger import logger
-from common.schemas.layout import LAYOUT_LABELS, BBox, LayoutItem
+from common.schemas.layout import LAYOUT_LABELS, BBoxModel, LayoutItem
 
 
 class LayoutAnalysisService:
@@ -165,7 +165,7 @@ class LayoutAnalysisService:
             # LayoutItemオブジェクトに変換
             layout_items = []
             for result in results:
-                bbox = BBox.from_list(result["bbox"])
+                bbox = BBoxModel.from_list(result["bbox"])
                 class_id = result["class_id"]
                 class_name = (
                     self.LABELS[class_id]

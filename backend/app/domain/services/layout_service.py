@@ -10,7 +10,7 @@ from typing import List
 
 import httpx
 
-from common.schemas.layout import BBox, LayoutItem
+from common.schemas.layout import BBoxModel, LayoutItem
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class LayoutAnalysisService:
                     layout_items = []
                     for item in results:
                         bbox_data = item["bbox"]
-                        bbox = BBox(
+                        bbox = BBoxModel(
                             x_min=bbox_data["x_min"],
                             y_min=bbox_data["y_min"],
                             x_max=bbox_data["x_max"],

@@ -1,6 +1,5 @@
 import base64
 import io
-from collections.abc import Sequence
 from typing import Any
 
 from app.providers.image_storage import save_page_image
@@ -10,6 +9,8 @@ from pdfplumber.display import PageImage
 from pdfplumber.page import Page
 
 from common.logger import logger
+from common.schemas.bbox import BBoxModel
+from common.utils.bbox import get_bbox_from_items, is_contained, scale_bbox
 
 from .paddle_layout_service import get_layout_service
 
@@ -46,17 +47,11 @@ class FigureService:
                 class_name = res.get("class_name", "").lower()
                 if class_name in ["figure", "table", "equation"]:
                     label = class_name
-                    # Convert pixel coordinates to PDF points
                     bbox_dict = res.get("bbox", {})
-                    bbox = [
-                        bbox_dict.get("x_min", 0),
-                        bbox_dict.get("y_min", 0),
-                        bbox_dict.get("x_max", 0),
-                        bbox_dict.get("y_max", 0),
-                    ]
-                    if len(bbox) == 4 and bbox[2] > bbox[0] and bbox[3] > bbox[1]:
+                    if bbox_dict:
+                        bbox = get_bbox_from_items([bbox_dict])
                         # bbox format: [x1, y1, x2, y2]
-                        bbox = [b / zoom for b in bbox]
+                        bbox = scale_bbox(bbox, 1.0 / zoom, 1.0 / zoom)
                         candidates.append({"bbox": bbox, "label": label})
         except Exception as e:
             logger.warning(
@@ -65,8 +60,15 @@ class FigureService:
 
         # 1. Add native pdfplumber images if not already covered by layout detector
         for img in page.images:
-            bbox = [img["x0"], img["top"], img["x1"], img["bottom"]]
-            if self._is_new_candidate(bbox, candidates):
+            bbox = get_bbox_from_items([img])
+            # Check if this image area is already significantly covered by a candidate
+            is_new = True
+            for cand in candidates:
+                if is_contained(bbox, cand["bbox"], threshold=0.8):
+                    is_new = False
+                    break
+
+            if is_new:
                 w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]
                 if 20 < w < page.width * 0.9 and 20 < h < page.height * 0.9:
                     candidates.append({"bbox": bbox, "label": "figure"})
@@ -92,8 +94,8 @@ class FigureService:
                 min(page.height, bbox[3] + margin),
             )
 
-            if not self._is_new_candidate(
-                list(c_bbox), final_areas, key="bbox_pt", iou_threshold=0.8
+            if any(
+                is_contained(c_bbox, f["bbox_pt"], threshold=0.8) for f in final_areas
             ):
                 continue
 
@@ -125,8 +127,8 @@ class FigureService:
                 final_areas.append(
                     {
                         "image_url": url,
-                        "bbox": [b * zoom for b in c_bbox],
-                        "bbox_pt": list(c_bbox),
+                        "bbox": scale_bbox(c_bbox, zoom, zoom),
+                        "bbox_pt": BBoxModel.from_list(c_bbox),
                         "explanation": "",
                         "page_num": page_num,
                         "label": cand["label"],
@@ -138,79 +140,12 @@ class FigureService:
                 )
                 continue
 
-        return [{k: v for k, v in f.items() if k != "bbox_pt"} for f in final_areas]
-
-    def _is_new_candidate(
-        self,
-        bbox: Sequence[float],
-        existing: list[dict],
-        key: str = "bbox",
-        iou_threshold: float = 0.8,
-    ) -> bool:
-        """Checks if a bbox is significantly new comparing to existing candidates."""
-        for other in existing:
-            o_bbox = other[key]
-            ix0 = max(bbox[0], o_bbox[0])
-            iy0 = max(bbox[1], o_bbox[1])
-            ix1 = min(bbox[2], o_bbox[2])
-            iy1 = min(bbox[3], o_bbox[3])
-
-            if ix1 > ix0 and iy1 > iy0:
-                inter_area = (ix1 - ix0) * (iy1 - iy0)
-                cand_area = (bbox[2] - bbox[0]) * (bbox[3] - bbox[1])
-                if inter_area / cand_area > iou_threshold:
-                    return False
-        return True
-
-    def _cluster_objects(
-        self, objs: list[dict], threshold: float = 10.0
-    ) -> list[list[float]]:
-        """Simple clustering of objects based on proximity of their bboxes."""
-        if not objs:
-            return []
-
-        bboxes = [(o["x0"], o["top"], o["x1"], o["bottom"]) for o in objs]
-        clusters: list[list[float]] = []
-
-        for bbox in bboxes:
-            merged = False
-            for i, cluster in enumerate(clusters):
-                if not (
-                    bbox[0] > cluster[2] + threshold
-                    or bbox[2] < cluster[0] - threshold
-                    or bbox[1] > cluster[3] + threshold
-                    or bbox[3] < cluster[1] - threshold
-                ):
-                    clusters[i] = [
-                        min(cluster[0], bbox[0]),
-                        min(cluster[1], bbox[1]),
-                        max(cluster[2], bbox[2]),
-                        max(cluster[3], bbox[3]),
-                    ]
-                    merged = True
-                    break
-            if not merged:
-                clusters.append(list(bbox))
-
-        final_clusters: list[list[float]] = []
-        for cluster in clusters:
-            merged = False
-            for i, f_cluster in enumerate(final_clusters):
-                if not (
-                    cluster[0] > f_cluster[2] + threshold
-                    or cluster[2] < f_cluster[0] - threshold
-                    or cluster[1] > f_cluster[3] + threshold
-                    or cluster[3] < f_cluster[1] - threshold
-                ):
-                    final_clusters[i] = [
-                        min(f_cluster[0], cluster[0]),
-                        min(f_cluster[1], cluster[1]),
-                        max(f_cluster[2], cluster[2]),
-                        max(f_cluster[3], cluster[3]),
-                    ]
-                    merged = True
-                    break
-            if not merged:
-                final_clusters.append(cluster)
-
-        return final_clusters
+        # Convert BBox objects to lists for the final response if they aren't serialized automatically
+        return [
+            {
+                k: (v.to_list() if isinstance(v, BBoxModel) else v)
+                for k, v in f.items()
+                if k != "bbox_pt"
+            }
+            for f in final_areas
+        ]

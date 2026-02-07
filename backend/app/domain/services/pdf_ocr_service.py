@@ -12,6 +12,7 @@ from app.providers.image_storage import get_page_images, save_page_image
 from app.utils import _get_file_hash
 
 from common.logger import get_service_logger, logger
+from common.utils.bbox import scale_bbox
 
 from .figure_service import FigureService
 from .language_service import LanguageService
@@ -254,12 +255,9 @@ class PDFOCRService:
         layout_data["words"] = [
             {
                 "word": w["text"],
-                "bbox": [
-                    w["x0"] * scale_x,
-                    w["top"] * scale_y,
-                    w["x1"] * scale_x,
-                    w["bottom"] * scale_y,
-                ],
+                "bbox": scale_bbox(
+                    [w["x0"], w["top"], w["x1"], w["bottom"]], scale_x, scale_y
+                ).to_list(),
             }
             for w in native_words
         ]

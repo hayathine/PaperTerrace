@@ -34,7 +34,8 @@ tasks:
   run:
     desc: "Run backend server with hot reload"
     cmds:
-      - PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 | tee -a local.log
+      - mkdir -p logs
+      - PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 | tee -a logs/local.log
 
   dev:
     desc: "Run frontend dev server"
@@ -91,6 +92,7 @@ tasks:
       - rm -rf frontend/node_modules/.cache frontend/dist
       - sqlite3 ocr_reader.db "DELETE FROM ocr_reader;" 2>/dev/null || true
       - rm -rf backend/app/static/paper_images/* 2>/dev/null || true
+      - rm -rf logs/*.log
       - echo "✅ Cache cleared!"
 
   # ============================================================================
@@ -345,14 +347,16 @@ tasks:
   staging:logs:servicea:
     desc: "Show backend logs (Service A)"
     cmds:
-      - echo "📋 Backend logs (last 50 entries) -> servicea.log"
-      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging"' --limit=50 --format="table(timestamp.date(tz='Asia/Tokyo'):label=TIME, severity, textPayload, jsonPayload.event:label=MESSAGE)" | tee -a servicea.log
+      - echo "📋 Backend logs (last 50 entries) -> logs/servicea.log"
+      - mkdir -p logs
+      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging"' --limit=50 --format="table(timestamp.date(tz='Asia/Tokyo'):label=TIME, severity, textPayload, jsonPayload.event:label=MESSAGE)" | tee -a logs/servicea.log
 
   staging:logs:serviceb:
     desc: "Show inference service logs (Service B)"
     cmds:
-      - echo "📋 Inference service logs (last 50 entries) -> serviceb.log"
-      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-inference-staging"' --limit=50 --format="table(timestamp.date(tz='Asia/Tokyo'):label=TIME, severity, textPayload, jsonPayload.event:label=MESSAGE)" | tee -a serviceb.log
+      - echo "📋 Inference service logs (last 50 entries) -> logs/serviceb.log"
+      - mkdir -p logs
+      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-inference-staging"' --limit=50 --format="table(timestamp.date(tz='Asia/Tokyo'):label=TIME, severity, textPayload, jsonPayload.event:label=MESSAGE)" | tee -a logs/serviceb.log
 
   staging:logs:tail:servicea:
     desc: "Tail backend logs in real-time"
