@@ -16,7 +16,7 @@ from app.domain.services.paper_processing import (
     process_figure_analysis_task,
     process_paper_summary_task,
 )
-from app.providers import RedisService, get_storage_provider
+from app.providers import RedisService, get_storage_provider  # RedisService now uses in-memory cache
 from app.utils import _get_file_hash
 from common.logger import get_service_logger, logger
 

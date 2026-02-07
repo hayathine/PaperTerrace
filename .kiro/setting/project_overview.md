@@ -17,7 +17,8 @@ Ensure consistency with these technologies:
 - **Frameworks**:
   - **Backend**: FastAPI, SQLAlchemy, Firebase Admin
   - **Inference**: FastAPI/SlowAPI, PaddleOCR, CTranslate2, PyTorch/Numpy
-- **Database**: PostgreSQL (Cloud SQL), SQLite (Local), Redis (Cache)
+- **Database**: PostgreSQL (Cloud SQL), SQLite (Local)
+- **Cache**: In-Memory (session/chat data)
 - **Infrastructure**: Google Cloud Platform (Cloud Run, Cloud SQL, Cloud Tasks, GCS)
 - **IaC**: Terraform, Docker
 

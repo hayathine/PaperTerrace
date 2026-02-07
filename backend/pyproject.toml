@@ -26,7 +26,6 @@ dependencies = [
     "sqlalchemy>=2.0.46",
     "alembic>=1.18.3",
     "psycopg2-binary>=2.9.11",
-    "redis>=7.1.0",
     
     # NLP & ML
     "spacy>=3.8.11",

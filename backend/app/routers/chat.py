@@ -11,7 +11,7 @@ from pydantic import BaseModel
 
 from app.domain.features import ChatService
 from common.logger import get_service_logger
-from app.providers import RedisService, get_image_bytes, get_storage_provider
+from app.providers import RedisService, get_image_bytes, get_storage_provider  # RedisService now uses in-memory cache
 
 log = get_service_logger("Chat")
 
@@ -96,7 +96,7 @@ async def chat(request: ChatRequest):
         if len(history) > 40:
             history = history[-40:]
 
-        # Save to Redis (TTL 24h = 86400s)
+        # Save to cache (Note: expire parameter ignored in in-memory mode)
         redis_service.set(history_key, json.dumps(history), expire=86400)
 
     return JSONResponse({"response": response})

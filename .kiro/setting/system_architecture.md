@@ -49,7 +49,7 @@
 1. **Request**: User selects text.
 2. **Process**:
    - **Inference Service** (Local CTranslate2) invoked.
-   - Redis Cache checked first.
+   - In-memory cache checked first.
 3. **Response**: Japanese text returned.
 
 ### 3. Visual Grounding (Evidence)

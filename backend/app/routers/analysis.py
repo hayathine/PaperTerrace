@@ -19,7 +19,7 @@ from app.domain.features import (
     SummaryService,
 )
 from app.domain.services.layout_service import get_layout_service
-from app.providers import RedisService, get_storage_provider
+from app.providers import RedisService, get_storage_provider  # RedisService now uses in-memory cache
 from common.logger import logger
 
 router = APIRouter(tags=["Analysis"])
@@ -37,17 +37,17 @@ layout_service = get_layout_service()
 
 
 def _get_context(session_id: str) -> str | None:
-    """Get paper context from Redis or DB fallback."""
-    # 1. Try Redis
+    """Get paper context from cache or DB fallback."""
+    # 1. Try in-memory cache
     context = redis_service.get(f"session:{session_id}")
     if context:
         logger.debug(
-            f"[_get_context] Redis HIT for session {session_id} (len={len(context)})"
+            f"[_get_context] Cache HIT for session {session_id} (len={len(context)})"
         )
         return context
 
     logger.info(
-        f"[_get_context] Redis MISS for session {session_id}. debug: exists={redis_service.exists(f'session:{session_id}')}"
+        f"[_get_context] Cache MISS for session {session_id}. debug: exists={redis_service.exists(f'session:{session_id}')}"
     )
 
     # 2. Try DB persistence (Session mapping)

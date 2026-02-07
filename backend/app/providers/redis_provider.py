@@ -1,124 +1,46 @@
 import json
 import os
-import time
 from typing import Any
-
-import redis
 
 from common.logger import get_service_logger
 
-log = get_service_logger("Redis")
+log = get_service_logger("Cache")
 
-# Singleton instance
-_redis_client: redis.Redis | None = None
-_redis_error_logged = False
-_last_connection_attempt = 0.0
-RETRY_DELAY = 60  # Retry every 60 seconds if failed
+# Redis is disabled - using in-memory cache only
+_redis_enabled = False
 
 
-def get_redis_client() -> redis.Redis | None:
-    """Get or create a Redis client instance optimized for Memorystore."""
-    global _redis_client, _redis_error_logged, _last_connection_attempt
-
-    if _redis_client is not None:
-        return _redis_client
-
-    # Avoid frequent reconnection attempts if it previously failed
-    current_time = time.time()
-    if _redis_error_logged and (current_time - _last_connection_attempt) < RETRY_DELAY:
-        return None
-
-    host = os.getenv("REDIS_HOST", "localhost")
-    port = int(os.getenv("REDIS_PORT", "6379"))
-    db = int(os.getenv("REDIS_DB", "0"))
-
-    # Cloud environment optimized timeouts
-    socket_timeout = int(os.getenv("REDIS_SOCKET_TIMEOUT", "10"))
-    socket_connect_timeout = int(os.getenv("REDIS_SOCKET_CONNECT_TIMEOUT", "10"))
-
-    _last_connection_attempt = current_time
-    try:
-        # Memorystore optimized settings
-        client = redis.Redis(
-            host=host,
-            port=port,
-            db=db,
-            decode_responses=True,
-            socket_timeout=socket_timeout,
-            socket_connect_timeout=socket_connect_timeout,
-            retry_on_timeout=True,
-            health_check_interval=30,
-        )
-        client.ping()
-        _redis_client = client
-
-        if _redis_error_logged:
-            log.info("connect", "Redis recovered", host=host, port=port)
-            _redis_error_logged = False
-        else:
-            log.info(
-                "connect",
-                "Connected to Redis",
-                host=host,
-                port=port,
-                type="Memorystore" if host != "localhost" else "Local",
-            )
-
-    except redis.ConnectionError as e:
-        if not _redis_error_logged:
-            log.warning(
-                "connect",
-                "Redis connection failed, using memory fallback",
-                host=host,
-                port=port,
-                error=str(e),
-            )
-            _redis_error_logged = True
-        _redis_client = None
-
-    return _redis_client
+def get_redis_client() -> None:
+    """Redis is disabled. Returns None to use in-memory fallback."""
+    return None
 
 
 class RedisService:
-    """Wrapper for Redis operations with in-memory fallback."""
+    """In-memory cache service (Redis disabled)."""
+
+    # Shared memory cache across all instances
+    _shared_cache: dict[str, Any] = {}
 
     def __init__(self):
-        self.memory_cache: dict[str, Any] = {}
+        # Use shared cache to maintain state across service instances
+        self.memory_cache = RedisService._shared_cache
+        if not hasattr(RedisService, '_initialized'):
+            log.info("init", "Using in-memory cache (Redis disabled)")
+            RedisService._initialized = True
 
     def set(self, key: str, value: Any, expire: int | None = None) -> bool:
-        """Set a value in Redis (or memory) with optional expiration."""
+        """Set a value in memory cache. Note: expire parameter is ignored."""
         if isinstance(value, (dict, list)):
             value_str = json.dumps(value)
         else:
             value_str = str(value)
 
-        client = get_redis_client()
-        if client:
-            try:
-                return client.set(key, value_str, ex=expire)
-            except Exception as e:
-                log.error("set", "Operation failed", key=key, error=str(e))
-                global _redis_client
-                _redis_client = None
-                return False
-        else:
-            self.memory_cache[key] = value_str
-            return True
+        self.memory_cache[key] = value_str
+        return True
 
     def get(self, key: str) -> Any | None:
-        """Get a value from Redis (or memory)."""
-        value_str = None
-        client = get_redis_client()
-        if client:
-            try:
-                value_str = client.get(key)
-            except Exception as e:
-                log.error("get", "Operation failed", key=key, error=str(e))
-                global _redis_client
-                _redis_client = None
-                return None
-        else:
-            value_str = self.memory_cache.get(key)
+        """Get a value from memory cache."""
+        value_str = self.memory_cache.get(key)
 
         if value_str is None:
             return None
@@ -129,32 +51,12 @@ class RedisService:
             return value_str
 
     def delete(self, key: str) -> int:
-        """Delete a key."""
-        client = get_redis_client()
-        if client:
-            try:
-                return int(client.delete(key))  # type: ignore
-            except Exception as e:
-                log.error("delete", "Operation failed", key=key, error=str(e))
-                global _redis_client
-                _redis_client = None
-                return 0
-        else:
-            if key in self.memory_cache:
-                del self.memory_cache[key]
-                return 1
-            return 0
+        """Delete a key from memory cache."""
+        if key in self.memory_cache:
+            del self.memory_cache[key]
+            return 1
+        return 0
 
     def exists(self, key: str) -> bool:
-        """Check if key exists."""
-        client = get_redis_client()
-        if client:
-            try:
-                return bool(client.exists(key))
-            except Exception as e:
-                log.error("exists", "Operation failed", key=key, error=str(e))
-                global _redis_client
-                _redis_client = None
-                return False
-        else:
-            return key in self.memory_cache
+        """Check if key exists in memory cache."""
+        return key in self.memory_cache

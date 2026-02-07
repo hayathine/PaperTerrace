@@ -248,27 +248,13 @@ if os.path.exists(dist_dir):
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint with Redis status."""
-    from app.providers.redis_provider import get_redis_client
-
+    """Health check endpoint."""
     health_status = {
-        "status": "ok",
-        "timestamp": time.time(),
-        "services": {"redis": "unknown"},
+        "status": "healthy",
+        "timestamp": datetime.now().isoformat(),
+        "cache": "in-memory",
     }
-
-    # Check Redis connection
-    try:
-        redis_client = get_redis_client()
-        if redis_client:
-            redis_client.ping()
-            health_status["services"]["redis"] = "connected"
-        else:
-            health_status["services"]["redis"] = "fallback"
-    except Exception as e:
-        health_status["services"]["redis"] = f"error: {str(e)}"
-
-    return health_status
+    return JSONResponse(health_status)
 
 
 @app.get("/api/config")

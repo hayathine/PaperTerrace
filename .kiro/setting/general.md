@@ -25,7 +25,7 @@ Ensure consistency with these technologies:
 - **Backend**: Python (FastAPI), SQLAlchemy
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS
 - **Database**: SQLite (Local), Cloud SQL (Production)
-- **Cache**: Redis
+- **Cache**: In-Memory
 
 ## 📏 Common Coding Standards
 
