@@ -131,7 +131,7 @@ class InferenceServiceClient:
     async def analyze_layout(
         self, pdf_path: str, pages: list[int] | None = None
     ) -> list[dict[str, Any]]:
-        """レイアウト解析の実行"""
+        """レイアウト解析の実行（PDF）"""
         request_data = LayoutAnalysisRequest(pdf_path=pdf_path, pages=pages)
 
         try:
@@ -152,6 +152,31 @@ class InferenceServiceClient:
 
         except Exception as e:
             logger.error(f"レイアウト解析エラー: {e}")
+            raise
+
+    async def analyze_image_async(self, image_bytes: bytes) -> list[dict[str, Any]]:
+        """レイアウト解析の実行（画像データ）"""
+        try:
+            logger.info("画像データによるレイアウト解析リクエスト")
+
+            # multipart/form-dataで画像を送信
+            files = {"file": ("image.png", image_bytes, "image/png")}
+
+            response = await self._make_request_with_retry(
+                "POST", "/api/v1/analyze-image", files=files
+            )
+
+            if response.get("success"):
+                logger.info(
+                    f"レイアウト解析完了: {response.get('processing_time', 0):.2f}秒"
+                )
+                return response.get("results", [])
+            else:
+                error_msg = response.get("message", "不明なエラー")
+                raise InferenceServiceError(f"レイアウト解析失敗: {error_msg}")
+
+        except Exception as e:
+            logger.error(f"画像レイアウト解析エラー: {e}")
             raise
 
     async def translate_text(self, text: str, target_lang: str = "ja") -> str:

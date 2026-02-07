@@ -36,34 +36,26 @@ class FigureService:
 
         # 0. Use ServiceB Layout Analysis if available (PRIORITY for CPU optimization)
         try:
-            if pdf_path:
-                # ServiceBを使用した非同期レイアウト解析
-                local_results = await self.layout_service.detect_layout_async(
-                    pdf_path, [page_num]
-                )
-                for res in local_results:
-                    if (
-                        res.get("class") in ["figure", "table", "equation"]
-                        and res.get("page") == page_num
-                    ):
-                        label = res["class"]
-                        # Convert pixel coordinates to PDF points
-                        bbox = res["bbox"]
-                        if len(bbox) == 4:
-                            # bbox format: [x1, y1, x2, y2]
-                            bbox = [b / zoom for b in bbox]
-                            candidates.append({"bbox": bbox, "label": label})
-            else:
-                # フォールバック: 従来の同期処理（非推奨）
-                logger.warning(
-                    "PDF path not provided, falling back to synchronous layout detection"
-                )
-                local_results = self.layout_service.detect_layout(img_bytes)
-                for res in local_results:
-                    if res["label"] in ["figure", "table", "equation", "chart"]:
-                        label = res["label"] if res["label"] != "chart" else "figure"
-                        # Convert pixel coordinates (at resolution) to PDF points
-                        bbox = [b / zoom for b in res["bbox"]]
+            # ServiceBを使用した非同期レイアウト解析（画像データを直接送信）
+            local_results = await self.layout_service.detect_layout_from_image_async(
+                img_bytes
+            )
+            for res in local_results:
+                # 結果の形式: {"bbox": {"x_min": ..., "y_min": ..., "x_max": ..., "y_max": ...}, "class_name": ..., "score": ...}
+                class_name = res.get("class_name", "")
+                if class_name in ["figure", "table", "equation"]:
+                    label = class_name
+                    # Convert pixel coordinates to PDF points
+                    bbox_dict = res.get("bbox", {})
+                    bbox = [
+                        bbox_dict.get("x_min", 0),
+                        bbox_dict.get("y_min", 0),
+                        bbox_dict.get("x_max", 0),
+                        bbox_dict.get("y_max", 0),
+                    ]
+                    if len(bbox) == 4 and bbox[2] > bbox[0] and bbox[3] > bbox[1]:
+                        # bbox format: [x1, y1, x2, y2]
+                        bbox = [b / zoom for b in bbox]
                         candidates.append({"bbox": bbox, "label": label})
         except Exception as e:
             logger.warning(

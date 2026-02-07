@@ -137,6 +137,52 @@ class PaddleLayoutService:
             log.error("detect_layout_async", f"Unexpected error: {e}")
             return []
 
+    async def detect_layout_from_image_async(
+        self, image_bytes: bytes
+    ) -> list[dict[str, Any]]:
+        """
+        画像データから直接レイアウト解析を実行（ServiceB経由）
+
+        Parameters
+        ----------
+        image_bytes : bytes
+            解析対象の画像データ（PNG/JPEG等）
+
+        Returns
+        -------
+        list[dict[str, Any]]
+            検出されたレイアウト要素のリスト
+            形式: [{"bbox": {"x_min": ..., "y_min": ..., "x_max": ..., "y_max": ...}, "class_name": ..., "score": ...}, ...]
+        """
+        try:
+            log.info(
+                "detect_layout_from_image_async",
+                f"Starting layout analysis for image ({len(image_bytes)} bytes)",
+            )
+
+            client = await get_inference_client()
+            results = await client.analyze_image_async(image_bytes)
+
+            log.info(
+                "detect_layout_from_image_async",
+                f"Layout analysis completed: {len(results)} elements detected",
+            )
+            return results
+
+        except CircuitBreakerError as e:
+            log.error("detect_layout_from_image_async", f"Circuit breaker error: {e}")
+            return []
+
+        except InferenceServiceError as e:
+            log.error(
+                "detect_layout_from_image_async", f"Inference service error: {e}"
+            )
+            return []
+
+        except Exception as e:
+            log.error("detect_layout_from_image_async", f"Unexpected error: {e}")
+            return []
+
     def detect_layout(self, image_bytes: bytes) -> list[dict[str, Any]]:
         """
         同期版レイアウト検出（後方互換性のため保持）

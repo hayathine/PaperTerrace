@@ -258,11 +258,13 @@ class LayoutAnalysisService:
             for res in valid_predictions:
                 class_id, score, xmin, ymin, xmax, ymax = res
 
-                # 座標を元のサイズに復元
-                x1 = max(0, min(ori_w, int(xmin * scale_x)))
-                y1 = max(0, min(ori_h, int(ymin * scale_y)))
-                x2 = max(0, min(ori_w, int(xmax * scale_x)))
-                y2 = max(0, min(ori_h, int(ymax * scale_y)))
+                # 座標を元のサイズに復元（正しい変換: 推論サイズ → 元画像サイズ）
+                # xmin, ymin, xmax, ymaxは推論時のサイズ（target_size）での座標
+                # 元画像サイズに戻すには scale で割る（または 1/scale を掛ける）
+                x1 = max(0, min(ori_w, int(xmin / scale_x)))
+                y1 = max(0, min(ori_h, int(ymin / scale_y)))
+                x2 = max(0, min(ori_w, int(xmax / scale_x)))
+                y2 = max(0, min(ori_h, int(ymax / scale_y)))
 
                 box = [x1, y1, x2, y2]
 
