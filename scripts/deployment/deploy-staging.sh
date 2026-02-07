@@ -31,6 +31,16 @@ SERVICEB_NAME="paperterrace-inference-staging"
 SERVICEA_IMAGE="${ARTIFACT_REGISTRY_HOST}/${PROJECT_ID}/${REPO_NAME}/app:staging"
 SERVICEB_IMAGE="${ARTIFACT_REGISTRY_HOST}/${PROJECT_ID}/${REPO_NAME}/inference:staging"
 
+# リソース設定の取得 (JSONより)
+get_config() {
+    python3 -c "import json; print(json.load(open('config/resources.json'))['$1']['$2'])"
+}
+
+BE_CPU=$(get_config "backend_staging" "cpu")
+BE_MEM=$(get_config "backend_staging" "memory")
+INF_CPU=$(get_config "inference_staging" "cpu")
+INF_MEM=$(get_config "inference_staging" "memory")
+
 # デプロイ対象の選択
 DEPLOY_TARGET=${1:-all}
 
@@ -74,8 +84,8 @@ deploy_servicea() {
         --region ${REGION} \
         --platform managed \
         --allow-unauthenticated \
-        --memory 1Gi \
-        --cpu 2 \
+        --memory ${BE_MEM} \
+        --cpu ${BE_CPU} \
         --min-instances 0 \
         --max-instances 20 \
         --concurrency 80 \
@@ -106,8 +116,8 @@ deploy_serviceb() {
         --region ${REGION} \
         --platform managed \
         --allow-unauthenticated \
-        --memory 2Gi \
-        --cpu 2 \
+        --memory ${INF_MEM} \
+        --cpu ${INF_CPU} \
         --min-instances 0 \
         --max-instances 10 \
         --concurrency 10 \

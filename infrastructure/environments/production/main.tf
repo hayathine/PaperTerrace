@@ -28,6 +28,11 @@ provider "google-beta" {
   region  = var.region
 }
 
+# Load Resource Configuration
+locals {
+  resources = jsondecode(file("${path.module}/../../../config/resources.json"))
+}
+
 # Enable required APIs
 resource "google_project_service" "apis" {
   for_each = toset([
@@ -160,7 +165,11 @@ module "cloud_run" {
   service_account_email = module.iam.service_account_email
 
   service_name         = "paperterrace"
-  min_instance_count   = 0
+  min_instance_count   = local.resources.backend.min_instance_count
+  max_instance_count   = local.resources.backend.max_instances
+  cpu                  = local.resources.backend.cpu
+  memory               = local.resources.backend.memory
+  concurrency          = local.resources.backend.concurrency
 
   # redis_host = module.redis_production.redis_host
   # redis_port = tostring(module.redis_production.redis_port)

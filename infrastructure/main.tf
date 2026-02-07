@@ -30,6 +30,11 @@ provider "google-beta" {
   region  = var.region
 }
 
+# Load Resource Configuration
+locals {
+  resources = jsondecode(file("${path.module}/../config/resources.json"))
+}
+
 # Enable required APIs
 resource "google_project_service" "apis" {
   for_each = toset([
@@ -142,7 +147,11 @@ module "cloud_run" {
 
   # Pass new variables explicitly (optional since defaults are set)
   service_name         = "paperterrace"
-  min_instance_count   = 1
+  min_instance_count   = local.resources.backend.min_instance_count
+  max_instance_count   = local.resources.backend.max_instances
+  cpu                  = local.resources.backend.cpu
+  memory               = local.resources.backend.memory
+  concurrency          = local.resources.backend.concurrency
 
   # Redis configuration (Disabled to save cost)
   # redis_host = module.redis_production.redis_host
@@ -199,7 +208,11 @@ module "cloud_run_staging" {
   service_name          = "paperterrace-staging"
   db_name               = google_sql_database.staging[0].name
   db_user               = module.cloud_sql.database_user # Share same user
-  min_instance_count    = 0 # Scale to zero to save costs
+  min_instance_count    = local.resources.backend_staging.min_instance_count
+  max_instance_count    = local.resources.backend_staging.max_instances
+  cpu                  = local.resources.backend_staging.cpu
+  memory               = local.resources.backend_staging.memory
+  concurrency          = local.resources.backend_staging.concurrency
 
   # Pass service account email
   service_account_email = module.iam.service_account_email

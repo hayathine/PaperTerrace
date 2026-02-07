@@ -19,8 +19,8 @@ resource "google_cloud_run_v2_service" "main" {
 
       resources {
         limits = {
-          cpu    = "1"
-          memory = "1Gi"
+          cpu    = var.cpu
+          memory = var.memory
         }
         cpu_idle = true
       }
@@ -124,7 +124,7 @@ resource "google_cloud_run_v2_service" "main" {
 
     scaling {
       min_instance_count = var.min_instance_count
-      max_instance_count = 10
+      max_instance_count = var.max_instance_count
     }
 
     vpc_access {
@@ -136,13 +136,14 @@ resource "google_cloud_run_v2_service" "main" {
     }
 
     timeout = "300s"
+    max_instance_request_concurrency = var.concurrency
 
     annotations = {
       "run.googleapis.com/cloudsql-instances" = var.cloud_sql_connection
       "run.googleapis.com/startup-cpu-boost" = "true"
       "run.googleapis.com/execution-environment" = "gen2"
       # アイドルタイムアウト設定（デフォルトは15分、最大60分）
-      "autoscaling.knative.dev/maxScale" = "10"
+      "autoscaling.knative.dev/maxScale" = tostring(var.max_instance_count)
       "run.googleapis.com/cpu-throttling" = "false"
     }
   }

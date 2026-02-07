@@ -8,6 +8,46 @@ vars:
   PROJECT_ID: gen-lang-client-0800253336
   REGION: asia-northeast1
 
+  # Resource Configurations from JSON
+  BE_CPU:
+    {
+      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["backend"]["cpu"])''',
+    }
+  BE_MEM:
+    {
+      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["backend"]["memory"])''',
+    }
+  BE_STG_CPU:
+    {
+      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["backend_staging"]["cpu"])''',
+    }
+  BE_STG_MEM:
+    {
+      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["backend_staging"]["memory"])''',
+    }
+
+  INF_CPU:
+    {
+      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["inference"]["cpu"])''',
+    }
+  INF_MEM:
+    {
+      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["inference"]["memory"])''',
+    }
+  INF_STG_CPU:
+    {
+      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["inference_staging"]["cpu"])''',
+    }
+  INF_STG_MEM:
+    {
+      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["inference_staging"]["memory"])''',
+    }
+
+  BUILD_MACHINE:
+    {
+      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["build"]["machine_type"])''',
+    }
+
 tasks:
   # ============================================================================
   # Development Tasks
@@ -172,8 +212,8 @@ tasks:
           --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:staging \
           --region {{.REGION}} \
           --allow-unauthenticated \
-          --memory 1Gi \
-          --cpu 1 \
+          --memory {{.BE_STG_MEM}} \
+          --cpu {{.BE_STG_CPU}} \
           --min-instances 0 \
           --max-instances 20 \
           --concurrency 80 \
@@ -194,8 +234,8 @@ tasks:
           --image {{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/inference:staging \
           --region {{.REGION}} \
           --allow-unauthenticated \
-          --memory 1Gi \
-          --cpu 2 \
+          --memory {{.INF_STG_MEM}} \
+          --cpu {{.INF_STG_CPU}} \
           --min-instances 0 \
           --max-instances 10 \
           --concurrency 10 \

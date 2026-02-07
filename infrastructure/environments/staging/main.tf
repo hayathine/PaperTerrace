@@ -28,6 +28,11 @@ provider "google-beta" {
   region  = var.region
 }
 
+# Load Resource Configuration
+locals {
+  resources = jsondecode(file("${path.module}/../../../config/resources.json"))
+}
+
 # Read Production State
 data "terraform_remote_state" "production" {
   backend = "gcs"
@@ -82,7 +87,11 @@ module "cloud_run_staging" {
   service_name          = "paperterrace-staging"
   db_name               = google_sql_database.staging.name
   db_user               = data.terraform_remote_state.production.outputs.cloud_sql_db_user
-  min_instance_count    = 0
+  min_instance_count    = local.resources.backend_staging.min_instance_count
+  max_instance_count    = local.resources.backend_staging.max_instances
+  cpu                  = local.resources.backend_staging.cpu
+  memory               = local.resources.backend_staging.memory
+  concurrency          = local.resources.backend_staging.concurrency
   
   # Redis
   # redis_host = module.redis_staging.redis_host

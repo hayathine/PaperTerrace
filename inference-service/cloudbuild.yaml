@@ -22,37 +22,45 @@ steps:
 
   # Cloud Run へのデプロイ
   - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
-    entrypoint: "gcloud"
+    entrypoint: "bash"
     args:
-      [
-        "run",
-        "deploy",
-        "paperterrace-inference",
-        "--image",
-        "gcr.io/$PROJECT_ID/paperterrace-inference:$COMMIT_SHA",
-        "--region",
-        "asia-northeast1",
-        "--platform",
-        "managed",
-        "--allow-unauthenticated",
-        "--memory",
-        "2Gi",
-        "--cpu",
-        "2",
-        "--min-instances",
-        "0",
-        "--max-instances",
-        "10",
-        "--concurrency",
-        "10",
-        "--cpu-always-allocated",
-        "--set-env-vars",
-        "ORT_INTRA_THREADS=4,ORT_INTER_THREADS=2,CT2_INTER_THREADS=1,CT2_INTRA_THREADS=4,LOG_LEVEL=INFO",
-        "--timeout",
-        "300",
-        "--execution-environment",
-        "gen2",
-      ]
+      - "-c"
+      - |
+        # config/resources.json が ルートにあると仮定
+        # cloudbuild は通常リポジトリルートで実行される。ディレクトリが inference-service なので ../config
+        # もし context が inference-service のみなら、ファイルが見えないので注意が必要。
+        # ここでは確実に読み込めるように python3 を使う。
+
+        CONF="../config/resources.json"
+        if [ ! -f "$CONF" ]; then
+          # Fallback if config is not available in context (e.g. subtree build)
+          CPU="2"
+          MEM="2Gi"
+          MIN="0"
+          MAX="10"
+          CON="10"
+        else
+          CPU=$(python3 -c "import json; print(json.load(open('$CONF'))['inference']['cpu'])")
+          MEM=$(python3 -c "import json; print(json.load(open('$CONF'))['inference']['memory'])")
+          MIN=$(python3 -c "import json; print(json.load(open('$CONF'))['inference']['min_instances'])")
+          MAX=$(python3 -c "import json; print(json.load(open('$CONF'))['inference']['max_instances'])")
+          CON=$(python3 -c "import json; print(json.load(open('$CONF'))['inference']['concurrency'])")
+        fi
+
+        gcloud run deploy paperterrace-inference \
+          --image gcr.io/$PROJECT_ID/paperterrace-inference:$COMMIT_SHA \
+          --region asia-northeast1 \
+          --platform managed \
+          --allow-unauthenticated \
+          --memory $MEM \
+          --cpu $CPU \
+          --min-instances $MIN \
+          --max-instances $MAX \
+          --concurrency $CON \
+          --cpu-always-allocated \
+          --set-env-vars "ORT_INTRA_THREADS=4,ORT_INTER_THREADS=2,CT2_INTER_THREADS=1,CT2_INTRA_THREADS=4,LOG_LEVEL=INFO" \
+          --timeout 300 \
+          --execution-environment gen2
 
 # ビルド設定
 options:

@@ -20,6 +20,30 @@ variable "min_instance_count" {
   default     = 0
 }
 
+variable "max_instance_count" {
+  description = "Maximum number of instances"
+  type        = number
+  default     = 10
+}
+
+variable "cpu" {
+  description = "CPU limit"
+  type        = string
+  default     = "1"
+}
+
+variable "memory" {
+  description = "Memory limit"
+  type        = string
+  default     = "1Gi"
+}
+
+variable "concurrency" {
+  description = "Max concurrent requests per instance"
+  type        = number
+  default     = 80
+}
+
 variable "image_url" {
   description = "Docker image URL"
   type        = string
