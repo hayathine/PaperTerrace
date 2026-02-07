@@ -98,11 +98,18 @@ def configure_logging(log_level: str = "INFO"):
         cache_logger_on_first_use=True,
     )
 
+    is_cloud_run = os.getenv("K_SERVICE") is not None
+
+    if is_cloud_run:
+        renderer = structlog.processors.JSONRenderer(ensure_ascii=False)
+    else:
+        renderer = structlog.dev.ConsoleRenderer(colors=True)
+
     formatter = structlog.stdlib.ProcessorFormatter(
         foreign_pre_chain=shared_processors,
         processors=[
             structlog.stdlib.ProcessorFormatter.remove_processors_meta,
-            structlog.processors.JSONRenderer(ensure_ascii=False),
+            renderer,
         ],
     )
 

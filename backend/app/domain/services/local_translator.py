@@ -5,12 +5,13 @@
 
 import os
 
-from common.logger import get_service_logger
 from app.providers.inference_client import (
     CircuitBreakerError,
     InferenceServiceError,
     get_inference_client,
 )
+
+from common.logger import get_service_logger
 
 log = get_service_logger("LocalTranslator")
 
@@ -54,9 +55,7 @@ class LocalTranslator:
         except Exception as e:
             log.warning("prewarm", f"ServiceB warmup failed: {e}")
 
-    async def translate_async(
-        self, text: str, src_lang: str = "en", tgt_lang: str = "ja"
-    ) -> str | None:
+    async def translate_async(self, text: str, tgt_lang: str = "ja") -> str | None:
         """
         非同期翻訳（ServiceB経由）
         """
@@ -67,7 +66,7 @@ class LocalTranslator:
             log.debug("translate_async", f"Translating: {text[:50]}...")
 
             client = await get_inference_client()
-            translation = await client.translate_text(text, src_lang, tgt_lang)
+            translation = await client.translate_text(text, tgt_lang)
 
             log.debug("translate_async", f"Translation result: {translation[:50]}...")
             return translation
@@ -85,41 +84,6 @@ class LocalTranslator:
         except Exception as e:
             log.error("translate_async", f"Unexpected error: {e}")
             return text
-
-    async def translate_batch_async(
-        self, texts: list[str], src_lang: str = "en", tgt_lang: str = "ja"
-    ) -> list[str]:
-        """
-        バッチ翻訳（ServiceB経由）
-        """
-        if not texts:
-            return []
-
-        try:
-            log.info("translate_batch_async", f"Batch translating: {len(texts)} texts")
-
-            client = await get_inference_client()
-            translations = await client.translate_batch(texts, src_lang, tgt_lang)
-
-            log.info(
-                "translate_batch_async",
-                f"Batch translation completed: {len(translations)} results",
-            )
-            return translations
-
-        except CircuitBreakerError as e:
-            log.error("translate_batch_async", f"Circuit breaker error: {e}")
-            # フォールバック: 元のテキストリストを返す
-            return texts
-
-        except InferenceServiceError as e:
-            log.error("translate_batch_async", f"Inference service error: {e}")
-            # フォールバック: 元のテキストリストを返す
-            return texts
-
-        except Exception as e:
-            log.error("translate_batch_async", f"Unexpected error: {e}")
-            return texts
 
     def translate(
         self, text: str, src_lang: str = "en", tgt_lang: str = "ja"

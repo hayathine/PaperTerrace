@@ -4,12 +4,22 @@ CTranslate2 を使用したM2M100推論
 """
 
 import asyncio
+import logging
 import os
+import sys
 
 import ctranslate2
 import sentencepiece as spm
 
-from common.logger import logger
+from .utils import LANG_CODES, get_m2m100_lang_code
+
+# ログ設定（標準出力）
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    handlers=[logging.StreamHandler(sys.stdout)],
+)
+logger = logging.getLogger(__name__)
 
 
 class TranslationService:
@@ -18,6 +28,7 @@ class TranslationService:
     def __init__(self):
         self.translator: ctranslate2.Translator | None = None
         self.tokenizer: spm.SentencePieceProcessor | None = None
+        self.src_lang: str | None = "en"
 
         self.model_path = os.getenv("LOCAL_MODEL_PATH", "models/m2m100_ct2")
 
@@ -25,26 +36,23 @@ class TranslationService:
         self.ct2_inter_threads = int(os.getenv("CT2_INTER_THREADS", "1"))
         self.ct2_intra_threads = int(os.getenv("CT2_INTRA_THREADS", "4"))
 
-        # 翻訳パラメータ
-        self.beam_size = 4
-        self.repetition_penalty = 1.2
-        self.no_repeat_ngram_size = 3
-        self.max_decoding_length = 256
+        # 翻訳パラメータ (単語翻訳用に最適化)
+        self.beam_size = int(os.getenv("TRANSLATION_BEAM_SIZE", "1"))
+        self.repetition_penalty = float(
+            os.getenv("TRANSLATION_REPETITION_PENALTY", "1.1")
+        )
+        self.no_repeat_ngram_size = int(
+            os.getenv("TRANSLATION_NO_REPEAT_NGRAM_SIZE", "1")
+        )
+        self.max_decoding_length = int(os.getenv("TRANSLATION_MAX_LENGTH", "32"))
 
         # 言語コードマッピング
-        self.lang_codes = {
-            "en": "__en__",
-            "ja": "__ja__",
-            "zh": "__zh__",
-            "ko": "__ko__",
-            "fr": "__fr__",
-            "de": "__de__",
-            "es": "__es__",
-        }
+        self.lang_codes = LANG_CODES
 
     async def initialize(self):
         """モデルの初期化"""
         print("翻訳モデルの初期化を開始...")
+        logger.info("翻訳モデルの初期化を開始...")
 
         # 開発環境でのスキップオプション
         if os.getenv("SKIP_MODEL_LOADING", "false").lower() == "true":
@@ -113,39 +121,21 @@ class TranslationService:
             self.tokenizer = None
         logger.info("翻訳サービスをクリーンアップしました")
 
-    def _prepare_input(
-        self, text: str, source_lang: str, target_lang: str
-    ) -> list[str]:
-        """入力テキストの準備"""
-        # 言語コード変換
+    def _prepare_input(self, text: str, target_lang: str) -> list[str]:
+        """入力テキストの準備
 
-        tgt_code = self.lang_codes.get(target_lang, f"__{target_lang}__")
+        M2M100では、入力テキストをそのままトークン化し、
+        target_prefixでターゲット言語を指定する
+        """
 
-        # M2M100形式: [target_lang] source_text
-        formatted_text = f"{tgt_code} {text}"
+        # Tokenize using SentencePiece
+        pieces = self.tokenizer.encode_as_pieces(text)
+        src_token = get_m2m100_lang_code(self.src_lang)
+        return [src_token] + pieces + ["</s>"]
 
-        # トークン化
-        tokens = self.tokenizer.encode(formatted_text, out_type=str)
-
-        return tokens
-
-    def _postprocess_output(self, tokens: list[str]) -> str:
-        """出力の後処理"""
-        # トークンをテキストに変換
-        text = self.tokenizer.decode(tokens)
-
-        # 言語コードを除去
-        for lang_code in self.lang_codes.values():
-            text = text.replace(lang_code, "").strip()
-
-        return text
-
-    async def translate(
-        self, text: str, source_lang: str = "en", target_lang: str = "ja"
-    ) -> str:
+    async def translate(self, text: str, target_lang: str = "ja") -> str:
         """単一テキストの翻訳"""
         if not self.translator or not self.tokenizer:
-            # 開発モードではダミー翻訳を返す
             if (
                 os.getenv("DEV_MODE", "false").lower() == "true"
                 or os.getenv("SKIP_MODEL_LOADING", "false").lower() == "true"
@@ -160,8 +150,11 @@ class TranslationService:
             return ""
 
         try:
-            # 入力準備
-            input_tokens = self._prepare_input(text, source_lang, target_lang)
+            # Encode
+            input_tokens = self._prepare_input(text, target_lang)
+
+            # ターゲット言語コードを取得
+            tgt_code = get_m2m100_lang_code(target_lang)
 
             # 翻訳実行（非同期実行のためスレッドプールを使用）
             loop = asyncio.get_event_loop()
@@ -169,6 +162,7 @@ class TranslationService:
                 None,
                 lambda: self.translator.translate_batch(
                     [input_tokens],
+                    target_prefix=[[tgt_code]],
                     beam_size=self.beam_size,
                     repetition_penalty=self.repetition_penalty,
                     no_repeat_ngram_size=self.no_repeat_ngram_size,
@@ -176,10 +170,11 @@ class TranslationService:
                 ),
             )
 
-            # 結果の後処理
-            if results and results[0].hypotheses:
+            # Decode
+            if results and results[0].hypotheses[0]:
                 output_tokens = results[0].hypotheses[0]
-                translation = self._postprocess_output(output_tokens)
+                translation = self._postprocess_output(output_tokens, tgt_code)
+                logger.info(f"翻訳結果: {text} -> {translation}")
                 return translation
             else:
                 logger.warning("翻訳結果が空です")
@@ -193,8 +188,17 @@ class TranslationService:
                 return f"[翻訳エラー・ダミー] {text} -> {target_lang}"
             raise RuntimeError(f"翻訳処理に失敗しました: {e}") from e
 
+    def _postprocess_output(self, tokens: list[str], target_lang: str) -> str:
+        """出力の後処理"""
+        # トークンをテキストに変換
+        if tokens and tokens[0] == target_lang:
+            tokens = tokens[1:]
+        text = self.tokenizer.decode_pieces(tokens)
+
+        return text.strip()
+
     async def translate_batch(
-        self, texts: list[str], source_lang: str = "en", target_lang: str = "ja"
+        self, texts: list[str], target_lang: str = "ja"
     ) -> list[str]:
         """複数テキストの一括翻訳"""
         if not self.translator or not self.tokenizer:
@@ -213,11 +217,14 @@ class TranslationService:
             return []
 
         try:
+            # ターゲット言語コードを取得
+            tgt_code = get_m2m100_lang_code(target_lang)
+
             # 入力準備
             input_batches = []
             for text in texts:
                 if text.strip():
-                    tokens = self._prepare_input(text, source_lang, target_lang)
+                    tokens = self._prepare_input(text, target_lang)
                     input_batches.append(tokens)
                 else:
                     input_batches.append([])
@@ -228,10 +235,11 @@ class TranslationService:
                 None,
                 lambda: self.translator.translate_batch(
                     input_batches,
-                    beam_size=self.beam_size,
-                    repetition_penalty=self.repetition_penalty,
-                    no_repeat_ngram_size=self.no_repeat_ngram_size,
-                    max_decoding_length=self.max_decoding_length,
+                    target_prefix=[[tgt_code]] * len(input_batches),
+                    # beam_size=self.beam_size,
+                    # repetition_penalty=self.repetition_penalty,
+                    # no_repeat_ngram_size=self.no_repeat_ngram_size,
+                    # max_decoding_length=self.max_decoding_length,
                 ),
             )
 

@@ -60,7 +60,7 @@ test_translation() {
     
     local response=$(curl -s -X POST "$serviceb_url/api/v1/translate" \
         -H "Content-Type: application/json" \
-        -d '{"text": "Hello world", "source_lang": "en", "target_lang": "ja"}' \
+        -d '{"text": "Hello world", "target_lang": "ja"}' \
         -w "%{http_code}" -o /tmp/translation_response)
     
     if [ "$response" = "200" ]; then
@@ -138,7 +138,7 @@ load_test() {
         (
             response=$(curl -s -X POST "$serviceb_url/api/v1/translate" \
                 -H "Content-Type: application/json" \
-                -d "{\"text\": \"Test message $i\", \"source_lang\": \"en\", \"target_lang\": \"ja\"}" \
+                -d "{\"text\": \"Test message $i\", \"target_lang\": \"ja\"}" \
                 -w "%{http_code}" -o /dev/null)
             if [ "$response" = "200" ]; then
                 echo "SUCCESS"

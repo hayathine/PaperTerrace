@@ -43,9 +43,7 @@ dependencies = [
     # Utilities
     "structlog>=24.1.0",
     "chardet>=5.2.0",
-    "datetime>=6.0",
-    "dotenv>=0.9.9",
-    "pip>=25.3",
+    "python-dotenv>=1.0.1",
     "email-validator>=2.3.0",
     "go-task-bin>=3.48.0",
     "typer>=0.21.1",

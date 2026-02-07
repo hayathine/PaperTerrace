@@ -17,7 +17,6 @@ class LayoutAnalysisResponse(BaseModel):
 
 class TranslationRequest(BaseModel):
     text: str
-    source_lang: str = "en"
     target_lang: str = "ja"
 
 
@@ -30,7 +29,6 @@ class TranslationResponse(BaseModel):
 
 class TranslationBatchRequest(BaseModel):
     texts: List[str]
-    source_lang: str = "en"
     target_lang: str = "ja"
 
 

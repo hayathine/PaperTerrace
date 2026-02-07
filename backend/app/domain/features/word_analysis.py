@@ -2,7 +2,6 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 
 from app.domain.prompts import (
-    ANALYSIS_BATCH_TRANSLATE_PROMPT,
     ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT,
     CORE_SYSTEM_PROMPT,
 )
@@ -28,29 +27,9 @@ class WordAnalysisService:
         self.word_cache = {}  # lemma -> bool (exists in dictionary)
         self.translation_cache = {}  # lemma -> translation
 
-    async def lookup_or_translate(
+    async def translate(
         self, lemma: str, lang: str = "ja", context: str | None = None
     ) -> dict | None:
-        """
-        Lookup word in dictionary or translate it using AI.
-        """
-        # 1. Local Memory Cache
-        if lemma in self.translation_cache:
-            return {
-                "word": lemma,
-                "translation": self.translation_cache[lemma],
-                "source": "Memory Cache",
-            }
-
-        # 2. Redis Cache
-        cached_trans = self.redis.get(f"trans:{lang}:{lemma}")
-        if cached_trans:
-            self.translation_cache[lemma] = cached_trans
-            return {
-                "word": lemma,
-                "translation": cached_trans,
-                "source": "Redis Cache",
-            }
 
         # 3.5 Local Machine Translation (M2M100) - ServiceB経由
         try:
@@ -77,50 +56,7 @@ class WordAnalysisService:
 
         return None
 
-    async def batch_translate(
-        self, words: list[str], lang: str = "ja"
-    ) -> dict[str, str]:
-        """
-        Batch translate multiple words.
-        """
-        lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
-
-        # Filter out already cached words
-        words_to_translate = [w for w in words if w not in self.translation_cache]
-        if not words_to_translate:
-            return {}
-
-        prompt = ANALYSIS_BATCH_TRANSLATE_PROMPT.format(
-            lang_name=lang_name, words_list="\n".join(words_to_translate)
-        )
-
-        result = {}
-        try:
-            response_text = await self.ai_provider.generate(
-                prompt,
-                model=self.translate_model,
-                system_instruction=CORE_SYSTEM_PROMPT,
-            )
-
-            for line in response_text.split("\n"):
-                if ":" in line:
-                    parts = line.split(":", 1)
-                    if len(parts) == 2:
-                        word = parts[0].strip().lower().lstrip("- ")
-                        translation = parts[1].strip()
-                        if word and translation:
-                            result[word] = translation
-
-            # Update caches
-            self.translation_cache.update(result)
-            for lemma, trans in result.items():
-                self.redis.set(f"trans:{lang}:{lemma}", trans, expire=604800)
-
-        except Exception as e:
-            logger.error(f"Batch translation failed: {e}")
-
-        return result
-
+    # geminiを用いた翻訳
     async def translate_with_context(
         self, word: str, context: str, lang: str = "ja"
     ) -> dict | None:

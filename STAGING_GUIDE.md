@@ -51,39 +51,40 @@ task staging:test:layout
 
 ### デプロイ関連
 
-| タスク | 説明 |
-|--------|------|
-| `task staging:serviceb:deploy` | ServiceB（推論サービス）のみデプロイ |
-| `task staging:servicea:deploy` | ServiceA（メインサービス）のみデプロイ |
-| `task staging:deploy:microservices` | 両方のサービスを一括デプロイ |
+| タスク                              | 説明                                   |
+| ----------------------------------- | -------------------------------------- |
+| `task staging:serviceb:deploy`      | ServiceB（推論サービス）のみデプロイ   |
+| `task staging:servicea:deploy`      | ServiceA（メインサービス）のみデプロイ |
+| `task staging:deploy:microservices` | 両方のサービスを一括デプロイ           |
 
 ### 監視・ログ
 
-| タスク | 説明 |
-|--------|------|
-| `task staging:logs:servicea` | ServiceAのログを表示 |
-| `task staging:logs:serviceb` | ServiceBのログを表示 |
+| タスク                            | 説明                             |
+| --------------------------------- | -------------------------------- |
+| `task staging:logs:servicea`      | ServiceAのログを表示             |
+| `task staging:logs:serviceb`      | ServiceBのログを表示             |
 | `task staging:logs:tail:servicea` | ServiceAのログをリアルタイム表示 |
 | `task staging:logs:tail:serviceb` | ServiceBのログをリアルタイム表示 |
 
 ### テスト
 
-| タスク | 説明 |
-|--------|------|
-| `task staging:health` | 両方のサービスのヘルスチェック |
-| `task staging:test:translation` | 翻訳機能のテスト |
-| `task staging:test:layout` | レイアウト解析機能のテスト |
+| タスク                          | 説明                           |
+| ------------------------------- | ------------------------------ |
+| `task staging:health`           | 両方のサービスのヘルスチェック |
+| `task staging:test:translation` | 翻訳機能のテスト               |
+| `task staging:test:layout`      | レイアウト解析機能のテスト     |
 
 ### 管理
 
-| タスク | 説明 |
-|--------|------|
-| `task staging:urls` | サービスURLの表示 |
+| タスク                            | 説明                 |
+| --------------------------------- | -------------------- |
+| `task staging:urls`               | サービスURLの表示    |
 | `task staging:stop:microservices` | 両方のサービスを停止 |
 
 ## Staging環境の設定
 
 ### ServiceA（メインサービス）
+
 - **CPU**: 2 vCPU
 - **メモリ**: 1GB
 - **min-instances**: 0（コスト最適化）
@@ -91,6 +92,7 @@ task staging:test:layout
 - **concurrency**: 80
 
 ### ServiceB（推論サービス）
+
 - **CPU**: 4 vCPU
 - **メモリ**: 4GB
 - **min-instances**: 1（常時待機）
@@ -121,7 +123,7 @@ SERVICEB_URL=$(gcloud run services describe paperterrace-inference-staging --reg
 # 10並列で100リクエスト
 seq 1 100 | xargs -n1 -P10 -I{} curl -X POST "$SERVICEB_URL/api/v1/translate" \
   -H "Content-Type: application/json" \
-  -d '{"text": "Hello world {}", "source_lang": "en", "target_lang": "ja"}'
+  -d '{"text": "Hello world {}", "target_lang": "ja"}'
 ```
 
 ### 3. 障害テスト

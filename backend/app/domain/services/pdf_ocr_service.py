@@ -7,10 +7,11 @@ from collections.abc import AsyncGenerator
 
 import pdfplumber
 from app.crud import get_ocr_from_db, save_ocr_to_db
-from common.logger import get_service_logger, logger
 from app.providers import get_ai_provider
 from app.providers.image_storage import get_page_images, save_page_image
 from app.utils import _get_file_hash
+
+from common.logger import get_service_logger, logger
 
 from .figure_service import FigureService
 from .language_service import LanguageService
@@ -203,7 +204,7 @@ class PDFOCRService:
         # Phase 1: Native Text & Links (ULTRA FAST)
         logger.debug(f"[OCR] Page {page_num}: Phase 1 - Extraction text/links")
         native_words = page.extract_words(
-            use_text_flow=True, x_tolerance=3, y_tolerance=3
+            use_text_flow=True, x_tolerance=1, y_tolerance=3
         )
         links = self._extract_links(page, zoom)
 
@@ -350,7 +351,7 @@ class PDFOCRService:
         page_num = page.page_number
         logger.debug(f"[OCR] p.{page_num}: Attempting native word extraction")
 
-        words = page.extract_words(use_text_flow=True, x_tolerance=3, y_tolerance=3)
+        words = page.extract_words(use_text_flow=True, x_tolerance=1, y_tolerance=3)
         if words:
             # Filter words that are inside any figure bbox
             if exclude_bboxes:

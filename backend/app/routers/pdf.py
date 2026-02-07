@@ -16,9 +16,9 @@ from app.domain.services.paper_processing import (
     process_figure_analysis_task,
     process_paper_summary_task,
 )
-from common.logger import get_service_logger, logger
 from app.providers import RedisService, get_storage_provider
 from app.utils import _get_file_hash
+from common.logger import get_service_logger, logger
 
 log = get_service_logger("PDF")
 
@@ -570,11 +570,6 @@ async def stream(task_id: str):
                 )
 
         return StreamingResponse(json_generate(), media_type="text/event-stream")
-
-    # --- LEGACY HTML STREAMING HANDLER (Original Code) ---
-    logger.info(
-        f"[stream] Task data retrieved: paper_id={paper_id}, text_length={len(text)}, lang={lang}"
-    )
 
     # OCR未実行の場合：ストリーム内でOCR処理を行う
     if data.get("pending_ocr"):

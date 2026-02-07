@@ -374,6 +374,8 @@ Provide the following in {lang_name}:
 
 ## Conclusion
 (Key findings and implications in {lang_name})
+
+Do not use English in the output.
 """
 
 ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT = """You are a rigorous reviewer. Analyze the attached PDF paper from a critical perspective and identify potential issues.

@@ -5,12 +5,11 @@ WORKDIR /app
 # uvのインストール
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
-# ワークスペース構造をコピー（親と子のpyproject.toml）
-COPY pyproject.toml uv.lock ./
-COPY inference-service/pyproject.toml ./inference-service/
+# ワークスペース構造をコピー
+COPY inference-service/pyproject.toml uv.lock ./
 
-# ワークスペース全体の依存関係をインストール（--packageフラグなし）
-RUN uv sync --frozen --no-dev
+# ワークスペース全体の依存関係をインストール
+RUN uv sync --no-dev
 
 # --- Production Stage ---
 FROM python:3.12-slim
@@ -19,13 +18,11 @@ WORKDIR /app
 
 # システムパッケージのインストール（ML推論に必要な依存関係を追加）
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgl1-mesa-dev \
-    libglib2.0-0 \
-    libsm6 \
-    libxext6 \
-    libxrender-dev \
-    libgomp1 \
+    libstdc++6 \
     libgcc-s1 \
+    libgomp1 \
+    libgl1 \
+    libglib2.0-0 \
     libopenblas-dev \
     liblapack-dev \
     && rm -rf /var/lib/apt/lists/*
@@ -56,9 +53,6 @@ ENV SKIP_MODEL_LOADING=false
 # ポート公開
 EXPOSE 8080
 
-# ヘルスチェック
-HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=3 \
-    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8080/health')" || exit 1
 
 # アプリケーション起動
-CMD ["/app/.venv/bin/python", "main.py"]
+CMD ["/app/.venv/bin/uvicorn", "main:app", "--host=0.0.0.0", "--port=8080"]

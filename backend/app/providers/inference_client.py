@@ -13,7 +13,6 @@ import httpx
 
 from common.schemas.inference import (
     LayoutAnalysisRequest,
-    TranslationBatchRequest,
     TranslationRequest,
 )
 
@@ -155,13 +154,9 @@ class InferenceServiceClient:
             logger.error(f"レイアウト解析エラー: {e}")
             raise
 
-    async def translate_text(
-        self, text: str, source_lang: str = "en", target_lang: str = "ja"
-    ) -> str:
+    async def translate_text(self, text: str, target_lang: str = "ja") -> str:
         """単一テキストの翻訳"""
-        request_data = TranslationRequest(
-            text=text, source_lang=source_lang, target_lang=target_lang
-        )
+        request_data = TranslationRequest(text=text, target_lang=target_lang)
 
         try:
             logger.debug(f"翻訳リクエスト: {text[:50]}...")
@@ -180,35 +175,6 @@ class InferenceServiceClient:
 
         except Exception as e:
             logger.error(f"翻訳エラー: {e}")
-            raise
-
-    async def translate_batch(
-        self, texts: list[str], source_lang: str = "en", target_lang: str = "ja"
-    ) -> list[str]:
-        """複数テキストの一括翻訳"""
-        request_data = TranslationBatchRequest(
-            texts=texts, source_lang=source_lang, target_lang=target_lang
-        )
-
-        try:
-            logger.info(f"バッチ翻訳リクエスト: {len(texts)}件")
-
-            response = await self._make_request_with_retry(
-                "POST", "/api/v1/translate-batch", json=request_data.model_dump()
-            )
-
-            if response.get("success"):
-                translations = response.get("translations", [])
-                logger.info(
-                    f"バッチ翻訳完了: {response.get('processing_time', 0):.2f}秒"
-                )
-                return translations
-            else:
-                error_msg = response.get("message", "不明なエラー")
-                raise InferenceServiceError(f"バッチ翻訳失敗: {error_msg}")
-
-        except Exception as e:
-            logger.error(f"バッチ翻訳エラー: {e}")
             raise
 
     async def health_check(self) -> dict[str, Any]:

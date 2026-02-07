@@ -1,5 +1,4 @@
 import asyncio
-import os
 import re
 
 # Use the same executor if possible, or create a new one
@@ -120,11 +119,6 @@ class TokenizationService:
         if paper_id and save_to_db:
             await self._save_full_html(paper_id, paragraphs, all_html_parts, id_prefix)
 
-        # Batch translate unknown words
-        if unknown_words:
-            async for msg in self._handle_unknown_words(unknown_words, lang):
-                yield msg
-
         # UI Cleanup
         yield 'event: message\ndata: <div id="dict-status-container" hx-swap-oob="true" class="relative min-h-[100px] flex flex-col items-center justify-center text-center p-4 border-2 border-dashed border-slate-100 rounded-2xl"><div class="bg-slate-50 p-2 rounded-xl mb-2"><svg class="w-6 h-6 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg></div><p class="text-[10px] font-bold text-slate-400 leading-relaxed">Dictionary Ready!</p></div>\n\n'
         yield 'event: message\ndata: <div id="tokenize-status" hx-swap-oob="true" class="fixed bottom-4 right-4 bg-green-500 text-white px-4 py-2 rounded-lg shadow-lg">✅ 分析完了！単語をクリックで翻訳</div>\n\n'
@@ -162,11 +156,3 @@ class TokenizationService:
             logger.info(f"Updated HTML content for paper: {paper_id}")
         except Exception as e:
             logger.error(f"Failed to save content for paper {paper_id}: {e}")
-
-    async def _handle_unknown_words(self, unknown_words, lang):
-        yield 'event: message\ndata: <div id="dict-status-container" hx-swap-oob="true" class="min-h-[300px] flex flex-col items-center justify-center text-center p-8 border-2 border-dashed border-indigo-200 bg-indigo-50/50 rounded-3xl animate-pulse"><div class="mb-4 text-indigo-500"><svg class="animate-spin w-8 h-8 mx-auto" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg></div><p class="text-xs font-bold text-indigo-500">Building Dictionary...</p><p class="text-[10px] text-slate-400 mt-2">Translating unknown words</p></div>\n\n'
-
-        limit = int(os.getenv("BATCH_WORDS_LIMIT", "50"))
-        words_to_translate = list(unknown_words)[:limit]
-
-        await self.word_analysis.batch_translate(words_to_translate, lang)

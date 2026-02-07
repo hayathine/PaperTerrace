@@ -19,8 +19,8 @@ from app.domain.features import (
     SummaryService,
 )
 from app.domain.services.layout_service import get_layout_service
-from common.logger import logger
 from app.providers import RedisService, get_storage_provider
+from common.logger import logger
 
 router = APIRouter(tags=["Analysis"])
 
@@ -107,31 +107,10 @@ async def summarize(
         f"[summarize] session_id={session_id}, paper_id={paper_id}, context_len={len(context)}"
     )
 
-    if mode == "sections":
-        sections = await summary_service.summarize_sections(
-            context, target_lang=lang, paper_id=paper_id
-        )
-        return JSONResponse({"sections": sections})
-    elif mode == "abstract":
-        # Check DB first
-        if paper_id:
-            paper = storage.get_paper(paper_id)
-            if paper and paper.get("abstract"):
-                logger.info(f"[summarize] Cache HIT for abstract: {paper_id}")
-                return JSONResponse({"abstract": paper["abstract"]})
-
-        abstract = await summary_service.summarize_abstract(context, target_lang=lang)
-
-        # Save generated abstract if paper exists
-        if paper_id:
-            storage.update_paper_abstract(paper_id, abstract)
-
-        return JSONResponse({"abstract": abstract})
-    else:
-        summary = await summary_service.summarize_full(
-            context, target_lang=lang, paper_id=paper_id
-        )
-        return JSONResponse({"summary": summary})
+    summary = await summary_service.summarize_full(
+        context, target_lang=lang, paper_id=paper_id
+    )
+    return JSONResponse({"summary": summary})
 
 
 # ============================================================================

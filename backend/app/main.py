@@ -16,6 +16,8 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
+from common.logger import configure_logging, logger
+
 from .routers import (
     analysis_router,
     auth_router,
@@ -52,9 +54,7 @@ async def lifespan(app: FastAPI):
     Lifespan event handler for FastAPI.
     Handles startup and shutdown events.
     """
-    from common.logger import configure_logging, logger
-
-    # Re-configure logging to ensure it survives uvicorn's setup
+    # Re-configure logging to ensure it survives uvicorn's setup if needed
     configure_logging()
 
     async def _prewarm_models():
@@ -121,7 +121,6 @@ app.add_middleware(
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
-        from common.logger import logger
 
         start_time = time.time()
 
@@ -169,7 +168,6 @@ app.add_middleware(LoggingMiddleware)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    from common.logger import logger
 
     logger.error(f"Global exception: {request.method} {request.url.path}")
     logger.error(traceback.format_exc())

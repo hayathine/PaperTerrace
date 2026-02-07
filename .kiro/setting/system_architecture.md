@@ -9,6 +9,7 @@
 - `frontend/` - React TypeScript Client
 - `infrastructure/` - Terraform & GCP Config
 - `.kiro/` - Project Settings & Documentation
+- `common` - logger etc
 
 ### Backend (`backend/`)
 

@@ -19,9 +19,9 @@ from app.domain.prompts import (
 )
 from app.domain.services import local_translator
 from app.domain.services.analysis_service import EnglishAnalysisService
-from common.logger import get_service_logger
 from app.logic import executor
 from app.providers import get_ai_provider, get_storage_provider
+from common.logger import get_service_logger
 
 log = get_service_logger("Translation")
 
@@ -197,7 +197,7 @@ async def explain(
 
     if translator._initialized:
         try:
-            local_translation = await translator.translate_async(lemma, "en", lang)
+            local_translation = await translator.translate_async(lemma, lang)
             log.debug(
                 "explain",
                 f"ServiceB translation result: {local_translation}",
