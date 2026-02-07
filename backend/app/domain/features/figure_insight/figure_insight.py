@@ -1,17 +1,16 @@
-from typing import Any
-
 from app.domain.prompts import (
     VISION_ANALYZE_FIGURE_PROMPT,
     VISION_ANALYZE_TABLE_PROMPT,
     VISION_COMPARE_FIGURES_PROMPT,
 )
-from common.logger import logger
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import (
     FigureAnalysisResponse,
     FigureComparisonResponse,
     TableAnalysisResponse,
 )
+
+from common.logger import logger
 
 
 class FigureInsightService:
@@ -175,16 +174,3 @@ class FigureInsightService:
         except Exception as e:
             logger.error(f"Figure comparison failed: {e}")
             return f"図の比較に失敗しました: {str(e)}"
-
-    async def extract_equations(
-        self, file_bytes: bytes, page_num: int, target_lang: str = "ja"
-    ) -> list[dict[str, Any]]:
-        """
-        PDFページ内の数式を抽出してLaTeX化する。
-        """
-        from .equation_service import EquationService
-
-        service = EquationService()
-        return await service.detect_and_convert_equations(
-            file_bytes, page_num, target_lang
-        )

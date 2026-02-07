@@ -106,6 +106,10 @@ class FigureService:
                 scale_x = img_width / float(page.width)
                 scale_y = img_height / float(page.height)
 
+                logger.debug(
+                    f"[Figure] p.{page_num}: scale_x={scale_x}, scale_y={scale_y}, page_size={page.width}x{page.height}, img_size={img_width}x{img_height}"
+                )
+
                 # Map PDF points to pixel coordinates
                 pixel_bbox = (
                     c_bbox[0] * scale_x,

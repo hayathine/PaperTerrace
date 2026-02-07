@@ -178,7 +178,7 @@ tasks:
           --max-instances 20 \
           --concurrency 80 \
           --timeout 300 \
-          --set-env-vars "GEMINI_API_KEY=${GEMINI_API_KEY},AI_PROVIDER=gemini,OCR_MODEL=gemini-1.5-flash,LOG_LEVEL=INFO,ACCESS_LOG_LEVEL=INFO,INFERENCE_SERVICE_URL=$SERVICEB_URL,INFERENCE_SERVICE_TIMEOUT=30,SKIP_INFERENCE_SERVICE_WARMUP=false"
+          --set-env-vars "GEMINI_API_KEY=${GEMINI_API_KEY},AI_PROVIDER=gemini,OCR_MODEL=gemini-1.5-flash,LOG_LEVEL=INFO,ACCESS_LOG_LEVEL=INFO,INFERENCE_SERVICE_URL=$SERVICEB_URL,INFERENCE_SERVICE_TIMEOUT=30,SKIP_INFERENCE_SERVICE_WARMUP=false,STORAGE_TYPE=gcs,GCS_BUCKET_NAME=paperterrace-papers"
       - echo "✅ Backend deployed to staging!"
       - task: staging:urls
 

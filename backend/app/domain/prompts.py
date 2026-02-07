@@ -84,10 +84,10 @@ PAPER_TEXT: {paper_text}
 
 IMPORTANT: You MUST respond in {lang_name} language only. Do not use English.
 
-Overview_{lang_name}: (1-2 sentences summarizing the main theme in {lang_name})
-Key Contributions_{lang_name}: (2-4 bullet points in {lang_name})
-Methodology_{lang_name}: (Concise explanation of methods used in {lang_name})
-Conclusion_{lang_name}: (Key findings and implications in {lang_name})
+Overview: (1-2 sentences summarizing the main theme)
+Key Contributions: (2-4 bullet points)
+Methodology: (Concise explanation of methods used)
+Conclusion: (Key findings and implications)
 """
 
 PAPER_SUMMARY_SECTIONS_PROMPT = """Summarize the following paper section by section in {lang_name}.

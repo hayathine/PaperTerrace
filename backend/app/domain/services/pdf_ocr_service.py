@@ -21,6 +21,11 @@ log = get_service_logger("OCR")
 
 
 class PDFOCRService:
+    """
+    PDF OCR Service
+    アップロードされた論文をOCR処理する
+    """
+
     def __init__(self, model):
         self.ai_provider = get_ai_provider()
         self.model = model
@@ -248,6 +253,10 @@ class PDFOCRService:
         scale_x = img_pil.width / float(page.width)
         scale_y = img_pil.height / float(page.height)
 
+        logger.debug(
+            f"[OCR] Page {page_num}: scale_x={scale_x}, scale_y={scale_y}, img_size={img_pil.width}x{img_pil.height}, page_size={page.width}x{page.height}"
+        )
+
         layout_data["width"] = float(img_pil.width)
         layout_data["height"] = float(img_pil.height)
 
@@ -299,8 +308,9 @@ class PDFOCRService:
             layout_data,
         )
 
-    def _extract_links(self, page, zoom):
+    def _extract_links(self, page, zoom):  # TODO: `linkify-it-py`を検討
         """Extract hyperlinks from the PDF page metadata using pdfplumber."""
+        logger.debug(f"[OCR] p.{page.page_number}: Extracting links with zoom={zoom}")
         links = []
         try:
             # pdfplumber >= 0.11.0 has .hyperlinks
@@ -353,6 +363,9 @@ class PDFOCRService:
         if words:
             # Filter words that are inside any figure bbox
             if exclude_bboxes:
+                logger.debug(
+                    f"[OCR] p.{page_num}: Filtering words against {len(exclude_bboxes)} figure boxes"
+                )
                 filtered_words = []
                 for w in words:
                     # Convert word coords to zoom coords for comparison

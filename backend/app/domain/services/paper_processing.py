@@ -50,29 +50,15 @@ async def process_figure_analysis_task(
             logger.warning(f"Could not retrieve image bytes for {image_url}")
             return
 
+        # All visual elements (figures, tables, equations) are handled via general AI analysis
+        explanation = await figure_insight.analyze_figure(
+            image_bytes,
+            caption=figure.get("caption", ""),
+            target_lang=lang,
+        )
+        storage.update_figure_explanation(figure_id, explanation)
+
         label = figure.get("label", "figure")
-
-        # Equation service logic
-        if label == "equation":
-            from app.domain.features.figure_insight.equation_service import (
-                EquationService,
-            )
-
-            eq_service = EquationService()
-            analysis = await eq_service._analyze_bbox_with_ai(
-                image_bytes, target_lang=lang
-            )
-            if analysis:
-                storage.update_figure_explanation(figure_id, analysis.explanation)
-                storage.update_figure_latex(figure_id, analysis.latex)
-        else:
-            explanation = await figure_insight.analyze_figure(
-                image_bytes,
-                caption=figure.get("caption", ""),
-                target_lang=lang,
-            )
-            storage.update_figure_explanation(figure_id, explanation)
-
         logger.info(f"[Task] Successfully updated analysis for {label} {figure_id}")
 
     except Exception as e:

@@ -155,7 +155,7 @@ class LayoutAnalysisService:
             )  # [height, width]
 
             outputs = self._inference(img, scale_factor, im_shape)
-            results = self._postprocess(outputs, ori_shape)
+            results = self._postprocess(outputs, ori_shape, scale_factor=scale_factor)
 
             total_time = time.time() - start_time
             logger.info(
@@ -217,6 +217,7 @@ class LayoutAnalysisService:
         logger.info(
             f"Preprocess complete - ori_shape: {ori_h}x{ori_w}, scale_factor: {scale_factor}, target_img_shape: {img.shape}"
         )
+        logger.debug(f"[Layout] Preprocess: scale_h={scale_h}, scale_w={scale_w}")
 
         return img, (ori_h, ori_w), scale_factor
 
@@ -250,10 +251,20 @@ class LayoutAnalysisService:
         ori_shape: tuple[int, int],
         target_size: tuple[int, int] = (640, 640),
         threshold: float = os.getenv("LAYOUT_THRESHOLD", 0.6),
+        scale_factor: np.ndarray | None = None,
     ) -> list[dict[str, Any]]:
         """後処理：座標変換とフィルタリング"""
         predictions = outputs[0]
         ori_h, ori_w = ori_shape
+
+        # スケールファクタを取得 (h, w)
+        sh, sw = (1.0, 1.0)
+        if scale_factor is not None:
+            sh, sw = scale_factor[0]
+
+        logger.debug(
+            f"[Layout] Postprocess: sw={sw}, sh={sh}, ori_w={ori_w}, ori_h={ori_h}"
+        )
 
         # デバッグログ追加: 推論データの生の状態を確認
         logger.info(f"Postprocess - predictions shape: {predictions.shape}")
@@ -289,11 +300,17 @@ class LayoutAnalysisService:
             for res in valid_predictions:
                 class_id, score, xxmin, yymin, xxmax, yymax = res
 
-                # 座標を元のサイズに復元 (im_shapeにより既にピクセルスケールになっている)
-                x1 = max(0, min(ori_w, int(xxmin)))
-                y1 = max(0, min(ori_h, int(yymin)))
-                x2 = max(0, min(ori_w, int(xxmax)))
-                y2 = max(0, min(ori_h, int(yymax)))
+                # 座標を元のサイズに復元
+                # Paddle2ONNXのDocLayoutモデルは、内部で scale_factor による除算が行われる場合があるため、
+                # ここで再度 scale_factor を掛けることで正しいピクセル座標に戻す。
+                x1 = max(0, min(ori_w, int(xxmin * sw)))
+                y1 = max(0, min(ori_h, int(yymin * sh)))
+                x2 = max(0, min(ori_w, int(xxmax * sw)))
+                y2 = max(0, min(ori_h, int(yymax * sh)))
+
+                logger.debug(
+                    f"[Layout] Raw coords: ({xxmin}, {yymin}, {xxmax}, {yymax}) -> Scaled: ({x1}, {y1}, {x2}, {y2})"
+                )
 
                 box = [x1, y1, x2, y2]
 
