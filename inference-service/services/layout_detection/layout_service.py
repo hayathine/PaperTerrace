@@ -81,7 +81,10 @@ class LayoutAnalysisService:
 
             # ONNXランタイムのセッションオプション設定
             session_options = ort.SessionOptions()
-            session_options.intra_op_num_threads = cpu_count or 4
+            session_options.graph_optimization_level = (
+                ort.GraphOptimizationLevel.ORT_ENABLE_ALL
+            )
+            session_options.intra_op_num_threads = min(cpu_count or 4, 8)
             session_options.inter_op_num_threads = 1
             session_options.log_severity_level = 3  # WARNING以上のみ
 
@@ -246,7 +249,7 @@ class LayoutAnalysisService:
         outputs: list,
         ori_shape: tuple[int, int],
         target_size: tuple[int, int] = (640, 640),
-        threshold: float = 0.5,
+        threshold: float = os.getenv("LAYOUT_THRESHOLD", 0.6),
     ) -> list[dict[str, Any]]:
         """後処理：座標変換とフィルタリング"""
         predictions = outputs[0]

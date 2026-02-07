@@ -98,9 +98,22 @@ class FigureService:
                 continue
 
             try:
-                cropped = page.crop(c_bbox)
-                crop_img = cropped.to_image(resolution=300)
-                crop_pil = crop_img.original.convert("RGB")
+                # Use pre-rendered page_img instead of re-rendering with page.crop().to_image()
+                # Calculate precise pixel coordinates based on actual image dimensions
+                img_width, img_height = page_img.original.size
+                scale_x = img_width / float(page.width)
+                scale_y = img_height / float(page.height)
+
+                # Map PDF points to pixel coordinates
+                pixel_bbox = (
+                    c_bbox[0] * scale_x,
+                    c_bbox[1] * scale_y,
+                    c_bbox[2] * scale_x,
+                    c_bbox[3] * scale_y,
+                )
+
+                # Crop from the already rendered PIL image
+                crop_pil = page_img.original.crop(pixel_bbox).convert("RGB")
 
                 buffer = io.BytesIO()
                 crop_pil.save(buffer, format="PNG")

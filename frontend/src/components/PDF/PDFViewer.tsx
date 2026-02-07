@@ -89,7 +89,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   );
   const [stamps, setStamps] = useState<Stamp[]>([]);
   const [selectedStamp, setSelectedStamp] = useState<StampType>("👍");
-  
+
   // Progressive loading states
   const [assistModeReady, setAssistModeReady] = useState(false);
   const [coordinatesReady, setCoordinatesReady] = useState(false);
@@ -267,7 +267,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     setPages([]);
     setLoadedPaperId(null);
     setStamps([]);
-    
+
     // Reset progressive loading states
     setAssistModeReady(false);
     setCoordinatesReady(false);
@@ -427,9 +427,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         "stream_url:",
         stream_url,
       );
-      
+
       es.close();
-      
+
       // If we have pages, consider it partial success
       if (pagesRef.current.length > 0) {
         setStatus("done");
@@ -440,13 +440,17 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
       // Retry logic for connection failures
       if (retryCount < maxRetries) {
-        console.log(`[PDFViewer] Retrying connection in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`);
+        console.log(
+          `[PDFViewer] Retrying connection in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`,
+        );
         setTimeout(() => {
           startStreaming(stream_url, retryCount + 1);
         }, retryDelay);
       } else {
         setStatus("error");
-        setErrorMsg(`ネットワークエラーが発生しました。接続を確認して再度お試しください。(URL: ${stream_url})`);
+        setErrorMsg(
+          `ネットワークエラーが発生しました。接続を確認して再度お試しください。(URL: ${stream_url})`,
+        );
         processingFileRef.current = null;
         activeTaskIdRef.current = null;
       }
@@ -832,10 +836,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
             >
               <span className="text-sm">📄</span>
               <span className="hidden sm:inline">
-                {assistModeReady 
+                {assistModeReady
                   ? t("viewer.toolbar.click_mode")
-                  : "支援モード⏳準備中"
-                }
+                  : "支援モード⏳準備中"}
               </span>
             </button>
 
@@ -853,10 +856,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
             >
               <span className="text-sm">✂️</span>
               <span className="hidden sm:inline">
-                {coordinatesReady 
+                {coordinatesReady
                   ? t("viewer.toolbar.area_mode")
-                  : "切り取り⏳準備中"
-                }
+                  : "切り取り⏳準備中"}
               </span>
             </button>
 
@@ -873,10 +875,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
             >
               <span className="text-sm">👍</span>
               <span className="hidden sm:inline">
-                {coordinatesReady 
+                {coordinatesReady
                   ? t("viewer.toolbar.stamp_mode")
-                  : "スタンプ⏳準備中"
-                }
+                  : "スタンプ⏳準備中"}
               </span>
             </button>
           </div>

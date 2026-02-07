@@ -7,7 +7,7 @@ description: Workflow for diagnosing and fixing errors or bugs
 This workflow guides you through the process of investigating and resolving errors, following the QA Engineer rules.
 
 1. **Analyze the Error**
-   - **Read Logs**: Use `read_terminal` (for active processes) or `view_file` (for `server.log` or similar).
+   - **Read Logs**: Use `read_terminal` (for active processes) or `view_file` (for `local.log` or similar).
    - **Identify the Source**: Is it a Frontend (browser console), Backend (FastAPI logs), or Infrastructure (Deployment/Terraform) issue?
    - **Read Stack Trace**: Locate exactly where the error originates.
 

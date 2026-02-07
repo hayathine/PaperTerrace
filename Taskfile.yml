@@ -34,7 +34,7 @@ tasks:
   run:
     desc: "Run backend server with hot reload"
     cmds:
-      - PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+      - PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 | tee -a local.log
 
   dev:
     desc: "Run frontend dev server"
@@ -345,14 +345,14 @@ tasks:
   staging:logs:servicea:
     desc: "Show backend logs (Service A)"
     cmds:
-      - echo "📋 Backend logs (last 50 entries):"
-      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging"' --limit=50 --format="table(timestamp.date(tz='Asia/Tokyo'):label=TIME, severity, textPayload, jsonPayload.event:label=MESSAGE)"
+      - echo "📋 Backend logs (last 50 entries) -> servicea.log"
+      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-staging"' --limit=50 --format="table(timestamp.date(tz='Asia/Tokyo'):label=TIME, severity, textPayload, jsonPayload.event:label=MESSAGE)" | tee -a servicea.log
 
   staging:logs:serviceb:
     desc: "Show inference service logs (Service B)"
     cmds:
-      - echo "📋 Inference service logs (last 50 entries):"
-      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-inference-staging"' --limit=50 --format="table(timestamp.date(tz='Asia/Tokyo'):label=TIME, severity, textPayload, jsonPayload.event:label=MESSAGE)"
+      - echo "📋 Inference service logs (last 50 entries) -> serviceb.log"
+      - gcloud logging read 'resource.type="cloud_run_revision" AND resource.labels.service_name="paperterrace-inference-staging"' --limit=50 --format="table(timestamp.date(tz='Asia/Tokyo'):label=TIME, severity, textPayload, jsonPayload.event:label=MESSAGE)" | tee -a serviceb.log
 
   staging:logs:tail:servicea:
     desc: "Tail backend logs in real-time"

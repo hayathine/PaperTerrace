@@ -3,9 +3,10 @@ from typing import Any
 
 import pdfplumber
 from app.domain.prompts import CORE_SYSTEM_PROMPT, VISION_ANALYZE_EQUATION_PROMPT
-from common.logger import logger
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import EquationAnalysisResponse
+
+from common.logger import logger
 
 
 class EquationService:
@@ -34,6 +35,16 @@ class EquationService:
                     return []
                 page = pdf.pages[page_num - 1]
 
+                # Render the entire page once to reuse for multiple crops
+                # High resolution is needed for math clarity
+                full_page_img = page.to_image(resolution=200)
+                full_img_pil = full_page_img.original
+
+                # Calculate precise pixel coordinates based on actual image dimensions
+                img_width, img_height = full_img_pil.size
+                scale_x = img_width / float(page.width)
+                scale_y = img_height / float(page.height)
+
                 for bbox in potential_bboxes:
                     # pdfplumber bbox is (x0, top, x1, bottom)
                     # Expand bbox slightly to catch symbols like exponents
@@ -44,11 +55,16 @@ class EquationService:
                         min(page.height, bbox[3] + 5),
                     )
 
-                    # Crop and render for high-quality images
-                    cropped_page = page.crop(expanded_bbox)
-                    # Use high resolution for math clarity (400 DPI)
-                    page_img = cropped_page.to_image(resolution=400)
-                    img_pil = page_img.original.convert("RGB")
+                    # Map PDF points to pixel coordinates
+                    pixel_bbox = (
+                        expanded_bbox[0] * scale_x,
+                        expanded_bbox[1] * scale_y,
+                        expanded_bbox[2] * scale_x,
+                        expanded_bbox[3] * scale_y,
+                    )
+
+                    # Crop from the already rendered PIL image
+                    img_pil = full_img_pil.crop(pixel_bbox).convert("RGB")
 
                     buffer = io.BytesIO()
                     img_pil.save(buffer, format="PNG")

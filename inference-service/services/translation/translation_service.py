@@ -162,7 +162,7 @@ class TranslationService:
                 None,
                 lambda: self.translator.translate_batch(
                     [input_tokens],
-                    target_prefix=[[tgt_code]],
+                    target_prefix=[[tgt_code]],  # List[Optional[List[str]]]形式
                     beam_size=self.beam_size,
                     repetition_penalty=self.repetition_penalty,
                     no_repeat_ngram_size=self.no_repeat_ngram_size,
