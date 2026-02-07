@@ -45,6 +45,7 @@ This document defines the specifications for the four primary interaction modes 
 ### Technical Requirements
 
 - Depends on **Layout Analysis** results (BBoxes of `Figure`, `Table`, etc.) stored in the database.
+- **Lazy Loading**: Layout detection may run in the background after the page is first rendered. Interactive bboxes appear dynamically once analysis completes.
 - requires an overlay layer that maps coordinate systems between the PDF page and the screen.
 
 ## 3. Crop Mode (切り取りモード)
@@ -95,4 +96,4 @@ This document defines the specifications for the four primary interaction modes 
 ### Technical Requirements
 
 - Stamps must scale appropriately with the PDF zoom level (anchored to PDF coordinates, not Screen coordinates).
-- Backend storage (already implemented in `src/routers/stamps.py`).
+- Backend storage (already implemented in `backend/app/routers/stamps.py`).

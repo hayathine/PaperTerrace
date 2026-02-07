@@ -11,29 +11,29 @@ This workflow guides you through creating a new backend feature following the `f
    (Agent: Use `view_file` on `.agent/skills/fastapi-design/SKILL.md`)
 
 2. **Define Pydantic Schemas**
-   Create or update schemas in `src/schemas/`.
+   Create or update schemas in `backend/app/schemas/`.
    - Define Input Schema (Request body)
    - Define Output Schema (Response body)
    - Ensure explicit typing.
 
 3. **Implement Service Logic**
-   Create or update a service in `src/services/` or implementing specific logic in `src/features/`.
+   Create or update a service in `backend/app/domain/services/` or implementing specific logic in `backend/app/domain/features/`.
    - Use `python-logging` skill for logging.
    - Handle exceptions gracefully.
    - Keep business logic separate from the router.
 
 4. **Create API Router**
-   Create a new router file in `src/routers/` or update an existing one.
+   Create a new router file in `backend/app/routers/` or update an existing one.
    - Define `APIRouter`.
    - Use Dependency Injection (`Depends`) for DB sessions and services.
    - Annotate endpoints with appropriate tags and response models.
 
 5. **Register Router**
-   Ensure the new router is included in `src/main.py`.
+   Ensure the new router is included in `backend/app/main.py`.
 
    ```python
    # Example
-   # from src.routers import new_feature
+   # from app.routers import new_feature
    # app.include_router(new_feature.router)
    ```
 

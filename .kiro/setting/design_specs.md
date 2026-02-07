@@ -1,11 +1,19 @@
 # Design & Interaction Specifications
 
-## 🎨 UI/UX Guidelines
+## 🎨 UI/UX
+
+### 1. PDF Viewer
+
+- **Rendering**: Pages are rendered as images. A transparent layer of BBoxes (Bounding Boxes) is overlaid for text selection and interaction.
+- **Lazy Loading**: Text layer and page images are streamed (Phase 1). Layout detection for clickable objects follows (Phase 2).
+- **Responsive**: Adapts to screen width while maintaining the paper's aspect ratio.
+- **Feedback**: ALWAYS show loading/success/error states.
+
+### 2. General Guidelines
 
 - **Tone**: "Intellectual & Relaxed". Gentle "Desu/Masu" for Japanese text.
 - **Visuals**: Premium, modern aesthetics. Use shadows, glassmorphism, and smooth transitions.
 - **Responsiveness**: Mobile-first recommended.
-- **Feedback**: ALWAYS show loading/success/error states.
 
 ## 🖱️ Interaction Modes
 
@@ -23,6 +31,7 @@
 - **Target**: Figures, Tables, Citations.
 - **Visual**: Hover effects on bounding boxes.
 - **Action**: Click to open Lightbox (Figures) or Tooltip (Citations).
+- **Note**: Interactive bboxes are loaded lazily as background analysis completes.
 
 ### 3. Crop Mode (Capture)
 
@@ -39,7 +48,7 @@
 
 ## 🧩 Frontend Architecture
 
-- **PDF Viewing**: `react-pdf` with custom overlay layers for functionality (Highlights, BBoxes).
+- **PDF Viewing**: Custom Image-based renderer with transparent `TextLayer` and `OverlayLayer` for interaction.
 - **State**:
   - `AuthContext`: User session.
   - `ThemeContext`: Dark/Light mode.

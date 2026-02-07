@@ -16,10 +16,10 @@ Don't touch frontend.
 
 ### 2. Logic & AI Integration
 
-- **Prompts**: Manage all prompts in `src/prompts.py`. Never hardcode prompts in logic files.
+- **Prompts**: Manage all prompts in `backend/app/domain/prompts.py`. Never hardcode prompts in logic files.
 - **Async**: Use `async/await` for all I/O bound operations (DB, API calls, File I/O) to maintain throughput.
 
 ### 3. Robustness
 
 - **Error Handling**: Implement global exception handlers. Ensure the server never crashes due to an unhandled exception.
-- **Logging**: Use `src/logger` (see `python-logging` skill). Log at appropriate levels (INFO, WARNING, ERROR).
+- **Logging**: Use `common/logger` (see `python-logging` skill). Log at appropriate levels (INFO, WARNING, ERROR).

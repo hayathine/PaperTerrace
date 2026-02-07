@@ -14,56 +14,71 @@ This document outlines the detailed technical requirements and processing flows 
   - Must run as a **Service**, not a Job.
   - Configuration: CPU always allocated (for background tasks/WebSocket if needed), Min instances 0 (autoscale).
 - **Cloud SQL**: PostgreSQL instance. Private IP access via VPC Connector.
-- **Cloud Tasks**: Handles asynchronous heavy processing (Layout Analysis, Summarization).
+- **Local Background Tasks**: Replaced Cloud Tasks with direct `asyncio.create_task` for heavy processing (Layout Analysis, Summarization) to simplify architecture and improve latency.
 - **GCS (Google Cloud Storage)**: Stores raw PDF files and extracted figure images.
 
 ### Backend (Python/FastAPI)
 
 - **Runtime**: Python 3.12+
 - **Dependency Management**: `uv`. All dependencies must be defined in `pyproject.toml`.
-- **Asyncio**: Heavy I/O and ML inference wrappers must be async to avoid blocking the event loop.
+- **Asyncio**: Heavy I/O and ML inference wrappers MUST be async. Use `asyncio.create_task` for non-blocking background processing.
 - **ML Models (CPU Optimization)**:
   - **Layout Analysis**: PaddlePaddle converted to **ONNX**. Run on CPU.
   - **Translation**: Meta M2M100 converted to **CTranslate2** (INT8 quantization). Run on CPU.
   - **Environment Variables**: Set `OMP_NUM_THREADS=1`, `MKL_NUM_THREADS=1` to prevent CPU oversubscription in container.
 
+## 📁 Directory Structure
+
+- `backend/app/domain/features/`: Feature-specific logic (Summary, Insight).
+- `backend/app/domain/services/`: Basic service layers (Layout, OCR, Translation).
+- `backend/app/routers/`: API endpoint definitions.
+- `backend/app/models/orm/`: SQLAlchemy models and Alembic migrations.
+- `backend/app/providers/`: Service wrappers (Storage, AI, etc.).
+- `inference-service/`: Dedicated ML inference service (ONNX/CTranslate2).
+- `frontend/src/`: React frontend source.
+- `frontend/src/components/`: React Components (Auth, Chat, PDF, UI).
+- `frontend/src/contexts/`: Global State (Auth, Theme, Paper).
+
 ### Frontend (React/TypeScript)
 
 - **Build Tool**: Vite.
 - **Styling**: Tailwind CSS.
-- **State Management**: React Context for global state (Auth, Theme, Search).
-- **PDF Rendering**: `react-pdf` or similar library. Custom layer for highlighing/search.
+- **State Management**: React Context for global state, **Dexie (IndexedDB)** for local caching of papers and images.
+- **PDF Rendering**: Custom implementation rendering pages as **Images** with a transparent **OverlayLayer** of word-level bounding boxes for selection and interaction.
+- **I18n**: i18next for multi-language support.
 
 ## 🔄 Feature Workflows
 
-### 1. PDF Upload & Analysis Flow
+### 1. Lazy PDF Analysis Flow (Optimized)
 
-To ensure responsiveness, heavy parsing is decoupled from the upload request.
+To ensure maximum responsiveness, processing is divided into prioritized phases:
 
 1. **User Action**: Uploads PDF via Frontend.
-2. **API (Synchronous)**:
-   - Save PDF to Storage (GCS/Local).
-   - Create `Paper` record in DB with status `PENDING`.
-   - **Enqueue Task**: Send message to Cloud Tasks (`analyze-layout`).
-   - Return `202 Accepted` to Frontend.
-3. **Worker (Asynchronous - Cloud Tasks Handler)**:
-   - Receive task.
-   - **Layout Analysis**: Load ONNX model. Detect Layout (Text, Title, Figure, Table).
-   - **Extraction**: Extract text per block. Crop figures.
-   - **Storage**: Save extracted data to DB (Figures to Storage).
-   - Update `Paper` status to `COMPLETED`.
+2. **Phase 1: OCR Start (Streaming)**:
+   - Backend extracts text and renders page images.
+   - **Streaming SSE**: Immediately sends "Text Layer" and "Images" to Frontend.
+   - **TTI (Time to Interactive)**: User can read the paper (Text Mode) immediately.
+3. **Phase 2: Layout Analysis (Lazy - Trigger B)**:
+   - For each page rendered, a background `asyncio` task is kicked off to detect figures, tables, and equations using local ONNX models.
+   - Once coordinates are found, they are saved to DB and SSE/Polling updates the Frontend.
+   - **Click Mode** becomes active for the identified regions.
+4. **Phase 3: AI Insights & Summarization (Lazy - Trigger C/S)**:
+   - **Figure Insights**: Once a figure is identified, Gemini API is optionally triggered to explain its content.
+   - **Paper Summary**: After all text is extracted, Gemini API generates a full summary in the background.
 
-### 2. Translation (Local/CPU)
+### 2. Translation (Inference Service)
 
-Translation is performed on-demand or pre-calculated.
+Translation is performed on-demand when a user selects text (Text Mode) or interacts with a word.
 
-1. **Request**: User selects text or requests full page translation.
-2. **LocalTranslator Service**:
-   - Check Redis Cache for existing translation.
-   - If miss: Invoke `CTranslate2` model.
-   - Input: Source text (English). Output: Target text (Japanese).
-   - **Optimization**: Use batched inference if multiple sentences.
-3. **Response**: Return translated text.
+1. **Request**: User selects text or requests translation.
+2. **LocalTranslator Service (Backend)**:
+   - Client that communicates with the `inference-service` via HTTP.
+   - Provides optional circuit breaking for stability.
+3. **Inference Service**:
+   - Resides on a separate Cloud Run instance.
+   - Uses **CTranslate2** (M2M100 model) running on CPU.
+   - Translates on-the-fly (no pre-calculation).
+4. **Response**: Return translated text directly to the UI.
 
 ### 3. Visual Grounding (Evidence) logic
 
@@ -71,10 +86,10 @@ Links AI answers to specific locations in the PDF.
 
 1. **QA Request**: User asks question about the paper.
 2. **RAG Process**:
-   - Retrieve relevant chunks from Vector DB (if implemented) or use full text.
+   - Retrieve relevant chunks.
    - **Prompt Engineering**: Instruct LLM to return answer AND source indices/quotes.
 3. **Evidence Mapping**:
-   - Backend maps LLM citation to specific `Page Number` and `Bounding Box` (BBox) from Layout Analysis data.
+   - Backend maps citations to specific `Page Number` and `Bounding Box` (BBox) from Layout Analysis data.
 4. **Response**: Return structure `{ answer: string, evidence: { page: int, bbox: [x,y,w,h] }[] }`.
 5. **Frontend**: Render answer. On hover/click, scroll PDF to page and draw highlight box.
 
@@ -85,16 +100,14 @@ Overcomes default browser search limitations in virtualized PDF viewers.
 1. **Search Input**: User types query in Custom Search Bar.
 2. **Search Logic**:
    - Frontend iterates through `TextLayer` or Backend returns search hits (Page, Index).
-   - Logic: Case-insensitive match, ignore newlines/hyphenation if possible.
 3. **Highlighting**:
-   - Overlay explicit highligh `div`s on the PDF coordinates.
-   - Maintain `currentMatch` index for Next/Prev navigation.
+   - Overlay explicit highlight `div`s on the PDF.
 
 ### 5. Paper Summarization
 
-1. **Trigger**: Automatic after Analysis or User triggered.
+1. **Trigger**: Automatic (Lazy) after OCR extraction completes.
 2. **Process**:
-   - Enqueue Cloud Task.
+   - Start background `asyncio` task.
    - Fetch Extracted Text.
-   - **LLM Call**: Send text to Gemini/OpenAI with "Summarize" prompt.
+   - **LLM Call (Gemini)**: Generate summary.
    - Save Summary to DB.

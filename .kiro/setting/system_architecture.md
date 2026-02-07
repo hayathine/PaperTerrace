@@ -17,8 +17,10 @@
   - `main.py` - Entry point
   - `api/` & `routers/` - Endpoints
   - `domain/` - Business Logic (DDD style)
+    - `features/` - Complex feature logic (AI summary, insight)
+    - `services/` - Service layers (OCR, translation)
   - `models/` - DB Models (SQLAlchemy) & Schemas (Pydantic)
-  - `providers/` - Service wrappers (GCS, Firestore, AI)
+  - `providers/` - Service wrappers (Storage, AI, etc.)
   - `auth/` - Authentication logic
 
 ### Inference Service (`inference-service/`)
@@ -30,37 +32,35 @@
 ### Frontend (`frontend/`)
 
 - `src/components/` - React Components (Auth, Chat, PDF, UI)
-- `src/contexts/` - Global State
-- `src/lib/` - Utilities (Firebase, i18n)
+- `src/contexts/` - Global State (Auth, Theme, Paper)
+- `src/lib/` - Utilities
 
 ## 🔄 Core Workflows
 
-### 1. PDF Upload & Analysis
+### 1. Lazy PDF Analysis
 
-1. **Upload**: User uploads PDF → Backend (pending status).
-2. **Analysis**:
-   - Backend enqueues task (Cloud Tasks or direct async).
-   - **Inference Service** performs Layout Analysis (PaddleOCR/ONNX).
-   - Text/Figures extracted and stored.
-3. **Completion**: Paper status updated → Frontend notified.
+1. **Phase 1: Streaming OCR**: Text and page images are streamed to Frontend via SSE.
+2. **Phase 2: Background Layout Analysis**: Local ONNX models detect BBoxes for figures, tables, etc.
+3. **Phase 3: AI Insights**: Gemini API generates automated summaries and figure explanations.
 
-### 2. On-Demand Translation
+### 2. Translation (Inference Service)
 
-1. **Request**: User selects text.
+1. **Request**: User selects text or requests translation.
 2. **Process**:
-   - **Inference Service** (Local CTranslate2) invoked.
-   - In-memory cache checked first.
-3. **Response**: Japanese text returned.
+   - Backend calls **Inference Service** (running on a separate Cloud Run instance) via HTTP.
+   - Inference Service uses **CTranslate2** (M2M100) on CPU for on-the-fly translation.
+   - No pre-calculation is performed for general text/words.
+3. **Response**: Japanese text returned to the UI.
 
 ### 3. Visual Grounding (Evidence)
 
 - **RAG**: LLM answers user questions using paper content.
-- **Mapping**: Backend maps citations to Layout Analysis BBoxes.
-- **UI**: Frontend highlights specific text/areas on the PDF based on BBoxes.
+- **Mapping**: Backend maps LLM chunks to Layout Analysis BBoxes.
+- **UI**: Frontend highlights specific text/areas on the PDF.
 
 ## 🛠 Infrastructure
 
-- **Cloud Run**: Hosts Backend and Inference Service (separately or monolithic depending on deploy config).
-- **Cloud SQL**: PostgreSQL for relational data (Papers, Users).
+- **Cloud Run**: Hosts Backend and Inference Service.
+- **Cloud SQL**: PostgreSQL for relational data.
 - **GCS**: Stores raw PDFs and extracted images.
-- **Cloud Tasks**: Managed Async queues for heavy jobs.
+- **Local Async**: `asyncio` for background task execution (replacing Cloud Tasks).

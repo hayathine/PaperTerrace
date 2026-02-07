@@ -14,11 +14,11 @@ PaperTerraceのバックエンドはFastAPIを採用しています。
 
 ### 1. ルーター (Routers)
 
-`src/routers/` 配下に機能ごとにファイルを分割し、`APIRouter` を定義します。
+`backend/app/routers/` 配下に機能ごとにファイルを分割し、`APIRouter` を定義します。
 `main.py` にすべてのパス処理を書かないでください。
 
 ```python
-# src/routers/users.py
+# backend/app/routers/users.py
 from fastapi import APIRouter
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -35,7 +35,7 @@ async def get_users():
 ```python
 from fastapi import Depends
 from sqlalchemy.orm import Session
-from src.database import get_db
+from app.database import get_db
 
 @router.get("/{user_id}")
 async def get_user(user_id: int, db: Session = Depends(get_db)):
@@ -45,7 +45,7 @@ async def get_user(user_id: int, db: Session = Depends(get_db)):
 ### 3. Pydanticスキーマ (Schemas)
 
 リクエストボディとレスポンスボディの厳密な型定義を行います。
-`src/schemas/` 配下に定義し、Routerの引数や `response_model` として使用します。
+`backend/app/schemas/` 配下に定義し、Routerの引数や `response_model` として使用します。
 
 - **Input Schema**: 入力データのバリデーション用 (例: `UserCreate`)
 - **Output Schema**: 出力データのフィルタリング用 (例: `UserResponse`)、内部IDやパスワードなどをクライアントに露出させないため。

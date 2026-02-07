@@ -31,11 +31,13 @@ Ensure consistency with these technologies:
 
 ### 1. Directory Structure
 
-- `src/features/`: Feature-specific logic.
-- `src/services/`: General application services.
-- `src/routers/`: API endpoint definitions.
-- `src/schemas/`: Pydantic data models.
-- `src/utils/`: Pure utility functions.
+- `backend/app/domain/features/`: Feature-specific logic.
+- `backend/app/domain/services/`: General application services.
+- `backend/app/routers/`: API endpoint definitions.
+- `backend/app/schemas/`: Pydantic data models.
+- `backend/app/utils/`: Pure utility functions.
+- `inference-service/`: ML inference logic (Layout, Translation).
+- `frontend/src/`: React frontend source.
 - **Dependency Management**:
   - `pyproject.toml` locations: `./`, `./backend`, `./inference-service`.
   - **Common Libraries**: Managed in the root (`./`) `pyproject.toml`.
