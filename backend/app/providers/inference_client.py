@@ -37,10 +37,10 @@ class InferenceServiceClient:
 
     def __init__(self):
         self.base_url = os.getenv("INFERENCE_SERVICE_URL", "http://localhost:8080")
-        self.timeout = int(os.getenv("INFERENCE_SERVICE_TIMEOUT", "30"))
+        self.timeout = int(os.getenv("INFERENCE_SERVICE_TIMEOUT", "60"))
         self.max_retries = int(
-            os.getenv("INFERENCE_SERVICE_RETRIES", "1")
-        )  # Reduced from 3 to 1
+            os.getenv("INFERENCE_SERVICE_RETRIES", "2")
+        )  # Reduced from 3 to 2
 
         # 回路ブレーカー設定
         self.failure_count = 0
@@ -49,10 +49,15 @@ class InferenceServiceClient:
         self.failure_threshold = 5
         self.recovery_timeout = 60  # 1分
 
-        # HTTPクライアント
+        # HTTPクライアント - HTTP/2有効化、接続プール最適化
         self.client = httpx.AsyncClient(
-            timeout=httpx.Timeout(self.timeout),
-            limits=httpx.Limits(max_connections=10, max_keepalive_connections=5),
+            timeout=httpx.Timeout(self.timeout, connect=10.0),
+            limits=httpx.Limits(
+                max_connections=20,  # 増加
+                max_keepalive_connections=10,  # 増加
+                keepalive_expiry=30.0,  # Keep-alive時間
+            ),
+            http2=True,  # HTTP/2有効化
         )
 
     async def __aenter__(self):

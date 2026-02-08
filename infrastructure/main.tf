@@ -154,6 +154,11 @@ module "cloud_run" {
   memory               = local.resources.backend.memory
   concurrency          = local.resources.backend.concurrency
 
+  # Inference Service URL (internal VPC communication)
+  # Format: https://<service-name>-<hash>-<region>.a.run.app
+  # For VPC internal communication, use the service URL directly
+  inference_service_url = "https://paperterrace-inference-${var.region}.run.app"
+
   # Redis configuration (Disabled to save cost)
   # redis_host = module.redis_production.redis_host
   # redis_port = tostring(module.redis_production.redis_port)
@@ -223,8 +228,8 @@ module "cloud_run_staging" {
   # redis_port = var.enable_staging ? tostring(module.redis_staging[0].redis_port) : "6379"
 
   # Inference Service Integration
-  # inference_service_url = var.enable_staging ? data.google_cloud_run_v2_service.inference_staging[0].uri : ""
-  inference_service_url = ""
+  # Use internal VPC URL for staging
+  inference_service_url = "https://paperterrace-inference-${var.region}.run.app"
 
   depends_on = [
     google_project_service.apis,

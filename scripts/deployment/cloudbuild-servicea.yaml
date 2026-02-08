@@ -31,7 +31,7 @@ steps:
       '--max-instances', '20',
       '--concurrency', '80',
       '--no-cpu-throttling',
-      '--set-env-vars', 'INFERENCE_SERVICE_URL=https://paperterrace-inference-xxx.run.app,INFERENCE_SERVICE_TIMEOUT=30,INFERENCE_SERVICE_RETRIES=3',
+      '--set-env-vars', 'INFERENCE_SERVICE_URL=https://paperterrace-inference-xxx.run.app,INFERENCE_SERVICE_TIMEOUT=60,INFERENCE_SERVICE_RETRIES=2',
       '--timeout', '300',
       '--execution-environment', 'gen2'
     ]

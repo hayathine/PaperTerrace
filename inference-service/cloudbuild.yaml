@@ -47,6 +47,20 @@ steps:
           CON=$(python3 -c "import json; print(json.load(open('$CONF'))['inference']['concurrency'])")
         fi
 
+        # Get VPC connector name
+        VPC_CONNECTOR=$(gcloud compute networks vpc-access connectors list \
+          --region=asia-northeast1 \
+          --filter="name:paperterrace-vpc-connector" \
+          --format="value(name)" \
+          --limit=1)
+
+        if [ -z "$VPC_CONNECTOR" ]; then
+          echo "Warning: VPC connector not found, deploying without VPC access"
+          VPC_ARGS=""
+        else
+          VPC_ARGS="--vpc-connector=$VPC_CONNECTOR --vpc-egress=private-ranges-only"
+        fi
+
         gcloud run deploy paperterrace-inference \
           --image gcr.io/$PROJECT_ID/paperterrace-inference:$COMMIT_SHA \
           --region asia-northeast1 \
@@ -60,7 +74,8 @@ steps:
           --cpu-always-allocated \
           --set-env-vars "ORT_INTRA_THREADS=4,ORT_INTER_THREADS=2,CT2_INTER_THREADS=1,CT2_INTRA_THREADS=4,LOG_LEVEL=INFO" \
           --timeout 300 \
-          --execution-environment gen2
+          --execution-environment gen2 \
+          $VPC_ARGS
 
 # ビルド設定
 options:
