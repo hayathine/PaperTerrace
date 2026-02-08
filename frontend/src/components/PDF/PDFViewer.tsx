@@ -90,10 +90,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   const [stamps, setStamps] = useState<Stamp[]>([]);
   const [selectedStamp, setSelectedStamp] = useState<StampType>("👍");
 
-  // Progressive loading states
-  const [assistModeReady, setAssistModeReady] = useState(false);
-  const [coordinatesReady, setCoordinatesReady] = useState(false);
-
   const pagesRef = useRef<PageData[]>([]);
 
   useEffect(() => {
@@ -296,10 +292,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     setLoadedPaperId(null);
     setStamps([]);
 
-    // Reset progressive loading states
-    setAssistModeReady(false);
-    setCoordinatesReady(false);
-
     const formData = new FormData();
     formData.append("file", file);
     formData.append("lang", i18n.language);
@@ -436,11 +428,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           activeTaskIdRef.current = null;
         } else if (eventData.type === "coordinates_ready") {
           console.log("[PDFViewer] Coordinates ready, enabling assist mode");
-          setCoordinatesReady(true);
-          setAssistModeReady(true);
         } else if (eventData.type === "assist_mode_ready") {
           console.log("[PDFViewer] Assist mode ready");
-          setAssistModeReady(true);
         } else if (eventData.type === "error") {
           setStatus("error");
           setErrorMsg(eventData.message);
@@ -674,8 +663,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
             setPages(cachedPages);
             setStatus("done");
             // Cached papers have coordinates ready
-            setCoordinatesReady(true);
-            setAssistModeReady(true);
             // If we have content, we could stop here.
             // Optional: Background check with server to ensure consistency.
             return;
@@ -728,8 +715,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
               setPages(fullPages);
               setStatus("done");
               // Full paper data has coordinates ready
-              setCoordinatesReady(true);
-              setAssistModeReady(true);
 
               // Cache images in background
               cachePaperImages(
@@ -943,7 +928,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
               jumpTarget={jumpTarget}
               searchTerm={searchTerm}
               currentSearchMatch={currentSearchMatch}
-              isClickMode={mode === "text"}
             />
           </div>
 
