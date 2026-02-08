@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 from common.logger import logger
 
-load_dotenv()
+load_dotenv("secrets/.env")
 
 
 class ImageStorageStrategy(ABC):

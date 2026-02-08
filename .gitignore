@@ -70,6 +70,13 @@ coverage.xml
 .pytest_cache/
 cover/
 paperterrace-a12ad-firebase-adminsdk-fbsvc-f315de7587.json
+secrets/
+# Service Account Keys
+*-sa-key.json
+paperterrace-sa-key.json
+service-account-key.json
+*.json.key
+
 # Translations
 *.mo
 *.pot
@@ -162,6 +169,10 @@ venv/
 ENV/
 env.bak/
 venv.bak/
+
+# Secrets folder (contains sensitive environment files)
+secrets/
+!secrets/.gitkeep
 
 # Spyder project settings
 .spyderproject

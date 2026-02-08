@@ -9,7 +9,7 @@ from pydantic import BaseModel
 
 from common.logger import logger
 
-load_dotenv()
+load_dotenv("secrets/.env")
 
 
 class AIProviderError(Exception):
@@ -521,6 +521,7 @@ class VertexAIProvider(AIProviderInterface):
     - AI_PROVIDER=vertex
     - GCP_PROJECT_ID=your-project-id
     - GCP_LOCATION=us-central1
+    - GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account-key.json (optional)
     """
 
     def __init__(self):
@@ -529,18 +530,44 @@ class VertexAIProvider(AIProviderInterface):
         self.model = os.getenv("VERTEX_MODEL", "gemini-2.0-flash-lite")
 
         if not self.project_id:
-            # Fallback or strict error? Let's check env or assume ADC might work without explicit project in some cases,
-            # but usually project is needed for Vertex init in this SDK style.
-            # However, genai.Client might auto-detect. Let's warn if missing.
             logger.warning(
                 "GCP_PROJECT_ID not set for VertexAIProvider. Relying on default credentials/config."
             )
 
-        self.client = genai.Client(
-            vertexai=True,
-            project=self.project_id,
-            location=self.location,
-        )
+        # Service Account認証の設定
+        credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        if credentials_path and os.path.exists(credentials_path):
+            logger.info(f"Using service account credentials from: {credentials_path}")
+            # google.auth.load_credentials_from_fileを使用
+            from google.auth import load_credentials_from_file
+            from google.auth.transport.requests import Request
+            
+            credentials, project = load_credentials_from_file(
+                credentials_path,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+            )
+            
+            # プロジェクトIDが環境変数で指定されていない場合、認証情報から取得
+            if not self.project_id and project:
+                self.project_id = project
+                logger.info(f"Using project ID from credentials: {project}")
+            
+            # 認証情報を使用してクライアントを初期化
+            self.client = genai.Client(
+                vertexai=True,
+                project=self.project_id,
+                location=self.location,
+                http_options={"credentials": credentials}
+            )
+        else:
+            # デフォルト認証情報を使用（Application Default Credentials）
+            logger.info("Using Application Default Credentials (ADC)")
+            self.client = genai.Client(
+                vertexai=True,
+                project=self.project_id,
+                location=self.location,
+            )
+        
         logger.info(
             f"VertexAIProvider initialized: project={self.project_id}, location={self.location}, model={self.model}"
         )

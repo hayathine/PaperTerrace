@@ -201,7 +201,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
   const triggerLazyLayoutAnalysis = async (paperId: string) => {
     try {
-      const headers: HeadersInit = { "Content-Type": "application/x-www-form-urlencoded" };
+      const headers: HeadersInit = {
+        "Content-Type": "application/x-www-form-urlencoded",
+      };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
       const formData = new URLSearchParams();
@@ -420,7 +422,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
               cachePaperImages(pId, imageUrls);
 
               // Trigger lazy layout analysis in background (non-blocking)
-              console.log("[PDFViewer] Triggering lazy layout analysis for paper:", pId);
+              console.log(
+                "[PDFViewer] Triggering lazy layout analysis for paper:",
+                pId,
+              );
               triggerLazyLayoutAnalysis(pId).catch((err) => {
                 console.warn("[PDFViewer] Lazy layout analysis failed:", err);
               });
@@ -803,16 +808,29 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
   return (
     <div className="w-full max-w-5xl mx-auto p-2 md:p-4 relative min-h-full pb-20">
+      {/* Initial Loading - Block screen until first page is ready */}
       {status === "idle" && !uploadFile && !propPaperId && (
         <div className="text-center p-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
           {t("viewer.waiting_pdf")}
         </div>
       )}
 
+      {/* Uploading - Block screen */}
       {status === "uploading" && (
-        <div className="flex justify-center p-10">
-          <span className="animate-pulse text-blue-500">
+        <div className="flex flex-col items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-4"></div>
+          <span className="text-indigo-600 font-medium">
             {t("viewer.uploading_pdf")}
+          </span>
+        </div>
+      )}
+
+      {/* Processing - Block screen until first page */}
+      {status === "processing" && pages.length === 0 && (
+        <div className="flex flex-col items-center justify-center min-h-[400px]">
+          <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-4"></div>
+          <span className="text-indigo-600 font-medium">
+            {t("viewer.processing_pdf")}
           </span>
         </div>
       )}
@@ -823,150 +841,144 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         </div>
       )}
 
-      {/* Toolbar */}
+      {/* Content Area - Show as soon as we have pages */}
       {pages.length > 0 && (
-        <div className="sticky top-4 z-[60] flex justify-center mb-6">
-          <div className="bg-white p-1 rounded-lg shadow-sm border border-slate-200 flex items-center gap-1">
-            <div
-              className="px-2 flex items-center gap-2 border-r border-slate-100 mr-1"
-              title={`Sync: ${syncStatus}`}
-            >
-              <div
-                className={`w-2 h-2 rounded-full ${
-                  syncStatus === "synced"
-                    ? "bg-green-500"
-                    : syncStatus === "pending"
-                      ? "bg-amber-500 animate-pulse"
-                      : "bg-red-500"
-                }`}
-              />
+        <>
+          {/* Small Loading Indicator - Non-blocking */}
+          {status === "processing" && (
+            <div className="fixed bottom-4 right-4 z-50 bg-white rounded-full shadow-lg p-3 border border-indigo-200">
+              <div className="flex items-center gap-2">
+                <div className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-200 border-t-indigo-600"></div>
+                <span className="text-xs text-indigo-600 font-medium">
+                  読み込み中...
+                </span>
+              </div>
             </div>
-            <button
-              onClick={() => setMode("plaintext")}
-              className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
-                mode === "plaintext"
-                  ? "bg-indigo-600 text-white shadow-none"
-                  : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-              }`}
-            >
-              <span className="text-sm">📝</span>
-              <span className="hidden sm:inline">
-                {t("viewer.toolbar.text_mode")}
-              </span>
-            </button>
+          )}
 
-            <button
-              onClick={() => setMode("text")}
-              disabled={!assistModeReady}
-              className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
-                !assistModeReady
-                  ? "text-slate-300 cursor-not-allowed bg-slate-50"
-                  : mode === "text"
+          {/* Toolbar */}
+          <div className="sticky top-4 z-[60] flex justify-center mb-6">
+            <div className="bg-white p-1 rounded-lg shadow-sm border border-slate-200 flex items-center gap-1">
+              <div
+                className="px-2 flex items-center gap-2 border-r border-slate-100 mr-1"
+                title={`Sync: ${syncStatus}`}
+              >
+                <div
+                  className={`w-2 h-2 rounded-full ${
+                    syncStatus === "synced"
+                      ? "bg-green-500"
+                      : syncStatus === "pending"
+                        ? "bg-amber-500 animate-pulse"
+                        : "bg-red-500"
+                  }`}
+                />
+              </div>
+              <button
+                onClick={() => setMode("plaintext")}
+                className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+                  mode === "plaintext"
                     ? "bg-indigo-600 text-white shadow-none"
                     : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-              }`}
-            >
-              <span className="text-sm">📄</span>
-              <span className="hidden sm:inline">
-                {assistModeReady
-                  ? t("viewer.toolbar.click_mode")
-                  : "支援モード⏳準備中"}
-              </span>
-            </button>
+                }`}
+              >
+                <span className="text-sm">📝</span>
+                <span className="hidden sm:inline">
+                  {t("viewer.toolbar.text_mode")}
+                </span>
+              </button>
 
-            <div className="w-[1px] h-4 bg-slate-200 mx-1 hidden sm:block" />
-            <button
-              onClick={() => setMode("area")}
-              disabled={!coordinatesReady}
-              className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
-                !coordinatesReady
-                  ? "text-slate-300 cursor-not-allowed bg-slate-50"
-                  : mode === "area"
+              <button
+                onClick={() => setMode("text")}
+                className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+                  mode === "text"
                     ? "bg-indigo-600 text-white shadow-none"
                     : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-              }`}
-            >
-              <span className="text-sm">✂️</span>
-              <span className="hidden sm:inline">
-                {coordinatesReady
-                  ? t("viewer.toolbar.area_mode")
-                  : "切り取り⏳準備中"}
-              </span>
-            </button>
+                }`}
+              >
+                <span className="text-sm">📄</span>
+                <span className="hidden sm:inline">
+                  {t("viewer.toolbar.click_mode")}
+                </span>
+              </button>
 
-            <button
-              onClick={() => setMode("stamp")}
-              disabled={!coordinatesReady}
-              className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
-                !coordinatesReady
-                  ? "text-slate-300 cursor-not-allowed bg-slate-50"
-                  : mode === "stamp"
+              <div className="w-[1px] h-4 bg-slate-200 mx-1 hidden sm:block" />
+              <button
+                onClick={() => setMode("area")}
+                className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+                  mode === "area"
                     ? "bg-indigo-600 text-white shadow-none"
                     : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-              }`}
-            >
-              <span className="text-sm">👍</span>
-              <span className="hidden sm:inline">
-                {coordinatesReady
-                  ? t("viewer.toolbar.stamp_mode")
-                  : "スタンプ⏳準備中"}
-              </span>
-            </button>
+                }`}
+              >
+                <span className="text-sm">✂️</span>
+                <span className="hidden sm:inline">
+                  {t("viewer.toolbar.area_mode")}
+                </span>
+              </button>
+
+              <button
+                onClick={() => setMode("stamp")}
+                className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+                  mode === "stamp"
+                    ? "bg-indigo-600 text-white shadow-none"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
+                }`}
+              >
+                <span className="text-sm">👍</span>
+                <span className="hidden sm:inline">
+                  {t("viewer.toolbar.stamp_mode")}
+                </span>
+              </button>
+            </div>
           </div>
-        </div>
-      )}
 
-      {/* Content Area */}
-      <div className={mode === "plaintext" ? "block" : "hidden"}>
-        <TextModeViewer
-          pages={pagesWithLines}
-          onWordClick={handleWordClick}
-          onTextSelect={handleTextSelect}
-          jumpTarget={jumpTarget}
-          searchTerm={searchTerm}
-          currentSearchMatch={currentSearchMatch}
-        />
-      </div>
-
-      <div className={mode !== "plaintext" ? "block" : "hidden"}>
-        <div
-          className={`space-y-6 ${mode === "stamp" || mode === "area" ? "cursor-crosshair" : ""}`}
-        >
-          {pages.map((page) => (
-            <PDFPage
-              key={page.page_num}
-              page={page}
+          {/* Content Area */}
+          <div className={mode === "plaintext" ? "block" : "hidden"}>
+            <TextModeViewer
+              pages={pagesWithLines}
               onWordClick={handleWordClick}
               onTextSelect={handleTextSelect}
-              stamps={stamps}
-              isStampMode={mode === "stamp"}
-              onAddStamp={handleAddStamp}
-              isAreaMode={mode === "area"}
-              onAreaSelect={handleAreaSelect}
-              onAskAI={onAskAI}
               jumpTarget={jumpTarget}
               searchTerm={searchTerm}
               currentSearchMatch={currentSearchMatch}
               isClickMode={mode === "text"}
             />
-          ))}
-        </div>
-      </div>
+          </div>
 
-      {status === "processing" && (
-        <div className="flex justify-center py-4">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-        </div>
-      )}
+          <div className={mode !== "plaintext" ? "block" : "hidden"}>
+            <div
+              className={`space-y-6 ${mode === "stamp" || mode === "area" ? "cursor-crosshair" : ""}`}
+            >
+              {pages.map((page) => (
+                <PDFPage
+                  key={page.page_num}
+                  page={page}
+                  onWordClick={handleWordClick}
+                  onTextSelect={handleTextSelect}
+                  stamps={stamps}
+                  isStampMode={mode === "stamp"}
+                  onAddStamp={handleAddStamp}
+                  isAreaMode={mode === "area"}
+                  onAreaSelect={handleAreaSelect}
+                  onAskAI={onAskAI}
+                  jumpTarget={jumpTarget}
+                  searchTerm={searchTerm}
+                  currentSearchMatch={currentSearchMatch}
+                />
+              ))}
+            </div>
+          </div>
 
-      {/* Stamp Palette (Only show if we have pages/loadedPaperId) */}
-      {loadedPaperId && mode === "stamp" && (
-        <StampPalette
-          isStampMode={true}
-          onToggleMode={() => setMode("text")}
-          selectedStamp={selectedStamp}
-          onSelectStamp={setSelectedStamp}
-        />
+          {/* Stamp Palette (Only show if we have pages/loadedPaperId) */}
+          {loadedPaperId && mode === "stamp" && (
+            <StampPalette
+              isStampMode={true}
+              onToggleMode={() => setMode("text")}
+              selectedStamp={selectedStamp}
+              onSelectStamp={setSelectedStamp}
+            />
+          )}
+        </>
       )}
     </div>
   );

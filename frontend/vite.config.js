@@ -9,6 +9,7 @@ const __dirname = path.dirname(__filename)
 // https://vitejs.dev/config/
 export default defineConfig({
     plugins: [react()],
+    envDir: '../secrets',  // Load .env files from secrets directory
     resolve: {
         alias: {
             '@': path.resolve(__dirname, './src'),

@@ -8,7 +8,7 @@ from app.models.orm import Base
 from dotenv import load_dotenv
 from sqlalchemy import create_engine, text
 
-load_dotenv()
+load_dotenv("secrets/.env")
 
 
 def init_db():

@@ -15,7 +15,7 @@ from common.logger import logger
 
 from .storage_provider import StorageInterface
 
-load_dotenv()
+load_dotenv("secrets/.env")
 
 
 class CloudSQLStorage(StorageInterface):

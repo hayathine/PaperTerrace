@@ -34,8 +34,8 @@ from .routers import (
     users_router,
 )
 
-# Load environment variables
-load_dotenv()
+# Load environment variables from secrets directory
+load_dotenv("secrets/.env")
 
 # Firebase Config for Frontend
 FIREBASE_CONFIG = {
