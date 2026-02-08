@@ -199,6 +199,32 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     }
   }, [loadedPaperId]);
 
+  const triggerLazyLayoutAnalysis = async (paperId: string) => {
+    try {
+      const headers: HeadersInit = { "Content-Type": "application/x-www-form-urlencoded" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const formData = new URLSearchParams();
+      formData.append("paper_id", paperId);
+
+      const response = await fetch("/api/analyze-layout-lazy", {
+        method: "POST",
+        headers,
+        body: formData,
+      });
+
+      if (!response.ok) {
+        throw new Error(`Layout analysis failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      console.log("[PDFViewer] Lazy layout analysis completed:", result);
+    } catch (err) {
+      console.error("[PDFViewer] Lazy layout analysis error:", err);
+      throw err;
+    }
+  };
+
   const fetchStamps = async (id: string) => {
     try {
       const headers: HeadersInit = {};
@@ -392,6 +418,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
               });
               // We don't block on image caching
               cachePaperImages(pId, imageUrls);
+
+              // Trigger lazy layout analysis in background (non-blocking)
+              console.log("[PDFViewer] Triggering lazy layout analysis for paper:", pId);
+              triggerLazyLayoutAnalysis(pId).catch((err) => {
+                console.warn("[PDFViewer] Lazy layout analysis failed:", err);
+              });
             })();
           }
           es.close();

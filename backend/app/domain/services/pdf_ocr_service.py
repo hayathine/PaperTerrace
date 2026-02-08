@@ -272,32 +272,7 @@ class PDFOCRService:
         ]
 
         # Phase 2 yield with synchronized layout and image
-        yield (
-            page_num,
-            total_pages,
-            page_text,
-            is_last,
-            file_hash,
-            image_url,
-            layout_data,
-        )
-
-        logger.debug(f"[OCR] Page {page_num}: Phase 3 - AI Analysis")
-        figures = await self.figure_service.detect_and_extract_figures(
-            img_bytes,
-            page_img,
-            page,
-            file_hash,
-            page_num,
-            zoom=zoom,
-            pdf_path=pdf_path,
-        )
-
-        if figures:
-            if "figures" not in layout_data:
-                layout_data["figures"] = []
-            layout_data["figures"].extend(figures)
-
+        # Phase 3 (AI Analysis for figures) is now deferred to lazy loading
         yield (
             page_num,
             total_pages,

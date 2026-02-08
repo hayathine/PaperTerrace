@@ -4,6 +4,7 @@ Handles paper analysis features: summary, research radar,
 figure/table analysis, layout detection, and adversarial review.
 """
 
+import io
 import tempfile
 from pathlib import Path
 
@@ -271,6 +272,154 @@ async def detect_layout(
         raise HTTPException(
             status_code=500, detail=f"Layout detection failed: {str(e)}"
         )
+
+
+@router.post("/analyze-layout-lazy")
+async def analyze_layout_lazy(
+    paper_id: str = Form(...),
+    page_numbers: str = Form(None),  # Comma-separated page numbers, e.g., "1,2,3"
+):
+    """
+    画面表示後に遅延実行されるレイアウト解析エンドポイント
+    
+    Parameters
+    ----------
+    paper_id : str
+        論文ID
+    page_numbers : str, optional
+        解析対象のページ番号（カンマ区切り）。指定がない場合は全ページ
+        
+    Returns
+    -------
+    JSONResponse
+        解析結果のステータス
+    """
+    try:
+        logger.info(f"[analyze-layout-lazy] Starting for paper_id={paper_id}, pages={page_numbers}")
+        
+        # Get paper data
+        paper = storage.get_paper(paper_id)
+        if not paper:
+            raise HTTPException(status_code=404, detail="Paper not found")
+        
+        file_hash = paper.get("file_hash")
+        if not file_hash:
+            raise HTTPException(status_code=400, detail="Paper has no file_hash")
+        
+        # Parse page numbers
+        pages_to_analyze = None
+        if page_numbers:
+            try:
+                pages_to_analyze = [int(p.strip()) for p in page_numbers.split(",")]
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid page_numbers format")
+        
+        # Get cached images
+        from app.providers.image_storage import get_page_images
+        cached_images = get_page_images(file_hash)
+        
+        if not cached_images:
+            raise HTTPException(status_code=404, detail="No cached images found for this paper")
+        
+        # Filter pages if specified
+        if pages_to_analyze:
+            pages_to_process = [(i, url) for i, url in enumerate(cached_images, 1) if i in pages_to_analyze]
+        else:
+            pages_to_process = list(enumerate(cached_images, 1))
+        
+        logger.info(f"[analyze-layout-lazy] Processing {len(pages_to_process)} pages")
+        
+        # Import figure service
+        from app.domain.services.pdf_ocr_service import PDFOCRService
+        from app.providers import get_ai_provider
+        
+        ai_provider = get_ai_provider()
+        ocr_service = PDFOCRService(model="gemini-2.0-flash-exp")
+        
+        # Process each page
+        all_figures = []
+        for page_num, image_url in pages_to_process:
+            try:
+                # Download image
+                import httpx
+                if image_url.startswith("/static/"):
+                    # Local file
+                    from pathlib import Path
+                    img_path = Path("src") / image_url.lstrip("/")
+                    if img_path.exists():
+                        img_bytes = img_path.read_bytes()
+                    else:
+                        logger.warning(f"Image not found: {img_path}")
+                        continue
+                else:
+                    # Remote URL
+                    async with httpx.AsyncClient() as client:
+                        resp = await client.get(image_url, timeout=30.0)
+                        if resp.status_code == 200:
+                            img_bytes = resp.content
+                        else:
+                            logger.warning(f"Failed to download image: {image_url}")
+                            continue
+                
+                # Detect figures using FigureService
+                from PIL import Image
+                img_pil = Image.open(io.BytesIO(img_bytes))
+                
+                figures = await ocr_service.figure_service.detect_and_extract_figures(
+                    img_bytes,
+                    None,  # page_img not needed
+                    None,  # page not needed
+                    file_hash,
+                    page_num,
+                    zoom=1.0,
+                    pdf_path=None,
+                )
+                
+                if figures:
+                    all_figures.extend(figures)
+                    logger.info(f"[analyze-layout-lazy] Page {page_num}: Found {len(figures)} figures")
+                
+            except Exception as e:
+                logger.error(f"[analyze-layout-lazy] Failed to process page {page_num}: {e}")
+                continue
+        
+        # Save figures to database
+        if all_figures:
+            from app.crud import save_figure_to_db
+            from app.domain.services.paper_processing import process_figure_analysis_task
+            import asyncio
+            
+            logger.info(f"[analyze-layout-lazy] Saving {len(all_figures)} figures to DB")
+            for fig in all_figures:
+                fid = save_figure_to_db(
+                    paper_id=paper_id,
+                    page_number=fig["page_num"],
+                    bbox=fig["bbox"],
+                    image_url=fig["image_url"],
+                    caption="",
+                    explanation="",
+                    label=fig.get("label", "figure"),
+                    latex=fig.get("latex", ""),
+                )
+                # Trigger figure analysis
+                asyncio.create_task(
+                    process_figure_analysis_task(fid, fig["image_url"])
+                )
+        
+        logger.info(f"[analyze-layout-lazy] Completed: {len(all_figures)} figures detected")
+        
+        return JSONResponse({
+            "success": True,
+            "paper_id": paper_id,
+            "pages_processed": len(pages_to_process),
+            "figures_detected": len(all_figures),
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"[analyze-layout-lazy] Unexpected error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Layout analysis failed: {str(e)}")
 
 
 # ============================================================================
