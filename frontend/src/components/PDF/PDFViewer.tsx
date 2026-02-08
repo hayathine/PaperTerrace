@@ -792,7 +792,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
             setErrorMsg(eventData.message);
             es.close();
           }
-        } catch (e) {}
+        } catch (e) {
+          // Ignore JSON parse errors for incomplete chunks
+        }
       };
 
       es.onerror = (err) => {

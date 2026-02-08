@@ -540,24 +540,23 @@ class VertexAIProvider(AIProviderInterface):
             logger.info(f"Using service account credentials from: {credentials_path}")
             # google.auth.load_credentials_from_fileを使用
             from google.auth import load_credentials_from_file
-            from google.auth.transport.requests import Request
-            
+
             credentials, project = load_credentials_from_file(
                 credentials_path,
-                scopes=["https://www.googleapis.com/auth/cloud-platform"]
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
             )
-            
+
             # プロジェクトIDが環境変数で指定されていない場合、認証情報から取得
             if not self.project_id and project:
                 self.project_id = project
                 logger.info(f"Using project ID from credentials: {project}")
-            
+
             # 認証情報を使用してクライアントを初期化
             self.client = genai.Client(
                 vertexai=True,
                 project=self.project_id,
                 location=self.location,
-                http_options={"credentials": credentials}
+                http_options={"credentials": credentials},
             )
         else:
             # デフォルト認証情報を使用（Application Default Credentials）
@@ -567,7 +566,7 @@ class VertexAIProvider(AIProviderInterface):
                 project=self.project_id,
                 location=self.location,
             )
-        
+
         logger.info(
             f"VertexAIProvider initialized: project={self.project_id}, location={self.location}, model={self.model}"
         )

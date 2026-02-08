@@ -19,6 +19,7 @@ migrations/
 *.pdf
 settings.json
 CLAUDE.md
+*.md
 # C extensions
 *.so
 
