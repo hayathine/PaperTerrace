@@ -280,7 +280,7 @@ async def analyze_layout_lazy(
     page_numbers: str = Form(None),  # Comma-separated page numbers, e.g., "1,2,3"
 ):
     """
-    画面表示後に遅延実行されるレイアウト解析エンドポイント
+    画面表示後に遅延実行されるレイアウト解析エンドポイント（バッチ処理版）
     
     Parameters
     ----------
@@ -332,12 +332,16 @@ async def analyze_layout_lazy(
         # Import figure service
         from app.domain.services.pdf_ocr_service import PDFOCRService
         from app.providers import get_ai_provider
+        from app.providers.inference_client import get_inference_client
+        from PIL import Image
         
         ai_provider = get_ai_provider()
         ocr_service = PDFOCRService(model="gemini-2.0-flash-exp")
         
-        # Process each page
-        all_figures = []
+        # Collect all images for batch processing
+        image_data_list = []
+        page_info_list = []
+        
         for page_num, image_url in pages_to_process:
             try:
                 # Download image
@@ -361,27 +365,46 @@ async def analyze_layout_lazy(
                             logger.warning(f"Failed to download image: {image_url}")
                             continue
                 
-                # Detect figures using FigureService
-                from PIL import Image
+                # JPEG圧縮で転送サイズを削減
                 img_pil = Image.open(io.BytesIO(img_bytes))
+                buffer = io.BytesIO()
+                img_pil.save(buffer, format="JPEG", quality=85, optimize=True)
+                compressed_bytes = buffer.getvalue()
                 
-                figures = await ocr_service.figure_service.detect_and_extract_figures(
-                    img_bytes,
-                    None,  # page_img not needed
-                    None,  # page not needed
-                    file_hash,
-                    page_num,
-                    zoom=1.0,
-                    pdf_path=None,
-                )
-                
-                if figures:
-                    all_figures.extend(figures)
-                    logger.info(f"[analyze-layout-lazy] Page {page_num}: Found {len(figures)} figures")
+                image_data_list.append(compressed_bytes)
+                page_info_list.append(page_num)
                 
             except Exception as e:
-                logger.error(f"[analyze-layout-lazy] Failed to process page {page_num}: {e}")
+                logger.error(f"[analyze-layout-lazy] Failed to load page {page_num}: {e}")
                 continue
+        
+        if not image_data_list:
+            raise HTTPException(status_code=400, detail="No valid images to process")
+        
+        # バッチ処理で一括解析（通信回数を大幅削減）
+        logger.info(f"[analyze-layout-lazy] Batch analyzing {len(image_data_list)} images")
+        client = await get_inference_client()
+        batch_results = await client.analyze_images_batch(image_data_list, max_batch_size=10)
+        
+        # Process results and save figures
+        all_figures = []
+        for page_num, results in zip(page_info_list, batch_results):
+            for res in results:
+                class_name = res.get("class_name", "").lower()
+                if class_name in ["figure", "table", "equation"]:
+                    bbox_dict = res.get("bbox", {})
+                    if bbox_dict:
+                        all_figures.append({
+                            "page_num": page_num,
+                            "bbox": [
+                                bbox_dict.get("x_min", 0),
+                                bbox_dict.get("y_min", 0),
+                                bbox_dict.get("x_max", 0),
+                                bbox_dict.get("y_max", 0),
+                            ],
+                            "label": class_name,
+                            "image_url": "",  # Will be generated when saving
+                        })
         
         # Save figures to database
         if all_figures:
@@ -395,16 +418,17 @@ async def analyze_layout_lazy(
                     paper_id=paper_id,
                     page_number=fig["page_num"],
                     bbox=fig["bbox"],
-                    image_url=fig["image_url"],
+                    image_url=fig.get("image_url", ""),
                     caption="",
                     explanation="",
                     label=fig.get("label", "figure"),
-                    latex=fig.get("latex", ""),
+                    latex="",
                 )
                 # Trigger figure analysis
-                asyncio.create_task(
-                    process_figure_analysis_task(fid, fig["image_url"])
-                )
+                if fig.get("image_url"):
+                    asyncio.create_task(
+                        process_figure_analysis_task(fid, fig["image_url"])
+                    )
         
         logger.info(f"[analyze-layout-lazy] Completed: {len(all_figures)} figures detected")
         

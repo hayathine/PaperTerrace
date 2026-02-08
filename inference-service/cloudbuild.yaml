@@ -39,12 +39,14 @@ steps:
           MIN="0"
           MAX="10"
           CON="10"
+          WORKERS="2"
         else
           CPU=$(python3 -c "import json; print(json.load(open('$CONF'))['inference']['cpu'])")
           MEM=$(python3 -c "import json; print(json.load(open('$CONF'))['inference']['memory'])")
           MIN=$(python3 -c "import json; print(json.load(open('$CONF'))['inference']['min_instances'])")
           MAX=$(python3 -c "import json; print(json.load(open('$CONF'))['inference']['max_instances'])")
           CON=$(python3 -c "import json; print(json.load(open('$CONF'))['inference']['concurrency'])")
+          WORKERS=$(python3 -c "import json; print(json.load(open('$CONF'))['inference'].get('batch_parallel_workers', 2))")
         fi
 
         # Get VPC connector name
@@ -72,7 +74,7 @@ steps:
           --max-instances $MAX \
           --concurrency $CON \
           --cpu-always-allocated \
-          --set-env-vars "ORT_INTRA_THREADS=4,ORT_INTER_THREADS=2,CT2_INTER_THREADS=1,CT2_INTRA_THREADS=4,LOG_LEVEL=INFO" \
+          --set-env-vars "ORT_INTRA_THREADS=4,ORT_INTER_THREADS=2,CT2_INTER_THREADS=1,CT2_INTRA_THREADS=4,LOG_LEVEL=INFO,BATCH_PARALLEL_WORKERS=$WORKERS" \
           --timeout 300 \
           --execution-environment gen2 \
           $VPC_ARGS

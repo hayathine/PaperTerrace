@@ -53,6 +53,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# gzip圧縮を有効化（レスポンスサイズを削減）
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
@@ -162,6 +166,103 @@ async def analyze_layout_image(request: Request, file: UploadFile = File(...)):
     finally:
         if temp_path and temp_path.exists():
             temp_path.unlink(missing_ok=True)
+
+
+@app.post("/api/v1/analyze-images-batch")
+@limiter.limit(os.getenv("RATE_LIMIT_LAYOUT_BATCH", "20/minute"))
+async def analyze_images_batch(request: Request, files: list[UploadFile] = File(...)):
+    """
+    複数画像を一括解析（バッチ処理）
+    通信回数を削減して高速化
+    
+    並列数は環境変数 BATCH_PARALLEL_WORKERS で制御可能
+    デフォルト: CPU数（最小1）
+    """
+    await ensure_initialized()
+
+    if not layout_service:
+        raise HTTPException(status_code=503, detail="Layout service unavailable")
+
+    start_time = time.time()
+    logger.info(f"Batch analysis request: {len(files)} images")
+
+    try:
+        # 環境変数から並列数を取得（resources.jsonから設定される）
+        # フォールバック: CPU数
+        cpu_count = os.cpu_count() or 2
+        max_parallel = int(os.getenv("BATCH_PARALLEL_WORKERS", cpu_count))
+        max_parallel = max(1, max_parallel)  # 最低1
+        
+        logger.info(
+            f"Using {max_parallel} parallel workers "
+            f"(CPU count: {cpu_count}, env: {os.getenv('BATCH_PARALLEL_WORKERS', 'not set')})"
+        )
+        
+        # 並列処理用のセマフォ
+        semaphore = asyncio.Semaphore(max_parallel)
+
+        async def process_one(file: UploadFile, index: int):
+            async with semaphore:
+                temp_path = None
+                try:
+                    temp_path = Path(f"/tmp/{int(time.time() * 1000)}_{index}.jpg")
+                    content = await file.read()
+                    temp_path.write_bytes(content)
+
+                    results = await run_in_threadpool(
+                        layout_service.analyze_image, str(temp_path)
+                    )
+
+                    serializable = [
+                        {
+                            "bbox": {
+                                "x_min": r.bbox.x_min,
+                                "y_min": r.bbox.y_min,
+                                "x_max": r.bbox.x_max,
+                                "y_max": r.bbox.y_max,
+                            },
+                            "class_name": r.class_name,
+                            "score": r.score,
+                        }
+                        for r in results
+                    ]
+
+                    return serializable
+
+                except Exception as e:
+                    logger.error(f"Failed to process image {index}: {e}")
+                    return []
+
+                finally:
+                    if temp_path and temp_path.exists():
+                        temp_path.unlink(missing_ok=True)
+
+        # 全画像を並列処理
+        results = await asyncio.gather(*[process_one(f, i) for i, f in enumerate(files)])
+
+        processing_time = time.time() - start_time
+        avg_time = processing_time / len(files) if files else 0
+        logger.info(
+            f"Batch analysis completed: {len(files)} images in {processing_time:.2f}s "
+            f"({avg_time:.2f}s per image)"
+        )
+
+        return {
+            "success": True,
+            "results": results,
+            "processing_time": processing_time,
+            "images_processed": len(files),
+            "parallel_workers": max_parallel,
+        }
+
+    except Exception as e:
+        logger.exception("Batch layout analysis failed")
+        return {
+            "success": False,
+            "results": [],
+            "processing_time": time.time() - start_time,
+            "message": str(e),
+        }
 
 
 # --------------------------------------------------

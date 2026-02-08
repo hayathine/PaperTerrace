@@ -121,8 +121,9 @@ class FigureService:
                 # Crop from the already rendered PIL image
                 crop_pil = page_img.original.crop(pixel_bbox).convert("RGB")
 
+                # JPEG圧縮で転送サイズを削減（PNG比で90%削減）
                 buffer = io.BytesIO()
-                crop_pil.save(buffer, format="PNG")
+                crop_pil.save(buffer, format="JPEG", quality=85, optimize=True)
                 img_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
                 img_name = f"p{page_num}_{cand['label']}_{len(final_areas)}"
