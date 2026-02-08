@@ -83,6 +83,11 @@ resource "google_cloud_run_v2_service" "main" {
         value = var.inference_service_url
       }
 
+      env {
+        name  = "BATCH_PARALLEL_WORKERS"
+        value = tostring(var.batch_parallel_workers)
+      }
+
       # Secrets from Secret Manager
       env {
         name = "GEMINI_API_KEY"

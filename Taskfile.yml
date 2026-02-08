@@ -42,6 +42,15 @@ vars:
     {
       sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["inference_staging"]["memory"])''',
     }
+  INF_STG_WORKERS:
+    {
+      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["inference_staging"].get("batch_parallel_workers", 2))''',
+    }
+
+  INF_WORKERS:
+    {
+      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["inference"].get("batch_parallel_workers", 2))''',
+    }
 
   BUILD_MACHINE:
     {
@@ -240,7 +249,7 @@ tasks:
           --max-instances 10 \
           --concurrency 10 \
           --timeout 300 \
-          --set-env-vars "LOG_LEVEL=INFO,DEV_MODE=false,SKIP_MODEL_LOADING=false,LOCAL_MODEL_PATH=/app/models/m2m100_ct2,TRANSLATION_BEAM_SIZE=5,TRANSLATION_REPETITION_PENALTY=1.4,TRANSLATION_NO_REPEAT_NGRAM_SIZE=3"
+          --set-env-vars "LOG_LEVEL=INFO,DEV_MODE=false,SKIP_MODEL_LOADING=false,LOCAL_MODEL_PATH=/app/models/m2m100_ct2,TRANSLATION_BEAM_SIZE=5,TRANSLATION_REPETITION_PENALTY=1.4,TRANSLATION_NO_REPEAT_NGRAM_SIZE=3,BATCH_PARALLEL_WORKERS={{.INF_STG_WORKERS}}"
       - echo "✅ Inference service deployed to staging!"
       - task: staging:urls
 

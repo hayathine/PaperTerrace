@@ -130,3 +130,9 @@ variable "inference_service_url" {
   type        = string
   default     = ""
 }
+
+variable "batch_parallel_workers" {
+  description = "Number of parallel workers for batch processing"
+  type        = number
+  default     = 2
+}
