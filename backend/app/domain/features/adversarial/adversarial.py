@@ -11,11 +11,12 @@ from app.domain.prompts import (
     AGENT_ADVERSARIAL_CRITIQUE_PROMPT,
     CORE_SYSTEM_PROMPT,
 )
-from common.logger import logger
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import (
     AdversarialCritiqueResponse as CritiqueResponse,
 )
+
+from common.logger import logger
 
 
 class AdversarialError(Exception):
@@ -44,7 +45,7 @@ class AdversarialReviewService:
         Returns:
             Dictionary with critical analysis categories
         """
-        from ..translate import SUPPORTED_LANGUAGES
+        from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 

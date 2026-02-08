@@ -1,8 +1,9 @@
 import os
 
-from common.logger import logger
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import ClaimVerificationResponse
+
+from common.logger import logger
 
 
 class ClaimVerificationService:
@@ -29,7 +30,7 @@ class ClaimVerificationService:
             CORE_SYSTEM_PROMPT,
         )
 
-        from ..translate import SUPPORTED_LANGUAGES
+        from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 

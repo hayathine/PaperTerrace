@@ -10,7 +10,7 @@ from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
-from app.domain.features.translate import SUPPORTED_LANGUAGES
+from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.domain.prompts import (
     CORE_SYSTEM_PROMPT,
     DICT_EXPLAIN_WORD_CONTEXT_PROMPT,

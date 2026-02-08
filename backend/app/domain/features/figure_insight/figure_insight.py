@@ -38,7 +38,7 @@ class FigureInsightService:
         Returns:
             ターゲット言語での分析結果
         """
-        from ..translate import SUPPORTED_LANGUAGES
+        from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
         caption_hint = f"\n[Caption]\n{caption}" if caption else ""
@@ -99,7 +99,7 @@ class FigureInsightService:
         Returns:
             ターゲット言語での分析結果
         """
-        from ..translate import SUPPORTED_LANGUAGES
+        from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
         context_hint = f"\n[Context]\n{context[:1000]}" if context else ""
@@ -143,7 +143,7 @@ class FigureInsightService:
         Returns:
             比較分析結果
         """
-        from ..translate import SUPPORTED_LANGUAGES
+        from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 

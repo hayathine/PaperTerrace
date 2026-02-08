@@ -2,9 +2,10 @@ import os
 from typing import Any
 
 from app.domain.prompts import AGENT_CITE_INTENT_PROMPT, CORE_SYSTEM_PROMPT
-from common.logger import logger
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import CitationAnalysisResponse
+
+from common.logger import logger
 
 
 class CiteIntentService:
@@ -59,7 +60,7 @@ class CiteIntentService:
         """
         段落内の引用を特定し、その意図を分類して詳細情報を付与する。
         """
-        from ..translate import SUPPORTED_LANGUAGES
+        from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 

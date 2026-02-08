@@ -12,7 +12,7 @@ from app.providers.dictionary_provider import get_dictionary_provider
 from common.logger import logger
 from common.utils.text import truncate_context
 
-from .translate import SUPPORTED_LANGUAGES
+from .correspondence_lang_dict import SUPPORTED_LANGUAGES
 
 
 class WordAnalysisService:

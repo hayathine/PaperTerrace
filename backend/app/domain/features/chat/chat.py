@@ -13,11 +13,12 @@ from app.domain.prompts import (
     CHAT_WITH_FIGURE_PROMPT,
     CORE_SYSTEM_PROMPT,
 )
-from common.logger import logger
 from app.providers import get_ai_provider
 from app.providers.redis_provider import (
     RedisService,
 )  # RedisService now uses in-memory cache
+
+from common.logger import logger
 
 
 class ChatError(Exception):
@@ -70,7 +71,7 @@ class ChatService:
             [f"{msg['role']}: {msg['content']}" for msg in current_conversation]
         )
 
-        from ..translate import SUPPORTED_LANGUAGES
+        from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
@@ -202,7 +203,7 @@ class ChatService:
         Returns:
             Response simulating the author's viewpoint
         """
-        from ..translate import SUPPORTED_LANGUAGES
+        from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
