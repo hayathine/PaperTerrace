@@ -281,74 +281,83 @@ async def analyze_layout_lazy(
 ):
     """
     画面表示後に遅延実行されるレイアウト解析エンドポイント（バッチ処理版）
-    
+
     Parameters
     ----------
     paper_id : str
         論文ID
     page_numbers : str, optional
         解析対象のページ番号（カンマ区切り）。指定がない場合は全ページ
-        
+
     Returns
     -------
     JSONResponse
         解析結果のステータス
     """
     try:
-        logger.info(f"[analyze-layout-lazy] Starting for paper_id={paper_id}, pages={page_numbers}")
-        
+        logger.info(
+            f"[analyze-layout-lazy] Starting for paper_id={paper_id}, pages={page_numbers}"
+        )
+
         # Get paper data
         paper = storage.get_paper(paper_id)
         if not paper:
             raise HTTPException(status_code=404, detail="Paper not found")
-        
+
         file_hash = paper.get("file_hash")
         if not file_hash:
             raise HTTPException(status_code=400, detail="Paper has no file_hash")
-        
+
         # Parse page numbers
         pages_to_analyze = None
         if page_numbers:
             try:
                 pages_to_analyze = [int(p.strip()) for p in page_numbers.split(",")]
             except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid page_numbers format")
-        
+                raise HTTPException(
+                    status_code=400, detail="Invalid page_numbers format"
+                )
+
         # Get cached images
         from app.providers.image_storage import get_page_images
+
         cached_images = get_page_images(file_hash)
-        
+
         if not cached_images:
-            raise HTTPException(status_code=404, detail="No cached images found for this paper")
-        
+            raise HTTPException(
+                status_code=404, detail="No cached images found for this paper"
+            )
+
         # Filter pages if specified
         if pages_to_analyze:
-            pages_to_process = [(i, url) for i, url in enumerate(cached_images, 1) if i in pages_to_analyze]
+            pages_to_process = [
+                (i, url)
+                for i, url in enumerate(cached_images, 1)
+                if i in pages_to_analyze
+            ]
         else:
             pages_to_process = list(enumerate(cached_images, 1))
-        
+
         logger.info(f"[analyze-layout-lazy] Processing {len(pages_to_process)} pages")
-        
+
         # Import figure service
-        from app.domain.services.pdf_ocr_service import PDFOCRService
-        from app.providers import get_ai_provider
-        from app.providers.inference_client import get_inference_client
         from PIL import Image
-        
-        ai_provider = get_ai_provider()
-        ocr_service = PDFOCRService(model="gemini-2.0-flash-exp")
-        
+
+        from app.providers.inference_client import get_inference_client
+
         # Collect all images for batch processing
         image_data_list = []
         page_info_list = []
-        
+
         for page_num, image_url in pages_to_process:
             try:
                 # Download image
                 import httpx
+
                 if image_url.startswith("/static/"):
                     # Local file
                     from pathlib import Path
+
                     img_path = Path("src") / image_url.lstrip("/")
                     if img_path.exists():
                         img_bytes = img_path.read_bytes()
@@ -364,28 +373,34 @@ async def analyze_layout_lazy(
                         else:
                             logger.warning(f"Failed to download image: {image_url}")
                             continue
-                
+
                 # JPEG圧縮で転送サイズを削減
                 img_pil = Image.open(io.BytesIO(img_bytes))
                 buffer = io.BytesIO()
                 img_pil.save(buffer, format="JPEG", quality=85, optimize=True)
                 compressed_bytes = buffer.getvalue()
-                
+
                 image_data_list.append(compressed_bytes)
                 page_info_list.append(page_num)
-                
+
             except Exception as e:
-                logger.error(f"[analyze-layout-lazy] Failed to load page {page_num}: {e}")
+                logger.error(
+                    f"[analyze-layout-lazy] Failed to load page {page_num}: {e}"
+                )
                 continue
-        
+
         if not image_data_list:
             raise HTTPException(status_code=400, detail="No valid images to process")
-        
+
         # バッチ処理で一括解析（通信回数を大幅削減）
-        logger.info(f"[analyze-layout-lazy] Batch analyzing {len(image_data_list)} images")
+        logger.info(
+            f"[analyze-layout-lazy] Batch analyzing {len(image_data_list)} images"
+        )
         client = await get_inference_client()
-        batch_results = await client.analyze_images_batch(image_data_list, max_batch_size=10)
-        
+        batch_results = await client.analyze_images_batch(
+            image_data_list, max_batch_size=10
+        )
+
         # Process results and save figures
         all_figures = []
         for page_num, results in zip(page_info_list, batch_results):
@@ -394,25 +409,32 @@ async def analyze_layout_lazy(
                 if class_name in ["figure", "table", "equation"]:
                     bbox_dict = res.get("bbox", {})
                     if bbox_dict:
-                        all_figures.append({
-                            "page_num": page_num,
-                            "bbox": [
-                                bbox_dict.get("x_min", 0),
-                                bbox_dict.get("y_min", 0),
-                                bbox_dict.get("x_max", 0),
-                                bbox_dict.get("y_max", 0),
-                            ],
-                            "label": class_name,
-                            "image_url": "",  # Will be generated when saving
-                        })
-        
+                        all_figures.append(
+                            {
+                                "page_num": page_num,
+                                "bbox": [
+                                    bbox_dict.get("x_min", 0),
+                                    bbox_dict.get("y_min", 0),
+                                    bbox_dict.get("x_max", 0),
+                                    bbox_dict.get("y_max", 0),
+                                ],
+                                "label": class_name,
+                                "image_url": "",  # Will be generated when saving
+                            }
+                        )
+
         # Save figures to database
         if all_figures:
-            from app.crud import save_figure_to_db
-            from app.domain.services.paper_processing import process_figure_analysis_task
             import asyncio
-            
-            logger.info(f"[analyze-layout-lazy] Saving {len(all_figures)} figures to DB")
+
+            from app.crud import save_figure_to_db
+            from app.domain.services.paper_processing import (
+                process_figure_analysis_task,
+            )
+
+            logger.info(
+                f"[analyze-layout-lazy] Saving {len(all_figures)} figures to DB"
+            )
             for fig in all_figures:
                 fid = save_figure_to_db(
                     paper_id=paper_id,
@@ -429,16 +451,20 @@ async def analyze_layout_lazy(
                     asyncio.create_task(
                         process_figure_analysis_task(fid, fig["image_url"])
                     )
-        
-        logger.info(f"[analyze-layout-lazy] Completed: {len(all_figures)} figures detected")
-        
-        return JSONResponse({
-            "success": True,
-            "paper_id": paper_id,
-            "pages_processed": len(pages_to_process),
-            "figures_detected": len(all_figures),
-        })
-        
+
+        logger.info(
+            f"[analyze-layout-lazy] Completed: {len(all_figures)} figures detected"
+        )
+
+        return JSONResponse(
+            {
+                "success": True,
+                "paper_id": paper_id,
+                "pages_processed": len(pages_to_process),
+                "figures_detected": len(all_figures),
+            }
+        )
+
     except HTTPException:
         raise
     except Exception as e:

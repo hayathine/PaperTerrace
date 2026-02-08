@@ -15,6 +15,7 @@ from typing import Optional
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.gzip import GZipMiddleware
 from services.layout_detection.layout_service import LayoutAnalysisService
 from services.translation.translation_service import TranslationService
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -54,7 +55,6 @@ app.add_middleware(
 )
 
 # gzip圧縮を有効化（レスポンスサイズを削減）
-from fastapi.middleware.gzip import GZipMiddleware
 app.add_middleware(GZipMiddleware, minimum_size=1000)
 
 app.state.limiter = limiter
@@ -174,7 +174,7 @@ async def analyze_images_batch(request: Request, files: list[UploadFile] = File(
     """
     複数画像を一括解析（バッチ処理）
     通信回数を削減して高速化
-    
+
     並列数は環境変数 BATCH_PARALLEL_WORKERS で制御可能
     デフォルト: CPU数（最小1）
     """
@@ -192,12 +192,12 @@ async def analyze_images_batch(request: Request, files: list[UploadFile] = File(
         cpu_count = os.cpu_count() or 2
         max_parallel = int(os.getenv("BATCH_PARALLEL_WORKERS", cpu_count))
         max_parallel = max(1, max_parallel)  # 最低1
-        
+
         logger.info(
             f"Using {max_parallel} parallel workers "
             f"(CPU count: {cpu_count}, env: {os.getenv('BATCH_PARALLEL_WORKERS', 'not set')})"
         )
-        
+
         # 並列処理用のセマフォ
         semaphore = asyncio.Semaphore(max_parallel)
 
@@ -238,7 +238,9 @@ async def analyze_images_batch(request: Request, files: list[UploadFile] = File(
                         temp_path.unlink(missing_ok=True)
 
         # 全画像を並列処理
-        results = await asyncio.gather(*[process_one(f, i) for i, f in enumerate(files)])
+        results = await asyncio.gather(
+            *[process_one(f, i) for i, f in enumerate(files)]
+        )
 
         processing_time = time.time() - start_time
         avg_time = processing_time / len(files) if files else 0

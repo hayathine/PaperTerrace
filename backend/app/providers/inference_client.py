@@ -189,14 +189,14 @@ class InferenceServiceClient:
     ) -> list[list[dict[str, Any]]]:
         """
         複数画像を一括で解析（バッチ処理）
-        
+
         Parameters
         ----------
         images : list[bytes]
             解析対象の画像データリスト
         max_batch_size : int
             1リクエストあたりの最大画像数
-            
+
         Returns
         -------
         list[list[dict[str, Any]]]
@@ -204,22 +204,22 @@ class InferenceServiceClient:
         """
         try:
             logger.info(f"バッチレイアウト解析リクエスト: {len(images)}画像")
-            
+
             # バッチサイズで分割
             all_results = []
             for i in range(0, len(images), max_batch_size):
                 batch = images[i : i + max_batch_size]
-                
+
                 # multipart/form-dataで複数画像を送信
                 files = [
                     ("files", (f"image_{j}.jpg", img, "image/jpeg"))
                     for j, img in enumerate(batch)
                 ]
-                
+
                 response = await self._make_request_with_retry(
                     "POST", "/api/v1/analyze-images-batch", files=files
                 )
-                
+
                 if response.get("success"):
                     batch_results = response.get("results", [])
                     all_results.extend(batch_results)
@@ -230,10 +230,10 @@ class InferenceServiceClient:
                 else:
                     error_msg = response.get("message", "不明なエラー")
                     raise InferenceServiceError(f"バッチ解析失敗: {error_msg}")
-            
+
             logger.info(f"全バッチ解析完了: {len(all_results)}結果")
             return all_results
-            
+
         except Exception as e:
             logger.error(f"バッチレイアウト解析エラー: {e}")
             raise
