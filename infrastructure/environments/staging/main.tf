@@ -87,7 +87,7 @@ module "cloud_run_staging" {
   service_name          = "paperterrace-staging"
   db_name               = google_sql_database.staging.name
   db_user               = data.terraform_remote_state.production.outputs.cloud_sql_db_user
-  min_instance_count    = local.resources.backend_staging.min_instance_count
+  min_instance_count    = local.resources.backend_staging.min_instances
   max_instance_count    = local.resources.backend_staging.max_instances
   cpu                  = local.resources.backend_staging.cpu
   memory               = local.resources.backend_staging.memory

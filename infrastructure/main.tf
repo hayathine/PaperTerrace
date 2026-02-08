@@ -46,6 +46,7 @@ resource "google_project_service" "apis" {
     "vpcaccess.googleapis.com",
     "servicenetworking.googleapis.com",
     "iam.googleapis.com", 
+    "iamcredentials.googleapis.com",
     # "redis.googleapis.com", # Redis API disabled to save cost
   ])
 
@@ -147,7 +148,7 @@ module "cloud_run" {
 
   # Pass new variables explicitly (optional since defaults are set)
   service_name         = "paperterrace"
-  min_instance_count   = local.resources.backend.min_instance_count
+  min_instance_count   = local.resources.backend.min_instances
   max_instance_count   = local.resources.backend.max_instances
   cpu                  = local.resources.backend.cpu
   memory               = local.resources.backend.memory
@@ -208,7 +209,7 @@ module "cloud_run_staging" {
   service_name          = "paperterrace-staging"
   db_name               = google_sql_database.staging[0].name
   db_user               = module.cloud_sql.database_user # Share same user
-  min_instance_count    = local.resources.backend_staging.min_instance_count
+  min_instance_count    = local.resources.backend_staging.min_instances
   max_instance_count    = local.resources.backend_staging.max_instances
   cpu                  = local.resources.backend_staging.cpu
   memory               = local.resources.backend_staging.memory

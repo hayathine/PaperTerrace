@@ -23,3 +23,10 @@ resource "google_project_iam_member" "ai_platform_user" {
   role    = "roles/aiplatform.user"
   member  = "serviceAccount:${google_service_account.app_sa.email}"
 }
+
+# Allow service account to sign URLs using IAM
+resource "google_project_iam_member" "token_creator" {
+  project = var.project_id
+  role    = "roles/iam.serviceAccountTokenCreator"
+  member  = "serviceAccount:${google_service_account.app_sa.email}"
+}

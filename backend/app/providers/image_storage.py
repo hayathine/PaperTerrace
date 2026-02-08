@@ -142,9 +142,21 @@ class GCSImageStorage(ImageStorageStrategy):
         # GCSの署名付きURLを使用してクライアントが直接アクセスできるようにする
         import datetime
 
-        url = blob.generate_signed_url(
-            version="v4", expiration=datetime.timedelta(hours=12), method="GET"
-        )
+        # 環境によってCredentialsに秘密鍵が含まれない場合があるため、
+        # IAM API経由で署名を行うように明示的に指定する
+        try:
+            url = blob.generate_signed_url(
+                version="v4",
+                expiration=datetime.timedelta(hours=12),
+                method="GET",
+                service_account_email=self.client.get_service_account_email(),
+            )
+        except Exception as e:
+            logger.warning(
+                f"Failed to generate signed URL using IAM, falling back: {e}"
+            )
+            # 署名付きURLが使えない場合のフォールバック（アクセストークンの有無などに依存）
+            url = blob.public_url
 
         logger.debug(f"Saved page image (GCS): {blob_name}")
         return url
@@ -179,10 +191,17 @@ class GCSImageStorage(ImageStorageStrategy):
         import datetime
 
         for _, blob in blob_list:
-            # 署名付きURL生成（キャッシュなどを考慮すると非効率だが一旦これで）
-            url = blob.generate_signed_url(
-                version="v4", expiration=datetime.timedelta(hours=12), method="GET"
-            )
+            # 署名付きURL生成
+            try:
+                url = blob.generate_signed_url(
+                    version="v4",
+                    expiration=datetime.timedelta(hours=12),
+                    method="GET",
+                    service_account_email=self.client.get_service_account_email(),
+                )
+            except Exception as e:
+                logger.warning(f"Failed to generate signed URL for list result: {e}")
+                url = blob.public_url
             urls.append(url)
 
         return urls
