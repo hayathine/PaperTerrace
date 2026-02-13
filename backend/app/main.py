@@ -4,6 +4,7 @@ Main application entry point.
 """
 
 import contextlib
+import json
 import os
 import time
 import traceback
@@ -282,26 +283,68 @@ async def serve_test_pdf():
     return JSONResponse({"error": "test.pdf not found"}, status_code=404)
 
 
+# Cache for index.html content
+_index_html_cache = None
+_index_html_mtime = 0
+
+
 @app.get("/{full_path:path}", response_class=HTMLResponse)
 async def serve_react_app(request: Request, full_path: str):
-    # Allow other defined routes (like /papers, /chat) to handle their requests by returning None here?
-    # No, FastAPI routing doesn't work that way. This is a catch-all.
-    # But since it's defined LAST (after routers), it only catches what routers didn't catch.
-    # However, include_router adds routes.
-    # So if I put this at the very end, it catches 404s.
+    """
+    Serve the React Single Page Application (SPA).
+    Injects runtime configuration (Firebase) into index.html.
+    Uses in-memory caching to avoid blocking disk I/O on every request.
+    """
+    global _index_html_cache, _index_html_mtime
 
     # Determine dist directory (Docker vs Local)
+    # Note: In production, this path is stable, so we could optimize this too,
+    # but for now we follow the existing logic for flexibility.
     dist_dir = "app/static/dist"
     if not os.path.exists(dist_dir) and os.path.exists("frontend/dist"):
         dist_dir = "frontend/dist"
 
-    # Check if index.html exists
     index_file = os.path.join(dist_dir, "index.html")
-    if os.path.exists(index_file):
-        return FileResponse(index_file)
 
-    # Fallback to old template if React build not found (or for intentionally unhandled routes?)
-    # For now, just render index.html (old one) if React not found.
-    return templates.TemplateResponse(
-        "index.html", {"request": request, "firebase_config": FIREBASE_CONFIG}
+    if not os.path.exists(index_file):
+        # Fallback to Jinja2 template if React build not found
+        # This is mainly for dev or errored builds
+        return templates.TemplateResponse(
+            "index.html", {"request": request, "firebase_config": FIREBASE_CONFIG}
+        )
+
+    # Check file modification time to invalidate cache if updated
+    try:
+        current_mtime = os.path.getmtime(index_file)
+        if _index_html_cache is None or current_mtime > _index_html_mtime:
+            # Read file (Blocking I/O only once per update)
+            # In high-concurrency scenarios, we might want a lock here, but for now this is fine.
+            with open(index_file, "r", encoding="utf-8") as f:
+                content = f.read()
+
+            _index_html_cache = content
+            _index_html_mtime = current_mtime
+            logger.info("Loaded and cached index.html")
+
+    except Exception as e:
+        logger.error(f"Failed to read index.html: {e}")
+        return JSONResponse(
+            status_code=500, content={"error": "Frontend build invalid"}
+        )
+
+    # Inject Runtime Configuration
+    # We do this every time because FIREBASE_CONFIG is in memory but relatively static.
+    # If config changes dynamically, this picks it up.
+    # Using json.dumps ensures the object is valid JSON.
+    # For extra safety, we could use a script tag with type="application/json" and read it,
+    # but window.__FIREBASE_CONFIG__ is standard pattern.
+    config_json = json.dumps(FIREBASE_CONFIG)
+
+    # We replace the comment placeholder.
+    # If the placeholder is missing, it just returns the original content.
+    html_content = _index_html_cache.replace(
+        "<!--__FIREBASE_CONFIG__-->",
+        f"<script>window.__FIREBASE_CONFIG__ = {config_json};</script>",
     )
+
+    return HTMLResponse(content=html_content, status_code=200)
