@@ -217,9 +217,30 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
       const result = await response.json();
       console.log("[PDFViewer] Lazy layout analysis completed:", result);
+
+      // Merge detected figures into page state
+      if (result.figures && result.figures.length > 0) {
+        setPages((prevPages) =>
+          prevPages.map((page) => {
+            const pageFigures = result.figures.filter(
+              (f: any) => f.page_num === page.page_num,
+            );
+            if (pageFigures.length > 0) {
+              return {
+                ...page,
+                figures: [...(page.figures || []), ...pageFigures],
+              };
+            }
+            return page;
+          }),
+        );
+        console.log(
+          `[PDFViewer] Merged ${result.figures.length} figures into pages`,
+        );
+      }
     } catch (err) {
       console.error("[PDFViewer] Lazy layout analysis error:", err);
-      throw err;
+      // Don't re-throw - this is a background enhancement, not critical
     }
   };
 
@@ -968,6 +989,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                   jumpTarget={jumpTarget}
                   searchTerm={searchTerm}
                   currentSearchMatch={currentSearchMatch}
+                  isClickMode={mode === "text"}
                 />
               ))}
             </div>

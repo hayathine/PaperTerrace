@@ -44,3 +44,4 @@ plans/
 frontend/node_modules/
 /models/
 docs/
+backend/app/static/dist/

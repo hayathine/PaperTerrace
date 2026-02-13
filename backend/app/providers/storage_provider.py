@@ -86,6 +86,11 @@ class StorageInterface(ABC):
         ...
 
     @abstractmethod
+    def update_paper_layout(self, paper_id: str, layout_json: str) -> bool:
+        """Update the layout JSON of a paper."""
+        ...
+
+    @abstractmethod
     def update_paper_visibility(self, paper_id: str, visibility: str) -> bool:
         """Update paper visibility."""
         ...
@@ -453,6 +458,17 @@ class SQLiteStorage(StorageInterface):
             if deleted:
                 log.info("db", f"Paper deleted: {paper_id}")
             return deleted
+
+    def update_paper_layout(self, paper_id: str, layout_json: str) -> bool:
+        """Update the layout JSON of a paper."""
+        now = datetime.now().isoformat()
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE papers SET layout_json = ?, updated_at = ? WHERE paper_id = ?",
+                (layout_json, now, paper_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
 
     def update_paper_visibility(self, paper_id: str, visibility: str) -> bool:
         """Update paper visibility."""

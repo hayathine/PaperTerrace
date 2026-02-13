@@ -194,6 +194,18 @@ class CloudSQLStorage(StorageInterface):
             conn.commit()
             return cur.rowcount > 0
 
+    def update_paper_layout(self, paper_id: str, layout_json: str) -> bool:
+        """Update the layout JSON of a paper."""
+        now = datetime.now()
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE papers SET layout_json = %s, updated_at = %s WHERE paper_id = %s",
+                    (layout_json, now, paper_id),
+                )
+            conn.commit()
+            return cur.rowcount > 0
+
     def update_paper_visibility(self, paper_id: str, visibility: str) -> bool:
         with self._get_connection() as conn:
             with conn.cursor() as cur:

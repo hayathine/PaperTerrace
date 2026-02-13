@@ -1,3 +1,5 @@
+# This script was used for one-time Terraform state import.
+# It is no longer needed.
 #!/bin/bash
 # Import all existing GCP resources into Terraform state
 set -e

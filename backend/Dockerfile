@@ -1,10 +1,11 @@
 # --- Stage 1: Frontend Builder ---
+# Pre-build frontend locally with: cd frontend && npm run build
 FROM node:20-slim AS frontend-builder
 WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend ./
-RUN npm run build
+RUN rm -rf dist && npm run build
 
 # --- Stage 2: Runtime Builder ---
 FROM python:3.12-slim AS runtime-builder

@@ -401,27 +401,69 @@ async def analyze_layout_lazy(
             image_data_list, max_batch_size=10
         )
 
-        # Process results and save figures
+        # Process results: crop figure images and save
+        from app.providers.image_storage import save_page_image
+
         all_figures = []
-        for page_num, results in zip(page_info_list, batch_results):
+        for page_num, img_bytes, results in zip(
+            page_info_list, image_data_list, batch_results
+        ):
+            img_pil = Image.open(io.BytesIO(img_bytes))
+            img_w, img_h = img_pil.size
+            fig_idx = 0
+
             for res in results:
                 class_name = res.get("class_name", "").lower()
                 if class_name in ["figure", "table", "equation"]:
                     bbox_dict = res.get("bbox", {})
-                    if bbox_dict:
+                    if not bbox_dict:
+                        continue
+
+                    x_min = bbox_dict.get("x_min", 0)
+                    y_min = bbox_dict.get("y_min", 0)
+                    x_max = bbox_dict.get("x_max", 0)
+                    y_max = bbox_dict.get("y_max", 0)
+
+                    # Skip invalid bboxes
+                    if x_max <= x_min or y_max <= y_min:
+                        continue
+
+                    # Crop the figure from the page image
+                    try:
+                        margin = 5
+                        crop_box = (
+                            max(0, x_min - margin),
+                            max(0, y_min - margin),
+                            min(img_w, x_max + margin),
+                            min(img_h, y_max + margin),
+                        )
+                        crop_pil = img_pil.crop(crop_box).convert("RGB")
+
+                        # Encode as JPEG
+                        import base64
+
+                        buffer = io.BytesIO()
+                        crop_pil.save(buffer, format="JPEG", quality=85, optimize=True)
+                        img_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+
+                        # Save the cropped image
+                        img_name = f"p{page_num}_{class_name}_{fig_idx}"
+                        figure_image_url = save_page_image(file_hash, img_name, img_b64)
+                        fig_idx += 1
+
                         all_figures.append(
                             {
                                 "page_num": page_num,
-                                "bbox": [
-                                    bbox_dict.get("x_min", 0),
-                                    bbox_dict.get("y_min", 0),
-                                    bbox_dict.get("x_max", 0),
-                                    bbox_dict.get("y_max", 0),
-                                ],
+                                "bbox": [x_min, y_min, x_max, y_max],
                                 "label": class_name,
-                                "image_url": "",  # Will be generated when saving
+                                "image_url": figure_image_url,
                             }
                         )
+                    except Exception as crop_err:
+                        logger.warning(
+                            f"[analyze-layout-lazy] Failed to crop {class_name} on page {page_num}: {crop_err}"
+                        )
+                        continue
 
         # Save figures to database
         if all_figures:
@@ -446,11 +488,50 @@ async def analyze_layout_lazy(
                     label=fig.get("label", "figure"),
                     latex="",
                 )
-                # Trigger figure analysis
+                # Trigger figure analysis for figures with images
                 if fig.get("image_url"):
                     asyncio.create_task(
                         process_figure_analysis_task(fid, fig["image_url"])
                     )
+
+        # Update layout_json in paper record to include figures
+        try:
+            existing_layout = paper.get("layout_json")
+            if existing_layout:
+                import json
+
+                layout_list = json.loads(existing_layout)
+
+                # Group figures by page
+                page_figures: dict[int, list] = {}
+                for fig in all_figures:
+                    pn = fig["page_num"]
+                    if pn not in page_figures:
+                        page_figures[pn] = []
+                    page_figures[pn].append(
+                        {
+                            "bbox": fig["bbox"],
+                            "image_url": fig["image_url"],
+                            "label": fig.get("label", "figure"),
+                            "page_num": fig["page_num"],
+                        }
+                    )
+
+                # Merge figures into layout_json
+                for i, layout in enumerate(layout_list):
+                    page_num = i + 1
+                    if page_num in page_figures:
+                        layout["figures"] = page_figures[page_num]
+
+                # Save updated layout_json
+                storage.update_paper_layout(paper_id, json.dumps(layout_list))
+                logger.info(
+                    f"[analyze-layout-lazy] Updated layout_json with {len(all_figures)} figures"
+                )
+        except Exception as layout_err:
+            logger.warning(
+                f"[analyze-layout-lazy] Failed to update layout_json: {layout_err}"
+            )
 
         logger.info(
             f"[analyze-layout-lazy] Completed: {len(all_figures)} figures detected"
@@ -462,6 +543,15 @@ async def analyze_layout_lazy(
                 "paper_id": paper_id,
                 "pages_processed": len(pages_to_process),
                 "figures_detected": len(all_figures),
+                "figures": [
+                    {
+                        "page_num": f["page_num"],
+                        "bbox": f["bbox"],
+                        "label": f["label"],
+                        "image_url": f["image_url"],
+                    }
+                    for f in all_figures
+                ],
             }
         )
 

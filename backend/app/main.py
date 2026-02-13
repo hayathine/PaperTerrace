@@ -111,7 +111,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # CORS configuration for React development
 app.add_middleware(
-    CORSMiddleware,  # type: ignore[arg-type]
+    CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
     allow_origin_regex=r"https://paperterrace.*\.run\.app",
     allow_credentials=True,
