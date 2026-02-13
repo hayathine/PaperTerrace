@@ -45,8 +45,15 @@ resource "google_storage_bucket" "papers" {
 }
 
 # IAM for Cloud Run service account to access bucket
-resource "google_storage_bucket_iam_member" "cloud_run" {
+resource "google_storage_bucket_iam_member" "cloud_run_admin" {
   bucket = google_storage_bucket.papers.name
   role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${var.service_account_email}"
+}
+
+# Allow public read access for paper images
+resource "google_storage_bucket_iam_member" "public_read" {
+  bucket = google_storage_bucket.papers.name
+  role   = "roles/storage.objectViewer"
+  member = "allUsers"
 }

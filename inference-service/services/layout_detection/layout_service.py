@@ -250,10 +250,14 @@ class LayoutAnalysisService:
         outputs: list,
         ori_shape: tuple[int, int],
         target_size: tuple[int, int] = (640, 640),
-        threshold: float = os.getenv("LAYOUT_THRESHOLD", 0.6),
+        threshold: float = os.getenv("LAYOUT_THRESHOLD", 0.9),
         scale_factor: np.ndarray | None = None,
     ) -> list[dict[str, Any]]:
-        """後処理：座標変換とフィルタリング"""
+        """後処理：座標変換とフィルタリング
+
+        モデル出力の座標は640x640スケールで返されるため、
+        元画像のピクセル座標に変換する必要がある。
+        """
         predictions = outputs[0]
         ori_h, ori_w = ori_shape
 
@@ -294,22 +298,20 @@ class LayoutAnalysisService:
         results = []
 
         if len(valid_predictions) > 0:
-            # ONNXモデルは im_shape 引数を受け取り、座標をそのスケール（元画像のピクセルサイズ）で返す。
-            # そのため、xmin / ymin などをそのままピクセル座標として利用可能。
+            # モデル出力は640x640スケールの座標なので、元画像スケールに変換
+            # scale_factor = 640 / ori_w なので、元に戻すには / scale_factor (= * ori_w / 640)
 
             for res in valid_predictions:
                 class_id, score, xxmin, yymin, xxmax, yymax = res
 
-                # 座標を元のサイズに復元
-                # Paddle2ONNXのDocLayoutモデルは、内部で scale_factor による除算が行われる場合があるため、
-                # ここで再度 scale_factor を掛けることで正しいピクセル座標に戻す。
-                x1 = max(0, min(ori_w, int(xxmin * sw)))
-                y1 = max(0, min(ori_h, int(yymin * sh)))
-                x2 = max(0, min(ori_w, int(xxmax * sw)))
-                y2 = max(0, min(ori_h, int(yymax * sh)))
+                # 座標を元のサイズに復元 (640スケール → 元画像スケール)
+                x1 = max(0, min(ori_w, int(xxmin / sw)))
+                y1 = max(0, min(ori_h, int(yymin / sh)))
+                x2 = max(0, min(ori_w, int(xxmax / sw)))
+                y2 = max(0, min(ori_h, int(yymax / sh)))
 
                 logger.debug(
-                    f"[Layout] Raw coords: ({xxmin}, {yymin}, {xxmax}, {yymax}) -> Scaled: ({x1}, {y1}, {x2}, {y2})"
+                    f"[Layout] Raw coords (640 scale): ({xxmin:.1f}, {yymin:.1f}, {xxmax:.1f}, {yymax:.1f}) -> Original scale: ({x1}, {y1}, {x2}, {y2})"
                 )
 
                 box = [x1, y1, x2, y2]

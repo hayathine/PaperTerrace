@@ -147,97 +147,118 @@ async def analyze_pdf_json(
     logger.info(f"[analyze-pdf-json] session_id={session_id}, file_hash={file_hash}")
 
     # Detect PDF language
-    detected_lang = await service.ocr_service.language_service.detect_language(content)
-    if detected_lang and detected_lang != "en":
-        logger.warning(f"Unsupported language detected: {detected_lang}")
-        return JSONResponse(
-            {
-                "error": "Currently, only English papers are supported. / 現在、英語の論文のみサポートしています。"
-            },
-            status_code=400,
+    try:
+        detected_lang = await service.ocr_service.language_service.detect_language(
+            content
         )
-    if detected_lang:
-        lang = detected_lang
-
-    # Check for cached paper
-    cached_paper = storage.get_paper_by_hash(file_hash)
-    raw_text = None
-    paper_id = "pending"
-    import base64
-
-    pdf_b64 = None
-
-    if cached_paper:
-        from ..providers.image_storage import get_page_images
-
-        # If cached, we might want to update owner if it was anonymous before?
-        # But generally we just return existing paper.
-        # If the user is owner, good. If not, do we duplicate?
-        # For now, let's keep it simple: reuse existing paper.
-        paper_id = cached_paper["paper_id"]
-        cached_images = get_page_images(file_hash)
-        if not cached_images:
-            logger.info(
-                f"[analyze-pdf-json] Cache HIT ({paper_id}) but images missing. Regenerating."
+        if detected_lang and detected_lang != "en":
+            logger.warning(f"Unsupported language detected: {detected_lang}")
+            return JSONResponse(
+                {
+                    "error": "Currently, only English papers are supported. / 現在、英語の論文のみサポートしています。"
+                },
+                status_code=400,
             )
+        if detected_lang:
+            lang = detected_lang
+
+        # Cache check
+        cached_paper = storage.get_paper_by_hash(file_hash)
+        raw_text = None
+        paper_id = "pending"
+        import base64
+
+        pdf_b64 = None
+
+        if cached_paper:
+            # If cached, we might want to update owner if it was anonymous before?
+            # But generally we just return existing paper.
+            paper_id = cached_paper["paper_id"]
+
+            # Safe image check + regeneration logic
+            try:
+                from ..providers.image_storage import get_page_images
+
+                cached_images = get_page_images(file_hash)
+            except ImportError as ie:
+                logger.error(f"Failed to import get_page_images: {ie}")
+                cached_images = []
+
+            if not cached_images:
+                logger.info(
+                    f"[analyze-pdf-json] Cache HIT ({paper_id}) but images missing. Regenerating."
+                )
+                pdf_b64 = base64.b64encode(content).decode("utf-8")
+                raw_text = None
+            else:
+                logger.info(f"[analyze-pdf-json] Cache HIT: paper_id={paper_id}")
+                if cached_paper.get("html_content"):
+                    raw_text = "CACHED_HTML:" + cached_paper["html_content"]
+                else:
+                    # Use .get() to avoid KeyError if ocr_text is missing
+                    raw_text = cached_paper.get("ocr_text")
+        else:
+            logger.info("[analyze-pdf-json] Cache MISS: Deferring OCR to stream")
             pdf_b64 = base64.b64encode(content).decode("utf-8")
             raw_text = None
-        else:
-            logger.info(f"[analyze-pdf-json] Cache HIT: paper_id={paper_id}")
-            if cached_paper.get("html_content"):
-                raw_text = "CACHED_HTML:" + cached_paper["html_content"]
-            else:
-                raw_text = cached_paper["ocr_text"]
-    else:
-        logger.info("[analyze-pdf-json] Cache MISS: Deferring OCR to stream")
-        pdf_b64 = base64.b64encode(content).decode("utf-8")
-        raw_text = None
 
-    task_id = str(uuid.uuid4())
+        task_id = str(uuid.uuid4())
 
-    # Save session context immediately if using existing paper
-    if session_id and paper_id and paper_id != "pending":
-        try:
-            storage.save_session_context(session_id, paper_id)
-            logger.info(
-                f"[analyze-pdf-json] Pre-saved session context: {session_id} -> {paper_id}"
+        # Save session context immediately if using existing paper
+        if session_id and paper_id and paper_id != "pending":
+            try:
+                storage.save_session_context(session_id, paper_id)
+                logger.info(
+                    f"[analyze-pdf-json] Pre-saved session context: {session_id} -> {paper_id}"
+                )
+            except Exception as e:
+                logger.error(
+                    f"[analyze-pdf-json] Failed to pre-save session context: {e}"
+                )
+
+        task_data = {
+            "format": "json",  # Flag for JSON streaming
+            "lang": lang,
+            "session_id": session_id,
+            "filename": file.filename,
+            "file_hash": file_hash,
+            "user_id": user_id,  # Store user_id for stream processing
+        }
+
+        if raw_text is None:
+            task_data.update(
+                {
+                    "pending_ocr": True,
+                    "pdf_b64": pdf_b64,
+                }
             )
-        except Exception as e:
-            logger.error(f"[analyze-pdf-json] Failed to pre-save session context: {e}")
+        else:
+            task_data.update(
+                {
+                    "text": raw_text,
+                    "paper_id": paper_id,
+                }
+            )
 
-    task_data = {
-        "format": "json",  # Flag for JSON streaming
-        "lang": lang,
-        "session_id": session_id,
-        "filename": file.filename,
-        "file_hash": file_hash,
-        "user_id": user_id,  # Store user_id for stream processing
-    }
+        # Set longer expiration for streaming tasks to prevent premature deletion
+        redis_service.set(
+            f"task:{task_id}", task_data, expire=7200
+        )  # 2 hours instead of 1
 
-    if raw_text is None:
-        task_data.update(
-            {
-                "pending_ocr": True,
-                "pdf_b64": pdf_b64,
-            }
-        )
-    else:
-        task_data.update(
-            {
-                "text": raw_text,
-                "paper_id": paper_id,
-            }
+        total_elapsed = time.time() - start_time
+        logger.info(
+            f"[analyze-pdf-json] Task created: {task_id}, elapsed: {total_elapsed:.2f}s"
         )
 
-    # Set longer expiration for streaming tasks to prevent premature deletion
-    redis_service.set(f"task:{task_id}", task_data, expire=7200)  # 2 hours instead of 1
+        return JSONResponse(
+            {"task_id": task_id, "stream_url": f"/api/stream/{task_id}"}
+        )
 
-    total_elapsed = time.time() - start_time
-    logger.info(
-        f"[analyze-pdf-json] Task created: {task_id}, elapsed: {total_elapsed:.2f}s"
-    )
-
-    return JSONResponse({"task_id": task_id, "stream_url": f"/api/stream/{task_id}"})
+    except Exception as e:
+        logger.error(f"[analyze-pdf-json] Unexpected error: {e}", exc_info=True)
+        return JSONResponse(
+            {"error": f"Internal Server Error: {str(e)}"}, status_code=500
+        )
 
 
 @router.post("/analyze-paper/{paper_id}")
@@ -388,12 +409,23 @@ async def stream(task_id: str):
                             page_payload["words"] = layout_data.get("words", [])
                             page_payload["figures"] = layout_data.get("figures", [])
 
+                            # Debug: Log what we're sending to frontend
+                            logger.info(
+                                f"[stream] {task_id}: Page {page_num} payload - "
+                                f"words={len(page_payload['words'])}, "
+                                f"width={page_payload['width']}, "
+                                f"height={page_payload['height']}"
+                            )
+
                             # Collect figures if present
                             if "figures" in layout_data:
                                 collected_figures.extend(layout_data["figures"])
 
                             all_layout_data.append(layout_data)
                         else:
+                            logger.warning(
+                                f"[stream] {task_id}: Page {page_num} has no layout_data!"
+                            )
                             all_layout_data.append(None)
 
                     yield f"event: message\ndata: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
@@ -483,10 +515,23 @@ async def stream(task_id: str):
                     if paper_data.get("layout_json"):
                         try:
                             layout_list = json.loads(paper_data["layout_json"])
+                            logger.info(
+                                f"[stream] {task_id}: Loaded layout_list with {len(layout_list)} pages"
+                            )
                         except Exception as e:
-                            logger.error(f"Failed to parse layout_json: {e}")
+                            logger.error(
+                                f"[stream] {task_id}: Failed to parse layout_json: {e}"
+                            )
+                    else:
+                        logger.warning(
+                            f"[stream] {task_id}: No layout_json in paper_data!"
+                        )
+
                     if paper_data.get("ocr_text"):
                         pages_text = paper_data["ocr_text"].split("\n\n---\n\n")
+                        logger.info(
+                            f"[stream] {task_id}: Loaded {len(pages_text)} pages of text"
+                        )
 
                 f_hash = data.get("file_hash")
                 logger.info(
@@ -512,6 +557,17 @@ async def stream(task_id: str):
                             page_payload["height"] = layout_list[i].get("height", 0)
                             page_payload["words"] = layout_list[i].get("words", [])
                             page_payload["figures"] = layout_list[i].get("figures", [])
+
+                            logger.debug(
+                                f"[stream] {task_id}: Page {i + 1} from cache - "
+                                f"words={len(page_payload['words'])}, "
+                                f"width={page_payload['width']}, height={page_payload['height']}"
+                            )
+                        else:
+                            logger.warning(
+                                f"[stream] {task_id}: Page {i + 1} missing from layout_list! "
+                                f"layout_list length={len(layout_list)}"
+                            )
 
                         yield f"event: message\ndata: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
                         await asyncio.sleep(0.01)

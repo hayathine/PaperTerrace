@@ -92,7 +92,6 @@ module "cloud_run_staging" {
   cpu                  = local.resources.backend_staging.cpu
   memory               = local.resources.backend_staging.memory
   concurrency          = local.resources.backend_staging.concurrency
-  batch_parallel_workers = local.resources.backend_staging.batch_parallel_workers
   
   # Redis
   # redis_host = module.redis_staging.redis_host

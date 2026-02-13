@@ -94,6 +94,19 @@ const PDFPage: React.FC<PDFPageProps> = ({
     }
   }, [cachedImage, image_url]);
 
+  // Debug: Log page data when component mounts or updates
+  useEffect(() => {
+    console.log(`[PDFPage ${page_num}] Rendering with data:`, {
+      width,
+      height,
+      words_count: words?.length || 0,
+      figures_count: figures?.length || 0,
+      image_url,
+      sample_word: words?.[0],
+      sample_figure: figures?.[0],
+    });
+  }, [page_num, width, height, words, figures, image_url]);
+
   // Text Selection State
   const [isDragging, setIsDragging] = React.useState(false);
   const [selectionStart, setSelectionStart] = React.useState<number | null>(

@@ -271,6 +271,17 @@ class PDFOCRService:
             for w in native_words
         ]
 
+        # Debug: Verify words are correctly populated
+        logger.info(
+            f"[OCR] Page {page_num}: Phase 2 complete - "
+            f"native_words={len(native_words)}, "
+            f"layout_data words={len(layout_data['words'])}, "
+            f"width={layout_data['width']}, height={layout_data['height']}"
+        )
+        if layout_data["words"]:
+            sample_word = layout_data["words"][0]
+            logger.debug(f"[OCR] Page {page_num}: Sample word: {sample_word}")
+
         # Phase 2 yield with synchronized layout and image
         # Phase 3 (AI Analysis for figures) is now deferred to lazy loading
         yield (

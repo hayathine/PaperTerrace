@@ -488,6 +488,61 @@ tasks:
       - gcloud logging read 'resource.type="cloud_run_revision" AND severity>=ERROR' --limit=50 --format="table(timestamp,severity,resource.labels.service_name,textPayload)" 2>/dev/null || echo "No error logs found"
 
   # ============================================================================
+  # Infrastructure Tasks
+  # ============================================================================
+
+  infra:init:production:
+    desc: "Initialize Terraform for production"
+    cmds:
+      - echo "🔧 Initializing Terraform for production..."
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform init
+
+  infra:init:staging:
+    desc: "Initialize Terraform for staging"
+    cmds:
+      - echo "🔧 Initializing Terraform for staging..."
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/staging && terraform init
+
+  infra:import:production:
+    desc: "Import existing GCP resources into Terraform state (production)"
+    cmds:
+      - echo "📥 Importing existing resources to Terraform..."
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.artifact_registry.google_artifact_registry_repository.main projects/{{.PROJECT_ID}}/locations/{{.REGION}}/repositories/paperterrace || echo "⚠️ Already imported or not found"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.iam.google_service_account.app_sa projects/{{.PROJECT_ID}}/serviceAccounts/paperterrace-sa@{{.PROJECT_ID}}.iam.gserviceaccount.com || echo "⚠️ Already imported or not found"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.networking.google_compute_network.main projects/{{.PROJECT_ID}}/global/networks/paperterrace-vpc || echo "⚠️ Already imported or not found"
+      - echo "✅ Import complete!"
+
+  infra:plan:production:
+    desc: "Plan Terraform changes for production"
+    cmds:
+      - echo "📋 Planning Terraform changes for production..."
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform plan -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest"
+
+  infra:apply:production:
+    desc: "Apply Terraform changes for production"
+    cmds:
+      - echo "🚀 Applying Terraform changes for production..."
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform apply -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest"
+
+  infra:plan:staging:
+    desc: "Plan Terraform changes for staging"
+    cmds:
+      - echo "📋 Planning Terraform changes for staging..."
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/staging && terraform plan -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:staging"
+
+  infra:apply:staging:
+    desc: "Apply Terraform changes for staging"
+    cmds:
+      - echo "🚀 Applying Terraform changes for staging..."
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/staging && terraform apply -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:staging"
+
+  infra:destroy:staging:
+    desc: "Destroy staging infrastructure"
+    cmds:
+      - echo "⚠️ Destroying staging infrastructure..."
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/staging && terraform destroy -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:staging"
+
+  # ============================================================================
   # Utility Tasks
   # ============================================================================
 

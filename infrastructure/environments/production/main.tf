@@ -44,6 +44,7 @@ resource "google_project_service" "apis" {
     "vpcaccess.googleapis.com",
     "servicenetworking.googleapis.com",
     "iam.googleapis.com", 
+    "iamcredentials.googleapis.com",
 #    "redis.googleapis.com",
   ])
 
@@ -165,7 +166,7 @@ module "cloud_run" {
   service_account_email = module.iam.service_account_email
 
   service_name         = "paperterrace"
-  min_instance_count   = local.resources.backend.min_instance_count
+  min_instance_count   = local.resources.backend.min_instances
   max_instance_count   = local.resources.backend.max_instances
   cpu                  = local.resources.backend.cpu
   memory               = local.resources.backend.memory

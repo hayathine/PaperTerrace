@@ -379,6 +379,23 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
             // Use ref to get the latest pages collected during streaming
             const finalPages = pagesRef.current;
 
+            // Debug: Log page structure
+            console.log(
+              "[PDFViewer] Final pages collected:",
+              finalPages.length,
+            );
+            if (finalPages.length > 0) {
+              console.log("[PDFViewer] Sample page structure:", {
+                page_num: finalPages[0].page_num,
+                width: finalPages[0].width,
+                height: finalPages[0].height,
+                words_count: finalPages[0].words?.length || 0,
+                figures_count: finalPages[0].figures?.length || 0,
+                has_content: !!finalPages[0].content,
+                content_length: finalPages[0].content?.length || 0,
+              });
+            }
+
             // Cache the final results
             (async () => {
               const imageUrls = finalPages.map((p) => p.image_url);
@@ -795,32 +812,45 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
   return (
     <div className="w-full max-w-5xl mx-auto p-2 md:p-4 relative min-h-full pb-20">
-      {/* Initial Loading - Block screen until first page is ready */}
-      {status === "idle" && !uploadFile && !propPaperId && (
-        <div className="text-center p-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
-          {t("viewer.waiting_pdf")}
+      {/* Non-blocking status indicators */}
+      {(status === "uploading" || status === "processing") && (
+        <div className="fixed bottom-4 right-4 z-50 bg-white rounded-full shadow-lg p-3 border border-indigo-200">
+          <div className="flex items-center gap-2">
+            <div className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-200 border-t-indigo-600"></div>
+            <span className="text-xs text-indigo-600 font-medium">
+              {status === "uploading"
+                ? t("viewer.uploading_pdf")
+                : "読み込み中..."}
+            </span>
+          </div>
         </div>
       )}
 
-      {/* Uploading - Block screen */}
-      {status === "uploading" && (
-        <div className="flex flex-col items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-4"></div>
-          <span className="text-indigo-600 font-medium">
-            {t("viewer.uploading_pdf")}
-          </span>
-        </div>
-      )}
+      {/* Initial state - no PDF loaded */}
+      {status === "idle" &&
+        !uploadFile &&
+        !propPaperId &&
+        pages.length === 0 && (
+          <div className="text-center p-10 text-gray-400 border-2 border-dashed border-gray-200 rounded-xl">
+            {t("viewer.waiting_pdf")}
+          </div>
+        )}
 
-      {/* Processing - Block screen until first page */}
-      {status === "processing" && pages.length === 0 && (
-        <div className="flex flex-col items-center justify-center min-h-[400px]">
-          <div className="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-4"></div>
-          <span className="text-indigo-600 font-medium">
-            {t("viewer.processing_pdf")}
-          </span>
-        </div>
-      )}
+      {/* Processing with no pages yet - show friendly message */}
+      {(status === "uploading" || status === "processing") &&
+        pages.length === 0 && (
+          <div className="text-center p-10 text-gray-400">
+            <div className="text-4xl mb-4">📄</div>
+            <p className="text-sm">
+              {status === "uploading"
+                ? "PDFをアップロード中..."
+                : "PDFを処理中..."}
+            </p>
+            <p className="text-xs mt-2 text-gray-300">
+              このまま他の操作を続けることができます
+            </p>
+          </div>
+        )}
 
       {status === "error" && (
         <div className="bg-red-50 text-red-600 p-4 rounded-lg mb-4">
@@ -831,18 +861,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       {/* Content Area - Show as soon as we have pages */}
       {pages.length > 0 && (
         <>
-          {/* Small Loading Indicator - Non-blocking */}
-          {status === "processing" && (
-            <div className="fixed bottom-4 right-4 z-50 bg-white rounded-full shadow-lg p-3 border border-indigo-200">
-              <div className="flex items-center gap-2">
-                <div className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-200 border-t-indigo-600"></div>
-                <span className="text-xs text-indigo-600 font-medium">
-                  読み込み中...
-                </span>
-              </div>
-            </div>
-          )}
-
           {/* Toolbar */}
           <div className="sticky top-4 z-[60] flex justify-center mb-6">
             <div className="bg-white p-1 rounded-lg shadow-sm border border-slate-200 flex items-center gap-1">
