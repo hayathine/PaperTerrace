@@ -42,7 +42,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
       setIsLoading(true);
       try {
-        const url = new URL("/chat/history", window.location.origin);
+        const url = new URL("/api/chat/history", window.location.origin);
         url.searchParams.append("session_id", sessionId);
         url.searchParams.append("paper_id", paperId);
 

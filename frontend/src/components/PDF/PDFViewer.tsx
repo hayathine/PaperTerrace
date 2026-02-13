@@ -249,7 +249,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
       const headers: HeadersInit = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`/stamps/paper/${id}`, { headers });
+      const res = await fetch(`/api/stamps/paper/${id}`, { headers });
       if (res.ok) {
         const data = await res.json();
         setStamps(data.stamps);
@@ -633,7 +633,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         const headers: HeadersInit = { "Content-Type": "application/json" };
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
-        const res = await fetch(`/stamps/paper/${loadedPaperId}`, {
+        const res = await fetch(`/api/stamps/paper/${loadedPaperId}`, {
           method: "POST",
           headers,
           body: JSON.stringify({

@@ -136,7 +136,7 @@ function App() {
         const formData = new FormData();
         formData.append("session_id", sessionId);
         formData.append("paper_id", currentPaperId);
-        navigator.sendBeacon("/chat/cache/delete", formData);
+        navigator.sendBeacon("/api/chat/cache/delete", formData);
       }
     };
 
