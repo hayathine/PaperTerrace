@@ -83,7 +83,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
         if (token) headers["Authorization"] = `Bearer ${token}`;
 
         const res = await fetch(
-          `/api/explain/${encodeURIComponent(term)}?lang=${i18n.language}`,
+          `/api/explain/${encodeURIComponent(term)}?lang=${i18n.language}&paper_id=${paperId || ""}`,
           { headers },
         );
 
@@ -119,6 +119,53 @@ const Dictionary: React.FC<DictionaryProps> = ({
   }, [term, token]); // Removed entries dependency to avoid loop, check inside setter or logic
 
   const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
+
+  const handleDeepTranslate = async (entry: DictionaryEntry) => {
+    if (!entry) return;
+    setLoading(true);
+    setError(null);
+
+    try {
+      const headers: HeadersInit = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      let res;
+      if (context) {
+        // Use context-aware explanation
+        res = await fetch("/api/explain/context", {
+          method: "POST",
+          headers,
+          body: JSON.stringify({
+            word: entry.word,
+            context: context,
+            session_id: sessionId,
+            lang: i18n.language,
+          }),
+        });
+      } else {
+        // Use simple explanation (with paper summary context from backend)
+        res = await fetch(
+          `/api/explain-deep/${encodeURIComponent(entry.word)}?lang=${i18n.language}&paper_id=${paperId || ""}`,
+          { headers },
+        );
+      }
+
+      if (res.ok) {
+        const data: DictionaryEntry = await res.json();
+        setEntries((prev) =>
+          prev.map((e) => (e.word === entry.word ? data : e)),
+        );
+      } else {
+        const errorText = await res.text();
+        setError(`Translation failed: ${res.status} ${errorText}`);
+      }
+    } catch (e) {
+      console.error(e);
+      setError("Translation failed.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSaveToNote = async (entry: DictionaryEntry) => {
     if (!entry) return;
@@ -330,6 +377,26 @@ const Dictionary: React.FC<DictionaryProps> = ({
                 )}
               </button>
 
+              <button
+                onClick={() => handleDeepTranslate(entry)}
+                className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
+              >
+                <svg
+                  className="w-3.5 h-3.5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                  />
+                </svg>
+                <span>{t("viewer.dictionary.ask_ai")}</span>
+              </button>
+
               {onAskAI && (
                 <button
                   onClick={() => {
@@ -338,7 +405,8 @@ const Dictionary: React.FC<DictionaryProps> = ({
                       : `論文の文脈を踏まえて、この単語「${entry.word}」を翻訳し、1-2文で短く解説してください。`;
                     onAskAI(prompt);
                   }}
-                  className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
+                  className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
+                  title="Ask in Chat"
                 >
                   <svg
                     className="w-3.5 h-3.5"
@@ -350,10 +418,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
                       strokeLinecap="round"
                       strokeLinejoin="round"
                       strokeWidth={2}
-                      d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
                     />
                   </svg>
-                  <span>{t("viewer.dictionary.ask_ai")}</span>
                 </button>
               )}
 

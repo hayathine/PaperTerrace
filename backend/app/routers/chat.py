@@ -10,12 +10,12 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.domain.features import ChatService
-from common.logger import get_service_logger
 from app.providers import (
     RedisService,
     get_image_bytes,
     get_storage_provider,
 )  # RedisService now uses in-memory cache
+from common.logger import get_service_logger
 
 log = get_service_logger("Chat")
 
@@ -135,7 +135,8 @@ async def delete_cache(session_id: str = Form(...), paper_id: str | None = Form(
         paper_id = storage.get_session_paper_id(session_id)
 
     if paper_id:
-        await chat_service.delete_paper_cache(paper_id)
+        # Prevent cache deletion to avoid re-uploading context on page refresh
+        # await chat_service.delete_paper_cache(paper_id)
         return JSONResponse({"status": "ok"})
 
     return JSONResponse(

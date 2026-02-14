@@ -152,13 +152,25 @@ class SummaryService:
                 )
 
                 # 後方互換性のため整形済みテキストを返す
-                result_lines = [
-                    f"## Overview\n{analysis.overview}",
-                    "\n## Key Contributions",
-                    *[f"- {item}" for item in analysis.key_contributions],
-                    f"\n## Methodology\n{analysis.methodology}",
-                    f"\n## Conclusion\n{analysis.conclusion}",
-                ]
+                # Headings are localized to Japanese by default as per user requirement
+
+                # Check if target is English, otherwise default to Japanese headers
+                if target_lang == "en":
+                    result_lines = [
+                        f"## Overview\n{analysis.overview}",
+                        "\n## Key Contributions",
+                        *[f"- {item}" for item in analysis.key_contributions],
+                        f"\n## Methodology\n{analysis.methodology}",
+                        f"\n## Conclusion\n{analysis.conclusion}",
+                    ]
+                else:
+                    result_lines = [
+                        f"## 概要\n{analysis.overview}",
+                        "\n## 主な貢献",
+                        *[f"- {item}" for item in analysis.key_contributions],
+                        f"\n## 手法\n{analysis.methodology}",
+                        f"\n## 結論\n{analysis.conclusion}",
+                    ]
                 formatted_text = "\n".join(result_lines)
 
                 logger.info(

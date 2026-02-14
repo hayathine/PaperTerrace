@@ -13,7 +13,6 @@ dependencies = [
     "python-multipart>=0.0.9",
     "httpx[http2]>=0.27.0",
     "jinja2>=3.1.6",
-    
     # Google Cloud & AI
     "google-genai>=1.60.0",
     "google-cloud-aiplatform>=1.135.0",
@@ -21,12 +20,10 @@ dependencies = [
     "google-cloud-tasks>=2.21.0",
     "firebase-admin>=6.0.0",
     "genai>=1.0.3",
-    
     # Database
     "sqlalchemy>=2.0.46",
     "alembic>=1.18.3",
     "psycopg2-binary>=2.9.11",
-    
     # NLP & ML
     "spacy>=3.8.11",
     "en-core-web-sm",
@@ -34,11 +31,9 @@ dependencies = [
     "opencv-python>=4.8.0",
     "numpy>=1.26.4",
     "Pillow>=11.0.0",
-    
     # PDF Processing
     "pdfplumber>=0.11.9",
     "beautifulsoup4>=4.14.3",
-    
     # Utilities
     "structlog>=24.1.0",
     "chardet>=5.2.0",

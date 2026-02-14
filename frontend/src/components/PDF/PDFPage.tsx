@@ -584,6 +584,22 @@ const PDFPage: React.FC<PDFPageProps> = ({
               <span>📝</span> {t("menu.note")}
             </button>
 
+            {onAskAI && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const prompt = `以下の文章をわかりやすく解説してください。\n\n"${selectionMenu.text}"`;
+                  onAskAI(prompt);
+                  setSelectionMenu(null);
+                  setSelectionStart(null);
+                  setSelectionEnd(null);
+                }}
+                className="px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-l border-slate-700 rounded-r-lg"
+              >
+                <span>💡</span> {t("menu.explain")}
+              </button>
+            )}
+
             {/* Triangle arrow */}
             <div className="absolute left-1/2 bottom-0 w-2 h-2 bg-gray-900 transform -translate-x-1/2 translate-y-1/2 rotate-45"></div>
           </div>
