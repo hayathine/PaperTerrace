@@ -322,6 +322,10 @@ async def analyze_layout_lazy(
         from app.providers.image_storage import get_page_images
 
         cached_images = get_page_images(file_hash)
+        
+        logger.info(
+            f"[analyze-layout-lazy] Found {len(cached_images) if cached_images else 0} cached images for file_hash={file_hash}"
+        )
 
         if not cached_images:
             raise HTTPException(
@@ -400,6 +404,16 @@ async def analyze_layout_lazy(
         batch_results = await client.analyze_images_batch(
             image_data_list, max_batch_size=10
         )
+        
+        logger.info(
+            f"[analyze-layout-lazy] Batch analysis complete. Results count: {len(batch_results)}"
+        )
+        
+        # Log sample results for debugging
+        if batch_results:
+            logger.info(
+                f"[analyze-layout-lazy] Sample result[0]: {batch_results[0][:2] if len(batch_results[0]) > 2 else batch_results[0]}"
+            )
 
         # Process results: crop figure images and save
         from app.providers.image_storage import save_page_image

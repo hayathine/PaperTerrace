@@ -57,3 +57,10 @@ resource "google_storage_bucket_iam_member" "public_read" {
   role   = "roles/storage.objectViewer"
   member = "allUsers"
 }
+
+# Access for Vertex AI Runner Service Account
+resource "google_storage_bucket_iam_member" "vertex_ai_runner" {
+  bucket = google_storage_bucket.papers.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:vertex-ai-runner@gen-lang-client-0800253336.iam.gserviceaccount.com"
+}

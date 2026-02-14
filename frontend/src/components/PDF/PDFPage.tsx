@@ -104,8 +104,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
       image_url,
       sample_word: words?.[0],
       sample_figure: figures?.[0],
+      isClickMode,
     });
-  }, [page_num, width, height, words, figures, image_url]);
+  }, [page_num, width, height, words, figures, image_url, isClickMode]);
 
   // Text Selection State
   const [isDragging, setIsDragging] = React.useState(false);
@@ -284,7 +285,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
         )}
 
         {/* Figure/Table Overlays (Overwrites text layer) */}
-        <div className="absolute inset-0 w-full h-full z-20 pointer-events-none">
+        <div className="absolute inset-0 w-full h-full z-30 pointer-events-none">
           {figures &&
             figures.length > 0 &&
             figures.map((fig, idx) => {
@@ -324,6 +325,13 @@ const PDFPage: React.FC<PDFPageProps> = ({
                 height: `${((y2 - y1) / pageHeight) * 100}%`,
               };
 
+              console.log(`[PDFPage ${page_num}] Rendering figure ${idx}:`, {
+                label: fig.label,
+                bbox: fig.bbox,
+                style,
+                isClickMode,
+              });
+
               return (
                 <div
                   key={`fig-img-${idx}`}
@@ -346,9 +354,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
                       {/* Click handler */}
                       <button
-                        className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer"
+                        className="absolute inset-0 w-full h-full opacity-0 z-40 cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
+                          console.log('[PDFPage] Figure clicked:', fig.label, fig.image_url);
                           // Open in lightbox
                           setLightboxFigure({
                             image_url: fig.image_url,
@@ -359,7 +368,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
                       />
 
                       {/* Small icon indicator */}
-                      <div className="absolute top-1 right-1 bg-indigo-600 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="absolute top-1 right-1 bg-indigo-600 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
                         🔍
                       </div>
                     </>
@@ -445,10 +454,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
               return (
                 <div
                   key={`${idx}`}
-                  className={`absolute rounded-sm group ${!isStampMode ? "cursor-pointer pointer-events-auto" : "pointer-events-none"} 
+                  className={`absolute rounded-sm group ${!isStampMode && !isClickMode ? "cursor-pointer pointer-events-auto" : "pointer-events-none"} 
                                     ${!isStampMode && !isSelected && !isJumpHighlight && !isSearchMatch ? "hover:bg-yellow-300/30" : ""} 
                                     ${isSelected ? "bg-indigo-500/30 border border-indigo-500/50" : ""}
-                                    ${isJumpHighlight ? "bg-yellow-400/60 border-2 border-yellow-600 shadow-[0_0_15px_rgba(250,204,21,0.5)] z-20 animate-bounce-subtle" : ""}
+                                    ${isJumpHighlight ? "bg-yellow-400/60 z-20 animate-bounce-subtle" : ""}
                                     ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 border border-amber-400" : ""}
                                     ${isCurrentSearchMatch ? "bg-orange-500/60 border-2 border-orange-600 shadow-[0_0_15px_rgba(249,115,22,0.6)] z-30 ring-2 ring-orange-400" : ""}`}
                   style={{

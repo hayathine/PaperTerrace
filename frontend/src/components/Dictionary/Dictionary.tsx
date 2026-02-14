@@ -9,7 +9,6 @@ interface DictionaryProps {
   paperId?: string | null;
   context?: string;
   coordinates?: { page: number; x: number; y: number };
-  onAskAI?: (prompt: string) => void;
   onJump?: (page: number, x: number, y: number, term?: string) => void;
 }
 
@@ -19,7 +18,6 @@ const Dictionary: React.FC<DictionaryProps> = ({
   paperId,
   context,
   coordinates,
-  onAskAI,
   onJump,
 }) => {
   const { t, i18n } = useTranslation();
@@ -397,33 +395,6 @@ const Dictionary: React.FC<DictionaryProps> = ({
                 <span>{t("viewer.dictionary.ask_ai")}</span>
               </button>
 
-              {onAskAI && (
-                <button
-                  onClick={() => {
-                    const prompt = context
-                      ? `以下の文脈における「${entry.word}」の意味を翻訳し、1-2文で短く解説してください。\n\n【文脈】\n${context}`
-                      : `論文の文脈を踏まえて、この単語「${entry.word}」を翻訳し、1-2文で短く解説してください。`;
-                    onAskAI(prompt);
-                  }}
-                  className="flex-1 py-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
-                  title="Ask in Chat"
-                >
-                  <svg
-                    className="w-3.5 h-3.5"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                    />
-                  </svg>
-                </button>
-              )}
-
               {onJump && coordinates && (
                 <button
                   onClick={() =>
@@ -434,22 +405,10 @@ const Dictionary: React.FC<DictionaryProps> = ({
                       entry.word,
                     )
                   }
-                  className="p-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg transition-all flex items-center justify-center"
+                  className="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg text-xs font-bold transition-all flex items-center justify-center"
                   title="Jump to Location"
                 >
-                  <svg
-                    className="w-4 h-4"
-                    fill="none"
-                    viewBox="0 0 24 24"
-                    stroke="currentColor"
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth={2}
-                      d="M13 5l7 7-7 7M5 5l7 7-7 7"
-                    />
-                  </svg>
+                  JUMP
                 </button>
               )}
             </div>

@@ -668,7 +668,6 @@ function App() {
                 pendingFigureId={pendingFigureId}
                 onPendingFigureConsumed={() => setPendingFigureId(null)}
                 pendingChatPrompt={pendingChatPrompt}
-                onAskAI={handleAskAI}
                 onPendingChatConsumed={() => setPendingChatPrompt(null)}
                 stackedPapers={stackedPapers}
                 onStackPaper={handleStackPaper}

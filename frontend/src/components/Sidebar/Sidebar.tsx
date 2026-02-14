@@ -20,7 +20,6 @@ interface SidebarProps {
   pendingFigureId?: string | null;
   onPendingFigureConsumed?: () => void;
   pendingChatPrompt?: string | null;
-  onAskAI?: (prompt: string) => void;
   onPendingChatConsumed?: () => void;
   stackedPapers: { url: string; title?: string; addedAt: number }[];
   onStackPaper: (url: string, title?: string) => void;
@@ -41,7 +40,6 @@ const Sidebar: React.FC<SidebarProps> = ({
   pendingFigureId,
   onPendingFigureConsumed,
   pendingChatPrompt,
-  onAskAI,
   onPendingChatConsumed,
   stackedPapers,
   onStackPaper,
@@ -120,7 +118,6 @@ const Sidebar: React.FC<SidebarProps> = ({
             term={selectedWord}
             context={context}
             coordinates={coordinates}
-            onAskAI={onAskAI}
             onJump={onJump}
           />
         </div>

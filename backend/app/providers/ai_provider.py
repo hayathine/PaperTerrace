@@ -161,7 +161,7 @@ class GeminiProvider(AIProviderInterface):
                 "temperature": 0.1,
                 "max_output_tokens": 1024,
             }
-            if tools:
+            if tools and not cached_content_name:
                 config_params["tools"] = tools
             if response_model:
                 config_params["response_mime_type"] = "application/json"
@@ -169,7 +169,7 @@ class GeminiProvider(AIProviderInterface):
                     response_model.model_json_schema()
                 )
 
-            if system_instruction:
+            if system_instruction and not cached_content_name:
                 config_params["system_instruction"] = system_instruction
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name
@@ -552,11 +552,12 @@ class VertexAIProvider(AIProviderInterface):
                 logger.info(f"Using project ID from credentials: {project}")
 
             # 認証情報を使用してクライアントを初期化
+            # Authenticate using credentials
             self.client = genai.Client(
                 vertexai=True,
                 project=self.project_id,
                 location=self.location,
-                http_options={"credentials": credentials},
+                credentials=credentials,
             )
         else:
             # デフォルト認証情報を使用（Application Default Credentials）
@@ -601,7 +602,7 @@ class VertexAIProvider(AIProviderInterface):
                 "temperature": 0.1,
                 "max_output_tokens": 1024,
             }
-            if tools:
+            if tools and not cached_content_name:
                 config_params["tools"] = tools
             if response_model:
                 config_params["response_mime_type"] = "application/json"
@@ -609,7 +610,7 @@ class VertexAIProvider(AIProviderInterface):
                     response_model.model_json_schema()
                 )
 
-            if system_instruction:
+            if system_instruction and not cached_content_name:
                 config_params["system_instruction"] = system_instruction
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name

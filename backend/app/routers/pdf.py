@@ -413,6 +413,7 @@ async def stream(task_id: str):
                             logger.info(
                                 f"[stream] {task_id}: Page {page_num} payload - "
                                 f"words={len(page_payload['words'])}, "
+                                f"figures={len(page_payload['figures'])}, "
                                 f"width={page_payload['width']}, "
                                 f"height={page_payload['height']}"
                             )
