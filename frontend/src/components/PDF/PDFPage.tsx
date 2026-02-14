@@ -284,7 +284,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
         )}
 
         {/* Figure/Table Overlays (Overwrites text layer) */}
-        <div className="absolute inset-0 w-full h-full z-0 pointer-events-none">
+        <div className="absolute inset-0 w-full h-full z-20 pointer-events-none">
           {figures &&
             figures.length > 0 &&
             figures.map((fig, idx) => {
@@ -295,6 +295,24 @@ const PDFPage: React.FC<PDFPageProps> = ({
                 !fig.image_url
               )
                 return null;
+
+              // Filter out non-visual elements that shouldn't block text interaction
+              const label = (fig.label || "").toLowerCase();
+              if (
+                [
+                  "text",
+                  "title",
+                  "list",
+                  "header",
+                  "footer",
+                  "reference",
+                  "caption",
+                  "section-header",
+                  "footnote",
+                ].includes(label)
+              ) {
+                return null;
+              }
 
               const pageWidth = width || 1;
               const pageHeight = height || 1;
@@ -324,11 +342,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
                   {isClickMode && (
                     <>
                       {/* Hover overlay for visual feedback */}
-                      <div className="absolute inset-0 bg-indigo-500/0 hover:bg-indigo-500/10 transition-colors border-2 border-transparent hover:border-indigo-400 rounded-sm" />
+                      <div className="absolute inset-0 bg-indigo-500/0 hover:bg-indigo-500/10 transition-colors border-2 border-transparent hover:border-indigo-400 rounded-sm pointer-events-none" />
 
                       {/* Click handler */}
                       <button
-                        className="absolute inset-0 w-full h-full opacity-0"
+                        className="absolute inset-0 w-full h-full opacity-0 z-10 cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
                           // Open in lightbox
