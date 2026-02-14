@@ -10,7 +10,7 @@ interface StampOverlayProps {
 const StampOverlay: React.FC<StampOverlayProps> = ({ stamps, isStampMode, onAddStamp }) => {
 
     const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-        if (!isStampMode) return;
+        if (!isStampMode || !e.currentTarget) return;
 
         // Calculate percentage coordinates
         const rect = e.currentTarget.getBoundingClientRect();

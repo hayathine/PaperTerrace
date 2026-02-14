@@ -44,7 +44,8 @@ const TextModePage: React.FC<TextModePageProps> = ({
         selection &&
         selection.rangeCount > 0 &&
         selectionText &&
-        selectionText.length > 0
+        selectionText.length > 0 &&
+        e.currentTarget
       ) {
         const rect = e.currentTarget.getBoundingClientRect();
         const range = selection.getRangeAt(0);

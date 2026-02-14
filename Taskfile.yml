@@ -5,8 +5,8 @@ version: "3"
 dotenv: ["secrets/.env"]
 
 vars:
-  PROJECT_ID: gen-lang-client-0800253336
-  REGION: asia-northeast1
+  PROJECT_ID: '{{.PROJECT_ID | default "gen-lang-client-0800253336"}}'
+  REGION: '{{.REGION | default "asia-northeast1"}}'
 
   # Resource Configurations from JSON
   BE_CPU:
@@ -56,6 +56,24 @@ vars:
     {
       sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["build"]["machine_type"])''',
     }
+
+  # Staging Deployment Variables
+  STG_SECRET_ENV: "GEMINI_API_KEY=GEMINI_API_KEY:latest,FIREBASE_API_KEY=FIREBASE_API_KEY:latest,FIREBASE_AUTH_DOMAIN=FIREBASE_AUTH_DOMAIN:latest,FIREBASE_PROJECT_ID=FIREBASE_PROJECT_ID:latest,FIREBASE_STORAGE_BUCKET=FIREBASE_STORAGE_BUCKET:latest,FIREBASE_MESSAGING_SENDER_ID=FIREBASE_MESSAGING_SENDER_ID:latest,FIREBASE_APP_ID=FIREBASE_APP_ID:latest,FIREBASE_MEASUREMENT_ID=FIREBASE_MEASUREMENT_ID:latest"
+
+  STG_BE_ENV_VARS: 'AI_PROVIDER={{.AI_PROVIDER | default "gemini"}},OCR_MODEL={{.OCR_MODEL | default "gemini-1.5-flash"}},LOG_LEVEL={{.LOG_LEVEL | default "INFO"}},ACCESS_LOG_LEVEL={{.ACCESS_LOG_LEVEL | default "INFO"}},INFERENCE_SERVICE_TIMEOUT={{.INFERENCE_SERVICE_TIMEOUT | default "200"}},SKIP_INFERENCE_SERVICE_WARMUP={{.SKIP_INFERENCE_SERVICE_WARMUP | default "false"}},STORAGE_TYPE={{.STORAGE_TYPE | default "gcs"}},GCS_BUCKET_NAME={{.GCS_BUCKET_NAME | default "paperterrace-papers"}}'
+
+  STG_INF_ENV_VARS: 'LOG_LEVEL={{.LOG_LEVEL | default "INFO"}},DEV_MODE=false,SKIP_MODEL_LOADING=false,LOCAL_MODEL_PATH={{.LOCAL_MODEL_PATH | default "/app/models/m2m100_ct2"}},TRANSLATION_BEAM_SIZE={{.TRANSLATION_BEAM_SIZE | default "5"}},TRANSLATION_REPETITION_PENALTY={{.TRANSLATION_REPETITION_PENALTY | default "1.4"}},TRANSLATION_NO_REPEAT_NGRAM_SIZE={{.TRANSLATION_NO_REPEAT_NGRAM_SIZE | default "3"}},LAYOUT_THRESHOLD={{.LAYOUT_THRESHOLD | default 0.9}},BATCH_PARALLEL_WORKERS={{.INF_STG_WORKERS}}'
+
+  # Staging Resource Configurations
+  BE_STG_MIN_INSTANCES: '{{.BE_STG_MIN_INSTANCES | default "0"}}'
+  BE_STG_MAX_INSTANCES: '{{.BE_STG_MAX_INSTANCES | default "20"}}'
+  BE_STG_CONCURRENCY: '{{.BE_STG_CONCURRENCY | default "80"}}'
+  BE_STG_TIMEOUT: '{{.BE_STG_TIMEOUT | default "300"}}'
+
+  INF_STG_MIN_INSTANCES: '{{.INF_STG_MIN_INSTANCES | default "0"}}'
+  INF_STG_MAX_INSTANCES: '{{.INF_STG_MAX_INSTANCES | default "10"}}'
+  INF_STG_CONCURRENCY: '{{.INF_STG_CONCURRENCY | default "10"}}'
+  INF_STG_TIMEOUT: '{{.INF_STG_TIMEOUT | default "300"}}'
 
 tasks:
   # ============================================================================
@@ -223,12 +241,12 @@ tasks:
           --allow-unauthenticated \
           --memory {{.BE_STG_MEM}} \
           --cpu {{.BE_STG_CPU}} \
-          --min-instances 0 \
-          --max-instances 20 \
-          --concurrency 80 \
-          --timeout 300 \
-          --set-secrets "GEMINI_API_KEY=GEMINI_API_KEY:latest,FIREBASE_API_KEY=FIREBASE_API_KEY:latest,FIREBASE_AUTH_DOMAIN=FIREBASE_AUTH_DOMAIN:latest,FIREBASE_PROJECT_ID=FIREBASE_PROJECT_ID:latest,FIREBASE_STORAGE_BUCKET=FIREBASE_STORAGE_BUCKET:latest,FIREBASE_MESSAGING_SENDER_ID=FIREBASE_MESSAGING_SENDER_ID:latest,FIREBASE_APP_ID=FIREBASE_APP_ID:latest,FIREBASE_MEASUREMENT_ID=FIREBASE_MEASUREMENT_ID:latest" \
-          --set-env-vars "AI_PROVIDER=gemini,OCR_MODEL=gemini-1.5-flash,LOG_LEVEL=INFO,ACCESS_LOG_LEVEL=INFO,INFERENCE_SERVICE_URL=$SERVICEB_URL,INFERENCE_SERVICE_TIMEOUT=30,SKIP_INFERENCE_SERVICE_WARMUP=false,STORAGE_TYPE=gcs,GCS_BUCKET_NAME=paperterrace-papers"
+          --min-instances {{.BE_STG_MIN_INSTANCES}} \
+          --max-instances {{.BE_STG_MAX_INSTANCES}} \
+          --concurrency {{.BE_STG_CONCURRENCY}} \
+          --timeout {{.BE_STG_TIMEOUT}} \
+          --set-secrets "{{.STG_SECRET_ENV}}" \
+          --set-env-vars "{{.STG_BE_ENV_VARS}},INFERENCE_SERVICE_URL=$SERVICEB_URL"
       - echo "✅ Backend deployed to staging!"
       - task: staging:urls
 
@@ -246,11 +264,11 @@ tasks:
           --allow-unauthenticated \
           --memory {{.INF_STG_MEM}} \
           --cpu {{.INF_STG_CPU}} \
-          --min-instances 0 \
-          --max-instances 10 \
-          --concurrency 10 \
-          --timeout 300 \
-          --set-env-vars "LOG_LEVEL=INFO,DEV_MODE=false,SKIP_MODEL_LOADING=false,LOCAL_MODEL_PATH=/app/models/m2m100_ct2,TRANSLATION_BEAM_SIZE=5,TRANSLATION_REPETITION_PENALTY=1.4,TRANSLATION_NO_REPEAT_NGRAM_SIZE=3,BATCH_PARALLEL_WORKERS={{.INF_STG_WORKERS}}"
+          --min-instances {{.INF_STG_MIN_INSTANCES}} \
+          --max-instances {{.INF_STG_MAX_INSTANCES}} \
+          --concurrency {{.INF_STG_CONCURRENCY}} \
+          --timeout {{.INF_STG_TIMEOUT}} \
+          --set-env-vars "{{.STG_INF_ENV_VARS}}"
       - echo "✅ Inference service deployed to staging!"
       - task: staging:urls
 

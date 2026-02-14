@@ -167,8 +167,6 @@ class GCSImageStorage(ImageStorageStrategy):
 
         # ページ順にソートしたい
         # page_1.png, page_2.png...
-        blob_list = list(blobs)
-
         def extract_page_num_and_filter(blob):
             try:
                 basename = os.path.basename(blob.name).replace(".png", "")

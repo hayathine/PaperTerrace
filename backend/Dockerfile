@@ -26,6 +26,7 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 curl libgl1 libglib2.0-0 libxcb1 libx11-6 \
     libxext6 libsm6 libxrender1 ghostscript gnupg lsb-release ca-certificates \
+    fonts-noto-cjk fonts-noto-color-emoji \
     && curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
        | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt gcsfuse-$(lsb_release -c -s) main" \
