@@ -322,7 +322,7 @@ async def analyze_layout_lazy(
         from app.providers.image_storage import get_page_images
 
         cached_images = get_page_images(file_hash)
-        
+
         logger.info(
             f"[analyze-layout-lazy] Found {len(cached_images) if cached_images else 0} cached images for file_hash={file_hash}"
         )
@@ -404,11 +404,11 @@ async def analyze_layout_lazy(
         batch_results = await client.analyze_images_batch(
             image_data_list, max_batch_size=10
         )
-        
+
         logger.info(
             f"[analyze-layout-lazy] Batch analysis complete. Results count: {len(batch_results)}"
         )
-        
+
         # Log sample results for debugging
         if batch_results:
             logger.info(
@@ -437,6 +437,12 @@ async def analyze_layout_lazy(
                     y_min = bbox_dict.get("y_min", 0)
                     x_max = bbox_dict.get("x_max", 0)
                     y_max = bbox_dict.get("y_max", 0)
+
+                    # Ensure coordinates are within image boundaries
+                    x_min = max(0, min(img_w, x_min))
+                    y_min = max(0, min(img_h, y_min))
+                    x_max = max(0, min(img_w, x_max))
+                    y_max = max(0, min(img_h, y_max))
 
                     # Skip invalid bboxes
                     if x_max <= x_min or y_max <= y_min:

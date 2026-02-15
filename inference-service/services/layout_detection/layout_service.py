@@ -258,6 +258,16 @@ class LayoutAnalysisService:
         モデル出力の座標は640x640スケールで返されるため、
         元画像のピクセル座標に変換する必要がある。
         """
+        # Ensure threshold is float
+        if isinstance(threshold, str):
+            try:
+                threshold = float(threshold)
+            except ValueError:
+                logger.warning(
+                    f"Invalid threshold value: {threshold}. Using default 0.9"
+                )
+                threshold = 0.9
+
         predictions = outputs[0]
         ori_h, ori_w = ori_shape
 
@@ -304,21 +314,36 @@ class LayoutAnalysisService:
             for res in valid_predictions:
                 class_id, score, xxmin, yymin, xxmax, yymax = res
 
-                # 座標を元のサイズに復元 (640スケール → 元画像スケール)
-                x1 = max(0, min(ori_w, int(xxmin / sw)))
-                y1 = max(0, min(ori_h, int(yymin / sh)))
-                x2 = max(0, min(ori_w, int(xxmax / sw)))
-                y2 = max(0, min(ori_h, int(yymax / sh)))
+                # 座標変換ロジックの修正
+                # モデル出力は既に元画像スケールであるため、クリッピングのみ行う
+                x1 = max(0, min(ori_w, int(xxmin)))
+                y1 = max(0, min(ori_h, int(yymin)))
+                x2 = max(0, min(ori_w, int(xxmax)))
+                y2 = max(0, min(ori_h, int(yymax)))
 
-                logger.debug(
-                    f"[Layout] Raw coords (640 scale): ({xxmin:.1f}, {yymin:.1f}, {xxmax:.1f}, {yymax:.1f}) -> Original scale: ({x1}, {y1}, {x2}, {y2})"
+                logger.info(
+                    f"Postprocess - Coordinates: ({xxmin:.1f}, {yymin:.1f}, {xxmax:.1f}, {yymax:.1f}) -> Clamped: ({x1}, {y1}, {x2}, {y2})"
                 )
 
                 box = [x1, y1, x2, y2]
 
                 if box[2] > box[0] and box[3] > box[1]:
-                    results.append(
-                        {"class_id": int(class_id), "score": float(score), "bbox": box}
-                    )
+                    # class_id=10 対策: 範囲外の場合は Figure (2) に書き換える
+                    # または呼び出し元で処理しやすいように class_id を変更して返す
+                    final_class_id = int(class_id)
+                    if final_class_id >= len(self.LABELS):
+                        # class_id=10 (Unknown) -> Figure (2)
+                        # ログに出力した通り class_id=10 が Figure 相当であると仮定
+                        logger.warning(
+                            f"Postprocess - Unknown class_id {class_id} detected. Mapping to Figure (2)."
+                        )
+                        final_class_id = 2  # Figure
 
+                    results.append(
+                        {
+                            "class_id": final_class_id,
+                            "score": float(score),
+                            "bbox": box,
+                        }
+                    )
         return results
