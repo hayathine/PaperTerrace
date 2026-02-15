@@ -13,14 +13,14 @@ class LayoutItem(BaseModel):
 
 # PP-DocLayoutの標準ラベル
 LAYOUT_LABELS = [
-    "Text",
-    "Title",
+    # "Text",
+    # "Title",
     "Figure",
     "Figure caption",
     "Table",
     "Table caption",
-    "Header",
-    "Footer",
-    "Reference",
+    # "Header",
+    # "Footer",
+    # "Reference",
     "Equation",
 ]

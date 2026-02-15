@@ -13,7 +13,6 @@ from app.providers.inference_client import (
 )
 
 from common.logger import get_service_logger
-from common.schemas.layout import LAYOUT_LABELS
 
 log = get_service_logger("LayoutService")
 
@@ -35,11 +34,6 @@ class PaddleLayoutService:
     def __init__(self):
         if self._initialized:
             return
-
-        # 共通ラベルからマップを作成
-        self.label_map = {
-            i: label.lower().replace(" ", "_") for i, label in enumerate(LAYOUT_LABELS)
-        }
 
         self._initialized = True
         log.info("init", "PaddleLayoutService initialized (ServiceB client mode)")
