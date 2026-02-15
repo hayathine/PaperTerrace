@@ -315,14 +315,15 @@ class LayoutAnalysisService:
                 class_id, score, xxmin, yymin, xxmax, yymax = res
 
                 # 座標変換ロジックの修正
-                # モデル出力は既に元画像スケールであるため、クリッピングのみ行う
-                x1 = max(0, min(ori_w, int(xxmin)))
-                y1 = max(0, min(ori_h, int(yymin)))
-                x2 = max(0, min(ori_w, int(xxmax)))
-                y2 = max(0, min(ori_h, int(yymax)))
+                # モデル出力は入力時のscale_factorで除算された巨大な座標系になっているため
+                # 元画像座標に戻すには scale_factor を「掛ける」必要がある
+                x1 = max(0, min(ori_w, int(xxmin * sw)))
+                y1 = max(0, min(ori_h, int(yymin * sh)))
+                x2 = max(0, min(ori_w, int(xxmax * sw)))
+                y2 = max(0, min(ori_h, int(yymax * sh)))
 
                 logger.info(
-                    f"Postprocess - Coordinates: ({xxmin:.1f}, {yymin:.1f}, {xxmax:.1f}, {yymax:.1f}) -> Clamped: ({x1}, {y1}, {x2}, {y2})"
+                    f"Postprocess - Coordinates: ({xxmin:.1f}, {yymin:.1f}, {xxmax:.1f}, {yymax:.1f}) * ({sw:.3f}, {sh:.3f}) -> Final: ({x1}, {y1}, {x2}, {y2})"
                 )
 
                 box = [x1, y1, x2, y2]
