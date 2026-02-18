@@ -37,9 +37,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY --from=runtime-builder /app/.venv /app/.venv
 COPY --from=frontend-builder /app/frontend/dist ./app/static/dist
 
-# ONNXモデルファイルをコピー
-COPY inference-service/models/paddle2onnx/PP-DocLayout-L_infer.onnx ./models/paddle2onnx/PP-DocLayout-L_infer.onnx
-
 COPY backend/alembic.ini ./
 COPY backend/migrations ./migrations
 COPY backend/app/ ./app/
@@ -47,8 +44,7 @@ COPY common/ ./common/
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
-    PYTHONUNBUFFERED=1 \
-    LAYOUT_MODEL_PATH="/app/models/paddle2onnx/PP-DocLayout-L_infer.onnx"
+    PYTHONUNBUFFERED=1
 
 EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \

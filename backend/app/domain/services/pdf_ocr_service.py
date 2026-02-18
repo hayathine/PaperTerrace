@@ -176,7 +176,6 @@ class PDFOCRService:
                     file_hash,
                     img_url,
                     layout,
-                    "phase2",  # Add phase information for cached data
                 )
             )
 
@@ -190,7 +189,6 @@ class PDFOCRService:
                 file_hash,
                 None,
                 None,
-                "status",
             )
         )
 
