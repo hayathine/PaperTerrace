@@ -12,19 +12,12 @@ interface TextModePageProps {
     text: string,
     coords: { page: number; x: number; y: number },
   ) => void;
-  jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
-  // 検索関連props
-  searchTerm?: string;
-  currentSearchMatch?: { page: number; wordIndex: number } | null;
 }
 
 const TextModePage: React.FC<TextModePageProps> = ({
   page,
   onWordClick,
   onTextSelect,
-  jumpTarget,
-  searchTerm,
-  currentSearchMatch,
 }) => {
   const [imageError, setImageError] = React.useState(false);
   const [selectionMenu, setSelectionMenu] = React.useState<{
@@ -118,7 +111,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
               className="w-full h-auto block select-none pointer-events-none"
               loading="lazy"
               onError={() => {
-                console.warn('Image failed to load:', page.image_url);
+                console.warn("Image failed to load:", page.image_url);
                 setImageError(true);
               }}
               onLoad={() => {
@@ -147,7 +140,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
                   return (
                     <div
                       key={lIdx}
-                      className="absolute text-transparent whitespace-pre flex items-center hover:text-slate-800 hover:bg-white/80 transition-colors duration-200"
+                      className="absolute text-transparent whitespace-pre flex items-center"
                       style={{
                         top: `${lTop}%`,
                         left: `${lLeft}%`,
@@ -158,37 +151,10 @@ const TextModePage: React.FC<TextModePageProps> = ({
                       }}
                     >
                       {line.words.map((w, wIdx) => {
-                        const currentGlobalIndex = globalWordIndex++;
-
-                        const isJumpHighlight =
-                          jumpTarget &&
-                          jumpTarget.page === page.page_num &&
-                          jumpTarget.term &&
-                          w.word
-                            .toLowerCase()
-                            .includes(jumpTarget.term.toLowerCase());
-
-                        // 検索マッチのハイライト
-                        const isSearchMatch =
-                          searchTerm &&
-                          searchTerm.length >= 2 &&
-                          w.word.toLowerCase().includes(searchTerm.toLowerCase());
-
-                        // 現在フォーカスされている検索マッチかどうか
-                        const isCurrentSearchMatch =
-                          currentSearchMatch &&
-                          currentSearchMatch.page === page.page_num &&
-                          currentSearchMatch.wordIndex === currentGlobalIndex;
+                        globalWordIndex++;
 
                         return (
-                          <span
-                            key={wIdx}
-                            className={`transition-all 
-                              ${isJumpHighlight ? "bg-yellow-400/40 border-b border-yellow-600" : ""}
-                              ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 rounded" : ""}
-                              ${isCurrentSearchMatch ? "bg-orange-500/60 rounded ring-2 ring-orange-400" : ""}`}
-                            style={{ pointerEvents: "auto" }}
-                          >
+                          <span key={wIdx} style={{ pointerEvents: "auto" }}>
                             {w.word}{" "}
                           </span>
                         );
@@ -210,23 +176,9 @@ const TextModePage: React.FC<TextModePageProps> = ({
                 {page.lines.map((line, lIdx) => (
                   <div key={lIdx} className="mb-2">
                     {line.words.map((w, wIdx) => {
-                      const isJumpHighlight =
-                        jumpTarget &&
-                        jumpTarget.page === page.page_num &&
-                        jumpTarget.term &&
-                        w.word
-                          .toLowerCase()
-                          .includes(jumpTarget.term.toLowerCase());
-
-                      const isSearchMatch =
-                        searchTerm &&
-                        searchTerm.length >= 2 &&
-                        w.word.toLowerCase().includes(searchTerm.toLowerCase());
-
                       return (
                         <span
                           key={wIdx}
-                          className={`${isJumpHighlight ? "bg-yellow-400/60 px-1 rounded" : ""} ${isSearchMatch ? "bg-amber-300/60 px-1 rounded" : ""}`}
                           onClick={() => {
                             if (onWordClick) {
                               onWordClick(w.word, undefined, {

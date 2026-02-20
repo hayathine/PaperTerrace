@@ -197,8 +197,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
   const triggerLazyLayoutAnalysis = async (paperId: string) => {
     try {
-      console.log("[PDFViewer] Starting lazy layout analysis for paper:", paperId);
-      
+      console.log(
+        "[PDFViewer] Starting lazy layout analysis for paper:",
+        paperId,
+      );
+
       const headers: HeadersInit = {
         "Content-Type": "application/x-www-form-urlencoded",
       };
@@ -213,11 +216,18 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         body: formData,
       });
 
-      console.log("[PDFViewer] Lazy layout analysis response status:", response.status);
+      console.log(
+        "[PDFViewer] Lazy layout analysis response status:",
+        response.status,
+      );
 
       if (!response.ok) {
         const errorText = await response.text();
-        console.error("[PDFViewer] Lazy layout analysis failed:", response.status, errorText);
+        console.error(
+          "[PDFViewer] Lazy layout analysis failed:",
+          response.status,
+          errorText,
+        );
         throw new Error(`Layout analysis failed: ${response.statusText}`);
       }
 
@@ -226,14 +236,18 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
       // Merge detected figures into page state
       if (result.figures && result.figures.length > 0) {
-        console.log(`[PDFViewer] Merging ${result.figures.length} figures into pages`);
+        console.log(
+          `[PDFViewer] Merging ${result.figures.length} figures into pages`,
+        );
         setPages((prevPages) =>
           prevPages.map((page) => {
             const pageFigures = result.figures.filter(
               (f: any) => f.page_num === page.page_num,
             );
             if (pageFigures.length > 0) {
-              console.log(`[PDFViewer] Adding ${pageFigures.length} figures to page ${page.page_num}`);
+              console.log(
+                `[PDFViewer] Adding ${pageFigures.length} figures to page ${page.page_num}`,
+              );
               return {
                 ...page,
                 figures: [...(page.figures || []), ...pageFigures],
@@ -246,7 +260,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
           `[PDFViewer] Merged ${result.figures.length} figures into pages`,
         );
       } else {
-        console.log("[PDFViewer] No figures returned from lazy layout analysis");
+        console.log(
+          "[PDFViewer] No figures returned from lazy layout analysis",
+        );
       }
     } catch (err) {
       console.error("[PDFViewer] Lazy layout analysis error:", err);
@@ -712,16 +728,20 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
             setStatus("done");
             // Cached papers have coordinates ready
             // If we have content, we could stop here.
-            
+
             // Trigger lazy layout analysis to fetch figures if not already present
-            const hasFigures = cachedPages.some((p) => p.figures && p.figures.length > 0);
+            const hasFigures = cachedPages.some(
+              (p) => p.figures && p.figures.length > 0,
+            );
             if (!hasFigures) {
-              console.log("[PDFViewer] No figures in cache, triggering lazy layout analysis");
+              console.log(
+                "[PDFViewer] No figures in cache, triggering lazy layout analysis",
+              );
               triggerLazyLayoutAnalysis(id).catch((err) => {
                 console.warn("[PDFViewer] Lazy layout analysis failed:", err);
               });
             }
-            
+
             // Optional: Background check with server to ensure consistency.
             return;
           }
@@ -779,16 +799,20 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
                 id,
                 fullPages.map((p) => p.image_url),
               );
-              
+
               // Trigger lazy layout analysis to fetch figures if not already present
-              const hasFigures = fullPages.some((p) => p.figures && p.figures.length > 0);
+              const hasFigures = fullPages.some(
+                (p) => p.figures && p.figures.length > 0,
+              );
               if (!hasFigures) {
-                console.log("[PDFViewer] No figures found, triggering lazy layout analysis");
+                console.log(
+                  "[PDFViewer] No figures found, triggering lazy layout analysis",
+                );
                 triggerLazyLayoutAnalysis(id).catch((err) => {
                   console.warn("[PDFViewer] Lazy layout analysis failed:", err);
                 });
               }
-              
+
               return; // Success! No need to stream.
             }
           } catch (parseErr) {
@@ -994,9 +1018,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
               pages={pagesWithLines}
               onWordClick={handleWordClick}
               onTextSelect={handleTextSelect}
-              jumpTarget={jumpTarget}
-              searchTerm={searchTerm}
-              currentSearchMatch={currentSearchMatch}
             />
           </div>
 

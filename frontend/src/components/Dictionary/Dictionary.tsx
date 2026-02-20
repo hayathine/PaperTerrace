@@ -332,6 +332,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
             <div className="flex gap-2">
               <button
                 onClick={() => handleSaveToNote(entry)}
+                disabled={savedItems.has(entry.word)}
                 className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 border ${
                   savedItems.has(entry.word)
                     ? "bg-green-50 text-green-600 border-green-200 cursor-default"

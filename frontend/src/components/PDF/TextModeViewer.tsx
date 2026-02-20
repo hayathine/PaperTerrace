@@ -13,19 +13,12 @@ interface TextModeViewerProps {
     text: string,
     coords: { page: number; x: number; y: number },
   ) => void;
-  jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
-  // 検索関連props
-  searchTerm?: string;
-  currentSearchMatch?: { page: number; wordIndex: number } | null;
 }
 
 const TextModeViewer: React.FC<TextModeViewerProps> = ({
   pages,
   onWordClick,
   onTextSelect,
-  jumpTarget,
-  searchTerm,
-  currentSearchMatch,
 }) => {
   if (!pages || pages.length === 0) {
     return (
@@ -44,9 +37,6 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({
           page={page}
           onWordClick={onWordClick}
           onTextSelect={onTextSelect}
-          jumpTarget={jumpTarget}
-          searchTerm={searchTerm}
-          currentSearchMatch={currentSearchMatch}
         />
       ))}
     </div>
