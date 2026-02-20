@@ -21,6 +21,11 @@ from app.domain.services import local_translator
 from app.domain.services.analysis_service import EnglishAnalysisService
 from app.logic import executor
 from app.providers import get_ai_provider, get_storage_provider
+from app.providers.inference_client import (
+    CircuitBreakerError,
+    InferenceServiceDownError,
+    InferenceServiceTimeoutError,
+)
 from common.logger import get_service_logger
 
 log = get_service_logger("Translation")
@@ -191,10 +196,6 @@ async def explain(
 
     # Stage 2: ServiceB Machine Translation (M2M100)
     translator = local_translator.get_local_translator()
-    log.debug(
-        "explain", f"Translator initialized: {translator._initialized}", lemma=lemma
-    )
-
     if translator._initialized:
         try:
             local_translation = await translator.translate_async(lemma, lang)
@@ -203,23 +204,36 @@ async def explain(
                 f"ServiceB translation result: {local_translation}",
                 lemma=lemma,
             )
+        except InferenceServiceTimeoutError:
+            log.warning("explain", "ServiceB translation timeout (busy)", lemma=lemma)
+            local_translation = "混雑中"
+        except (InferenceServiceDownError, CircuitBreakerError):
+            log.warning("explain", "ServiceB is down or circuit open", lemma=lemma)
+            local_translation = "サーバーが故障中です"
         except Exception as e:
             log.warning("explain", f"ServiceB translation failed: {e}", lemma=lemma)
             local_translation = None
     else:
         local_translation = None
         log.warning("explain", "Local translator not initialized", lemma=lemma)
-
     if local_translation:
-        service.translation_cache[lemma] = local_translation
-        service.word_cache[lemma] = False
+        if local_translation not in ["混雑中", "サーバーが故障中です"]:
+            service.translation_cache[lemma] = local_translation
+            service.word_cache[lemma] = False
+
+        source = "Local-MT"
+        if local_translation == "混雑中":
+            source = "Busy"
+        elif local_translation == "サーバーが故障中です":
+            source = "Down"
+
         if not is_htmx:
             return JSONResponse(
                 {
                     "word": original_word,
                     "lemma": lemma,
                     "translation": local_translation,
-                    "source": "Local-MT",
+                    "source": source,
                 }
             )
         return HTMLResponse(
@@ -227,10 +241,13 @@ async def explain(
                 original_word,
                 lemma,
                 local_translation,
-                "Local-MT",
+                source,
                 lang,
                 paper_id,
                 element_id=element_id,
+                show_deep_btn=(
+                    local_translation not in ["混雑中", "サーバーが故障中です"]
+                ),
             )
         )
 

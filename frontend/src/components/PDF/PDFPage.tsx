@@ -129,7 +129,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
   } | null>(null);
 
   const handleMouseUp = () => {
-    if (isStampMode || isAreaMode) return;
+    if (isStampMode || isAreaMode || !isClickMode) return;
 
     if (isDragging && selectionStart !== null && selectionEnd !== null) {
       setIsDragging(false);
@@ -357,7 +357,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
                         className="absolute inset-0 w-full h-full opacity-0 z-40 cursor-pointer"
                         onClick={(e) => {
                           e.stopPropagation();
-                          console.log('[PDFPage] Figure clicked:', fig.label, fig.image_url);
+                          console.log(
+                            "[PDFPage] Figure clicked:",
+                            fig.label,
+                            fig.image_url,
+                          );
                           // Open in lightbox
                           setLightboxFigure({
                             image_url: fig.image_url,
@@ -402,7 +406,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
         />
 
         {/* Word Overlays */}
-        <div className="absolute inset-0 w-full h-full z-10 pointer-events-none">
+        <div className="absolute inset-0 w-full h-full z-40 pointer-events-none">
           {words &&
             words.length > 0 &&
             words.map((w, idx) => {
@@ -454,7 +458,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
               return (
                 <div
                   key={`${idx}`}
-                  className={`absolute rounded-sm group ${!isStampMode && !isClickMode ? "cursor-pointer pointer-events-auto" : "pointer-events-none"} 
+                  className={`absolute rounded-sm group ${!isStampMode && isClickMode ? "cursor-pointer pointer-events-auto" : "pointer-events-none"} 
                                     ${!isStampMode && !isSelected && !isJumpHighlight && !isSearchMatch ? "hover:bg-yellow-300/30" : ""} 
                                     ${isSelected ? "bg-indigo-500/30 border border-indigo-500/50" : ""}
                                     ${isJumpHighlight ? "bg-yellow-400/60 z-20 animate-bounce-subtle" : ""}
@@ -467,7 +471,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
                     height: `${styleH}%`,
                   }}
                   onMouseDown={(e) => {
-                    if (isStampMode || isAreaMode) return;
+                    if (isStampMode || isAreaMode || !isClickMode) return;
                     e.preventDefault();
                     e.stopPropagation();
                     setIsDragging(true);
@@ -476,13 +480,13 @@ const PDFPage: React.FC<PDFPageProps> = ({
                     setSelectionMenu(null); // Hide menu on new select start
                   }}
                   onMouseEnter={() => {
-                    if (isDragging && selectionStart !== null) {
+                    if (isClickMode && isDragging && selectionStart !== null) {
                       setSelectionEnd(idx);
                     }
                   }}
                   onClick={(e) => {
                     e.stopPropagation(); // Stop propagation to document
-                    if (!isStampMode && onWordClick) {
+                    if (!isStampMode && !isAreaMode && isClickMode && onWordClick) {
                       if (selectionStart === selectionEnd && !selectionMenu) {
                         const start = Math.max(0, idx - 50);
                         const end = Math.min(words.length, idx + 50);

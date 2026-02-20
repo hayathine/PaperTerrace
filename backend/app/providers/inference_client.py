@@ -23,6 +23,18 @@ class InferenceServiceError(Exception):
     pass
 
 
+class InferenceServiceTimeoutError(InferenceServiceError):
+    """推論サービスタイムアウト（混雑）"""
+
+    pass
+
+
+class InferenceServiceDownError(InferenceServiceError):
+    """推論サービスダウン"""
+
+    pass
+
+
 class CircuitBreakerError(Exception):
     """回路ブレーカーエラー"""
 
@@ -129,9 +141,20 @@ class InferenceServiceClient:
                     self._record_failure()
 
         # 全ての試行が失敗
-        raise InferenceServiceError(
-            f"推論サービスへのリクエストが失敗しました: {last_exception}"
-        )
+        if isinstance(last_exception, httpx.TimeoutException):
+            raise InferenceServiceTimeoutError(
+                f"推論サービスへのリクエストがタイムアウトしました: {last_exception}"
+            )
+        elif isinstance(
+            last_exception, httpx.HTTPStatusError
+        ) and last_exception.response.status_code in [429, 503]:
+            raise InferenceServiceTimeoutError(
+                f"推論サービスが混雑しています (Status {last_exception.response.status_code}): {last_exception}"
+            )
+        else:
+            raise InferenceServiceDownError(
+                f"推論サービスへのリクエストが失敗しました: {last_exception}"
+            )
 
     async def analyze_layout(
         self, pdf_path: str, pages: list[int] | None = None

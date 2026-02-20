@@ -160,11 +160,11 @@ class LocalTranslator:
 
         except CircuitBreakerError as e:
             log.error("translate_async", f"Circuit breaker error: {e}")
-            return text
+            raise
 
         except InferenceServiceError as e:
             log.error("translate_async", f"Inference service error: {e}")
-            return text
+            raise
 
         except Exception as e:
             log.error("translate_async", f"Unexpected error: {e}")
