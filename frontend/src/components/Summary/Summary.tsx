@@ -140,19 +140,19 @@ const Summary: React.FC<SummaryProps> = ({
       <div className="flex p-2 bg-white border-b border-slate-100 gap-2 overflow-x-auto">
         <button
           onClick={() => setMode("summary")}
-          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all whitespace-nowrap ${mode === "summary" ? "bg-indigo-50 text-indigo-600" : "text-slate-400"}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "summary" ? "bg-indigo-50 text-indigo-600" : "text-slate-400"}`}
         >
           {t("summary.modes.summary")}
         </button>
         <button
           onClick={() => setMode("critique")}
-          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all whitespace-nowrap ${mode === "critique" ? "bg-red-50 text-red-600" : "text-slate-400"}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "critique" ? "bg-red-50 text-red-600" : "text-slate-400"}`}
         >
           {t("summary.modes.critique")}
         </button>
         <button
           onClick={() => setMode("radar")}
-          className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all whitespace-nowrap ${mode === "radar" ? "bg-emerald-50 text-emerald-600" : "text-slate-400"}`}
+          className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "radar" ? "bg-emerald-50 text-emerald-600" : "text-slate-400"}`}
         >
           {t("summary.modes.radar")}
         </button>
@@ -196,7 +196,7 @@ const Summary: React.FC<SummaryProps> = ({
               </div>
             )}
             {summaryData && (
-              <div className="prose prose-sm max-w-none text-xs text-slate-600 leading-relaxed whitespace-pre-wrap bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+              <div className="prose prose-sm max-w-none text-sm text-slate-600 leading-relaxed whitespace-pre-wrap bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
                 {summaryData}
               </div>
             )}
@@ -220,22 +220,24 @@ const Summary: React.FC<SummaryProps> = ({
             )}
             {critiqueData && (
               <div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm space-y-4">
-                <div className="text-xs text-slate-700 leading-relaxed font-medium mb-4">
+                <div className="text-sm text-slate-700 leading-relaxed font-medium mb-4">
                   {critiqueData.overall_assessment}
                 </div>
 
                 {critiqueData.hidden_assumptions &&
                   critiqueData.hidden_assumptions.length > 0 && (
-                    <div className="bg-red-50 p-3 rounded-lg">
-                      <h4 className="text-[10px] font-bold text-red-800 uppercase mb-2">
+                    <div className="bg-red-50 p-4 rounded-lg flex flex-col gap-2">
+                      <h4 className="text-xs font-bold text-red-800 uppercase mb-2">
                         {t("summary.assumptions")}
                       </h4>
 
-                      <div className="space-y-2">
+                      <div className="space-y-4">
                         {critiqueData.hidden_assumptions.map((h, i) => (
-                          <div key={i} className="text-[10px] text-red-700">
+                          <div key={i} className="text-sm text-red-700">
                             <span className="font-bold">● {h.assumption}</span>
-                            <p className="ml-3 opacity-80">{h.risk}</p>
+                            <p className="ml-4 mt-1 opacity-80 text-xs">
+                              {h.risk}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -244,16 +246,18 @@ const Summary: React.FC<SummaryProps> = ({
 
                 {critiqueData.unverified_conditions &&
                   critiqueData.unverified_conditions.length > 0 && (
-                    <div className="bg-orange-50 p-3 rounded-lg">
-                      <h4 className="text-[10px] font-bold text-orange-800 uppercase mb-2">
+                    <div className="bg-orange-50 p-4 rounded-lg flex flex-col gap-2">
+                      <h4 className="text-xs font-bold text-orange-800 uppercase mb-2">
                         {t("summary.unverified")}
                       </h4>
 
-                      <div className="space-y-2">
+                      <div className="space-y-4">
                         {critiqueData.unverified_conditions.map((h, i) => (
-                          <div key={i} className="text-[10px] text-orange-700">
+                          <div key={i} className="text-sm text-orange-700">
                             <span className="font-bold">● {h.condition}</span>
-                            <p className="ml-3 opacity-80">{h.impact}</p>
+                            <p className="ml-4 mt-1 opacity-80 text-xs">
+                              {h.impact}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -262,16 +266,18 @@ const Summary: React.FC<SummaryProps> = ({
 
                 {critiqueData.reproducibility_risks &&
                   critiqueData.reproducibility_risks.length > 0 && (
-                    <div className="bg-slate-50 p-3 rounded-lg border border-slate-200">
-                      <h4 className="text-[10px] font-bold text-slate-800 uppercase mb-2">
+                    <div className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-col gap-2">
+                      <h4 className="text-xs font-bold text-slate-800 uppercase mb-2">
                         {t("summary.reproducibility")}
                       </h4>
 
-                      <div className="space-y-2">
+                      <div className="space-y-4">
                         {critiqueData.reproducibility_risks.map((h, i) => (
-                          <div key={i} className="text-[10px] text-slate-700">
+                          <div key={i} className="text-sm text-slate-700">
                             <span className="font-bold">● {h.risk}</span>
-                            <p className="ml-3 opacity-80">{h.detail}</p>
+                            <p className="ml-4 mt-1 opacity-80 text-xs">
+                              {h.detail}
+                            </p>
                           </div>
                         ))}
                       </div>
@@ -300,11 +306,11 @@ const Summary: React.FC<SummaryProps> = ({
             {radarData && (
               <div className="space-y-4">
                 {radarData.search_queries && (
-                  <div className="flex flex-wrap gap-1">
+                  <div className="flex flex-wrap gap-2">
                     {radarData.search_queries.map((q, i) => (
                       <span
                         key={i}
-                        className="bg-emerald-50 text-emerald-700 text-[9px] px-2 py-0.5 rounded-full border border-emerald-100 italic"
+                        className="bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full border border-emerald-100 italic"
                       >
                         "{q}"
                       </span>
@@ -313,17 +319,17 @@ const Summary: React.FC<SummaryProps> = ({
                 )}
                 {radarData.related_papers &&
                   radarData.related_papers.length > 0 && (
-                    <div className="space-y-2">
+                    <div className="space-y-3">
                       {radarData.related_papers.map((p, i) => (
                         <div
                           key={i}
-                          className="bg-white p-3 rounded-lg border border-emerald-100 shadow-sm hover:shadow-md transition-shadow"
+                          className="bg-white p-4 rounded-lg border border-emerald-100 shadow-sm hover:shadow-md transition-shadow"
                         >
-                          <p className="text-xs font-bold text-slate-700">
+                          <p className="text-sm font-bold text-slate-700">
                             {p.title}
                           </p>
-                          <div className="flex items-center gap-2 mt-1">
-                            <span className="text-[9px] text-slate-400">
+                          <div className="flex items-center gap-2 mt-1.5">
+                            <span className="text-xs font-medium text-slate-400">
                               {p.year || "N/A"}
                             </span>
                             {p.url && (
@@ -331,14 +337,14 @@ const Summary: React.FC<SummaryProps> = ({
                                 href={p.url}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                className="text-[9px] text-indigo-500 hover:underline"
+                                className="text-xs text-indigo-500 hover:text-indigo-600 hover:underline font-medium"
                               >
                                 View Paper
                               </a>
                             )}
                           </div>
                           {p.abstract && (
-                            <p className="text-[9px] text-slate-500 mt-2 line-clamp-2 italic">
+                            <p className="text-xs text-slate-500 mt-2.5 line-clamp-3 italic leading-relaxed">
                               {p.abstract}
                             </p>
                           )}

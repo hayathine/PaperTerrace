@@ -461,7 +461,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
                   className={`absolute rounded-sm group ${!isStampMode && isClickMode ? "cursor-pointer pointer-events-auto" : "pointer-events-none"} 
                                     ${!isStampMode && !isSelected && !isJumpHighlight && !isSearchMatch ? "hover:bg-yellow-300/30" : ""} 
                                     ${isSelected ? "bg-indigo-500/30 border border-indigo-500/50" : ""}
-                                    ${isJumpHighlight ? "bg-yellow-400/60 z-20 animate-bounce-subtle" : ""}
+                                    ${isJumpHighlight ? "bg-yellow-400/60 z-20" : ""}
                                     ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 border border-amber-400" : ""}
                                     ${isCurrentSearchMatch ? "bg-orange-500/60 border-2 border-orange-600 shadow-[0_0_15px_rgba(249,115,22,0.6)] z-30 ring-2 ring-orange-400" : ""}`}
                   style={{
@@ -486,7 +486,12 @@ const PDFPage: React.FC<PDFPageProps> = ({
                   }}
                   onClick={(e) => {
                     e.stopPropagation(); // Stop propagation to document
-                    if (!isStampMode && !isAreaMode && isClickMode && onWordClick) {
+                    if (
+                      !isStampMode &&
+                      !isAreaMode &&
+                      isClickMode &&
+                      onWordClick
+                    ) {
                       if (selectionStart === selectionEnd && !selectionMenu) {
                         const start = Math.max(0, idx - 50);
                         const end = Math.min(words.length, idx + 50);

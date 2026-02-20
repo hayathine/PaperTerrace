@@ -48,7 +48,7 @@ const NoteList: React.FC<NoteListProps> = ({
       const headers: HeadersInit = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const url = new URL(`/note/${sessionId}`, window.location.origin);
+      const url = new URL(`/api/note/${sessionId}`, window.location.origin);
       if (paperId) url.searchParams.append("paper_id", paperId);
 
       const res = await fetch(url.toString(), { headers });
@@ -116,7 +116,7 @@ const NoteList: React.FC<NoteListProps> = ({
       const headers: HeadersInit = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`/note/${id}`, {
+      const res = await fetch(`/api/note/${id}`, {
         method: "PUT",
         headers,
         body: JSON.stringify({
@@ -145,7 +145,7 @@ const NoteList: React.FC<NoteListProps> = ({
       const headers: HeadersInit = {};
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      await fetch(`/note/${id}`, { method: "DELETE", headers });
+      await fetch(`/api/note/${id}`, { method: "DELETE", headers });
       setNotes((prev) => prev.filter((n) => n.note_id !== id));
     } catch (e) {
       console.error(e);
