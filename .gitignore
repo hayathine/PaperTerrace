@@ -11,6 +11,8 @@ logs/
 screenshots/
 scripts/
 infrastructure/k8s/
+.testmondata
+.testmondata*
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
@@ -241,5 +243,7 @@ __marimo__/
 
 #frontend
 node_modules/
+dist/
+coverage/
 # AI Models
 models/

@@ -1,0 +1,21 @@
+[project]
+name = "paperterrace-workspace"
+version = "0.1.0"
+description = "PaperTerrace - Academic Paper Translation Platform"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["backend", "inference-service", "redis_provider"]
+
+[tool.uv]
+dev-dependencies = [
+    "pyright>=1.1.408",
+    "pytest>=9.0.2",
+    "pytest-asyncio>=1.3.0",
+    "pytest-testmon>=2.2.0",
+    "pytest-xdist>=3.6.1",
+    "ruff>=0.15.0",
+    "ty>=0.0.15",
+]
