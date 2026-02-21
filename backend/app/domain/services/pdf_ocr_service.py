@@ -269,12 +269,36 @@ class PDFOCRService:
             for w in native_words
         ]
 
+        # Phase 3: Layout analysis and Markdown generation
+        try:
+            # We delay import to avoid circular dependency
+            from app.domain.services.markdown_builder import (
+                generate_markdown_from_layout,
+            )
+            from app.domain.services.paddle_layout_service import get_layout_service
+
+            layout_svc = get_layout_service()
+            layout_blocks = await layout_svc.detect_layout_from_image_async(img_bytes)
+            logger.info(
+                f"[OCR] Page {page_num}: Layout blocks detected: {len(layout_blocks)}"
+            )
+
+            # Update page_text to be Markdown using layout blocks
+            page_text = generate_markdown_from_layout(
+                layout_data["words"], layout_blocks
+            )
+        except Exception as e:
+            logger.error(f"[OCR] Page {page_num}: Markdown generation failed: {e}")
+            # Fallback to plain text if layout service fails
+            pass
+
         # Debug: Verify words are correctly populated
         logger.info(
             f"[OCR] Page {page_num}: Phase 2 complete - "
             f"native_words={len(native_words)}, "
             f"layout_data words={len(layout_data['words'])}, "
-            f"width={layout_data['width']}, height={layout_data['height']}"
+            f"width={layout_data['width']}, height={layout_data['height']}, "
+            f"markdown_length={len(page_text)}"
         )
         if layout_data["words"]:
             sample_word = layout_data["words"][0]
