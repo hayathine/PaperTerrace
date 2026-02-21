@@ -1,11 +1,11 @@
-# --- Stage 1: Frontend Builder ---
+# --- Stage 1: Frontend Builder (Optional - use pre-built dist) ---
 # Pre-build frontend locally with: cd frontend && npm run build
-FROM node:20-slim AS frontend-builder
-WORKDIR /app/frontend
-COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
-COPY frontend ./
-RUN rm -rf dist && npm run build
+# FROM node:20-slim AS frontend-builder
+# WORKDIR /app/frontend
+# COPY frontend/package.json frontend/package-lock.json ./
+# RUN npm ci
+# COPY frontend ./
+# RUN rm -rf dist && npm run build
 
 # --- Stage 2: Runtime Builder ---
 FROM python:3.12-slim AS runtime-builder
@@ -35,13 +35,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=runtime-builder /app/.venv /app/.venv
-COPY --from=frontend-builder /app/frontend/dist ./app/static/dist
+# Use pre-built frontend dist
+COPY frontend/dist ./app/static/dist
 
 COPY backend/alembic.ini ./
 COPY backend/migrations ./migrations
 COPY backend/app/ ./app/
 COPY common/ ./common/
-COPY redis_provider.provider/ ./redis_provider.provider/
+COPY redis_provider/ ./redis_provider/
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
