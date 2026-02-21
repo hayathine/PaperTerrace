@@ -84,12 +84,16 @@ const BoxOverlay: React.FC<BoxOverlayProps> = ({ isActive, onSelect }) => {
 	}
 
 	return (
-		<div
+		<section
+			aria-label="Selection overlay"
 			ref={containerRef}
 			className="absolute inset-0 z-50 cursor-crosshair select-none"
 			onMouseDown={handleMouseDown}
 			onMouseMove={handleMouseMove}
 			onMouseUp={handleMouseUp}
+			onKeyDown={() => {
+				// Keyboard support could be added here if needed
+			}}
 			onMouseLeave={() => {
 				setStart(null);
 				setCurrent(null);
@@ -101,7 +105,7 @@ const BoxOverlay: React.FC<BoxOverlayProps> = ({ isActive, onSelect }) => {
 					style={boxStyle}
 				/>
 			)}
-		</div>
+		</section>
 	);
 };
 

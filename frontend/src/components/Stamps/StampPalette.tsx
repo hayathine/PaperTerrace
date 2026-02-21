@@ -24,7 +24,7 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 		if (saved) {
 			try {
 				setCustomStamps(JSON.parse(saved));
-			} catch (e) {
+			} catch (_e) {
 				console.error("Failed to parse custom stamps");
 			}
 		}
@@ -78,6 +78,7 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 		<div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center gap-4 w-full max-w-sm sm:max-w-md px-4">
 			{/* Main Toggle Button */}
 			<button
+				type="button"
 				onClick={onToggleMode}
 				className={`group px-8 py-4 rounded-full shadow-2xl font-bold transition-all transform hover:scale-105 flex items-center gap-3
                     ${
@@ -104,6 +105,7 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 				<div className="flex space-x-1 mb-4 overflow-x-auto no-scrollbar pb-1">
 					{dynamicCategories.map((cat) => (
 						<button
+							type="button"
 							key={cat.id}
 							onClick={() => setActiveCategory(cat.id)}
 							className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all
@@ -125,6 +127,7 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 						.find((c) => c.id === activeCategory)
 						?.stamps.map((s) => (
 							<button
+								type="button"
 								key={s}
 								onClick={() => onSelectStamp(s)}
 								className={`
@@ -151,6 +154,7 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 						))}
 					{activeCategory === "custom" && (
 						<button
+							type="button"
 							onClick={() => fileInputRef.current?.click()}
 							className="aspect-square rounded-2xl flex items-center justify-center text-xl bg-indigo-50 text-indigo-500 hover:bg-indigo-100 transition-all border-2 border-dashed border-indigo-300 transform hover:scale-110"
 							title="Upload Custom Stamp"

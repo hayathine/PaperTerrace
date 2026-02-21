@@ -52,6 +52,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 			{/* Tab Navigation */}
 			<div className="flex bg-slate-50 border-b border-slate-200 overflow-x-auto">
 				<button
+					type="button"
 					onClick={() => onTabChange("dict")}
 					className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${
 						activeTab === "dict"
@@ -63,6 +64,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 				</button>
 
 				<button
+					type="button"
 					onClick={() => onTabChange("summary")}
 					className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${
 						activeTab === "summary"
@@ -74,6 +76,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 				</button>
 
 				<button
+					type="button"
 					onClick={() => onTabChange("chat")}
 					className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${
 						activeTab === "chat"
@@ -85,6 +88,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 				</button>
 
 				<button
+					type="button"
 					onClick={() => onTabChange("notes")}
 					className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${
 						activeTab === "notes"
@@ -96,6 +100,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 				</button>
 
 				<button
+					type="button"
 					onClick={() => onTabChange("stack")}
 					className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${
 						activeTab === "stack"

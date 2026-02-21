@@ -34,6 +34,7 @@ class ErrorBoundary extends Component<Props, State> {
 						{this.state.error?.stack}
 					</pre>
 					<button
+						type="button"
 						onClick={() => window.location.reload()}
 						className="mt-6 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
 					>

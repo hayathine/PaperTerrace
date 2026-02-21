@@ -17,6 +17,7 @@ const NoteItem: React.FC<NoteItemProps> = ({ note, onDelete, onJump }) => {
 					{note.term}
 				</span>
 				<button
+					type="button"
 					onClick={() => onDelete(note.note_id)}
 					className="text-slate-300 hover:text-red-500 text-xs px-1 opacity-0 group-hover:opacity-100 transition-opacity"
 					title="Delete Note"
@@ -43,6 +44,7 @@ const NoteItem: React.FC<NoteItemProps> = ({ note, onDelete, onJump }) => {
 			{note.page_number !== undefined && note.page_number !== null && (
 				<div className="mt-2 flex justify-start">
 					<button
+						type="button"
 						onClick={() =>
 							onJump &&
 							note.page_number !== undefined &&

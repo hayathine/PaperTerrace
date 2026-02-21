@@ -27,7 +27,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 			e.stopPropagation();
 			setIsDragging(false);
 
-			if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+			if (e.dataTransfer.files?.[0]) {
 				const file = e.dataTransfer.files[0];
 				if (file.type === "application/pdf") {
 					onFileSelect(file);
@@ -44,7 +44,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 	};
 
 	const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
-		if (e.target.files && e.target.files[0]) {
+		if (e.target.files?.[0]) {
 			onFileSelect(e.target.files[0]);
 		}
 	};
@@ -65,8 +65,14 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 			</div>
 
 			{/* Upload Zone */}
-			<div
+			<button
+				type="button"
 				onClick={handleClick}
+				onKeyDown={(e) => {
+					if (e.key === "Enter" || e.key === " ") {
+						handleClick();
+					}
+				}}
 				onDragOver={handleDragOver}
 				onDragLeave={handleDragLeave}
 				onDrop={handleDrop}
@@ -76,7 +82,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
           border-2 border-dashed rounded-3xl
           transition-all duration-300 ease-out
           cursor-pointer overflow-hidden
-          group
+          group text-left
           ${
 						isDragging
 							? "border-indigo-500 bg-indigo-50/80 scale-[1.02] shadow-xl shadow-indigo-200/50"
@@ -172,7 +178,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 						</span>
 					</div>
 				</div>
-			</div>
+			</button>
 
 			<p className="mt-8 text-xs text-slate-400 max-w-md text-center leading-relaxed">
 				※現在、英語の論文のみサポートしています。

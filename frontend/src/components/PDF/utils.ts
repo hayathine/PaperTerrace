@@ -7,7 +7,7 @@ import type { LineData, PageData, PageWithLines } from "./types";
 export function groupWordsIntoLines(pages: PageData[]): PageWithLines[] {
 	return pages.map((page) => {
 		const validWords = (page.words || []).filter(
-			(w) => w && w.bbox && w.bbox.length >= 4,
+			(w) => w?.bbox && w.bbox.length >= 4,
 		);
 		if (validWords.length === 0) return { ...page, lines: [] } as PageWithLines;
 
@@ -64,9 +64,9 @@ export function groupWordsIntoLines(pages: PageData[]): PageWithLines[] {
 			});
 
 			// Sort words within each line by X
-			colLines.forEach((line) =>
-				line.words.sort((a, b) => a.bbox[0] - b.bbox[0]),
-			);
+			colLines.forEach((line) => {
+				line.words.sort((a, b) => a.bbox[0] - b.bbox[0]);
+			});
 			allLines.push(...colLines);
 		});
 

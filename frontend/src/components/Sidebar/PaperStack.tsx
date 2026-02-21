@@ -75,6 +75,7 @@ const PaperStack: React.FC<PaperStackProps> = ({ papers, onRemove }) => {
 								</div>
 
 								<button
+									type="button"
 									onClick={() => onRemove(paper.url)}
 									className="absolute top-3 right-3 text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-all p-1"
 									title="Remove from stack"

@@ -83,7 +83,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 			try {
 				const headers: HeadersInit = {};
-				if (token) headers["Authorization"] = `Bearer ${token}`;
+				if (token) headers.Authorization = `Bearer ${token}`;
 
 				const res = await fetch(
 					`/api/explain/${encodeURIComponent(term)}?lang=${i18n.language}&paper_id=${paperId || ""}`,
@@ -92,7 +92,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 				if (res.ok) {
 					const contentType = res.headers.get("content-type");
-					if (contentType && contentType.includes("application/json")) {
+					if (contentType?.includes("application/json")) {
 						const data: DictionaryEntryWithCoords = await res.json();
 						data.coords = coordinates; // Attach current coordinates
 						setEntries((prev) => {
@@ -131,9 +131,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 		try {
 			const headers: HeadersInit = { "Content-Type": "application/json" };
-			if (token) headers["Authorization"] = `Bearer ${token}`;
+			if (token) headers.Authorization = `Bearer ${token}`;
 
-			let res;
+			let res: Response;
 			if (context) {
 				// Use context-aware explanation
 				res = await fetch("/api/explain/context", {
@@ -177,7 +177,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 		const targetCoords = entry.coords || coordinates;
 		try {
 			const headers: HeadersInit = { "Content-Type": "application/json" };
-			if (token) headers["Authorization"] = `Bearer ${token}`;
+			if (token) headers.Authorization = `Bearer ${token}`;
 
 			const res = await fetch("/api/note", {
 				method: "POST",
@@ -242,6 +242,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					</p>
 					<div className="flex flex-col gap-2 mt-6 w-full">
 						<button
+							type="button"
 							onClick={() =>
 								window.open(
 									term.startsWith("//")
@@ -339,6 +340,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 						<div className="flex gap-2">
 							<button
+								type="button"
 								onClick={() => handleSaveToNote(entry)}
 								disabled={savedItems.has(entry.word)}
 								className={`flex-1 py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 border ${
@@ -385,6 +387,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 							</button>
 
 							<button
+								type="button"
 								onClick={() => handleDeepTranslate(entry)}
 								className="flex-1 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
 							>
@@ -406,6 +409,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 							{(onJump && entry.coords) || (onJump && coordinates) ? (
 								<button
+									type="button"
 									onClick={() => {
 										const c = entry.coords || coordinates;
 										if (c) onJump(c.page, c.x, c.y, entry.word);

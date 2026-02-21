@@ -69,6 +69,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 					Figures & Charts
 				</h3>
 				<button
+					type="button"
 					onClick={() =>
 						paperId && paperId !== "pending" && fetchFigures(paperId)
 					}
@@ -159,9 +160,15 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 							className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden group hover:shadow-md transition-shadow"
 						>
 							{/* Image Container */}
-							<div
+							<button
+								type="button"
 								onClick={() => fig.image_url && setZoomedImage(fig.image_url)}
-								className="relative bg-slate-100 aspect-video flex items-center justify-center overflow-hidden border-b border-slate-100 cursor-zoom-in group/img"
+								onKeyDown={(e) => {
+									if (e.key === "Enter" || e.key === " ") {
+										fig.image_url && setZoomedImage(fig.image_url);
+									}
+								}}
+								className="relative w-full bg-slate-100 aspect-video flex items-center justify-center overflow-hidden border-b border-slate-100 cursor-zoom-in group/img border-none p-0"
 							>
 								{fig.image_url ? (
 									<>
@@ -200,7 +207,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 										{fig.label}
 									</div>
 								)}
-							</div>
+							</button>
 
 							{/* Content */}
 							<div className="p-4">
@@ -214,6 +221,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 								) : (
 									<div className="flex flex-col items-center justify-center py-2">
 										<button
+											type="button"
 											onClick={() => figId && handleExplain(figId)}
 											className="flex items-center space-x-2 px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-600 rounded-lg text-[11px] font-bold transition-colors group"
 										>
@@ -237,11 +245,16 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 
 			{/* Zoom Modal */}
 			{zoomedImage && (
-				<div
-					className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 md:p-8 transition-opacity duration-300"
+				<button
+					type="button"
+					className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 md:p-8 transition-opacity duration-300 border-none w-full h-full text-left"
 					onClick={() => setZoomedImage(null)}
+					onKeyDown={(e) => {
+						if (e.key === "Escape") setZoomedImage(null);
+					}}
 				>
 					<button
+						type="button"
 						className="absolute top-6 right-6 text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-all"
 						onClick={(e) => {
 							e.stopPropagation();
@@ -264,8 +277,11 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 					</button>
 
 					<div
+						role="dialog"
+						aria-modal="true"
 						className="relative max-w-4xl w-full max-h-full overflow-hidden flex items-center justify-center transition-transform duration-300 scale-100"
 						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
 					>
 						<img
 							src={zoomedImage}
@@ -273,7 +289,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 							className="max-w-full max-h-[90vh] object-contain shadow-2xl rounded-lg"
 						/>
 					</div>
-				</div>
+				</button>
 			)}
 		</div>
 	);

@@ -19,12 +19,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
 		const elements: React.ReactNode[] = [];
 		let lastIndex = 0;
-		let match;
-
-		// Reset regex state
-		urlRegex.lastIndex = 0;
-
-		while ((match = urlRegex.exec(content)) !== null) {
+		let match = urlRegex.exec(content);
+		while (match !== null) {
 			// Add text before the match
 			if (match.index > lastIndex) {
 				elements.push(content.substring(lastIndex, match.index));
@@ -63,6 +59,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
 			elements.push(
 				<button
+					type="button"
 					key={match.index}
 					onClick={(e) => {
 						e.preventDefault();
@@ -96,6 +93,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 			}
 
 			lastIndex = urlRegex.lastIndex;
+			match = urlRegex.exec(content);
 		}
 
 		// Add remaining text

@@ -220,7 +220,7 @@ function App() {
 	};
 
 	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		if (e.target.files && e.target.files[0]) {
+		if (e.target.files?.[0]) {
 			handleDirectFileSelect(e.target.files[0]);
 		}
 	};
@@ -398,6 +398,7 @@ function App() {
 					<div className="w-64 p-4 flex flex-col h-full">
 						<div className="flex items-center gap-3 mb-8">
 							<button
+								type="button"
 								onClick={() => setIsLeftSidebarOpen(false)}
 								className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
 								title="メニューを閉じる"
@@ -431,6 +432,7 @@ function App() {
 								) : (
 									uploadedPapers.map((paper) => (
 										<button
+											type="button"
 											key={paper.paper_id}
 											onClick={() => handlePaperSelect(paper)}
 											className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-200 group relative ${
@@ -510,6 +512,7 @@ function App() {
 							)}
 							{user ? (
 								<button
+									type="button"
 									onClick={logout}
 									className="w-full py-2 px-4 bg-red-600 hover:bg-red-700 rounded text-sm transition-colors"
 								>
@@ -517,6 +520,7 @@ function App() {
 								</button>
 							) : (
 								<button
+									type="button"
 									onClick={() => setShowLoginModal(true)}
 									className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 rounded text-sm transition-colors"
 								>
@@ -526,7 +530,10 @@ function App() {
 						</div>
 
 						<div className="mt-4">
-							<label className="block text-xs font-bold mb-2 text-gray-400">
+							<label
+								htmlFor="pdf-upload-input"
+								className="block text-xs font-bold mb-2 text-gray-400"
+							>
 								UPLOAD PDF
 							</label>
 							<p className="text-[10px] text-amber-400/80 mb-2 leading-tight">
@@ -535,6 +542,7 @@ function App() {
 								(Only English papers are supported)
 							</p>
 							<input
+								id="pdf-upload-input"
 								type="file"
 								accept="application/pdf"
 								onChange={handleFileChange}
@@ -551,6 +559,7 @@ function App() {
 							{SHOW_DEV_TOOLS && (
 								<div className="mt-4 pt-4 border-t border-gray-700">
 									<button
+										type="button"
 										onClick={() => {
 											fetch("/test.pdf")
 												.then((res) => res.blob())
@@ -581,6 +590,7 @@ function App() {
 					<header className="h-12 bg-white border-b border-slate-200 flex items-center px-4">
 						{!isLeftSidebarOpen && (
 							<button
+								type="button"
 								onClick={() => setIsLeftSidebarOpen(true)}
 								className="mr-4 p-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 transition-all duration-200 flex items-center justify-center shadow-sm"
 								title="メニューを開く"
@@ -640,15 +650,25 @@ function App() {
 						</div>
 
 						{/* Resizer Handle */}
-						<div
-							className={`w-1.5 h-full cursor-col-resize hover:bg-indigo-500/30 transition-colors z-30 shrink-0 ${isResizing ? "bg-indigo-500/50" : "bg-transparent"}`}
+						<hr
+							aria-orientation="vertical"
+							aria-valuenow={sidebarWidth}
+							aria-valuemin={150}
+							aria-valuemax={500}
+							tabIndex={0}
+							className={`w-1.5 h-full cursor-col-resize hover:bg-indigo-500/30 transition-colors z-30 shrink-0 border-none m-0 p-0 ${isResizing ? "bg-indigo-500/50" : "bg-transparent"}`}
 							onMouseDown={(e) => {
 								e.preventDefault();
 								setIsResizing(true);
 							}}
-						>
-							<div className="w-[1px] h-full bg-gray-200 mx-auto" />
-						</div>
+							onKeyDown={(e) => {
+								if (e.key === "ArrowLeft") {
+									setSidebarWidth((w: number) => Math.max(150, w - 10));
+								} else if (e.key === "ArrowRight") {
+									setSidebarWidth((w: number) => Math.min(500, w + 10));
+								}
+							}}
+						/>
 
 						{/* Right Sidebar */}
 						<div
@@ -683,6 +703,7 @@ function App() {
 					<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
 						<div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden">
 							<button
+								type="button"
 								onClick={() => setShowLoginModal(false)}
 								className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
 							>

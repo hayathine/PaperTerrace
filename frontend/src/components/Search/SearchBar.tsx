@@ -115,6 +115,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
 					<div className="flex items-center gap-1">
 						{/* 前へ */}
 						<button
+							type="button"
 							onClick={onPrevMatch}
 							disabled={matches.length === 0}
 							className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -137,6 +138,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
 
 						{/* 次へ */}
 						<button
+							type="button"
 							onClick={onNextMatch}
 							disabled={matches.length === 0}
 							className="p-1.5 rounded-lg hover:bg-slate-100 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -160,6 +162,7 @@ const SearchBar: React.FC<SearchBarProps> = ({
 
 					{/* 閉じるボタン */}
 					<button
+						type="button"
 						onClick={onClose}
 						className="p-1.5 rounded-lg hover:bg-red-50 text-slate-400 hover:text-red-500 transition-colors"
 						title={t("search.close", "閉じる (Esc)")}

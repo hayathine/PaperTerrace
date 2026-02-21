@@ -252,9 +252,10 @@ const TextModePage: React.FC<TextModePageProps> = ({
 												w.word.toLowerCase().includes(searchTerm.toLowerCase());
 
 											return (
-												<span
+												<button
 													key={wIdx}
-													className={`${isJumpHighlight ? "bg-yellow-400/60 px-1 rounded" : ""} ${isSearchMatch ? "bg-amber-300/60 px-1 rounded" : ""}`}
+													type="button"
+													className={`${isJumpHighlight ? "bg-yellow-400/60 px-1 rounded" : ""} ${isSearchMatch ? "bg-amber-300/60 px-1 rounded" : ""} text-left`}
 													onClick={() => {
 														if (onWordClick) {
 															onWordClick(w.word, undefined, {
@@ -264,10 +265,17 @@ const TextModePage: React.FC<TextModePageProps> = ({
 															});
 														}
 													}}
-													style={{ cursor: "pointer" }}
+													style={{
+														cursor: "pointer",
+														background: "none",
+														border: "none",
+														padding: 0,
+														font: "inherit",
+														color: "inherit",
+													}}
 												>
 													{w.word}{" "}
-												</span>
+												</button>
 											);
 										})}
 									</div>
@@ -281,6 +289,8 @@ const TextModePage: React.FC<TextModePageProps> = ({
 			{/* Selection Menu */}
 			{selectionMenu && (
 				<div
+					role="toolbar"
+					aria-label="Selection menu"
 					className="selection-menu absolute z-50 flex gap-1 bg-gray-900 text-white p-1.5 rounded-lg shadow-xl overflow-hidden transform -translate-x-1/2"
 					style={{
 						left: `${selectionMenu.x}%`,
@@ -290,6 +300,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 					onMouseDown={(e) => e.stopPropagation()}
 				>
 					<button
+						type="button"
 						onClick={(e) => {
 							e.stopPropagation();
 							if (onWordClick)
@@ -306,6 +317,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 					</button>
 
 					<button
+						type="button"
 						onClick={(e) => {
 							e.stopPropagation();
 							if (onTextSelect)
@@ -319,6 +331,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 
 					{onAskAI && (
 						<button
+							type="button"
 							onClick={(e) => {
 								e.stopPropagation();
 								const prompt = `以下の文章をわかりやすく解説してください。\n\n"${selectionMenu.text}"`;

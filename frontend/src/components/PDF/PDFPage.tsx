@@ -81,7 +81,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 	const [imageError, setImageError] = useState(false);
 
 	useEffect(() => {
-		if (cachedImage && cachedImage.blob) {
+		if (cachedImage?.blob) {
 			const blobUrl = URL.createObjectURL(cachedImage.blob);
 			setDisplayUrl(blobUrl);
 			setImageError(false);
@@ -159,7 +159,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
 				// Let's use % for position
 				const validWords = (selectedWords || []).filter(
-					(w) => w && w.bbox && w.bbox.length >= 4,
+					(w) => w?.bbox && w.bbox.length >= 4,
 				);
 				if (validWords.length === 0) {
 					setSelectionStart(null);
@@ -233,7 +233,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
 	};
 
 	return (
-		<div
+		<section
+			aria-label={`${t("viewer.page")} ${page.page_num}`}
 			id={`page-${page.page_num}`}
 			className="relative mb-8 shadow-2xl rounded-xl overflow-hidden bg-white transition-all duration-300 border border-slate-200/50 mx-auto"
 			style={{ maxWidth: "100%" }}
@@ -353,6 +354,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
 											{/* Click handler */}
 											<button
+												type="button"
 												className="absolute inset-0 w-full h-full opacity-0 z-40 cursor-pointer"
 												onClick={(e) => {
 													e.stopPropagation();
@@ -455,8 +457,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								currentSearchMatch.wordIndex === idx;
 
 							return (
-								<div
+								<button
 									key={`${idx}`}
+									type="button"
 									id={isCurrentSearchMatch ? "current-search-match" : undefined}
 									className={`absolute rounded-sm group text-layer-word ${!isStampMode && isClickMode ? "cursor-pointer pointer-events-auto" : "pointer-events-none"} 
                                     ${!isStampMode && !isSelected && !isJumpHighlight && !isSearchMatch ? "hover:bg-yellow-300/30" : ""} 
@@ -470,6 +473,15 @@ const PDFPage: React.FC<PDFPageProps> = ({
 										width: `${styleW}%`,
 										height: `${styleH}%`,
 										fontSize: `${styleH}cqh`,
+										background: "none",
+										border:
+											isSelected || isSearchMatch || isCurrentSearchMatch
+												? undefined
+												: "none",
+										padding: 0,
+										font: "inherit",
+										color: "inherit",
+										textAlign: "left",
 									}}
 									onMouseDown={(e) => {
 										if (isStampMode || isAreaMode || !isClickMode) return;
@@ -515,7 +527,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 									title={w.word}
 								>
 									{w.word}
-								</div>
+								</button>
 							);
 						})}
 				</div>
@@ -541,6 +553,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
 							return (
 								<button
+									type="button"
 									key={`link-${idx}`}
 									className="absolute cursor-pointer pointer-events-auto border border-blue-400/0 hover:border-blue-400/50 hover:bg-blue-400/10 transition-all rounded-sm z-30"
 									style={{
@@ -565,6 +578,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
 				{/* Selection Menu */}
 				{selectionMenu && (
 					<div
+						role="toolbar"
+						aria-label="Selection menu"
 						className="absolute z-60 flex gap-1 bg-gray-900 text-white p-1.5 rounded-lg shadow-xl transform -translate-x-1/2"
 						style={{
 							left: `${selectionMenu.x}%`,
@@ -574,6 +589,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 						onMouseDown={(e) => e.stopPropagation()} // Prevent closing on click
 					>
 						<button
+							type="button"
 							onClick={(e) => {
 								e.stopPropagation();
 								if (onWordClick)
@@ -592,6 +608,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 						</button>
 
 						<button
+							type="button"
 							onClick={(e) => {
 								e.stopPropagation();
 								if (onTextSelect)
@@ -607,6 +624,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
 						{onAskAI && (
 							<button
+								type="button"
 								onClick={(e) => {
 									e.stopPropagation();
 									const prompt = `以下の文章をわかりやすく解説してください。\n\n"${selectionMenu.text}"`;
@@ -629,13 +647,20 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
 			{/* Figure Lightbox Modal */}
 			{lightboxFigure && (
-				<div
-					className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4"
+				<button
+					type="button"
+					className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 cursor-default border-none"
 					onClick={() => setLightboxFigure(null)}
+					onKeyDown={(e) => {
+						if (e.key === "Escape") setLightboxFigure(null);
+					}}
 				>
 					<div
+						role="dialog"
+						aria-modal="true"
 						className="relative max-w-[90vw] max-h-[90vh] bg-white rounded-lg overflow-hidden shadow-2xl"
 						onClick={(e) => e.stopPropagation()}
+						onKeyDown={(e) => e.stopPropagation()}
 					>
 						{/* Header */}
 						<div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
@@ -643,6 +668,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								{lightboxFigure.label}
 							</h3>
 							<button
+								type="button"
 								onClick={() => setLightboxFigure(null)}
 								className="text-gray-500 hover:text-gray-700 text-xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 transition-colors"
 							>
@@ -663,6 +689,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 						<div className="bg-gray-50 px-4 py-3 border-t flex gap-2 justify-end">
 							{onAskAI && (
 								<button
+									type="button"
 									onClick={() => {
 										const typeName = getFigTypeLabel(
 											t,
@@ -677,6 +704,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								</button>
 							)}
 							<button
+								type="button"
 								onClick={() => setLightboxFigure(null)}
 								className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors text-sm font-medium"
 							>
@@ -684,9 +712,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
 							</button>
 						</div>
 					</div>
-				</div>
+				</button>
 			)}
-		</div>
+		</section>
 	);
 };
 

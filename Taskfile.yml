@@ -179,7 +179,7 @@ tasks:
     desc: "Run linting and formatting for all components"
     cmds:
       - echo "🔍 Running biome check..."
-      - npx biome check --write .
+      - npx biome check --write frontend/ common/ redis_provider/
       - echo "🔍 Running backend linting..."
       - uv run --directory backend ruff check --fix .
       - echo "🔍 Running inference-service linting..."

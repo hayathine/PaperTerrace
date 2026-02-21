@@ -12,7 +12,7 @@ const StampOverlay: React.FC<StampOverlayProps> = ({
 	isStampMode,
 	onAddStamp,
 }) => {
-	const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
+	const handleClick = (e: React.MouseEvent<HTMLElement>) => {
 		if (!isStampMode || !e.currentTarget) return;
 
 		// Calculate percentage coordinates
@@ -24,9 +24,18 @@ const StampOverlay: React.FC<StampOverlayProps> = ({
 	};
 
 	return (
-		<div
-			className={`absolute inset-0 w-full h-full z-20 ${isStampMode ? "cursor-crosshair" : "pointer-events-none"}`}
+		<button
+			type="button"
+			tabIndex={isStampMode ? 0 : -1}
+			aria-label="Add stamp overlay"
+			className={`absolute inset-0 w-full h-full z-20 ${isStampMode ? "cursor-crosshair overflow-hidden" : "pointer-events-none"} bg-transparent border-none p-0`}
 			onClick={handleClick}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					// Default to center if no mouse position
+					onAddStamp(50, 50);
+				}
+			}}
 		>
 			{stamps.map((stamp) => (
 				<div
@@ -51,7 +60,7 @@ const StampOverlay: React.FC<StampOverlayProps> = ({
 					)}
 				</div>
 			))}
-		</div>
+		</button>
 	);
 };
 

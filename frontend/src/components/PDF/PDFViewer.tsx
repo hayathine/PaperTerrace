@@ -221,7 +221,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			const headers: HeadersInit = {
 				"Content-Type": "application/x-www-form-urlencoded",
 			};
-			if (token) headers["Authorization"] = `Bearer ${token}`;
+			if (token) headers.Authorization = `Bearer ${token}`;
 
 			const formData = new URLSearchParams();
 			formData.append("paper_id", paperId);
@@ -289,7 +289,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	const fetchStamps = async (id: string) => {
 		try {
 			const headers: HeadersInit = {};
-			if (token) headers["Authorization"] = `Bearer ${token}`;
+			if (token) headers.Authorization = `Bearer ${token}`;
 
 			const res = await fetch(`/api/stamps/paper/${id}`, { headers });
 			if (res.ok) {
@@ -370,7 +370,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 		try {
 			const headers: HeadersInit = {};
-			if (token) headers["Authorization"] = `Bearer ${token}`;
+			if (token) headers.Authorization = `Bearer ${token}`;
 
 			const response = await fetch("/api/analyze-pdf-json", {
 				method: "POST",
@@ -521,7 +521,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					processingFileRef.current = null;
 					activeTaskIdRef.current = null;
 				}
-			} catch (e) {
+			} catch (_e) {
 				// Ignore parsing errors
 			}
 		};
@@ -631,7 +631,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 					// We need token if auth is enabled
 					const headers: HeadersInit = {};
-					if (token) headers["Authorization"] = `Bearer ${token}`;
+					if (token) headers.Authorization = `Bearer ${token}`;
 
 					const res = await fetch("/api/upload/image", {
 						method: "POST",
@@ -665,7 +665,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			}
 
 			const newStamp: Stamp = {
-				id: "temp-" + Date.now(),
+				id: `temp-${Date.now()}`,
 				type: selectedStamp,
 				x,
 				y,
@@ -677,7 +677,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 			try {
 				const headers: HeadersInit = { "Content-Type": "application/json" };
-				if (token) headers["Authorization"] = `Bearer ${token}`;
+				if (token) headers.Authorization = `Bearer ${token}`;
 
 				const res = await fetch(`/api/stamps/paper/${loadedPaperId}`, {
 					method: "POST",
@@ -723,7 +723,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		try {
 			// 0. Check IndexedDB Cache First (Offline First / Fast Load)
 			const cached = await getCachedPaper(id);
-			if (cached && cached.layout_json && cached.file_hash) {
+			if (cached?.layout_json && cached.file_hash) {
 				console.log("[PDFViewer] Fast Load from cache:", id);
 				try {
 					const layoutList = JSON.parse(cached.layout_json);
@@ -771,7 +771,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			}
 
 			const headers: HeadersInit = {};
-			if (token) headers["Authorization"] = `Bearer ${token}`;
+			if (token) headers.Authorization = `Bearer ${token}`;
 
 			// 1. Try to fetch full paper data directly first (Fast Load)
 			const paperRes = await fetch(`/papers/${id}`, { headers });
@@ -889,7 +889,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						setErrorMsg(eventData.message);
 						es.close();
 					}
-				} catch (e) {
+				} catch (_e) {
 					// Ignore JSON parse errors for incomplete chunks
 				}
 			};
@@ -974,6 +974,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								/>
 							</div>
 							<button
+								type="button"
 								onClick={() => setMode("plaintext")}
 								className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
 									mode === "plaintext"
@@ -988,6 +989,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							</button>
 
 							<button
+								type="button"
 								onClick={() => setMode("text")}
 								className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
 									mode === "text"
@@ -1003,6 +1005,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 							<div className="w-[1px] h-4 bg-slate-200 mx-1 hidden sm:block" />
 							<button
+								type="button"
 								onClick={() => setMode("area")}
 								className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
 									mode === "area"
@@ -1017,6 +1020,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							</button>
 
 							<button
+								type="button"
 								onClick={() => setMode("stamp")}
 								className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
 									mode === "stamp"

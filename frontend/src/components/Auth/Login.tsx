@@ -77,6 +77,7 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 				<div className="space-y-4">
 					<div className="flex flex-col gap-2">
 						<button
+							type="button"
 							onClick={() => handleSignIn("google", "popup")}
 							disabled={!!loading}
 							className="group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-semibold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none transition-all disabled:opacity-70"
@@ -87,6 +88,7 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 						</button>
 
 						<button
+							type="button"
 							onClick={() => handleSignIn("github", "popup")}
 							disabled={!!loading}
 							className="group relative w-full flex justify-center py-2.5 px-4 border border-gray-300 text-sm font-semibold rounded-xl text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-all disabled:opacity-70"
@@ -104,12 +106,14 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 
 						<div className="flex gap-2">
 							<button
+								type="button"
 								onClick={() => handleSignIn("google", "redirect")}
 								className="flex-1 py-1.5 px-2 border border-black/10 rounded-lg text-[10px] text-gray-500 hover:bg-gray-50 transition-colors"
 							>
 								Google (Redirect)
 							</button>
 							<button
+								type="button"
 								onClick={() => handleSignIn("github", "redirect")}
 								className="flex-1 py-1.5 px-2 border border-black/10 rounded-lg text-[10px] text-gray-500 hover:bg-gray-50 transition-colors"
 							>
@@ -130,6 +134,7 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 					</div>
 
 					<button
+						type="button"
 						onClick={onGuestAccess}
 						className="group relative w-full flex justify-center py-3 px-4 border border-dashed border-gray-300 text-sm font-medium rounded-xl text-gray-500 bg-gray-50/50 hover:bg-gray-50 hover:text-gray-700 transition-all duration-200"
 					>

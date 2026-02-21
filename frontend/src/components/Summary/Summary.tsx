@@ -151,18 +151,21 @@ const Summary: React.FC<SummaryProps> = ({
 		<div className="flex flex-col h-full bg-slate-50">
 			<div className="flex p-2 bg-white border-b border-slate-100 gap-2 overflow-x-auto">
 				<button
+					type="button"
 					onClick={() => setMode("summary")}
 					className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "summary" ? "bg-indigo-50 text-indigo-600" : "text-slate-400"}`}
 				>
 					{t("summary.modes.summary")}
 				</button>
 				<button
+					type="button"
 					onClick={() => setMode("critique")}
 					className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "critique" ? "bg-red-50 text-red-600" : "text-slate-400"}`}
 				>
 					{t("summary.modes.critique")}
 				</button>
 				<button
+					type="button"
 					onClick={() => setMode("radar")}
 					className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "radar" ? "bg-emerald-50 text-emerald-600" : "text-slate-400"}`}
 				>
@@ -206,6 +209,7 @@ const Summary: React.FC<SummaryProps> = ({
 											{t("summary.hints.summary")}
 										</p>
 										<button
+											type="button"
 											onClick={() => handleSummarize(false)}
 											className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-indigo-700"
 										>
@@ -219,6 +223,7 @@ const Summary: React.FC<SummaryProps> = ({
 							<div>
 								<div className="flex justify-end mb-2">
 									<button
+										type="button"
 										onClick={() => handleSummarize(true)}
 										className="px-3 py-1 text-xs text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all flex items-center gap-1"
 										title={t("summary.regenerate", "再生成")}
@@ -255,6 +260,7 @@ const Summary: React.FC<SummaryProps> = ({
 									{t("summary.hints.critique")}
 								</p>
 								<button
+									type="button"
 									onClick={handleCritique}
 									className="px-4 py-2 bg-red-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-red-700"
 								>
@@ -340,6 +346,7 @@ const Summary: React.FC<SummaryProps> = ({
 									{t("summary.hints.radar")}
 								</p>
 								<button
+									type="button"
 									onClick={handleRadar}
 									className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-emerald-700"
 								>
