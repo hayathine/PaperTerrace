@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 import { STAMP_CATEGORIES, StampType } from "./types";
 
 interface StampPaletteProps {
@@ -15,6 +15,63 @@ const StampPalette: React.FC<StampPaletteProps> = ({
   onSelectStamp,
 }) => {
   const [activeCategory, setActiveCategory] = useState(STAMP_CATEGORIES[0].id);
+  const [customStamps, setCustomStamps] = useState<StampType[]>([]);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const saved = localStorage.getItem("customStamps");
+    if (saved) {
+      try {
+        setCustomStamps(JSON.parse(saved));
+      } catch (e) {
+        console.error("Failed to parse custom stamps");
+      }
+    }
+  }, []);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Check initial file size limit before upload (e.g. 5MB to be safe, exact limit is 512KB on backend)
+    if (file.size > 5 * 1024 * 1024) {
+      alert("File is too large. Please select a smaller image.");
+      return;
+    }
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch("/api/stamps/upload_custom", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to upload image");
+      }
+
+      const data = await response.json();
+      const newStamps = [data.url, ...customStamps].slice(0, 20); // Keep last 20 custom stamps
+      setCustomStamps(newStamps);
+      localStorage.setItem("customStamps", JSON.stringify(newStamps));
+      onSelectStamp(data.url);
+      setActiveCategory("custom");
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    }
+  };
+
+  const dynamicCategories = [
+    ...STAMP_CATEGORIES,
+    { id: "custom", name: "Custom", stamps: customStamps },
+  ];
 
   return (
     <div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center gap-4 w-full max-w-sm sm:max-w-md px-4">
@@ -44,7 +101,7 @@ const StampPalette: React.FC<StampPaletteProps> = ({
       >
         {/* Category Switcher */}
         <div className="flex space-x-1 mb-4 overflow-x-auto no-scrollbar pb-1">
-          {STAMP_CATEGORIES.map((cat) => (
+          {dynamicCategories.map((cat) => (
             <button
               key={cat.id}
               onClick={() => setActiveCategory(cat.id)}
@@ -63,8 +120,9 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 
         {/* Stamp Grid */}
         <div className="grid grid-cols-5 sm:grid-cols-6 gap-3 max-h-48 overflow-y-auto pr-1 custom-scrollbar">
-          {STAMP_CATEGORIES.find((c) => c.id === activeCategory)?.stamps.map(
-            (s) => (
+          {dynamicCategories
+            .find((c) => c.id === activeCategory)
+            ?.stamps.map((s) => (
               <button
                 key={s}
                 onClick={() => onSelectStamp(s)}
@@ -77,11 +135,36 @@ const StampPalette: React.FC<StampPaletteProps> = ({
                                 }
                             `}
               >
-                {s}
+                {s.startsWith("/") ||
+                s.startsWith("http") ||
+                s.startsWith("data:image") ? (
+                  <img
+                    src={s}
+                    alt="stamp"
+                    className="w-8 h-8 object-contain pointer-events-none rounded-sm"
+                  />
+                ) : (
+                  s
+                )}
               </button>
-            ),
+            ))}
+          {activeCategory === "custom" && (
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              className="aspect-square rounded-2xl flex items-center justify-center text-xl bg-indigo-50 text-indigo-500 hover:bg-indigo-100 transition-all border-2 border-dashed border-indigo-300 transform hover:scale-110"
+              title="Upload Custom Stamp"
+            >
+              ➕
+            </button>
           )}
         </div>
+        <input
+          type="file"
+          accept="image/*"
+          ref={fileInputRef}
+          className="hidden"
+          onChange={handleFileUpload}
+        />
       </div>
 
       <style>{`

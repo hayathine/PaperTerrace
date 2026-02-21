@@ -142,7 +142,7 @@ tasks:
   test:
     desc: "Run backend tests"
     cmds:
-      - uv run --directory backend pytest
+      - uv run --directory backend env PYTHONPATH=.:.. pytest
 
   lint:
     desc: "Run linting and formatting"

@@ -3,14 +3,26 @@ Stamps Router
 Handles stamp functionality for Papers and Notes.
 """
 
-from fastapi import APIRouter, HTTPException
+import io
+import time
+import uuid
+from pathlib import Path
+
+from fastapi import APIRouter, File, HTTPException, UploadFile
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
+from PIL import Image
 from pydantic import BaseModel
 
 from app.auth import OptionalUser
+from common.logger import get_service_logger
 
 from ..providers import get_storage_provider
+
+logger = get_service_logger("Stamps")
+
+STAMPS_UPLOAD_DIR = Path("app/static/user_uploads/stamps")
+STAMPS_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter(tags=["Stamps"])
 
@@ -101,3 +113,51 @@ async def delete_note_stamp(stamp_id: str):
     if not deleted:
         raise HTTPException(status_code=404, detail="Stamp not found")
     return JSONResponse({"deleted": True})
+
+
+@router.post("/stamps/upload_custom")
+async def upload_custom_stamp(file: UploadFile = File(...)):
+    """Upload an image to be used as a custom stamp.
+    Enforces a file size limit (e.g. 512KB) and resizes images to max 256x256.
+    """
+    try:
+        if not file.content_type.startswith("image/"):
+            return JSONResponse(
+                {"error": "Invalid file type. Only images are allowed."},
+                status_code=400,
+            )
+
+        # Read file content into memory to check size
+        # Limit to 512KB for a single stamp to prevent abuse
+        content = await file.read()
+        if len(content) > 512 * 1024:
+            return JSONResponse(
+                {"error": "File size exceeds 512KB limit."},
+                status_code=400,
+            )
+
+        try:
+            image = Image.open(io.BytesIO(content))
+        except Exception:
+            return JSONResponse(
+                {"error": "Invalid image file format."},
+                status_code=400,
+            )
+
+        # Resize to max 256x256 while preserving aspect ratio
+        max_size = (256, 256)
+        image.thumbnail(max_size, Image.Resampling.LANCZOS)
+
+        # Save as PNG
+        ext = "png"
+        filename = f"{uuid.uuid4()}_{int(time.time())}.{ext}"
+        file_path = STAMPS_UPLOAD_DIR / filename
+
+        image.save(file_path, format="PNG")
+        file_url = f"/static/user_uploads/stamps/{filename}"
+
+        logger.info(f"Custom stamp uploaded: {file_url}")
+        return JSONResponse({"url": file_url})
+    except Exception as e:
+        logger.error(f"Failed to upload custom stamp: {e}")
+        return JSONResponse({"error": "Failed to upload custom stamp"}, status_code=500)
