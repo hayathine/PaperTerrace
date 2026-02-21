@@ -249,7 +249,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
       {/* Main Viewport Container */}
       <div
-        className="relative w-full overflow-hidden"
+        className="relative w-full overflow-hidden pdf-page-viewport"
         style={{
           aspectRatio: width && height ? `${width}/${height}` : "auto",
           backgroundColor: "#fff",
@@ -458,7 +458,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
               return (
                 <div
                   key={`${idx}`}
-                  className={`absolute rounded-sm group ${!isStampMode && isClickMode ? "cursor-pointer pointer-events-auto" : "pointer-events-none"} 
+                  className={`absolute rounded-sm group text-layer-word ${!isStampMode && isClickMode ? "cursor-pointer pointer-events-auto" : "pointer-events-none"} 
                                     ${!isStampMode && !isSelected && !isJumpHighlight && !isSearchMatch ? "hover:bg-yellow-300/30" : ""} 
                                     ${isSelected ? "bg-indigo-500/30 border border-indigo-500/50" : ""}
                                     ${isJumpHighlight ? "bg-yellow-400/60 z-20" : ""}
@@ -469,6 +469,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
                     top: `${top}%`,
                     width: `${styleW}%`,
                     height: `${styleH}%`,
+                    fontSize: `${styleH}cqh`,
                   }}
                   onMouseDown={(e) => {
                     if (isStampMode || isAreaMode || !isClickMode) return;
@@ -512,7 +513,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
                     }
                   }}
                   title={w.word}
-                />
+                >
+                  {w.word}
+                </div>
               );
             })}
         </div>

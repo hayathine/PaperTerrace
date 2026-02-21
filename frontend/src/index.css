@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* PDF Text Layer - transparent text overlay for native search/selection */
+.pdf-page-viewport {
+  container-type: size;
+}
+
+.text-layer-word {
+  color: transparent;
+  font-family: sans-serif;
+  line-height: 1;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+/* Show text selection highlight on transparent text */
+.text-layer-word::selection {
+  background: rgba(99, 102, 241, 0.3);
+  color: transparent;
+}
+
 @layer utilities {
   @keyframes bounce-subtle {
     0%,
