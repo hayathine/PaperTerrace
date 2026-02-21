@@ -94,6 +94,7 @@ async def summarize(
     mode: str = Form("full"),
     lang: str = Form("ja"),
     paper_id: str | None = Form(None),
+    force: bool = Form(False),
 ):
     context = _get_context(session_id)
     if not context:
@@ -107,8 +108,13 @@ async def summarize(
     if not paper_id:
         paper_id = storage.get_session_paper_id(session_id)
 
+    # Clear cached summary if force=True
+    if force and paper_id:
+        logger.info(f"[summarize] Force regeneration requested for {paper_id}")
+        storage.update_paper_full_summary(paper_id, "")
+
     logger.info(
-        f"[summarize] session_id={session_id}, paper_id={paper_id}, context_len={len(context)}"
+        f"[summarize] session_id={session_id}, paper_id={paper_id}, context_len={len(context)}, force={force}"
     )
 
     summary = await summary_service.summarize_full(

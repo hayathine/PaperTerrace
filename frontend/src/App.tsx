@@ -294,8 +294,8 @@ function App() {
   };
 
   const handleAnalysisStatusChange = useCallback((status: string) => {
-    // Only show loading during upload, not during processing
-    setIsAnalyzing(status === "uploading");
+    // Show analyzing state during upload and processing
+    setIsAnalyzing(status === "uploading" || status === "processing");
   }, []);
 
   const handleAskAI = (prompt: string) => {

@@ -458,6 +458,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
               return (
                 <div
                   key={`${idx}`}
+                  id={isCurrentSearchMatch ? "current-search-match" : undefined}
                   className={`absolute rounded-sm group text-layer-word ${!isStampMode && isClickMode ? "cursor-pointer pointer-events-auto" : "pointer-events-none"} 
                                     ${!isStampMode && !isSelected && !isJumpHighlight && !isSearchMatch ? "hover:bg-yellow-300/30" : ""} 
                                     ${isSelected ? "bg-indigo-500/30 border border-indigo-500/50" : ""}

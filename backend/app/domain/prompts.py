@@ -82,20 +82,15 @@ Please provide:
 PAPER_SUMMARY_FULL_PROMPT = """TASK: Summarize the following paper in {lang_name}
 PAPER_TEXT: {paper_text}
 
-IMPORTANT: You MUST respond in {lang_name} language only. Do not use English.
+IMPORTANT: You MUST respond ENTIRELY in {lang_name} language only. Do not use English at all, including section headings.
 
-Output Format:
-## Overview
-(1-2 sentences summarizing the main theme in {lang_name})
+Output Format (use 4 sections with ## markdown headers, all in {lang_name}):
+1. Overview section: 1-2 sentences summarizing the main theme
+2. Key Contributions section: 2-4 bullet points
+3. Methodology section: Concise explanation of methods used
+4. Conclusion section: Key findings and implications
 
-## Key Contributions
-(2-4 bullet points in {lang_name})
-
-## Methodology
-(Concise explanation of methods used in {lang_name})
-
-## Conclusion
-(Key findings and implications in {lang_name})
+All section headers and content MUST be written in {lang_name}. Never use English headers like "Overview" or "Key Contributions".
 """
 
 PAPER_SUMMARY_SECTIONS_PROMPT = """Summarize the following paper section by section in {lang_name}.
@@ -360,30 +355,23 @@ PDF_EXTRACT_TEXT_OCR_PROMPT = "Transcribe the text from this PDF page preserving
 PAPER_SUMMARY_FROM_PDF_PROMPT = """TASK: Summarize the attached PDF paper in {lang_name}
 OUTPUT_LANGUAGE: {lang_name}
 
-IMPORTANT: You MUST respond in {lang_name} language only. Do not use English.
+IMPORTANT: You MUST respond ENTIRELY in {lang_name} language only. Do not use English at all, including section headings.
 
 # Instructions
 - Analyze the entire PDF including text, figures, tables, and equations.
 - Pay attention to visual elements and their captions.
 - Extract key information comprehensively.
-- Write everything in {lang_name} language.
+- Write everything in {lang_name} language, including all section headers.
 
 # Output Format
-Provide the following in {lang_name}:
+Provide 4 sections with ## markdown headers, ALL written in {lang_name}:
+1. Overview section: 1-2 sentences summarizing the main theme
+2. Key Contributions section: 2-4 bullet points
+3. Methodology section: Concise explanation of methods used
+4. Conclusion section: Key findings and implications
 
-## Overview
-(1-2 sentences summarizing the main theme in {lang_name})
-
-## Key Contributions
-- (2-4 bullet points in {lang_name})
-
-## Methodology
-(Concise explanation of methods used in {lang_name})
-
-## Conclusion
-(Key findings and implications in {lang_name})
-
-Do not use English in the output.
+All section headers and content MUST be written in {lang_name}. Never use English headers like "Overview" or "Key Contributions".
+For example, if {lang_name} is Japanese, use headers like "## 概要", "## 主な貢献", "## 手法", "## 結論".
 """
 
 ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT = """You are a rigorous reviewer. Analyze the attached PDF paper from a critical perspective and identify potential issues.

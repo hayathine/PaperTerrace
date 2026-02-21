@@ -143,20 +143,38 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     if (!pageEl) return;
 
     const scroller = pageEl.closest(".overflow-y-auto");
-    if (scroller) {
-      const pageRect = pageEl.getBoundingClientRect();
-      const scrollerRect = scroller.getBoundingClientRect();
-      const currentScrollTop = scroller.scrollTop;
-      const pageTopInScroller =
-        currentScrollTop + (pageRect.top - scrollerRect.top);
+    const matchEl = document.getElementById("current-search-match");
 
-      // ページの上部にスクロール
-      scroller.scrollTo({
-        top: pageTopInScroller - 100,
-        behavior: "smooth",
-      });
+    if (scroller) {
+      if (matchEl) {
+        const matchRect = matchEl.getBoundingClientRect();
+        const scrollerRect = scroller.getBoundingClientRect();
+        const currentScrollTop = scroller.scrollTop;
+        const matchTopInScroller =
+          currentScrollTop + (matchRect.top - scrollerRect.top);
+
+        scroller.scrollTo({
+          top: matchTopInScroller - 100,
+          behavior: "smooth",
+        });
+      } else {
+        const pageRect = pageEl.getBoundingClientRect();
+        const scrollerRect = scroller.getBoundingClientRect();
+        const currentScrollTop = scroller.scrollTop;
+        const pageTopInScroller =
+          currentScrollTop + (pageRect.top - scrollerRect.top);
+
+        scroller.scrollTo({
+          top: pageTopInScroller - 100,
+          behavior: "smooth",
+        });
+      }
     } else {
-      pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      if (matchEl) {
+        matchEl.scrollIntoView({ behavior: "smooth", block: "center" });
+      } else {
+        pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
     }
   }, [currentSearchMatch, mode]);
 

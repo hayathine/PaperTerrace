@@ -115,7 +115,6 @@ const TextModePage: React.FC<TextModePageProps> = ({
       style={{
         maxWidth: "100%",
         userSelect: "none",
-        containerType: "inline-size",
       }}
     >
       {/* Header */}
@@ -126,7 +125,13 @@ const TextModePage: React.FC<TextModePageProps> = ({
       </div>
 
       {/* Content Container */}
-      <div className="relative w-full overflow-hidden min-h-[600px] bg-white">
+      <div
+        className="relative w-full overflow-hidden min-h-[600px] bg-white pdf-page-viewport"
+        style={{
+          aspectRatio:
+            page.width && page.height ? `${page.width}/${page.height}` : "auto",
+        }}
+      >
         {!imageError ? (
           <>
             {/* PDF Image (Base Layer) */}
@@ -149,69 +154,57 @@ const TextModePage: React.FC<TextModePageProps> = ({
               className="absolute inset-0 z-10 w-full h-full cursor-text selection:bg-indigo-600/30"
               style={{ userSelect: "text" }}
             >
-              {(() => {
-                return page.lines.map((line, lIdx) => {
-                  const [lx1, ly1, lx2, ly2] = line.bbox;
-                  const pWidth = page.width || 1;
-                  const pHeight = page.height || 1;
-                  const lTop = (ly1 / pHeight) * 100;
-                  const lLeft = (lx1 / pWidth) * 100;
-                  const lWidth = ((lx2 - lx1) / pWidth) * 100;
-                  const lHeight = ((ly2 - ly1) / pHeight) * 100;
+              {page.words?.map((w, wIdx) => {
+                const [lx1, ly1, lx2, ly2] = w.bbox;
+                const pWidth = page.width || 1;
+                const pHeight = page.height || 1;
+                const styleH = ((ly2 - ly1) / pHeight) * 100;
+                const styleW = ((lx2 - lx1) / pWidth) * 100;
+                const top = (ly1 / pHeight) * 100;
+                const left = (lx1 / pWidth) * 100;
 
-                  return (
-                    <div
-                      key={lIdx}
-                      className="absolute text-transparent whitespace-pre flex items-center"
-                      style={{
-                        top: `${lTop}%`,
-                        left: `${lLeft}%`,
-                        width: `${lWidth}%`,
-                        height: `${lHeight}%`,
-                        fontSize: `${lHeight * 0.8}cqw`,
-                        letterSpacing: "-0.05em",
-                      }}
-                    >
-                      {line.words.map((w, wIdx) => {
-                        const currentGlobalIndex = page.words?.indexOf(w) ?? -1;
+                const isJumpHighlight =
+                  jumpTarget &&
+                  jumpTarget.page === page.page_num &&
+                  jumpTarget.term &&
+                  w.word.toLowerCase().includes(jumpTarget.term.toLowerCase());
 
-                        const isJumpHighlight =
-                          jumpTarget &&
-                          jumpTarget.page === page.page_num &&
-                          jumpTarget.term &&
-                          w.word
-                            .toLowerCase()
-                            .includes(jumpTarget.term.toLowerCase());
+                const isSearchMatch =
+                  searchTerm &&
+                  searchTerm.length >= 2 &&
+                  w.word.toLowerCase().includes(searchTerm.toLowerCase());
 
-                        const isSearchMatch =
-                          searchTerm &&
-                          searchTerm.length >= 2 &&
-                          w.word
-                            .toLowerCase()
-                            .includes(searchTerm.toLowerCase());
+                const isCurrentSearchMatch =
+                  currentSearchMatch &&
+                  currentSearchMatch.page === page.page_num &&
+                  currentSearchMatch.wordIndex === wIdx;
 
-                        const isCurrentSearchMatch =
-                          currentSearchMatch &&
-                          currentSearchMatch.page === page.page_num &&
-                          currentSearchMatch.wordIndex === currentGlobalIndex;
-
-                        return (
-                          <span
-                            key={wIdx}
-                            className={`transition-all 
-                              ${isJumpHighlight ? "bg-yellow-400/40 border-b border-yellow-600" : ""}
-                              ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 rounded" : ""}
-                              ${isCurrentSearchMatch ? "bg-orange-500/60 rounded ring-2 ring-orange-400" : ""}`}
-                            style={{ pointerEvents: "auto" }}
-                          >
-                            {w.word}{" "}
-                          </span>
-                        );
-                      })}
-                    </div>
-                  );
-                });
-              })()}
+                return (
+                  <div
+                    key={wIdx}
+                    id={
+                      isCurrentSearchMatch ? "current-search-match" : undefined
+                    }
+                    className={`absolute text-transparent text-layer-word
+                      ${isJumpHighlight ? "bg-yellow-400/40 border-b border-yellow-600 z-20" : ""}
+                      ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 rounded" : ""}
+                      ${isCurrentSearchMatch ? "bg-orange-500/60 rounded ring-2 ring-orange-400 z-30" : ""}
+                    `}
+                    style={{
+                      top: `${top}%`,
+                      left: `${left}%`,
+                      width: `${styleW}%`,
+                      height: `${styleH}%`,
+                      fontSize: `${styleH}cqh`,
+                      letterSpacing: "-0.05em",
+                      lineHeight: 1,
+                      pointerEvents: "auto",
+                    }}
+                  >
+                    {w.word}
+                  </div>
+                );
+              })}
             </div>
           </>
         ) : (

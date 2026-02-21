@@ -37,40 +37,44 @@ const Summary: React.FC<SummaryProps> = ({
     setError(null);
   }, [paperId]);
 
-  const handleSummarize = useCallback(async () => {
-    setLoading(true);
-    startLoading(t("summary.processing"));
-    setError(null);
-    try {
-      const formData = new FormData();
-      formData.append("session_id", sessionId);
-      formData.append("lang", i18n.language);
-      if (paperId) formData.append("paper_id", paperId);
+  const handleSummarize = useCallback(
+    async (force = false) => {
+      setLoading(true);
+      startLoading(t("summary.processing"));
+      setError(null);
+      try {
+        const formData = new FormData();
+        formData.append("session_id", sessionId);
+        formData.append("lang", i18n.language);
+        if (paperId) formData.append("paper_id", paperId);
+        if (force) formData.append("force", "true");
 
-      const res = await fetch("/api/summarize", {
-        method: "POST",
-        body: formData,
-      });
-      if (!res.ok) {
-        const errorText = await res.text();
-        throw new Error(errorText || `Status ${res.status}`);
+        const res = await fetch("/api/summarize", {
+          method: "POST",
+          body: formData,
+        });
+        if (!res.ok) {
+          const errorText = await res.text();
+          throw new Error(errorText || `Status ${res.status}`);
+        }
+        const data = await res.json();
+        if (data.summary) {
+          setSummaryData(data.summary);
+        } else if (data.abstract) {
+          setSummaryData(data.abstract);
+        } else {
+          setError(data.error || "Summary not found in response");
+        }
+      } catch (e: any) {
+        setError(`Error: ${e.message}`);
+        console.error(e);
+      } finally {
+        setLoading(false);
+        stopLoading();
       }
-      const data = await res.json();
-      if (data.summary) {
-        setSummaryData(data.summary);
-      } else if (data.abstract) {
-        setSummaryData(data.abstract);
-      } else {
-        setError(data.error || "Summary not found in response");
-      }
-    } catch (e: any) {
-      setError(`Error: ${e.message}`);
-      console.error(e);
-    } finally {
-      setLoading(false);
-      stopLoading();
-    }
-  }, [sessionId, paperId, i18n.language, t, startLoading, stopLoading]);
+    },
+    [sessionId, paperId, i18n.language, t, startLoading, stopLoading],
+  );
 
   const handleCritique = useCallback(async () => {
     setLoading(true);
@@ -128,12 +132,20 @@ const Summary: React.FC<SummaryProps> = ({
     }
   }, [sessionId, i18n.language, t, startLoading, stopLoading]);
 
-  // Auto-fetch summary on mount or paper change
+  // Auto-fetch summary when analysis completes (not during analysis)
+  const prevAnalyzingRef = React.useRef(isAnalyzing);
   React.useEffect(() => {
-    if (sessionId && paperId) {
-      handleSummarize();
+    const wasAnalyzing = prevAnalyzingRef.current;
+    prevAnalyzingRef.current = isAnalyzing;
+
+    // Don't fetch while still analyzing
+    if (isAnalyzing) return;
+
+    // Fetch when: analysis just finished, or initial load (not analyzing)
+    if (sessionId && paperId && (wasAnalyzing || !summaryData)) {
+      handleSummarize(false);
     }
-  }, [sessionId, paperId, handleSummarize]);
+  }, [sessionId, paperId, isAnalyzing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
@@ -175,29 +187,61 @@ const Summary: React.FC<SummaryProps> = ({
           <div className="space-y-4">
             {!summaryData && (
               <div className="text-center py-8">
-                <p className="text-xs text-slate-400 mb-4">
-                  {t("summary.hints.summary")}
-                </p>
                 {isAnalyzing ? (
-                  <button
-                    disabled
-                    className="px-4 py-2 bg-slate-300 text-white rounded-lg text-xs font-bold shadow-sm cursor-not-allowed"
-                  >
-                    {t("summary.processing")}
-                  </button>
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" />
+                    <p className="text-xs text-slate-400 animate-pulse">
+                      {t("summary.analyzing", "論文を解析中です...")}
+                    </p>
+                    <p className="text-[10px] text-slate-300">
+                      {t(
+                        "summary.analyzing_hint",
+                        "解析完了後に自動で要約を生成します",
+                      )}
+                    </p>
+                  </div>
                 ) : (
-                  <button
-                    onClick={handleSummarize}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-indigo-700"
-                  >
-                    {t("summary.generate")}
-                  </button>
+                  <>
+                    <p className="text-xs text-slate-400 mb-4">
+                      {t("summary.hints.summary")}
+                    </p>
+                    <button
+                      onClick={() => handleSummarize(false)}
+                      className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-indigo-700"
+                    >
+                      {t("summary.generate")}
+                    </button>
+                  </>
                 )}
               </div>
             )}
             {summaryData && (
-              <div className="prose prose-sm max-w-none text-sm text-slate-600 leading-relaxed whitespace-pre-wrap bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-                {summaryData}
+              <div>
+                <div className="flex justify-end mb-2">
+                  <button
+                    onClick={() => handleSummarize(true)}
+                    className="px-3 py-1 text-xs text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all flex items-center gap-1"
+                    title={t("summary.regenerate", "再生成")}
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M21.5 2v6h-6M2.5 22v-6h6M2 11.5a10 10 0 0 1 18.8-4.3M22 12.5a10 10 0 0 1-18.8 4.2" />
+                    </svg>
+                    {t("summary.regenerate", "再生成")}
+                  </button>
+                </div>
+                <div className="prose prose-sm max-w-none text-sm text-slate-600 leading-relaxed whitespace-pre-wrap bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+                  {summaryData}
+                </div>
               </div>
             )}
           </div>
