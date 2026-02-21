@@ -247,3 +247,4 @@ dist/
 coverage/
 # AI Models
 models/
+.kube
