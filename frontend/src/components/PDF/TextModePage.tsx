@@ -154,8 +154,8 @@ const TextModePage: React.FC<TextModePageProps> = ({
               className="absolute inset-0 z-10 w-full h-full cursor-text selection:bg-indigo-600/30"
               style={{ userSelect: "text" }}
             >
-              {page.words?.map((w, wIdx) => {
-                const [lx1, ly1, lx2, ly2] = w.bbox;
+              {page.lines?.map((line, lIdx) => {
+                const [lx1, ly1, lx2, ly2] = line.bbox;
                 const pWidth = page.width || 1;
                 const pHeight = page.height || 1;
                 const styleH = ((ly2 - ly1) / pHeight) * 100;
@@ -163,45 +163,65 @@ const TextModePage: React.FC<TextModePageProps> = ({
                 const top = (ly1 / pHeight) * 100;
                 const left = (lx1 / pWidth) * 100;
 
-                const isJumpHighlight =
-                  jumpTarget &&
-                  jumpTarget.page === page.page_num &&
-                  jumpTarget.term &&
-                  w.word.toLowerCase().includes(jumpTarget.term.toLowerCase());
-
-                const isSearchMatch =
-                  searchTerm &&
-                  searchTerm.length >= 2 &&
-                  w.word.toLowerCase().includes(searchTerm.toLowerCase());
-
-                const isCurrentSearchMatch =
-                  currentSearchMatch &&
-                  currentSearchMatch.page === page.page_num &&
-                  currentSearchMatch.wordIndex === wIdx;
-
                 return (
                   <div
-                    key={wIdx}
-                    id={
-                      isCurrentSearchMatch ? "current-search-match" : undefined
-                    }
-                    className={`absolute text-transparent text-layer-word
-                      ${isJumpHighlight ? "bg-yellow-400/40 border-b border-yellow-600 z-20" : ""}
-                      ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 rounded" : ""}
-                      ${isCurrentSearchMatch ? "bg-orange-500/60 rounded ring-2 ring-orange-400 z-30" : ""}
-                    `}
+                    key={`line-${lIdx}`}
+                    className="absolute text-transparent text-layer-line whitespace-pre"
                     style={{
                       top: `${top}%`,
                       left: `${left}%`,
                       width: `${styleW}%`,
                       height: `${styleH}%`,
-                      fontSize: `${styleH}cqh`,
-                      letterSpacing: "-0.05em",
+                      fontSize: `${styleH * 0.85}cqh`,
                       lineHeight: 1,
                       pointerEvents: "auto",
+                      display: "flex",
+                      alignItems: "flex-end",
                     }}
                   >
-                    {w.word}
+                    {line.words.map((w, wIdx) => {
+                      const globalWordIndex = page.words?.indexOf(w) ?? -1;
+
+                      const isJumpHighlight =
+                        jumpTarget &&
+                        jumpTarget.page === page.page_num &&
+                        jumpTarget.term &&
+                        w.word
+                          .toLowerCase()
+                          .includes(jumpTarget.term.toLowerCase());
+
+                      const isSearchMatch =
+                        searchTerm &&
+                        searchTerm.length >= 2 &&
+                        w.word.toLowerCase().includes(searchTerm.toLowerCase());
+
+                      const isCurrentSearchMatch =
+                        currentSearchMatch &&
+                        currentSearchMatch.page === page.page_num &&
+                        currentSearchMatch.wordIndex === globalWordIndex;
+
+                      return (
+                        <span
+                          key={wIdx}
+                          id={
+                            isCurrentSearchMatch
+                              ? "current-search-match"
+                              : undefined
+                          }
+                          className={`
+                            ${isJumpHighlight ? "bg-yellow-400/40 border-b border-yellow-600 z-20" : ""}
+                            ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 rounded" : ""}
+                            ${isCurrentSearchMatch ? "bg-orange-500/60 rounded ring-2 ring-orange-400 z-30" : ""}
+                          `}
+                          style={{
+                            marginRight:
+                              wIdx < line.words.length - 1 ? "0.25em" : "0",
+                          }}
+                        >
+                          {w.word}
+                        </span>
+                      );
+                    })}
                   </div>
                 );
               })}
