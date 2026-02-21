@@ -135,7 +135,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   useEffect(() => {
     if (!currentSearchMatch) return;
 
-    const pageEl = document.getElementById(`page-${currentSearchMatch.page}`);
+    const pageId =
+      mode === "plaintext"
+        ? `text-page-${currentSearchMatch.page}`
+        : `page-${currentSearchMatch.page}`;
+    const pageEl = document.getElementById(pageId);
     if (!pageEl) return;
 
     const scroller = pageEl.closest(".overflow-y-auto");
@@ -154,7 +158,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
     } else {
       pageEl.scrollIntoView({ behavior: "smooth", block: "start" });
     }
-  }, [currentSearchMatch]);
+  }, [currentSearchMatch, mode]);
 
   // Handle file upload and paper loading
   // Use isMounted to handle React StrictMode double-mounting
@@ -288,7 +292,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
   // Scroll to jump target when it changes
   useEffect(() => {
     if (jumpTarget) {
-      const pageEl = document.getElementById(`page-${jumpTarget.page}`);
+      const pageId =
+        mode === "plaintext"
+          ? `text-page-${jumpTarget.page}`
+          : `page-${jumpTarget.page}`;
+      const pageEl = document.getElementById(pageId);
       if (pageEl) {
         // Find scrollable container (assuming one of the parents is overflow-y-auto)
         // In App.tsx it's the div with ".overflow-y-auto"
@@ -328,7 +336,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
         }
       }
     }
-  }, [jumpTarget]);
+  }, [jumpTarget, mode]);
 
   const startAnalysis = async (file: File) => {
     if (processingFileRef.current === file) return;
@@ -1018,6 +1026,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
               pages={pagesWithLines}
               onWordClick={handleWordClick}
               onTextSelect={handleTextSelect}
+              onAskAI={onAskAI}
+              jumpTarget={jumpTarget}
+              searchTerm={searchTerm}
+              currentSearchMatch={currentSearchMatch}
             />
           </div>
 

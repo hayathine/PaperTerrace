@@ -223,26 +223,38 @@ class SectionSummary(BaseModel):
     """Represents a summary for a specific section of the paper."""
 
     section: str = Field(description="Title of the section")
-    summary: str = Field(description="Summary of the section content")
+    summary: str = Field(
+        description="Summary of the section content (must be in the requested language)"
+    )
 
 
 class SectionSummaryList(BaseModel):
     """List of section summaries."""
 
-    sections: list[SectionSummary] = Field(description="List of section summaries")
+    sections: list[SectionSummary] = Field(
+        description="List of section summaries (must be in the requested language)"
+    )
 
 
 class FullSummaryResponse(BaseModel):
     """Paper full summary model."""
 
     overview: str = Field(
-        ..., description="Abstract or overview of the main theme (1-2 sentences)"
+        ...,
+        description="Abstract or overview of the main theme in the requested target language (1-2 sentences)",
     )
     key_contributions: list[str] = Field(
-        ..., description="List of 3-5 key contributions"
+        ...,
+        description="List of 3-5 key contributions in the requested target language",
     )
-    methodology: str = Field(..., description="Concise explanation of the methodology")
-    conclusion: str = Field(..., description="Key findings and implications")
+    methodology: str = Field(
+        ...,
+        description="Concise explanation of the methodology in the requested target language",
+    )
+    conclusion: str = Field(
+        ...,
+        description="Key findings and implications in the requested target language",
+    )
 
 
 # --- Integrated Analysis (Grounding) ---

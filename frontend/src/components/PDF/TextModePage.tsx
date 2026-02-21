@@ -1,4 +1,5 @@
 import React from "react";
+import { useTranslation } from "react-i18next";
 import { PageWithLines } from "./types";
 
 interface TextModePageProps {
@@ -12,13 +13,22 @@ interface TextModePageProps {
     text: string,
     coords: { page: number; x: number; y: number },
   ) => void;
+  onAskAI?: (prompt: string) => void;
+  jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
+  searchTerm?: string;
+  currentSearchMatch?: { page: number; wordIndex: number } | null;
 }
 
 const TextModePage: React.FC<TextModePageProps> = ({
   page,
   onWordClick,
   onTextSelect,
+  onAskAI,
+  jumpTarget,
+  searchTerm,
+  currentSearchMatch,
 }) => {
+  const { t } = useTranslation();
   const [imageError, setImageError] = React.useState(false);
   const [selectionMenu, setSelectionMenu] = React.useState<{
     x: number;
@@ -125,9 +135,6 @@ const TextModePage: React.FC<TextModePageProps> = ({
               style={{ userSelect: "text" }}
             >
               {(() => {
-                // グローバルwordインデックスを計算するためのカウンター
-                let globalWordIndex = 0;
-
                 return page.lines.map((line, lIdx) => {
                   const [lx1, ly1, lx2, ly2] = line.bbox;
                   const pWidth = page.width || 1;
@@ -151,10 +158,37 @@ const TextModePage: React.FC<TextModePageProps> = ({
                       }}
                     >
                       {line.words.map((w, wIdx) => {
-                        globalWordIndex++;
+                        const currentGlobalIndex = page.words?.indexOf(w) ?? -1;
+
+                        const isJumpHighlight =
+                          jumpTarget &&
+                          jumpTarget.page === page.page_num &&
+                          jumpTarget.term &&
+                          w.word
+                            .toLowerCase()
+                            .includes(jumpTarget.term.toLowerCase());
+
+                        const isSearchMatch =
+                          searchTerm &&
+                          searchTerm.length >= 2 &&
+                          w.word
+                            .toLowerCase()
+                            .includes(searchTerm.toLowerCase());
+
+                        const isCurrentSearchMatch =
+                          currentSearchMatch &&
+                          currentSearchMatch.page === page.page_num &&
+                          currentSearchMatch.wordIndex === currentGlobalIndex;
 
                         return (
-                          <span key={wIdx} style={{ pointerEvents: "auto" }}>
+                          <span
+                            key={wIdx}
+                            className={`transition-all 
+                              ${isJumpHighlight ? "bg-yellow-400/40 border-b border-yellow-600" : ""}
+                              ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 rounded" : ""}
+                              ${isCurrentSearchMatch ? "bg-orange-500/60 rounded ring-2 ring-orange-400" : ""}`}
+                            style={{ pointerEvents: "auto" }}
+                          >
                             {w.word}{" "}
                           </span>
                         );
@@ -176,9 +210,23 @@ const TextModePage: React.FC<TextModePageProps> = ({
                 {page.lines.map((line, lIdx) => (
                   <div key={lIdx} className="mb-2">
                     {line.words.map((w, wIdx) => {
+                      const isJumpHighlight =
+                        jumpTarget &&
+                        jumpTarget.page === page.page_num &&
+                        jumpTarget.term &&
+                        w.word
+                          .toLowerCase()
+                          .includes(jumpTarget.term.toLowerCase());
+
+                      const isSearchMatch =
+                        searchTerm &&
+                        searchTerm.length >= 2 &&
+                        w.word.toLowerCase().includes(searchTerm.toLowerCase());
+
                       return (
                         <span
                           key={wIdx}
+                          className={`${isJumpHighlight ? "bg-yellow-400/60 px-1 rounded" : ""} ${isSearchMatch ? "bg-amber-300/60 px-1 rounded" : ""}`}
                           onClick={() => {
                             if (onWordClick) {
                               onWordClick(w.word, undefined, {
@@ -205,7 +253,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
       {/* Selection Menu */}
       {selectionMenu && (
         <div
-          className="selection-menu absolute z-50 flex gap-0 bg-slate-900 text-white rounded shadow-lg overflow-hidden transform -translate-x-1/2 -translate-y-full border border-slate-800"
+          className="selection-menu absolute z-50 flex gap-1 bg-gray-900 text-white p-1.5 rounded-lg shadow-xl overflow-hidden transform -translate-x-1/2 -translate-y-full"
           style={{
             left: `${selectionMenu.x}%`,
             top: `${selectionMenu.y}%`,
@@ -224,10 +272,11 @@ const TextModePage: React.FC<TextModePageProps> = ({
                 );
               setSelectionMenu(null);
             }}
-            className="px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-800"
+            className="px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-700"
           >
-            <span>文A</span> Translate
+            <span>文A</span> {t("menu.translate", "Translate")}
           </button>
+
           <button
             onClick={(e) => {
               e.stopPropagation();
@@ -235,10 +284,27 @@ const TextModePage: React.FC<TextModePageProps> = ({
                 onTextSelect(selectionMenu.text, selectionMenu.coords);
               setSelectionMenu(null);
             }}
-            className="px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors"
+            className={`px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors ${onAskAI ? "border-r border-slate-700" : ""}`}
           >
-            <span>📝</span> Note
+            <span>📝</span> {t("menu.note", "Note")}
           </button>
+
+          {onAskAI && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                const prompt = `以下の文章をわかりやすく解説してください。\n\n"${selectionMenu.text}"`;
+                onAskAI(prompt);
+                setSelectionMenu(null);
+              }}
+              className="px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors rounded-r-lg"
+            >
+              <span>💡</span> {t("menu.explain", "Explain")}
+            </button>
+          )}
+
+          {/* Triangle arrow */}
+          <div className="absolute left-1/2 bottom-0 w-2 h-2 bg-gray-900 transform -translate-x-1/2 translate-y-1/2 rotate-45 pointer-events-none"></div>
         </div>
       )}
     </div>
