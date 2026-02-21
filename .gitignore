@@ -8,9 +8,7 @@ logs/
 *.png
 *.jpg
 .deb
-*.sh
 screenshots/
-infrastructure/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
