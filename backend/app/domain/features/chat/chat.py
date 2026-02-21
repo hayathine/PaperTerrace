@@ -14,7 +14,7 @@ from app.domain.prompts import (
     CORE_SYSTEM_PROMPT,
 )
 from app.providers import get_ai_provider
-from app.providers.redis_provider import (
+from redis_provider.provider import (
     RedisService,
 )  # RedisService now uses in-memory cache
 

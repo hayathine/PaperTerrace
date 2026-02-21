@@ -4,36 +4,29 @@
 
 ### Root Level
 
-- `backend/` - Main API & Business Logic
-- `inference-service/` - ML Model Serving (OCR, Translation)
+- `backend/` - Main API & Business Logic (Service A)
+- `inference-service/` - ML Model Serving (Service B)
+- `redis_provider/` - Shared Redis Access Package
+- `common/` - Shared Utilities & Logger
 - `frontend/` - React TypeScript Client
-- `infrastructure/` - Terraform & GCP Config
+- `infrastructure/k8s/` - Kubernetes Local Cluster Manifests
 - `.kiro/` - Project Settings & Documentation
-- `common` - logger etc
 
 ### Backend (`backend/`)
 
 - `app/` - Application Source
-  - `main.py` - Entry point
-  - `api/` & `routers/` - Endpoints
-  - `domain/` - Business Logic (DDD style)
-    - `features/` - Complex feature logic (AI summary, insight)
-    - `services/` - Service layers (OCR, translation)
-  - `models/` - DB Models (SQLAlchemy) & Schemas (Pydantic)
-  - `providers/` - Service wrappers (Storage, AI, etc.)
-  - `auth/` - Authentication logic
+- `migrations/` - Alembic migrations
+- `Dockerfile` - Multi-stage (Builds frontend -> FastAPI)
 
 ### Inference Service (`inference-service/`)
 
-- `main.py` - Service Entry point
+- `main.py` - Service Entry point (ONNX / CTranslate2)
 - `services/` - ML Logic (Layout Analysis, Translation)
-- `models/` - Model definitions/Loading
 
 ### Frontend (`frontend/`)
 
-- `src/components/` - React Components (Auth, Chat, PDF, UI)
-- `src/contexts/` - Global State (Auth, Theme, Paper)
-- `src/lib/` - Utilities
+- `src/` - React/TypeScript SPA
+- `dist/` - Production build (served by backend)
 
 ## 🔄 Core Workflows
 
@@ -47,9 +40,8 @@
 
 1. **Request**: User selects text or requests translation.
 2. **Process**:
-   - Backend calls **Inference Service** (running on a separate Cloud Run instance) via HTTP.
+   - Backend calls **Inference Service Pod** via K8s Service DNS (ClusterIP).
    - Inference Service uses **CTranslate2** (M2M100) on CPU for on-the-fly translation.
-   - No pre-calculation is performed for general text/words.
 3. **Response**: Japanese text returned to the UI.
 
 ### 3. Visual Grounding (Evidence)
@@ -60,7 +52,10 @@
 
 ## 🛠 Infrastructure
 
-- **Cloud Run**: Hosts Backend and Inference Service.
-- **Cloud SQL**: PostgreSQL for relational data.
-- **GCS**: Stores raw PDFs and extracted images.
-- **Local Async**: `asyncio` for background task execution (replacing Cloud Tasks).
+- **Kubernetes Multi-node Cluster**:
+  - **Node A (localA)**: Backend & API Gateway.
+  - **Node B (localB)**: Inference Service.
+  - **Node C (localC)**: Redis 7.2 (Standardized via `redis_provider`).
+- **Cloudflare Tunnel**: Established on Node A to expose the backend via Cloudflare Pages.
+- **Persistence**: SQLite (Local Dev) / Cloud SQL (Hybrid), GCS for assets.
+- **Local Async**: `asyncio` for task orchestration within the cluster.

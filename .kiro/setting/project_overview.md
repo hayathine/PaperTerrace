@@ -11,17 +11,17 @@
 
 Ensure consistency with these technologies:
 
-### Backend Workspace (`backend/`, `inference-service/`)
+### Backend Workspace (`backend/`, `inference-service/`, `redis_provider/`)
 
 - **Runtime**: Python 3.12+ (Managed by `uv`)
 - **Frameworks**:
   - **Backend**: FastAPI, SQLAlchemy, Firebase Admin
-  - **Inference**: FastAPI/SlowAPI, PaddleOCR, CTranslate2, PyTorch/Numpy
-- **Database**: PostgreSQL (Cloud SQL), SQLite (Local)
-- **Cache**: In-Memory
-- **Infrastructure**: Google Cloud Platform (Cloud Run, Cloud SQL, GCS)
-- **Task Management**: Local Async (`asyncio.create_task`)
-- **IaC**: Terraform, Docker
+  - **Inference**: FastAPI, ONNX, CTranslate2
+- **Database**: PostgreSQL (Cloud SQL/Hybrid), SQLite (Local)
+- **Cache**: Redis 7.2 (Distributed via `redis_provider`)
+- **Infrastructure**: Distributed (Multi-node Kubernetes, GCP hybrid)
+- **Networking**: Cloudflare Tunnel (cloudflared)
+- **IaC**: Kustomize, Docker, Terraform
 
 ### Frontend (`frontend/`)
 

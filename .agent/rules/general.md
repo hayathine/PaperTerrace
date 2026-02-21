@@ -25,14 +25,13 @@ Don’t forget to make all necessary follow-up changes caused by this update.（
 
 Ensure consistency with these technologies:
 
-- **Infrastructure**: Google Cloud Platform (GCP)
-- **IaC**: Terraform
-- **Containerization**: Docker
+- **Infrastructure**: Distributed (Multi-node K8s / GCP hybrid)
+- **Deployment**: Kubernetes (Kustomize), Docker
 - **Package Management**: uv (Python)
 - **Backend**: Python (FastAPI), SQLAlchemy
 - **Frontend**: React, TypeScript, Vite, Tailwind CSS
-- **Database**: SQLite (Local), Cloud SQL (Production)
-- **Cache**: In-Memory (SQLite fallback for some data)
+- **Database**: SQLite (Local), Cloud SQL (Hybrid)
+- **Cache**: Redis 7.2 (Standardized via `redis_provider`)
 
 ## 📏 Common Coding Standards
 

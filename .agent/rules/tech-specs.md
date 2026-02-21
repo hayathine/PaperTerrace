@@ -8,36 +8,24 @@ This document outlines the detailed technical requirements and processing flows 
 
 ## 🛠 Technical Requirements
 
-### Infrastructure (GCP)
+### Infrastructure (Distributed / K8s)
 
-- **Cloud Run**: Used for hosting the main application (Backend + Frontend assets).
-  - Must run as a **Service**, not a Job.
-  - Configuration: CPU always allocated (for background tasks/WebSocket if needed), Min instances 0 (autoscale).
-- **Cloud SQL**: PostgreSQL instance. Private IP access via VPC Connector.
-- **Local Background Tasks**: Replaced Cloud Tasks with direct `asyncio.create_task` for heavy processing (Layout Analysis, Summarization) to simplify architecture and improve latency.
-- **GCS (Google Cloud Storage)**: Stores raw PDF files and extracted figure images.
+- **Kubernetes Cluster**: Multi-node deployment (on-premise/hybrid).
+  - **Node A (localA)**: Backend / API Gateway + Cloudflare Tunnel.
+  - **Node B (localB)**: Inference Service (Layout/Translation).
+  - **Node C (localC)**: Redis (Data Persistence via HostPath).
+- **Cloudflare Tunnel (cloudflared)**: Secure ingress tunnel between the local K8s cluster and Cloudflare Pages.
+- **Direct Async Processing**: Heavy processing tasks (Layout Analysis, Summarization) are orchestrated via `asyncio.create_task` and cross-service calls between Node A and Node B.
+- **Persistence**: Hybrid Storage (SQLite/Cloud SQL for meta, GCS for assets).
 
-### Backend (Python/FastAPI)
+### 📁 Directory Structure
 
-- **Runtime**: Python 3.12+
-- **Dependency Management**: `uv`. All dependencies must be defined in `pyproject.toml`.
-- **Asyncio**: Heavy I/O and ML inference wrappers MUST be async. Use `asyncio.create_task` for non-blocking background processing.
-- **ML Models (CPU Optimization)**:
-  - **Layout Analysis**: PaddlePaddle converted to **ONNX**. Run on CPU.
-  - **Translation**: Meta M2M100 converted to **CTranslate2** (INT8 quantization). Run on CPU.
-  - **Environment Variables**: Set `OMP_NUM_THREADS=1`, `MKL_NUM_THREADS=1` to prevent CPU oversubscription in container.
-
-## 📁 Directory Structure
-
-- `backend/app/domain/features/`: Feature-specific logic (Summary, Insight).
-- `backend/app/domain/services/`: Basic service layers (Layout, OCR, Translation).
-- `backend/app/routers/`: API endpoint definitions.
-- `backend/app/models/orm/`: SQLAlchemy models and Alembic migrations.
-- `backend/app/providers/`: Service wrappers (Storage, AI, etc.).
+- `backend/app/`: Core FastAPI logic and routers.
+- `common/`: Shared utilities and schemas.
+- `redis_provider/`: Root-level shared package for standardized Redis access with memory fallback.
 - `inference-service/`: Dedicated ML inference service (ONNX/CTranslate2).
+- `infrastructure/k8s/`: Kubernetes deployment manifests.
 - `frontend/src/`: React frontend source.
-- `frontend/src/components/`: React Components (Auth, Chat, PDF, UI).
-- `frontend/src/contexts/`: Global State (Auth, Theme, Paper).
 
 ### Frontend (React/TypeScript)
 

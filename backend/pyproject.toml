@@ -42,6 +42,7 @@ dependencies = [
     "go-task-bin>=3.48.0",
     "typer>=0.21.1",
     "uuid6>=2025.0.1",
+    "redis>=7.2.0",
 ]
 
 [dependency-groups]

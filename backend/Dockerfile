@@ -41,6 +41,7 @@ COPY backend/alembic.ini ./
 COPY backend/migrations ./migrations
 COPY backend/app/ ./app/
 COPY common/ ./common/
+COPY redis_provider.provider/ ./redis_provider.provider/
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
