@@ -38,7 +38,7 @@
 </div>
 
 <script>
-  document.body.addEventListener("tab-figures-active", function () {
+  document.body.addEventListener("tab-figures-active", () => {
     refreshFigures();
   });
 
@@ -157,7 +157,7 @@
   }
 
   // After initial load, render math
-  document.body.addEventListener("htmx:afterSwap", function (evt) {
+  document.body.addEventListener("htmx:afterSwap", (evt) => {
     if (
       evt.detail.target.id === "figures-container" &&
       window.renderMathInElement

@@ -1,77 +1,52 @@
 {
-  "success": true,
-  "results": [
-    {
-      "bbox": [
-        50,
-        50,
-        2500,
-        150
-      ],
-      "confidence": 0.95,
-      "class": "title",
-      "class_id": 0,
-      "text": "Document Title (Dummy)",
-      "page": 1,
-      "image_path": "/home/gwsgs/work_space/paperterrace/backend/app/static/paper_images/44968521e74427ff9f06db874cd6f7012eaffc3c3e79ffcdbc66d292462c28f4/page_1.png"
-    },
-    {
-      "bbox": [
-        50,
-        200,
-        1250,
-        400
-      ],
-      "confidence": 0.88,
-      "class": "text",
-      "class_id": 2,
-      "text": "Left column text content (Dummy)",
-      "page": 1,
-      "image_path": "/home/gwsgs/work_space/paperterrace/backend/app/static/paper_images/44968521e74427ff9f06db874cd6f7012eaffc3c3e79ffcdbc66d292462c28f4/page_1.png"
-    },
-    {
-      "bbox": [
-        1300,
-        200,
-        2500,
-        400
-      ],
-      "confidence": 0.87,
-      "class": "text",
-      "class_id": 2,
-      "text": "Right column text content (Dummy)",
-      "page": 1,
-      "image_path": "/home/gwsgs/work_space/paperterrace/backend/app/static/paper_images/44968521e74427ff9f06db874cd6f7012eaffc3c3e79ffcdbc66d292462c28f4/page_1.png"
-    },
-    {
-      "bbox": [
-        50,
-        450,
-        2500,
-        650
-      ],
-      "confidence": 0.92,
-      "class": "table",
-      "class_id": 8,
-      "text": "Table content (Dummy)",
-      "page": 1,
-      "image_path": "/home/gwsgs/work_space/paperterrace/backend/app/static/paper_images/44968521e74427ff9f06db874cd6f7012eaffc3c3e79ffcdbc66d292462c28f4/page_1.png"
-    },
-    {
-      "bbox": [
-        50,
-        700,
-        2500,
-        3201
-      ],
-      "confidence": 0.85,
-      "class": "text",
-      "class_id": 2,
-      "text": "Bottom text content (Dummy)",
-      "page": 1,
-      "image_path": "/home/gwsgs/work_space/paperterrace/backend/app/static/paper_images/44968521e74427ff9f06db874cd6f7012eaffc3c3e79ffcdbc66d292462c28f4/page_1.png"
-    }
-  ],
-  "processing_time": 7.504989385604858,
-  "message": null
+	"success": true,
+	"results": [
+		{
+			"bbox": [50, 50, 2500, 150],
+			"confidence": 0.95,
+			"class": "title",
+			"class_id": 0,
+			"text": "Document Title (Dummy)",
+			"page": 1,
+			"image_path": "/home/gwsgs/work_space/paperterrace/backend/app/static/paper_images/44968521e74427ff9f06db874cd6f7012eaffc3c3e79ffcdbc66d292462c28f4/page_1.png"
+		},
+		{
+			"bbox": [50, 200, 1250, 400],
+			"confidence": 0.88,
+			"class": "text",
+			"class_id": 2,
+			"text": "Left column text content (Dummy)",
+			"page": 1,
+			"image_path": "/home/gwsgs/work_space/paperterrace/backend/app/static/paper_images/44968521e74427ff9f06db874cd6f7012eaffc3c3e79ffcdbc66d292462c28f4/page_1.png"
+		},
+		{
+			"bbox": [1300, 200, 2500, 400],
+			"confidence": 0.87,
+			"class": "text",
+			"class_id": 2,
+			"text": "Right column text content (Dummy)",
+			"page": 1,
+			"image_path": "/home/gwsgs/work_space/paperterrace/backend/app/static/paper_images/44968521e74427ff9f06db874cd6f7012eaffc3c3e79ffcdbc66d292462c28f4/page_1.png"
+		},
+		{
+			"bbox": [50, 450, 2500, 650],
+			"confidence": 0.92,
+			"class": "table",
+			"class_id": 8,
+			"text": "Table content (Dummy)",
+			"page": 1,
+			"image_path": "/home/gwsgs/work_space/paperterrace/backend/app/static/paper_images/44968521e74427ff9f06db874cd6f7012eaffc3c3e79ffcdbc66d292462c28f4/page_1.png"
+		},
+		{
+			"bbox": [50, 700, 2500, 3201],
+			"confidence": 0.85,
+			"class": "text",
+			"class_id": 2,
+			"text": "Bottom text content (Dummy)",
+			"page": 1,
+			"image_path": "/home/gwsgs/work_space/paperterrace/backend/app/static/paper_images/44968521e74427ff9f06db874cd6f7012eaffc3c3e79ffcdbc66d292462c28f4/page_1.png"
+		}
+	],
+	"processing_time": 7.504989385604858,
+	"message": null
 }

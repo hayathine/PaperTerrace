@@ -1,39 +1,39 @@
 {
-  "backend": {
-    "cpu": "1",
-    "memory": "1Gi",
-    "min_instances": 0,
-    "max_instances": 20,
-    "concurrency": 5,
-    "timeout": "300s"
-  },
-  "backend_staging": {
-    "cpu": "1",
-    "memory": "1Gi",
-    "min_instances": 0,
-    "max_instances": 20,
-    "concurrency": 5,
-    "timeout": "300s"
-  },
-  "inference": {
-    "cpu": "2",
-    "memory": "2Gi",
-    "min_instances": 0,
-    "max_instances": 10,
-    "concurrency": 5,
-    "timeout": "300s",
-    "batch_parallel_workers": 2
-  },
-  "inference_staging": {
-    "cpu": "2",
-    "memory": "2Gi",
-    "min_instances": 0,
-    "max_instances": 10,
-    "concurrency": 5,
-    "timeout": "300s",
-    "batch_parallel_workers": 2
-  },
-  "build": {
-    "machine_type": "E2_HIGHCPU_8"
-  }
+	"backend": {
+		"cpu": "1",
+		"memory": "1Gi",
+		"min_instances": 0,
+		"max_instances": 20,
+		"concurrency": 5,
+		"timeout": "300s"
+	},
+	"backend_staging": {
+		"cpu": "1",
+		"memory": "1Gi",
+		"min_instances": 0,
+		"max_instances": 20,
+		"concurrency": 5,
+		"timeout": "300s"
+	},
+	"inference": {
+		"cpu": "2",
+		"memory": "2Gi",
+		"min_instances": 0,
+		"max_instances": 10,
+		"concurrency": 5,
+		"timeout": "300s",
+		"batch_parallel_workers": 2
+	},
+	"inference_staging": {
+		"cpu": "2",
+		"memory": "2Gi",
+		"min_instances": 0,
+		"max_instances": 10,
+		"concurrency": 5,
+		"timeout": "300s",
+		"batch_parallel_workers": 2
+	},
+	"build": {
+		"machine_type": "E2_HIGHCPU_8"
+	}
 }

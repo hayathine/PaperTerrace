@@ -614,7 +614,7 @@
         return;
       }
 
-      let citationsHtml = data.citations
+      const citationsHtml = data.citations
         .map(
           (c) => `
         <div class="flex items-start gap-2 p-2 rounded-lg ${c.bg} border ${c.border} transition-all hover:shadow-sm">

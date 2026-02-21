@@ -1,0 +1,12 @@
+{
+  "name": "paperterrace-root",
+  "private": true,
+  "scripts": {
+    "lint": "biome lint .",
+    "format": "biome format --write .",
+    "check": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.4.4"
+  }
+}

@@ -1,141 +1,141 @@
 {
-  "common": {
-    "loading": "Loading...",
-    "preparing": "Preparing...",
-    "loading_description": "Please wait a moment...",
-    "error": "Error",
-    "save": "Save",
-    "cancel": "Cancel",
-    "delete": "Delete",
-    "edit": "Edit",
-    "close": "Close"
-  },
-  "nav": {
-    "explore": "Explore",
-    "library": "Library",
-    "settings": "Settings",
-    "login": "Login",
-    "logout": "Logout",
-    "signin_signup": "Sign In / Sign Up",
-    "signout": "Sign Out",
-    "guest_user": "Guest User",
-    "limited_access": "Limited Access",
-    "no_papers": "No papers uploaded yet",
-    "uploaded_on": "Uploaded on: ",
-    "close_menu": "Close menu",
-    "open_menu": "Open menu",
-    "paper_library": "Paper Library",
-    "reading_mode": "Reading Mode",
-    "only_english_supported": "Currently, only English papers are supported.",
-    "upload_pdf": "Upload PDF"
-  },
-  "auth": {
-    "tagline": "Read papers casually, like sitting on a terrace",
-    "google": "Sign in with Google",
-    "github": "Sign in with GitHub",
-    "guest": "Continue as Guest",
-    "redirect_hint": "If popup doesn't work, try redirect:",
-    "terms_hint": "By signing in, you agree to our Terms of Service and Privacy Policy."
-  },
-  "sidebar": {
-    "tabs": {
-      "dict": "Dict",
-      "summary": "Summary",
-      "chat": "Chat",
-      "notes": "Notes",
-      "stack": "Stack"
-    }
-  },
-  "viewer": {
-    "waiting_pdf": "Waiting for PDF...",
-    "uploading_pdf": "Uploading PDF...",
-    "processing_pdf": "Analyzing PDF...",
-    "select_pdf": "Select a PDF to view",
-    "loading_test": "[DEV] Load Test.pdf",
-    "page": "Page",
-    "toolbar": {
-      "text_mode": "Text Mode",
-      "click_mode": "Click Mode",
-      "area_mode": "Crop Area",
-      "stamp_mode": "Stamps"
-    },
-    "image_not_available": "Image not available",
-    "text_mode_hint": "Use Text Mode to view content",
-    "dictionary": {
-      "ready": "Dictionary Ready!",
-      "click_hint": "Click any word in the PDF to see its definition here.",
-      "external_link": "External Link",
-      "open_link": "Open Link",
-      "ask_ai": "Ask AI",
-      "save_note": "Save Note",
-      "saved": "Saved",
-      "jump": "Jump to Location"
-    }
-  },
-  "summary": {
-    "modes": {
-      "summary": "Summary",
-      "critique": "Critique",
-      "radar": "Radar"
-    },
-    "generate": "Generate Summary",
-    "start_critique": "Start Critique",
-    "scan_radar": "Scan Radar",
-    "processing": "Analyzing...",
-    "hints": {
-      "summary": "Generate a comprehensive summary of the paper.",
-      "critique": "Perform an adversarial review to find flaws.",
-      "radar": "Find related papers and missing citations."
-    },
-    "overall": "Overall Assessment",
-    "assumptions": "Hidden Assumptions",
-    "unverified": "Unverified Conditions",
-    "reproducibility": "Reproducibility Risks"
-  },
-  "notes": {
-    "title": "My Notes",
-    "placeholder_term": "Term / Keyword",
-    "placeholder_content": "Write your note here...",
-    "add": "Add Note",
-    "update": "Update Note",
-    "adding": "Adding...",
-    "updating": "Updating...",
-    "no_notes": "No notes yet. Add one above!",
-    "jump_to_page": "Jump to Page {{page}}"
-  },
-  "stack": {
-    "title": "Next to Read",
-    "hint": "Click URL to add to stack",
-    "added_at": "Added: "
-  },
-  "chat": {
-    "placeholder": "Ask a question about the paper...",
-    "send": "Send",
-    "chat_assistant": "Chat Assistant",
-    "explain_fig": "Please explain this {{type}}.",
-    "explain_fig_btn": "Explain {{type}} with AI",
-    "error_retry": "An error occurred. Please try again."
-  },
-  "pdf": {
-    "figure": "figure",
-    "table": "table",
-    "equation": "equation",
-    "image": "image"
-  },
-  "menu": {
-    "translate": "Translate",
-    "note": "Note",
-    "ask_ai": "Ask AI",
-    "explain": "Explain",
-    "close": "Close"
-  },
-  "search": {
-    "placeholder": "Search...",
-    "no_results": "No results",
-    "prev": "Previous (Shift+Enter)",
-    "next": "Next (Enter)",
-    "close": "Close (Esc)",
-    "hint_next": "Next",
-    "hint_prev": "Previous"
-  }
+	"common": {
+		"loading": "Loading...",
+		"preparing": "Preparing...",
+		"loading_description": "Please wait a moment...",
+		"error": "Error",
+		"save": "Save",
+		"cancel": "Cancel",
+		"delete": "Delete",
+		"edit": "Edit",
+		"close": "Close"
+	},
+	"nav": {
+		"explore": "Explore",
+		"library": "Library",
+		"settings": "Settings",
+		"login": "Login",
+		"logout": "Logout",
+		"signin_signup": "Sign In / Sign Up",
+		"signout": "Sign Out",
+		"guest_user": "Guest User",
+		"limited_access": "Limited Access",
+		"no_papers": "No papers uploaded yet",
+		"uploaded_on": "Uploaded on: ",
+		"close_menu": "Close menu",
+		"open_menu": "Open menu",
+		"paper_library": "Paper Library",
+		"reading_mode": "Reading Mode",
+		"only_english_supported": "Currently, only English papers are supported.",
+		"upload_pdf": "Upload PDF"
+	},
+	"auth": {
+		"tagline": "Read papers casually, like sitting on a terrace",
+		"google": "Sign in with Google",
+		"github": "Sign in with GitHub",
+		"guest": "Continue as Guest",
+		"redirect_hint": "If popup doesn't work, try redirect:",
+		"terms_hint": "By signing in, you agree to our Terms of Service and Privacy Policy."
+	},
+	"sidebar": {
+		"tabs": {
+			"dict": "Dict",
+			"summary": "Summary",
+			"chat": "Chat",
+			"notes": "Notes",
+			"stack": "Stack"
+		}
+	},
+	"viewer": {
+		"waiting_pdf": "Waiting for PDF...",
+		"uploading_pdf": "Uploading PDF...",
+		"processing_pdf": "Analyzing PDF...",
+		"select_pdf": "Select a PDF to view",
+		"loading_test": "[DEV] Load Test.pdf",
+		"page": "Page",
+		"toolbar": {
+			"text_mode": "Text Mode",
+			"click_mode": "Click Mode",
+			"area_mode": "Crop Area",
+			"stamp_mode": "Stamps"
+		},
+		"image_not_available": "Image not available",
+		"text_mode_hint": "Use Text Mode to view content",
+		"dictionary": {
+			"ready": "Dictionary Ready!",
+			"click_hint": "Click any word in the PDF to see its definition here.",
+			"external_link": "External Link",
+			"open_link": "Open Link",
+			"ask_ai": "Ask AI",
+			"save_note": "Save Note",
+			"saved": "Saved",
+			"jump": "Jump to Location"
+		}
+	},
+	"summary": {
+		"modes": {
+			"summary": "Summary",
+			"critique": "Critique",
+			"radar": "Radar"
+		},
+		"generate": "Generate Summary",
+		"start_critique": "Start Critique",
+		"scan_radar": "Scan Radar",
+		"processing": "Analyzing...",
+		"hints": {
+			"summary": "Generate a comprehensive summary of the paper.",
+			"critique": "Perform an adversarial review to find flaws.",
+			"radar": "Find related papers and missing citations."
+		},
+		"overall": "Overall Assessment",
+		"assumptions": "Hidden Assumptions",
+		"unverified": "Unverified Conditions",
+		"reproducibility": "Reproducibility Risks"
+	},
+	"notes": {
+		"title": "My Notes",
+		"placeholder_term": "Term / Keyword",
+		"placeholder_content": "Write your note here...",
+		"add": "Add Note",
+		"update": "Update Note",
+		"adding": "Adding...",
+		"updating": "Updating...",
+		"no_notes": "No notes yet. Add one above!",
+		"jump_to_page": "Jump to Page {{page}}"
+	},
+	"stack": {
+		"title": "Next to Read",
+		"hint": "Click URL to add to stack",
+		"added_at": "Added: "
+	},
+	"chat": {
+		"placeholder": "Ask a question about the paper...",
+		"send": "Send",
+		"chat_assistant": "Chat Assistant",
+		"explain_fig": "Please explain this {{type}}.",
+		"explain_fig_btn": "Explain {{type}} with AI",
+		"error_retry": "An error occurred. Please try again."
+	},
+	"pdf": {
+		"figure": "figure",
+		"table": "table",
+		"equation": "equation",
+		"image": "image"
+	},
+	"menu": {
+		"translate": "Translate",
+		"note": "Note",
+		"ask_ai": "Ask AI",
+		"explain": "Explain",
+		"close": "Close"
+	},
+	"search": {
+		"placeholder": "Search...",
+		"no_results": "No results",
+		"prev": "Previous (Shift+Enter)",
+		"next": "Next (Enter)",
+		"close": "Close (Esc)",
+		"hint_next": "Next",
+		"hint_prev": "Previous"
+	}
 }

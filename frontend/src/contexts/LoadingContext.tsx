@@ -1,49 +1,50 @@
-import React, {
-  createContext,
-  useContext,
-  useState,
-  useCallback,
-  ReactNode,
+import type React from "react";
+import {
+	createContext,
+	type ReactNode,
+	useCallback,
+	useContext,
+	useState,
 } from "react";
 
 interface LoadingContextType {
-  isLoading: boolean;
-  message: string | null;
-  startLoading: (message?: string) => void;
-  stopLoading: () => void;
+	isLoading: boolean;
+	message: string | null;
+	startLoading: (message?: string) => void;
+	stopLoading: () => void;
 }
 
 const LoadingContext = createContext<LoadingContextType | undefined>(undefined);
 
 export const LoadingProvider: React.FC<{ children: ReactNode }> = ({
-  children,
+	children,
 }) => {
-  const [isLoading, setIsLoading] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+	const [isLoading, setIsLoading] = useState(false);
+	const [message, setMessage] = useState<string | null>(null);
 
-  const startLoading = useCallback((msg?: string) => {
-    setMessage(msg || null);
-    setIsLoading(true);
-  }, []);
+	const startLoading = useCallback((msg?: string) => {
+		setMessage(msg || null);
+		setIsLoading(true);
+	}, []);
 
-  const stopLoading = useCallback(() => {
-    setIsLoading(false);
-    setMessage(null);
-  }, []);
+	const stopLoading = useCallback(() => {
+		setIsLoading(false);
+		setMessage(null);
+	}, []);
 
-  return (
-    <LoadingContext.Provider
-      value={{ isLoading, message, startLoading, stopLoading }}
-    >
-      {children}
-    </LoadingContext.Provider>
-  );
+	return (
+		<LoadingContext.Provider
+			value={{ isLoading, message, startLoading, stopLoading }}
+		>
+			{children}
+		</LoadingContext.Provider>
+	);
 };
 
 export const useLoading = () => {
-  const context = useContext(LoadingContext);
-  if (context === undefined) {
-    throw new Error("useLoading must be used within a LoadingProvider");
-  }
-  return context;
+	const context = useContext(LoadingContext);
+	if (context === undefined) {
+		throw new Error("useLoading must be used within a LoadingProvider");
+	}
+	return context;
 };

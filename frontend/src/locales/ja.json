@@ -1,141 +1,141 @@
 {
-  "common": {
-    "loading": "読み込み中...",
-    "preparing": "準備中...",
-    "loading_description": "少々お待ちください...",
-    "error": "エラー",
-    "save": "保存",
-    "cancel": "キャンセル",
-    "delete": "削除",
-    "edit": "編集",
-    "close": "閉じる"
-  },
-  "nav": {
-    "explore": "見つける",
-    "library": "ライブラリ",
-    "settings": "設定",
-    "login": "ログイン",
-    "logout": "ログアウト",
-    "signin_signup": "サインイン / サインアップ",
-    "signout": "サインアウト",
-    "guest_user": "ゲストユーザー",
-    "limited_access": "制限付きアクセス",
-    "no_papers": "まだ論文がアップロードされていません",
-    "uploaded_on": "アップロード日: ",
-    "close_menu": "メニューを閉じる",
-    "open_menu": "メニューを開く",
-    "paper_library": "論文ライブラリ",
-    "reading_mode": "読書モード",
-    "only_english_supported": "現在、英語の論文のみサポートしています。",
-    "upload_pdf": "PDFをアップロード"
-  },
-  "auth": {
-    "tagline": "テラスで読むように、論文をカジュアルに",
-    "google": "Googleでログイン",
-    "github": "GitHubでログイン",
-    "guest": "ゲストとして利用する",
-    "redirect_hint": "ポップアップが動かない場合はこちら:",
-    "terms_hint": "ログインすることで、利用規約およびプライバシーポリシーに同意したものとみなされます。"
-  },
-  "sidebar": {
-    "tabs": {
-      "dict": "辞書",
-      "summary": "要約",
-      "chat": "チャット",
-      "notes": "ノート",
-      "stack": "スタック"
-    }
-  },
-  "viewer": {
-    "waiting_pdf": "PDFを待機中...",
-    "uploading_pdf": "PDFをアップロード中...",
-    "processing_pdf": "PDFを解析中...",
-    "select_pdf": "PDFを選択してください",
-    "loading_test": "[DEV] テスト用PDFを読み込む",
-    "page": "ページ",
-    "toolbar": {
-      "text_mode": "テキストモード",
-      "click_mode": "クリックモード",
-      "area_mode": "切り抜き",
-      "stamp_mode": "スタンプ"
-    },
-    "image_not_available": "画像を読み込めません",
-    "text_mode_hint": "テキストモードでコンテンツを表示できます",
-    "dictionary": {
-      "ready": "辞書の準備ができました！",
-      "click_hint": "単語をクリックして意味を調べられます。",
-      "external_link": "外部リンク",
-      "open_link": "リンクを開く",
-      "ask_ai": "AIで翻訳",
-      "save_note": "ノートに保存",
-      "saved": "保存済み",
-      "jump": "場所へ移動"
-    }
-  },
-  "summary": {
-    "modes": {
-      "summary": "要約",
-      "critique": "レビュー",
-      "radar": "レーダー"
-    },
-    "generate": "要約を生成",
-    "start_critique": "レビューを開始",
-    "scan_radar": "レーダーをスキャン",
-    "processing": "解析中...",
-    "hints": {
-      "summary": "論文全体の包括的な要約を生成します。",
-      "critique": "潜在的な欠陥や仮定を特定するための批判的レビューを行います。",
-      "radar": "関連論文や引用漏れを調査します。"
-    },
-    "overall": "総合評価",
-    "assumptions": "隠れた仮定",
-    "unverified": "未検証の条件",
-    "reproducibility": "再現性のリスク"
-  },
-  "notes": {
-    "title": "マイノート",
-    "placeholder_term": "用語 / キーワード",
-    "placeholder_content": "メモを入力...",
-    "add": "ノートを追加",
-    "update": "ノートを更新",
-    "adding": "追加中...",
-    "updating": "更新中...",
-    "no_notes": "ノートがまだありません。上のフォームから追加してください。",
-    "jump_to_page": "ページ {{page}} へ移動"
-  },
-  "stack": {
-    "title": "次に読む論文",
-    "hint": "URLをクリックしてスタックに追加できます",
-    "added_at": "追加日: "
-  },
-  "chat": {
-    "placeholder": "論文について質問する...",
-    "send": "送信",
-    "chat_assistant": "チャットアシスタント",
-    "explain_fig": "{{type}}の解説をお願いします。",
-    "explain_fig_btn": "AIで{{type}}を解説",
-    "error_retry": "エラーが発生しました。もう一度お試しください。"
-  },
-  "pdf": {
-    "figure": "図",
-    "table": "表",
-    "equation": "数式",
-    "image": "画像"
-  },
-  "menu": {
-    "translate": "翻訳",
-    "note": "ノート",
-    "ask_ai": "AIに聞く",
-    "explain": "解説",
-    "close": "閉じる"
-  },
-  "search": {
-    "placeholder": "検索...",
-    "no_results": "0件",
-    "prev": "前へ (Shift+Enter)",
-    "next": "次へ (Enter)",
-    "close": "閉じる (Esc)",
-    "hint_next": "次へ",
-    "hint_prev": "前へ"
-  }
+	"common": {
+		"loading": "読み込み中...",
+		"preparing": "準備中...",
+		"loading_description": "少々お待ちください...",
+		"error": "エラー",
+		"save": "保存",
+		"cancel": "キャンセル",
+		"delete": "削除",
+		"edit": "編集",
+		"close": "閉じる"
+	},
+	"nav": {
+		"explore": "見つける",
+		"library": "ライブラリ",
+		"settings": "設定",
+		"login": "ログイン",
+		"logout": "ログアウト",
+		"signin_signup": "サインイン / サインアップ",
+		"signout": "サインアウト",
+		"guest_user": "ゲストユーザー",
+		"limited_access": "制限付きアクセス",
+		"no_papers": "まだ論文がアップロードされていません",
+		"uploaded_on": "アップロード日: ",
+		"close_menu": "メニューを閉じる",
+		"open_menu": "メニューを開く",
+		"paper_library": "論文ライブラリ",
+		"reading_mode": "読書モード",
+		"only_english_supported": "現在、英語の論文のみサポートしています。",
+		"upload_pdf": "PDFをアップロード"
+	},
+	"auth": {
+		"tagline": "テラスで読むように、論文をカジュアルに",
+		"google": "Googleでログイン",
+		"github": "GitHubでログイン",
+		"guest": "ゲストとして利用する",
+		"redirect_hint": "ポップアップが動かない場合はこちら:",
+		"terms_hint": "ログインすることで、利用規約およびプライバシーポリシーに同意したものとみなされます。"
+	},
+	"sidebar": {
+		"tabs": {
+			"dict": "辞書",
+			"summary": "要約",
+			"chat": "チャット",
+			"notes": "ノート",
+			"stack": "スタック"
+		}
+	},
+	"viewer": {
+		"waiting_pdf": "PDFを待機中...",
+		"uploading_pdf": "PDFをアップロード中...",
+		"processing_pdf": "PDFを解析中...",
+		"select_pdf": "PDFを選択してください",
+		"loading_test": "[DEV] テスト用PDFを読み込む",
+		"page": "ページ",
+		"toolbar": {
+			"text_mode": "テキストモード",
+			"click_mode": "クリックモード",
+			"area_mode": "切り抜き",
+			"stamp_mode": "スタンプ"
+		},
+		"image_not_available": "画像を読み込めません",
+		"text_mode_hint": "テキストモードでコンテンツを表示できます",
+		"dictionary": {
+			"ready": "辞書の準備ができました！",
+			"click_hint": "単語をクリックして意味を調べられます。",
+			"external_link": "外部リンク",
+			"open_link": "リンクを開く",
+			"ask_ai": "AIで翻訳",
+			"save_note": "ノートに保存",
+			"saved": "保存済み",
+			"jump": "場所へ移動"
+		}
+	},
+	"summary": {
+		"modes": {
+			"summary": "要約",
+			"critique": "レビュー",
+			"radar": "レーダー"
+		},
+		"generate": "要約を生成",
+		"start_critique": "レビューを開始",
+		"scan_radar": "レーダーをスキャン",
+		"processing": "解析中...",
+		"hints": {
+			"summary": "論文全体の包括的な要約を生成します。",
+			"critique": "潜在的な欠陥や仮定を特定するための批判的レビューを行います。",
+			"radar": "関連論文や引用漏れを調査します。"
+		},
+		"overall": "総合評価",
+		"assumptions": "隠れた仮定",
+		"unverified": "未検証の条件",
+		"reproducibility": "再現性のリスク"
+	},
+	"notes": {
+		"title": "マイノート",
+		"placeholder_term": "用語 / キーワード",
+		"placeholder_content": "メモを入力...",
+		"add": "ノートを追加",
+		"update": "ノートを更新",
+		"adding": "追加中...",
+		"updating": "更新中...",
+		"no_notes": "ノートがまだありません。上のフォームから追加してください。",
+		"jump_to_page": "ページ {{page}} へ移動"
+	},
+	"stack": {
+		"title": "次に読む論文",
+		"hint": "URLをクリックしてスタックに追加できます",
+		"added_at": "追加日: "
+	},
+	"chat": {
+		"placeholder": "論文について質問する...",
+		"send": "送信",
+		"chat_assistant": "チャットアシスタント",
+		"explain_fig": "{{type}}の解説をお願いします。",
+		"explain_fig_btn": "AIで{{type}}を解説",
+		"error_retry": "エラーが発生しました。もう一度お試しください。"
+	},
+	"pdf": {
+		"figure": "図",
+		"table": "表",
+		"equation": "数式",
+		"image": "画像"
+	},
+	"menu": {
+		"translate": "翻訳",
+		"note": "ノート",
+		"ask_ai": "AIに聞く",
+		"explain": "解説",
+		"close": "閉じる"
+	},
+	"search": {
+		"placeholder": "検索...",
+		"no_results": "0件",
+		"prev": "前へ (Shift+Enter)",
+		"next": "次へ (Enter)",
+		"close": "閉じる (Esc)",
+		"hint_next": "次へ",
+		"hint_prev": "前へ"
+	}
 }

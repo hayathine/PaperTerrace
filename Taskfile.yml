@@ -178,6 +178,8 @@ tasks:
   lint:
     desc: "Run linting and formatting for all components"
     cmds:
+      - echo "🔍 Running biome check..."
+      - npx biome check --write .
       - echo "🔍 Running backend linting..."
       - uv run --directory backend ruff check --fix .
       - echo "🔍 Running inference-service linting..."
@@ -186,13 +188,6 @@ tasks:
       - uv run ruff check --fix common redis_provider
       - echo "🔍 Running frontend linting..."
       - cd frontend && npm run lint
-
-  test:all:
-    desc: "Run tests for all components"
-    deps: [test]
-    cmds:
-      - echo "Checking for other component tests..."
-      # Add other component tests here as they are created
 
   clean:
     desc: "Clean cache and temporary files"

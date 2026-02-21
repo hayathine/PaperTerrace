@@ -4,52 +4,52 @@
 
 /* PDF Text Layer - transparent text overlay for native search/selection */
 .pdf-page-viewport {
-  container-type: size;
+	container-type: size;
 }
 
 .text-layer-word {
-  color: transparent;
-  font-family: sans-serif;
-  line-height: 1;
-  white-space: nowrap;
-  overflow: hidden;
+	color: transparent;
+	font-family: sans-serif;
+	line-height: 1;
+	white-space: nowrap;
+	overflow: hidden;
 }
 
 /* Show text selection highlight on transparent text */
 .text-layer-word::selection {
-  background: rgba(99, 102, 241, 0.3);
-  color: transparent;
+	background: rgba(99, 102, 241, 0.3);
+	color: transparent;
 }
 
 @layer utilities {
-  @keyframes bounce-subtle {
-    0%,
-    100% {
-      transform: translateY(0);
-    }
-    50% {
-      transform: translateY(-4px);
-    }
-  }
-  .animate-bounce-subtle {
-    animation: bounce-subtle 1.5s ease-in-out infinite;
-  }
+	@keyframes bounce-subtle {
+		0%,
+		100% {
+			transform: translateY(0);
+		}
+		50% {
+			transform: translateY(-4px);
+		}
+	}
+	.animate-bounce-subtle {
+		animation: bounce-subtle 1.5s ease-in-out infinite;
+	}
 
-  @keyframes stamp-pop {
-    0% {
-      transform: translate(-50%, -50%) scale(0);
-      opacity: 0;
-    }
-    50% {
-      transform: translate(-50%, -50%) scale(1.3);
-      opacity: 1;
-    }
-    100% {
-      transform: translate(-50%, -50%) scale(1);
-      opacity: 1;
-    }
-  }
-  .animate-stamp-pop {
-    animation: stamp-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-  }
+	@keyframes stamp-pop {
+		0% {
+			transform: translate(-50%, -50%) scale(0);
+			opacity: 0;
+		}
+		50% {
+			transform: translate(-50%, -50%) scale(1.3);
+			opacity: 1;
+		}
+		100% {
+			transform: translate(-50%, -50%) scale(1);
+			opacity: 1;
+		}
+	}
+	.animate-stamp-pop {
+		animation: stamp-pop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+	}
 }
