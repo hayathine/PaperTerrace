@@ -145,7 +145,7 @@ const Summary: React.FC<SummaryProps> = ({
     if (sessionId && paperId && (wasAnalyzing || !summaryData)) {
       handleSummarize(false);
     }
-  }, [sessionId, paperId, isAnalyzing]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [sessionId, paperId, isAnalyzing]);
 
   return (
     <div className="flex flex-col h-full bg-slate-50">
