@@ -36,51 +36,67 @@ const TextModePage: React.FC<TextModePageProps> = ({
     text: string;
     coords: any;
   } | null>(null);
+  React.useEffect(() => {
+    const handleDocumentMouseUp = () => {
+      // Selection detection can be tricky, small delay ensures selection state is updated
+      setTimeout(() => {
+        const selection = window.getSelection();
+        const selectionText = selection?.toString().trim();
+        const container = document.getElementById(`text-page-${page.page_num}`);
 
-  const handleMouseUp = (e: React.MouseEvent) => {
-    // Selection detection can be tricky, small delay ensures selection state is updated
-    setTimeout(() => {
-      const selection = window.getSelection();
-      const selectionText = selection?.toString().trim();
+        if (
+          selection &&
+          selection.rangeCount > 0 &&
+          selectionText &&
+          selectionText.length > 0 &&
+          container
+        ) {
+          const range = selection.getRangeAt(0);
 
-      if (
-        selection &&
-        selection.rangeCount > 0 &&
-        selectionText &&
-        selectionText.length > 0 &&
-        e.currentTarget
-      ) {
-        const rect = e.currentTarget.getBoundingClientRect();
-        const range = selection.getRangeAt(0);
-        const rangeRect = range.getBoundingClientRect();
+          // Only show menu for the page where the selection starts
+          if (
+            !container.contains(range.startContainer) &&
+            range.startContainer !== container
+          ) {
+            return;
+          }
 
-        // Ensure we have a valid bounding box
-        if (rangeRect.width === 0) return;
+          const rect = container.getBoundingClientRect();
+          const rangeRect = range.getBoundingClientRect();
 
-        const pageWidth = rect.width || 1;
-        const pageHeight = rect.height || 1;
+          // Ensure we have a valid bounding box
+          if (rangeRect.width === 0) return;
 
-        const menuX =
-          (((rangeRect.left + rangeRect.right) / 2 - rect.left) / pageWidth) *
-          100;
-        const menuY = ((rangeRect.top - rect.top) / pageHeight) * 100;
+          const pageWidth = rect.width || 1;
+          const pageHeight = rect.height || 1;
 
-        const centerX =
-          ((rangeRect.left + rangeRect.right) / 2 - rect.left) / pageWidth;
-        const centerY =
-          ((rangeRect.top + rangeRect.bottom) / 2 - rect.top) / pageHeight;
+          const menuX =
+            (((rangeRect.left + rangeRect.right) / 2 - rect.left) / pageWidth) *
+            100;
+          const menuY = ((rangeRect.bottom - rect.top) / pageHeight) * 100;
 
-        setSelectionMenu({
-          x: menuX,
-          y: menuY,
-          text: selectionText,
-          coords: { page: page.page_num, x: centerX, y: centerY },
-        });
-      } else {
-        setSelectionMenu(null);
-      }
-    }, 10);
-  };
+          const centerX =
+            ((rangeRect.left + rangeRect.right) / 2 - rect.left) / pageWidth;
+          const centerY =
+            ((rangeRect.top + rangeRect.bottom) / 2 - rect.top) / pageHeight;
+
+          setSelectionMenu({
+            x: menuX,
+            y: menuY,
+            text: selectionText,
+            coords: { page: page.page_num, x: centerX, y: centerY },
+          });
+        } else {
+          // If there is no selection, but we currently have a menu, we shouldn't necessarily clear it here
+          // because mousedown handles outside clicks. But if selection is empty natively, clear it.
+          setSelectionMenu(null);
+        }
+      }, 10);
+    };
+
+    document.addEventListener("mouseup", handleDocumentMouseUp);
+    return () => document.removeEventListener("mouseup", handleDocumentMouseUp);
+  }, [page.page_num]);
 
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -101,7 +117,6 @@ const TextModePage: React.FC<TextModePageProps> = ({
         userSelect: "none",
         containerType: "inline-size",
       }}
-      onMouseUp={handleMouseUp}
     >
       {/* Header */}
       <div className="bg-slate-50 border-b border-slate-200 px-4 py-1.5 flex justify-between items-center select-none">
@@ -253,11 +268,11 @@ const TextModePage: React.FC<TextModePageProps> = ({
       {/* Selection Menu */}
       {selectionMenu && (
         <div
-          className="selection-menu absolute z-50 flex gap-1 bg-gray-900 text-white p-1.5 rounded-lg shadow-xl overflow-hidden transform -translate-x-1/2 -translate-y-full"
+          className="selection-menu absolute z-50 flex gap-1 bg-gray-900 text-white p-1.5 rounded-lg shadow-xl overflow-hidden transform -translate-x-1/2"
           style={{
             left: `${selectionMenu.x}%`,
             top: `${selectionMenu.y}%`,
-            marginTop: "-10px",
+            marginTop: "8px",
           }}
           onMouseDown={(e) => e.stopPropagation()}
         >
@@ -304,7 +319,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
           )}
 
           {/* Triangle arrow */}
-          <div className="absolute left-1/2 bottom-0 w-2 h-2 bg-gray-900 transform -translate-x-1/2 translate-y-1/2 rotate-45 pointer-events-none"></div>
+          <div className="absolute left-1/2 top-0 w-2 h-2 bg-gray-900 transform -translate-x-1/2 -translate-y-1/2 rotate-45 pointer-events-none"></div>
         </div>
       )}
     </div>

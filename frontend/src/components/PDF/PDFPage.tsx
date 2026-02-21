@@ -177,14 +177,14 @@ const PDFPage: React.FC<PDFPageProps> = ({
         const pageHeight = height || 1;
 
         const centerPctX = ((x1 + x2) / 2 / pageWidth) * 100;
-        const topPctY = (y1 / pageHeight) * 100;
+        const bottomPctY = (y2 / pageHeight) * 100;
 
         const centerX = (x1 + x2) / 2 / pageWidth;
         const centerY = (y1 + y2) / 2 / pageHeight;
 
         setSelectionMenu({
           x: centerPctX,
-          y: topPctY,
+          y: bottomPctY,
           text,
           context,
           coords: { page: page_num, x: centerX, y: centerY },
@@ -196,6 +196,13 @@ const PDFPage: React.FC<PDFPageProps> = ({
       }
     }
   };
+
+  React.useEffect(() => {
+    if (isDragging) {
+      window.addEventListener("mouseup", handleMouseUp);
+      return () => window.removeEventListener("mouseup", handleMouseUp);
+    }
+  });
 
   // Additional helper to clear selection on outside click
   React.useEffect(() => {
@@ -232,13 +239,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
       className="relative mb-8 shadow-2xl rounded-xl overflow-hidden bg-white transition-all duration-300 border border-slate-200/50 mx-auto"
       style={{ maxWidth: "100%" }}
       onMouseUp={handleMouseUp}
-      onMouseLeave={() => {
-        if (isDragging) {
-          setIsDragging(false);
-          setSelectionStart(null);
-          setSelectionEnd(null);
-        }
-      }}
     >
       {/* Header / Page Number */}
       <div className="bg-gray-50 border-b border-gray-100 px-4 py-2 flex justify-between items-center">
@@ -562,11 +562,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
         {/* Selection Menu */}
         {selectionMenu && (
           <div
-            className="absolute z-60 flex gap-1 bg-gray-900 text-white p-1.5 rounded-lg shadow-xl transform -translate-x-1/2 -translate-y-full"
+            className="absolute z-60 flex gap-1 bg-gray-900 text-white p-1.5 rounded-lg shadow-xl transform -translate-x-1/2"
             style={{
               left: `${selectionMenu.x}%`,
               top: `${selectionMenu.y}%`,
-              marginTop: "-10px",
+              marginTop: "8px",
             }}
             onMouseDown={(e) => e.stopPropagation()} // Prevent closing on click
           >
@@ -619,7 +619,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
             )}
 
             {/* Triangle arrow */}
-            <div className="absolute left-1/2 bottom-0 w-2 h-2 bg-gray-900 transform -translate-x-1/2 translate-y-1/2 rotate-45"></div>
+            <div className="absolute left-1/2 top-0 w-2 h-2 bg-gray-900 transform -translate-x-1/2 -translate-y-1/2 rotate-45"></div>
           </div>
         )}
       </div>

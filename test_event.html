@@ -1,0 +1,8 @@
+<body><div id="test">Test</div>
+<script>
+document.getElementById('test').addEventListener('mouseup', (e) => {
+  setTimeout(() => {
+    console.log("currentTarget in timeout:", e.currentTarget);
+  }, 10);
+});
+</script></body>

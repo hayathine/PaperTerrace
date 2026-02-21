@@ -144,10 +144,30 @@ class SummaryService:
                     lang_name=lang_name, paper_text=safe_text
                 )
 
+                from pydantic import Field
+
+                class DynamicFullSummaryResponse(FullSummaryResponse):
+                    overview: str = Field(
+                        ...,
+                        description=f"Abstract or overview of the main theme in {lang_name} (1-2 sentences)",
+                    )
+                    key_contributions: list[str] = Field(
+                        ...,
+                        description=f"List of 3-5 key contributions in {lang_name}",
+                    )
+                    methodology: str = Field(
+                        ...,
+                        description=f"Concise explanation of the methodology in {lang_name}",
+                    )
+                    conclusion: str = Field(
+                        ...,
+                        description=f"Key findings and implications in {lang_name}",
+                    )
+
                 analysis: FullSummaryResponse = await self.ai_provider.generate(
                     prompt,
                     model=self.model,
-                    response_model=FullSummaryResponse,
+                    response_model=DynamicFullSummaryResponse,
                     system_instruction=CORE_SYSTEM_PROMPT,
                 )
 
@@ -223,6 +243,19 @@ class SummaryService:
             lang_name=lang_name, paper_text=safe_text
         )
 
+        from app.schemas.gemini_schema import SectionSummary
+        from pydantic import Field
+
+        class DynamicSectionSummary(SectionSummary):
+            summary: str = Field(
+                description=f"Summary of the section content (must be in {lang_name})"
+            )
+
+        class DynamicSectionSummariesResponse(SectionSummariesResponse):
+            sections: list[DynamicSectionSummary] = Field(
+                description=f"List of section summaries (must be in {lang_name})"
+            )
+
         try:
             logger.debug(
                 "Generating section summary",
@@ -231,7 +264,7 @@ class SummaryService:
             response: SectionSummariesResponse = await self.ai_provider.generate(
                 prompt,
                 model=self.model,
-                response_model=SectionSummariesResponse,
+                response_model=DynamicSectionSummariesResponse,
                 system_instruction=CORE_SYSTEM_PROMPT,
             )
 

@@ -110,7 +110,7 @@ const Sidebar: React.FC<SidebarProps> = ({
       {/* Tab Content - All rendered but hidden when not active to preserve state */}
       <div className="flex-1 overflow-hidden relative">
         <div
-          className={`absolute inset-0 ${activeTab === "dict" ? "block" : "hidden"}`}
+          className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "dict" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
         >
           <Dictionary
             sessionId={sessionId}
@@ -123,7 +123,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div
-          className={`absolute inset-0 ${activeTab === "summary" ? "block" : "hidden"}`}
+          className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "summary" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
         >
           <Summary
             sessionId={sessionId}
@@ -133,7 +133,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div
-          className={`absolute inset-0 ${activeTab === "chat" ? "block" : "hidden"}`}
+          className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "chat" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
         >
           <ChatWindow
             sessionId={sessionId}
@@ -147,7 +147,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div
-          className={`absolute inset-0 ${activeTab === "notes" ? "block" : "hidden"}`}
+          className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "notes" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
         >
           <NoteList
             sessionId={sessionId}
@@ -161,7 +161,7 @@ const Sidebar: React.FC<SidebarProps> = ({
         </div>
 
         <div
-          className={`absolute inset-0 ${activeTab === "stack" ? "block" : "hidden"}`}
+          className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "stack" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
         >
           <PaperStack papers={stackedPapers} onRemove={onRemoveFromStack} />
         </div>

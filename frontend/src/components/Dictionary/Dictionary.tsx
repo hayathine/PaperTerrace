@@ -1,5 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { DictionaryEntry } from "./types";
+
+export type DictionaryEntryWithCoords = DictionaryEntry & {
+  coords?: { page: number; x: number; y: number };
+};
 import { useAuth } from "../../contexts/AuthContext";
 import { useTranslation } from "react-i18next";
 
@@ -24,7 +28,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
   const { token } = useAuth();
 
   // Maintain a list of entries instead of a single one
-  const [entries, setEntries] = useState<DictionaryEntry[]>([]);
+  const [entries, setEntries] = useState<DictionaryEntryWithCoords[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -88,7 +92,8 @@ const Dictionary: React.FC<DictionaryProps> = ({
         if (res.ok) {
           const contentType = res.headers.get("content-type");
           if (contentType && contentType.includes("application/json")) {
-            const data: DictionaryEntry = await res.json();
+            const data: DictionaryEntryWithCoords = await res.json();
+            data.coords = coordinates; // Attach current coordinates
             setEntries((prev) => {
               const filtered = prev.filter((e) => e.word !== data.word);
               return [data, ...filtered];
@@ -118,7 +123,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
   const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
 
-  const handleDeepTranslate = async (entry: DictionaryEntry) => {
+  const handleDeepTranslate = async (entry: DictionaryEntryWithCoords) => {
     if (!entry) return;
     setLoading(true);
     setError(null);
@@ -149,7 +154,8 @@ const Dictionary: React.FC<DictionaryProps> = ({
       }
 
       if (res.ok) {
-        const data: DictionaryEntry = await res.json();
+        const data: DictionaryEntryWithCoords = await res.json();
+        data.coords = entry.coords; // Preserve coordinates
         setEntries((prev) =>
           prev.map((e) => (e.word === entry.word ? data : e)),
         );
@@ -165,8 +171,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
     }
   };
 
-  const handleSaveToNote = async (entry: DictionaryEntry) => {
+  const handleSaveToNote = async (entry: DictionaryEntryWithCoords) => {
     if (!entry) return;
+    const targetCoords = entry.coords || coordinates;
     try {
       const headers: HeadersInit = { "Content-Type": "application/json" };
       if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -179,9 +186,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
           paper_id: paperId,
           term: entry.word,
           note: entry.translation,
-          page_number: coordinates?.page,
-          x: coordinates?.x,
-          y: coordinates?.y,
+          page_number: targetCoords?.page,
+          x: targetCoords?.x,
+          y: targetCoords?.y,
         }),
       });
 
@@ -396,22 +403,18 @@ const Dictionary: React.FC<DictionaryProps> = ({
                 <span>{t("viewer.dictionary.ask_ai")}</span>
               </button>
 
-              {onJump && coordinates && (
+              {(onJump && entry.coords) || (onJump && coordinates) ? (
                 <button
-                  onClick={() =>
-                    onJump(
-                      coordinates.page,
-                      coordinates.x,
-                      coordinates.y,
-                      entry.word,
-                    )
-                  }
+                  onClick={() => {
+                    const c = entry.coords || coordinates;
+                    if (c) onJump(c.page, c.x, c.y, entry.word);
+                  }}
                   className="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg text-xs font-bold transition-all flex items-center justify-center"
                   title="Jump to Location"
                 >
                   JUMP
                 </button>
-              )}
+              ) : null}
             </div>
           </div>
         ))}
