@@ -1,0 +1,13 @@
+[project]
+name = "paperterrace-workspace"
+version = "0.1.0"
+description = "PaperTerrace - Academic Paper Translation Platform"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = []
+
+[tool.uv.workspace]
+members = ["backend", "inference-service"]
+
+[tool.uv]
+dev-dependencies = []
