@@ -18,6 +18,7 @@ class LayoutAnalysisResponse(BaseModel):
 class TranslationRequest(BaseModel):
     text: str
     target_lang: str = "ja"
+    paper_context: Optional[str] = None
 
 
 class TranslationResponse(BaseModel):

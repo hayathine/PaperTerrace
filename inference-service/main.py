@@ -18,6 +18,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from services.layout_detection.layout_service import LayoutAnalysisService
 from services.translation.translation_service import TranslationService
+from services.translation_with_llamacpp.llamacpp_service import (
+    LlamaCppTranslationService,
+)
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -74,7 +77,12 @@ _init_started_at: Optional[float] = None
 
 
 async def ensure_initialized():
-    global layout_service, translation_service, _initialized, _init_started_at
+    global \
+        layout_service, \
+        translation_service, \
+        llamacpp_service, \
+        _initialized, \
+        _init_started_at
 
     if _initialized:
         return
@@ -89,6 +97,11 @@ async def ensure_initialized():
         layout_service = LayoutAnalysisService(lang="en")
         translation_service = TranslationService()
         await translation_service.initialize()
+
+        llamacpp_service = LlamaCppTranslationService()
+        # LLMの初期化は重くメモリを食うため、必要に応じて遅延実行するか
+        # または起動時に一気に行ってしまう（ここでは一気に行う）
+        await llamacpp_service.initialize()
 
         _initialized = True
         logger.info(
@@ -311,7 +324,17 @@ async def translate_text(request: Request, req: TranslationRequest):
     start_time = time.time()
 
     try:
-        translation = await translation_service.translate(req.text, req.target_lang)
+        # paper_context がある場合は llama-cpp (LLM) による高度な翻訳を実行
+        if req.paper_context:
+            logger.info("Using Llama-cpp for context-aware translation")
+            translation = await llamacpp_service.translate_with_llamacpp(
+                original_word=req.text,
+                paper_context=req.paper_context,
+                lang_name="Japanese" if req.target_lang == "ja" else "English",
+            )
+        else:
+            # それ以外は通常の M2M100 翻訳を実行
+            translation = await translation_service.translate(req.text, req.target_lang)
 
         return TranslationResponse(
             success=True,
