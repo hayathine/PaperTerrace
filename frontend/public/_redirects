@@ -1,0 +1,4 @@
+# frontend/public/_redirects
+/api/*  https://api.paperterrace.page/api/:splat  200
+/auth/* https://api.paperterrace.page/api/auth/:splat 200
+/static/* https://api.paperterrace.page/static/:splat 200
