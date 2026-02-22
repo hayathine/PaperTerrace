@@ -24,6 +24,7 @@ migrations/
 settings.json
 CLAUDE.md
 *.md
+config.ts
 # C extensions
 *.so
 
