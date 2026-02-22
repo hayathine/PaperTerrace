@@ -16,7 +16,13 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
-from services.layout_detection.layout_service import LayoutAnalysisService
+
+if os.getenv("USE_OPENVINO", "true").lower() == "true":
+    from services.layout_detection.openvino_layout_service import (
+        OpenVINOLayoutAnalysisService as LayoutAnalysisService,
+    )
+else:
+    from services.layout_detection.layout_service import LayoutAnalysisService
 from services.translation.translation_service import TranslationService
 from services.translation_with_llamacpp.llamacpp_service import (
     LlamaCppTranslationService,

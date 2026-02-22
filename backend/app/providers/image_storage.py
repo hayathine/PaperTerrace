@@ -32,6 +32,18 @@ class ImageStorageStrategy(ABC):
     def get_image_bytes(self, image_url: str) -> bytes:
         pass
 
+    @abstractmethod
+    def save_doc(self, file_hash: str, doc_bytes: bytes) -> str:
+        pass
+
+    @abstractmethod
+    def get_doc_path(self, file_hash: str) -> str:
+        pass
+
+    @abstractmethod
+    def get_doc_bytes(self, doc_path: str) -> bytes:
+        pass
+
 
 class LocalImageStorage(ImageStorageStrategy):
     def __init__(self):
@@ -54,17 +66,22 @@ class LocalImageStorage(ImageStorageStrategy):
         return relative_path
 
     def save_doc(self, file_hash: str, doc_bytes: bytes) -> str:
-        doc_dir = Path("src/static/pdfs")
+        doc_dir = self.images_dir.parent / "pdfs"
         doc_dir.mkdir(parents=True, exist_ok=True)
         doc_path = doc_dir / f"{file_hash}.pdf"
         doc_path.write_bytes(doc_bytes)
+        logger.info(f"Saved PDF to disk: {doc_path}")
         return str(doc_path)
 
     def get_doc_path(self, file_hash: str) -> str:
-        path = Path(f"src/static/pdfs/{file_hash}.pdf")
+        doc_dir = self.images_dir.parent / "pdfs"
+        path = doc_dir / f"{file_hash}.pdf"
         if path.exists():
             return str(path)
         raise FileNotFoundError(f"PDF not found for hash: {file_hash}")
+
+    def get_doc_bytes(self, doc_path: str) -> bytes:
+        return Path(doc_path).read_bytes()
 
     def get_list(self, file_hash: str) -> list[str]:
         hash_dir = self.images_dir / file_hash
@@ -223,6 +240,21 @@ class GCSImageStorage(ImageStorageStrategy):
         response = requests.get(image_url)
         response.raise_for_status()
         return response.content
+
+    def save_doc(self, file_hash: str, doc_bytes: bytes) -> str:
+        blob_name = f"pdfs/{file_hash}.pdf"
+        blob = self.bucket.blob(blob_name)
+        blob.upload_from_string(doc_bytes, content_type="application/pdf")
+        logger.info(f"Saved PDF to GCS: {blob_name}")
+        return blob_name
+
+    def get_doc_path(self, file_hash: str) -> str:
+        # GCSの場合はパスというよりはBlob名
+        return f"pdfs/{file_hash}.pdf"
+
+    def get_doc_bytes(self, doc_path: str) -> bytes:
+        blob = self.bucket.blob(doc_path)
+        return blob.download_as_bytes()
 
 
 # Factory

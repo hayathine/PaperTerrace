@@ -42,6 +42,12 @@ terraform/
 .agent/
 plans/
 frontend/node_modules/
+# Models
 /models/
+**/models/
+*.onnx
+*.xml
+*.bin
+*.blob
 docs/
 backend/app/static/dist/

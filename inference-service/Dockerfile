@@ -5,8 +5,20 @@ WORKDIR /app
 # uvのインストール
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
+# llama-cpp-python のビルドに必要なツールチェーンをインストール
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    && rm -rf /var/lib/apt/lists/*
+
 # ワークスペース構造をコピー
 COPY inference-service/pyproject.toml uv.lock ./
+
+# llama-cpp-python: ネイティブCPU最適化を無効化（ビルドマシンとターゲットマシンのCPUが異なるため）
+# -march=x86-64-v2: SSE4.2/SSSE3/POPCNT（Intel/AMD共通の安全な命令セット）
+ENV CMAKE_ARGS="-DLLAMA_NATIVE=OFF -DLLAMA_AVX2=ON -DLLAMA_AVX=ON -DLLAMA_FMA=ON -DLLAMA_F16C=ON"
+ENV CFLAGS="-march=x86-64-v2 -mtune=generic"
+ENV CXXFLAGS="-march=x86-64-v2 -mtune=generic"
 
 # ワークスペース全体の依存関係をインストール
 RUN uv sync --no-dev
@@ -33,10 +45,8 @@ COPY inference-service/*.py ./
 COPY inference-service/services ./services
 COPY common ./common
 
-# m2m100モデルファイルをコピー
-COPY inference-service/models/m2m100_ct2 ./models/m2m100_ct2
-# レイアウト解析モデルをコピー
-COPY inference-service/models/paddle2onnx/PP-DocLayout-L_infer.onnx ./models/paddle2onnx/PP-DocLayout-L_infer.onnx
+# Models are now mounted from the host via Kubernetes volume mounts
+# to keep the container image lightweight.
 
 # 環境変数設定
 ENV PATH="/app/.venv/bin:$PATH"

@@ -110,7 +110,7 @@ app = FastAPI(
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-# CORS configuration for React development
+# CORS configuration for React development & production
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
@@ -119,7 +119,7 @@ app.add_middleware(
         "https://paperterrace.page",
         "https://www.paperterrace.page",
     ],
-    allow_origin_regex=r"https://.*\.paperterrace\.page",
+    allow_origin_regex=r"https://.*\.(paperterrace\.page|pages\.dev)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

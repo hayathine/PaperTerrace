@@ -18,8 +18,9 @@ from app.domain.services.paper_processing import (
 )
 from app.providers import (
     RedisService,
+    get_image_storage,
     get_storage_provider,
-)  # RedisService now uses in-memory cache
+)
 from app.utils import _get_file_hash
 from common.logger import get_service_logger, logger
 
@@ -35,6 +36,7 @@ service = EnglishAnalysisService()
 summary_service = SummaryService()
 storage = get_storage_provider()
 redis_service = RedisService()
+img_storage = get_image_storage()
 
 
 @router.post("/analyze-pdf")
@@ -76,16 +78,11 @@ async def analyze_pdf(
     cached_paper = storage.get_paper_by_hash(file_hash)
     raw_text = None
     paper_id = "pending"
-    import base64
-
-    pdf_b64 = None
 
     if cached_paper:
         paper_id = cached_paper["paper_id"]
         if cached_paper.get("ocr_text"):
             raw_text = cached_paper["ocr_text"]
-    else:
-        pdf_b64 = base64.b64encode(content).decode("utf-8")
 
     task_id = str(uuid.uuid4())
 
@@ -99,7 +96,8 @@ async def analyze_pdf(
     }
 
     if raw_text is None:
-        task_data.update({"pending_ocr": True, "pdf_b64": pdf_b64})
+        doc_path = img_storage.save_doc(file_hash, content)
+        task_data.update({"pending_ocr": True, "pdf_path": doc_path})
     else:
         task_data.update({"text": raw_text, "paper_id": paper_id})
 
@@ -166,9 +164,6 @@ async def analyze_pdf_json(
         cached_paper = storage.get_paper_by_hash(file_hash)
         raw_text = None
         paper_id = "pending"
-        import base64
-
-        pdf_b64 = None
 
         if cached_paper:
             # If cached, we might want to update owner if it was anonymous before?
@@ -188,18 +183,15 @@ async def analyze_pdf_json(
                 logger.info(
                     f"[analyze-pdf-json] Cache HIT ({paper_id}) but images missing. Regenerating."
                 )
-                pdf_b64 = base64.b64encode(content).decode("utf-8")
                 raw_text = None
             else:
                 logger.info(f"[analyze-pdf-json] Cache HIT: paper_id={paper_id}")
                 if cached_paper.get("html_content"):
                     raw_text = "CACHED_HTML:" + cached_paper["html_content"]
                 else:
-                    # Use .get() to avoid KeyError if ocr_text is missing
                     raw_text = cached_paper.get("ocr_text")
         else:
             logger.info("[analyze-pdf-json] Cache MISS: Deferring OCR to stream")
-            pdf_b64 = base64.b64encode(content).decode("utf-8")
             raw_text = None
 
         task_id = str(uuid.uuid4())
@@ -226,10 +218,12 @@ async def analyze_pdf_json(
         }
 
         if raw_text is None:
+            # Save PDF to disk instead of Redis to prevent OOM
+            doc_path = img_storage.save_doc(file_hash, content)
             task_data.update(
                 {
                     "pending_ocr": True,
-                    "pdf_b64": pdf_b64,
+                    "pdf_path": doc_path,
                 }
             )
         else:
@@ -339,14 +333,28 @@ async def stream(task_id: str):
 
         async def _inner_json_generate():
             if data.get("pending_ocr"):
-                import base64
-
-                import uuid6
-
+                pdf_path = data.get("pdf_path")
                 pdf_b64 = data.get("pdf_b64", "")
                 filename = data.get("filename", "unknown.pdf")
                 file_hash = data.get("file_hash", "")
-                pdf_content = base64.b64decode(pdf_b64)
+
+                if pdf_path:
+                    try:
+                        pdf_content = img_storage.get_doc_bytes(pdf_path)
+                    except Exception as e:
+                        logger.error(
+                            f"[stream] {task_id}: Failed to read PDF from {pdf_path}: {e}"
+                        )
+                        yield f"data: {json.dumps({'type': 'error', 'message': 'PDF source not found or inaccessible'})}\n\n"
+                        return
+                elif pdf_b64:
+                    import base64
+
+                    pdf_content = base64.b64decode(pdf_b64)
+                else:
+                    logger.error(f"[stream] {task_id}: No PDF source found")
+                    yield f"data: {json.dumps({'type': 'error', 'message': 'PDF source not found'})}\n\n"
+                    return
 
                 full_text_fragments = []
                 all_layout_data = []
@@ -444,6 +452,8 @@ async def stream(task_id: str):
                 # Send assist mode ready event
                 yield f"event: message\ndata: {json.dumps({'type': 'assist_mode_ready'})}\n\n"
                 await asyncio.sleep(0.01)
+
+                import uuid6
 
                 full_text = "\n\n---\n\n".join(full_text_fragments)
                 new_paper_id = str(uuid6.uuid7())
@@ -633,13 +643,28 @@ async def stream(task_id: str):
 
     # OCR未実行の場合：ストリーム内でOCR処理を行う
     if data.get("pending_ocr"):
-        import base64
-
+        pdf_path = data.get("pdf_path")
         pdf_b64 = data.get("pdf_b64", "")
         file_hash = data.get("file_hash", "")
         filename = data.get("filename", "unknown.pdf")
         session_id = data.get("session_id")
-        pdf_content = base64.b64decode(pdf_b64)
+
+        if pdf_path:
+            try:
+                pdf_content = img_storage.get_doc_bytes(pdf_path)
+            except Exception as e:
+                logger.error(
+                    f"[stream] {task_id}: Failed to read PDF from {pdf_path}: {e}"
+                )
+                return Response(
+                    "Error: PDF source not found or inaccessible", status_code=404
+                )
+        elif pdf_b64:
+            import base64
+
+            pdf_content = base64.b64decode(pdf_b64)
+        else:
+            return Response("Error: PDF source not found", status_code=404)
 
         async def ocr_generate():
             import uuid6
