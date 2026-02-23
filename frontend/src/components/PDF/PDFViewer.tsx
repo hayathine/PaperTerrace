@@ -265,9 +265,19 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							console.log(
 								`[PDFViewer] Adding ${pageFigures.length} figures to page ${page.page_num}`,
 							);
+							// Prepend API_URL to figure image URLs if they are relative
+							const processedFigures = pageFigures.map((f: any) => ({
+								...f,
+								image_url:
+									f.image_url &&
+									!f.image_url.startsWith("http") &&
+									!f.image_url.startsWith("blob:")
+										? `${API_URL}${f.image_url}`
+										: f.image_url,
+							}));
 							return {
 								...page,
-								figures: [...(page.figures || []), ...pageFigures],
+								figures: [...(page.figures || []), ...processedFigures],
 							};
 						}
 						return page;
@@ -421,7 +431,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 				if (eventData.type === "page") {
 					setPages((prev) => {
-						const newData = eventData.data;
+						let newData = eventData.data;
 						if (!newData || typeof newData.page_num === "undefined") {
 							console.warn(
 								"[PDFViewer] Received malformed page data:",
@@ -429,6 +439,35 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							);
 							return prev;
 						}
+
+						// Prepend API_URL to image_url if it's a relative path
+						if (
+							newData.image_url &&
+							!newData.image_url.startsWith("http") &&
+							!newData.image_url.startsWith("blob:")
+						) {
+							newData = {
+								...newData,
+								image_url: `${API_URL}${newData.image_url}`,
+							};
+						}
+
+						// Also prepend to figures if they exist
+						if (newData.figures && newData.figures.length > 0) {
+							newData = {
+								...newData,
+								figures: newData.figures.map((f: any) => ({
+									...f,
+									image_url:
+										f.image_url &&
+										!f.image_url.startsWith("http") &&
+										!f.image_url.startsWith("blob:")
+											? `${API_URL}${f.image_url}`
+											: f.image_url,
+								})),
+							};
+						}
+
 						const index = prev.findIndex(
 							(p) => p.page_num === newData.page_num,
 						);
