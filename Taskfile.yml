@@ -185,7 +185,8 @@ tasks:
       - echo "🔍 Running inference-service linting..."
       - uv run --directory inference-service ruff check --fix .
       - echo "🔍 Running common & shared linting..."
-      - uv run ruff check --fix common redis_provider
+      - uv run --directory backend ruff check --fix ../common
+      - uv run --directory redis_provider ruff check --fix .
       - echo "🔍 Running frontend linting..."
       - cd frontend && npm run lint
 
