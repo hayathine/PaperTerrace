@@ -11,7 +11,8 @@
     "cloudflare-workers"
   ],
   "devDependencies": {
-    "@biomejs/biome": "^2.4.4"
+    "@biomejs/biome": "^2.4.4",
+    "typescript": "^5.1.0"
   },
   "overrides": {
     "undici": "^6.23.0",
