@@ -70,9 +70,9 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 				</h3>
 				<button
 					type="button"
-					onClick={() =>
-						paperId && paperId !== "pending" && fetchFigures(paperId)
-					}
+					onClick={() => {
+						if (paperId && paperId !== "pending") fetchFigures(paperId);
+					}}
 					className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-indigo-600 transition-colors disabled:opacity-30"
 					title="Reload"
 					disabled={!paperId || paperId === "pending" || loading}
@@ -165,7 +165,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 								onClick={() => fig.image_url && setZoomedImage(fig.image_url)}
 								onKeyDown={(e) => {
 									if (e.key === "Enter" || e.key === " ") {
-										fig.image_url && setZoomedImage(fig.image_url);
+										if (fig.image_url) setZoomedImage(fig.image_url);
 									}
 								}}
 								className="relative w-full bg-slate-100 aspect-video flex items-center justify-center overflow-hidden border-b border-slate-100 cursor-zoom-in group/img border-none p-0"

@@ -715,9 +715,9 @@ tasks:
       - kubectl logs -f -l app=cloudflared -n paperterrace
 
   cf:workers:install:
-    desc: "Install dependencies for Cloudflare Workers"
+    desc: "Install all dependencies (including Workers/Frontend)"
     cmds:
-      - cd cloudflare-workers && npm install
+      - npm install
 
   cf:workers:dev:
     desc: "Run Cloudflare Workers in development mode"
@@ -741,8 +741,8 @@ tasks:
   cf:pages:deploy:
     desc: "Deploy frontend to Cloudflare Pages"
     cmds:
-      - cd frontend && npm run build
-      - cd frontend && wrangler pages deploy dist
+      - npm run build -w frontend
+      - npx wrangler pages deploy frontend/dist
 
   cf:deploy:
     desc: "Deploy all Cloudflare services (Workers + Pages)"

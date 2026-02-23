@@ -23,4 +23,4 @@ id = "e699d25a697542babdc2343bfc75866b"
 # - FIREBASE_PRIVATE_KEY
 
 [build]
-command = "npm run --prefix cloudflare-workers build"
+command = "npm run build -w cloudflare-workers"
