@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import worker from "./index";
 
 describe("Origin Validation", () => {
@@ -16,13 +16,24 @@ describe("Origin Validation", () => {
     },
   };
 
+  beforeEach(() => {
+    vi.resetAllMocks();
+    // Mock global fetch for forwardRequest
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ) as any;
+  });
+
   it("should allow exact allowed origin", async () => {
     const request = new Request("https://api.paperterrace.page/api/health", {
       headers: { Origin: "https://paperterrace.page" },
     });
     const response = await worker.fetch(request, env as any, {} as any);
-    // It should NOT be 403. It will be 401 (Unauthorized) because of missing token, which is fine for this test.
-    expect(response.status).not.toBe(403);
+    // Should pass origin check and hit 200 (guest access enabled)
+    expect(response.status).toBe(200);
   });
 
   it("should allow origin with trailing slash if startsWith is used", async () => {
@@ -30,7 +41,7 @@ describe("Origin Validation", () => {
       headers: { Origin: "https://paperterrace.page/" },
     });
     const response = await worker.fetch(request, env as any, {} as any);
-    expect(response.status).not.toBe(403);
+    expect(response.status).toBe(200);
   });
 
   it("should ALLOW if Origin and Referer are missing on GET (direct browser hit)", async () => {
@@ -39,8 +50,8 @@ describe("Origin Validation", () => {
       headers: {}, // No Origin, No Referer
     });
     const response = await worker.fetch(request, env as any, {} as any);
-    // Should pass origin check and hit 401 Unauthorized (missing token)
-    expect(response.status).toBe(401);
+    // Should pass origin check and forward as guest -> 200
+    expect(response.status).toBe(200);
   });
 
   it("should FORBID if Origin is missing on POST", async () => {
@@ -50,7 +61,7 @@ describe("Origin Validation", () => {
     });
     const response = await worker.fetch(request, env as any, {} as any);
     expect(response.status).toBe(403);
-    const body = await response.json();
+    const body = await (response as any).json();
     expect(body.message).toBe("Origin not allowed");
   });
 
@@ -59,6 +70,6 @@ describe("Origin Validation", () => {
       headers: { Referer: "https://paperterrace.page/dashboard" },
     });
     const response = await worker.fetch(request, env as any, {} as any);
-    expect(response.status).not.toBe(403);
+    expect(response.status).toBe(200);
   });
 });

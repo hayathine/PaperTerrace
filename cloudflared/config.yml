@@ -8,7 +8,7 @@
 # 2. Authenticate: cloudflared tunnel login
 # 3. Create tunnel: cloudflared tunnel create paperterrace
 # 4. Copy the tunnel ID and credentials file path
-# 5. Configure DNS: cloudflared tunnel route dns <tunnel-id> backend.paperterrace.page
+# 5. Configure DNS: cloudflared tunnel route dns <tunnel-id> api.paperterrace.page
 # 6. Update this file with your tunnel ID
 # 7. Run: cloudflared tunnel run paperterrace
 
@@ -23,7 +23,7 @@ credentials-file: /etc/cloudflared/credentials.json
 ingress:
   # Backend API - Main application server
   # All API requests from Cloudflare Workers will be routed here
-  - hostname: backend.paperterrace.page
+  - hostname: api.paperterrace.page
     service: http://traefik.kube-system.svc.cluster.local:80
     originRequest:
       # Disable TLS verification for local services

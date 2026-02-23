@@ -1,4 +1,4 @@
-name = "paperterrace-api-gateway"
+name = "paperterrace"
 main = "cloudflare-workers/src/index.ts"
 compatibility_date = "2024-01-01"
 
@@ -7,7 +7,7 @@ workers_dev = true
 
 # Environment variables (non-sensitive)
 [vars]
-BACKEND_TUNNEL_URL = "https://backend.paperterrace.page"
+BACKEND_TUNNEL_URL = "https://tunnel.paperterrace.page" # トンネルの裏口
 ALLOWED_ORIGINS = "https://paperterrace.pages.dev,https://www.paperterrace.page,https://paperterrace.page,http://localhost:5173"
 RATE_LIMIT_REQUESTS = "100"
 RATE_LIMIT_WINDOW = "60"
