@@ -172,7 +172,7 @@ async def analyze_pdf_json(
 
             # Safe image check + regeneration logic
             try:
-                from ..providers.image_storage import get_page_images
+                from app.providers.image_storage import get_page_images
 
                 cached_images = get_page_images(file_hash)
             except ImportError as ie:
@@ -517,7 +517,7 @@ async def stream(task_id: str):
 
             else:
                 # Cached content
-                from ..providers.image_storage import get_page_images
+                from app.providers.image_storage import get_page_images
 
                 paper_data = storage.get_paper(paper_id)
                 layout_list = []

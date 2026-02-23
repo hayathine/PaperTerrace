@@ -7,7 +7,7 @@ from fastapi import APIRouter
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 
-from ..providers import get_storage_provider
+from app.providers import get_storage_provider
 
 router = APIRouter(tags=["Papers"])
 

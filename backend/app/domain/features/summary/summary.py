@@ -13,7 +13,7 @@ from app.schemas.gemini_schema import SectionSummaryList as SectionSummariesResp
 
 from common.logger import logger
 
-from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
+from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 
 
 class SummaryError(Exception):

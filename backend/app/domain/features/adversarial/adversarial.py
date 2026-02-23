@@ -45,7 +45,7 @@ class AdversarialReviewService:
         Returns:
             Dictionary with critical analysis categories
         """
-        from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
+        from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 

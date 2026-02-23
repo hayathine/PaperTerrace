@@ -30,7 +30,7 @@ class ClaimVerificationService:
             CORE_SYSTEM_PROMPT,
         )
 
-        from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
+        from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 

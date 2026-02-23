@@ -8,9 +8,9 @@ from datetime import datetime
 from fastapi import APIRouter, HTTPException, status
 
 from app.auth import CurrentUser
-from common.logger import logger
 from app.models.user import UserInDB, UserStats, UserUpdate
 from app.providers import get_storage_provider
+from common.logger import logger
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 

@@ -3,18 +3,18 @@ Routers package for PaperTerrace.
 Contains FastAPI routers for different API endpoints.
 """
 
-from .analysis import router as analysis_router
-from .auth import router as auth_router
-from .chat import router as chat_router
-from .explore import router as explore_router
-from .figures import router as figures_router
-from .note import router as note_router
-from .papers import router as papers_router
-from .pdf import router as pdf_router
-from .stamps import router as stamps_router
-from .translation import router as translation_router
-from .upload import router as upload_router
-from .users import router as users_router
+from app.routers.analysis import router as analysis_router
+from app.routers.auth import router as auth_router
+from app.routers.chat import router as chat_router
+from app.routers.explore import router as explore_router
+from app.routers.figures import router as figures_router
+from app.routers.note import router as note_router
+from app.routers.papers import router as papers_router
+from app.routers.pdf import router as pdf_router
+from app.routers.stamps import router as stamps_router
+from app.routers.translation import router as translation_router
+from app.routers.upload import router as upload_router
+from app.routers.users import router as users_router
 
 __all__ = [
     "auth_router",

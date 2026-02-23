@@ -60,7 +60,7 @@ class CiteIntentService:
         """
         段落内の引用を特定し、その意図を分類して詳細情報を付与する。
         """
-        from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
+        from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 

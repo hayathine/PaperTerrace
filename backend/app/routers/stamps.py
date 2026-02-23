@@ -17,7 +17,7 @@ from pydantic import BaseModel
 from app.auth import OptionalUser
 from common.logger import get_service_logger
 
-from ..providers import get_storage_provider
+from app.providers import get_storage_provider
 
 logger = get_service_logger("Stamps")
 

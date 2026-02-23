@@ -42,9 +42,7 @@ terraform/
 .agent/
 plans/
 frontend/node_modules/
-# Models
-/models/
-**/models/
+# Models (ignore only weight files, keep code)
 *.onnx
 *.xml
 *.bin

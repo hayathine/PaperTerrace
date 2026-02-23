@@ -3,6 +3,7 @@ import os
 from typing import Any
 
 import redis
+
 from common.logger import get_service_logger
 
 log = get_service_logger("Cache")
@@ -15,14 +16,16 @@ REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
 
 _redis_client = None
 _redis_enabled = True
+_redis_attempted = False
 
 
 def get_redis_client():
-    global _redis_client
+    global _redis_client, _redis_attempted
     if not _redis_enabled:
         return None
 
-    if _redis_client is None:
+    if _redis_client is None and not _redis_attempted:
+        _redis_attempted = True
         try:
             _redis_client = redis.Redis(
                 host=REDIS_HOST,
@@ -30,6 +33,8 @@ def get_redis_client():
                 db=REDIS_DB,
                 password=REDIS_PASSWORD,
                 decode_responses=True,
+                socket_timeout=5.0,
+                socket_connect_timeout=5.0,
             )
             # test connection
             _redis_client.ping()

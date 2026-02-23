@@ -71,7 +71,7 @@ class ChatService:
             [f"{msg['role']}: {msg['content']}" for msg in current_conversation]
         )
 
-        from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
+        from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
@@ -203,7 +203,7 @@ class ChatService:
         Returns:
             Response simulating the author's viewpoint
         """
-        from ..correspondence_lang_dict import SUPPORTED_LANGUAGES
+        from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 

@@ -4,23 +4,19 @@ Main application entry point.
 """
 
 import contextlib
-import json
 import os
+import re
 import time
 import traceback
 from datetime import datetime
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
+from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
-from common.logger import configure_logging, logger
-
-from .routers import (
+from app.routers import (
     analysis_router,
     auth_router,
     chat_router,
@@ -34,6 +30,7 @@ from .routers import (
     upload_router,
     users_router,
 )
+from common.logger import configure_logging, logger
 
 # Load environment variables from secrets directory
 load_dotenv("secrets/.env")
@@ -106,9 +103,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Templates and static files
-templates = Jinja2Templates(directory="app/templates")
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # CORS configuration for React development & production
 app.add_middleware(
@@ -126,12 +120,83 @@ app.add_middleware(
 )
 
 
-class LoggingMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
+class OriginCheckMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to restrict API access to authorized frontend origins.
+    Rejects requests (403) from unknown origins or direct access (curl/browser URL bar)
+    to protected API endpoints.
+    """
 
+    async def dispatch(self, request: Request, call_next):
+        path = request.url.path
+
+        # 1. Allow public/system endpoints
+        if path in ["/", "/api/health", "/docs", "/openapi.json", "/api/config"]:
+            return await call_next(request)
+
+        # 2. Allow CORS preflight requests (handled by CORSMiddleware)
+        if request.method == "OPTIONS":
+            return await call_next(request)
+
+        origin = request.headers.get("origin")
+        referer = request.headers.get("referer")
+
+        # List of explicitly allowed origins
+        allowed_origins = [
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "https://paperterrace.page",
+            "https://www.paperterrace.page",
+        ]
+
+        # Regex for dynamic subdomains (e.g., branch previews on pages.dev)
+        pattern = re.compile(r"https://.*\.(paperterrace\.page|pages\.dev)")
+
+        def is_authorized(url: str | None) -> bool:
+            if not url:
+                return False
+            # Check prefix for simple matching
+            if any(url.startswith(o) for o in allowed_origins):
+                return True
+            # Regex match for domain patterns
+            if pattern.match(url):
+                return True
+            return False
+
+        # Allow internal TestClient requests
+        if request.client and request.client.host == "testclient":
+            return await call_next(request)
+
+        # 3. Deny if neither Origin nor Referer matches the authorized list
+        if not (is_authorized(origin) or is_authorized(referer)):
+            logger.warning(
+                "unauthorized_access_attempt",
+                path=path,
+                origin=origin,
+                referer=referer,
+                client=request.client.host if request.client else "unknown",
+            )
+            return JSONResponse(
+                status_code=403,
+                content={
+                    "error": "Forbidden",
+                    "message": "Access denied. This API is only accessible from the PaperTerrace frontend.",
+                },
+            )
+
+        return await call_next(request)
+
+
+class LoggingMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to log incoming requests and their responses.
+    Includes success, failure, and execution duration.
+    """
+
+    async def dispatch(self, request: Request, call_next):
         start_time = time.time()
 
-        # リクエスト情報を詳細にログ出力
+        # Log request start
         logger.info(
             "request_started",
             method=request.method,
@@ -144,7 +209,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             response = await call_next(request)
             duration = time.time() - start_time
 
-            # レスポンス情報を詳細にログ出力
+            # Log request completion
             logger.info(
                 "request_completed",
                 method=request.method,
@@ -170,6 +235,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             )
 
 
+app.add_middleware(OriginCheckMiddleware)
 app.add_middleware(LoggingMiddleware)
 
 
@@ -233,24 +299,17 @@ app.include_router(figures_router, prefix="/api")
 # ============================================================================
 
 
-# Serve React assets
-# Determine dist directory (Docker vs Local)
-dist_dir = "app/static/dist"
-if not os.path.exists(dist_dir) and os.path.exists("frontend/dist"):
-    dist_dir = "frontend/dist"
-
-if os.path.exists(dist_dir):
-    # Mount assets folder if it exists
-    assets_dir = os.path.join(dist_dir, "assets")
-    if os.path.exists(assets_dir):
-        app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
-
-
-# ... routers ...
-
-# ============================================================================
-# Main Page & API
-# ============================================================================
+@app.get("/")
+async def root():
+    """Root endpoint for API discovery."""
+    return JSONResponse(
+        content={
+            "message": "PaperTerrace API Server",
+            "version": "1.0.0",
+            "docs": "/docs",
+            "status": "active",
+        }
+    )
 
 
 @app.get("/api/health")
@@ -268,88 +327,3 @@ async def health_check():
 async def get_config():
     """Returns configuration for the frontend."""
     return JSONResponse(content={"firebase_config": FIREBASE_CONFIG})
-
-
-# Dev: Serve test.pdf from dist folder
-@app.get("/test.pdf")
-async def serve_test_pdf():
-    # Determine dist directory (Docker vs Local)
-    dist_dir = "app/static/dist"
-    if not os.path.exists(dist_dir) and os.path.exists("frontend/dist"):
-        dist_dir = "frontend/dist"
-
-    test_pdf_path = os.path.join(dist_dir, "test.pdf")
-    if os.path.exists(test_pdf_path):
-        return FileResponse(test_pdf_path, media_type="application/pdf")
-    # Fallback to public folder
-    public_path = "frontend/public/test.pdf"
-    if os.path.exists(public_path):
-        return FileResponse(public_path, media_type="application/pdf")
-    return JSONResponse({"error": "test.pdf not found"}, status_code=404)
-
-
-# Cache for index.html content
-_index_html_cache = None
-_index_html_mtime = 0
-
-
-@app.get("/{full_path:path}", response_class=HTMLResponse)
-async def serve_react_app(request: Request, full_path: str):
-    """
-    Serve the React Single Page Application (SPA).
-    Injects runtime configuration (Firebase) into index.html.
-    Uses in-memory caching to avoid blocking disk I/O on every request.
-    """
-    global _index_html_cache, _index_html_mtime
-
-    # Determine dist directory (Docker vs Local)
-    # Note: In production, this path is stable, so we could optimize this too,
-    # but for now we follow the existing logic for flexibility.
-    dist_dir = "app/static/dist"
-    if not os.path.exists(dist_dir) and os.path.exists("frontend/dist"):
-        dist_dir = "frontend/dist"
-
-    index_file = os.path.join(dist_dir, "index.html")
-
-    if not os.path.exists(index_file):
-        # Fallback to Jinja2 template if React build not found
-        # This is mainly for dev or errored builds
-        return templates.TemplateResponse(
-            "index.html", {"request": request, "firebase_config": FIREBASE_CONFIG}
-        )
-
-    # Check file modification time to invalidate cache if updated
-    try:
-        current_mtime = os.path.getmtime(index_file)
-        if _index_html_cache is None or current_mtime > _index_html_mtime:
-            # Read file (Blocking I/O only once per update)
-            # In high-concurrency scenarios, we might want a lock here, but for now this is fine.
-            with open(index_file, "r", encoding="utf-8") as f:
-                content = f.read()
-
-            _index_html_cache = content
-            _index_html_mtime = current_mtime
-            logger.info("Loaded and cached index.html")
-
-    except Exception as e:
-        logger.error(f"Failed to read index.html: {e}")
-        return JSONResponse(
-            status_code=500, content={"error": "Frontend build invalid"}
-        )
-
-    # Inject Runtime Configuration
-    # We do this every time because FIREBASE_CONFIG is in memory but relatively static.
-    # If config changes dynamically, this picks it up.
-    # Using json.dumps ensures the object is valid JSON.
-    # For extra safety, we could use a script tag with type="application/json" and read it,
-    # but window.__FIREBASE_CONFIG__ is standard pattern.
-    config_json = json.dumps(FIREBASE_CONFIG)
-
-    # We replace the comment placeholder.
-    # If the placeholder is missing, it just returns the original content.
-    html_content = _index_html_cache.replace(
-        "<!--__FIREBASE_CONFIG__-->",
-        f"<script>window.__FIREBASE_CONFIG__ = {config_json};</script>",
-    )
-
-    return HTMLResponse(content=html_content, status_code=200)

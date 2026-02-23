@@ -1,9 +1,4 @@
-# test
-test/
-# assets
-assets/
-# db
-*.db
+
 logs/
 *.png
 *.jpg
@@ -17,8 +12,6 @@ infrastructure/k8s/
 __pycache__/
 *.py[codz]
 *$py.class
-tests/
-plans/
 migrations/
 *.pdf
 settings.json
@@ -27,7 +20,11 @@ CLAUDE.md
 config.ts
 # C extensions
 *.so
-
+# local
+*tests/
+assets/
+*.db
+plans/
 # Distribution / packaging
 .Python
 build/
