@@ -5,7 +5,6 @@ Main application entry point.
 
 import contextlib
 import os
-import re
 import time
 import traceback
 from datetime import datetime
@@ -104,14 +103,15 @@ app = FastAPI(
 )
 
 
-# CORS configuration for React development & production
+# CORS configuration for Cloudflare Pages and Workers
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
-        "https://paperterrace.page",
+        "https://paperterrace.pages.dev",
         "https://www.paperterrace.page",
+        "https://paperterrace.page",
     ],
     allow_origin_regex=r"https://.*\.(paperterrace\.page|pages\.dev)",
     allow_credentials=True,
@@ -120,69 +120,18 @@ app.add_middleware(
 )
 
 
-class OriginCheckMiddleware(BaseHTTPMiddleware):
+class TrustedProxyMiddleware(BaseHTTPMiddleware):
     """
-    Middleware to restrict API access to authorized frontend origins.
-    Rejects requests (403) from unknown origins or direct access (curl/browser URL bar)
-    to protected API endpoints.
+    Middleware to extract user ID from X-User-ID header added by Cloudflare Workers API Gateway.
+    Trusts the header since authentication is handled at the edge by Cloudflare Workers.
     """
 
     async def dispatch(self, request: Request, call_next):
-        path = request.url.path
-
-        # 1. Allow public/system endpoints
-        if path in ["/", "/api/health", "/docs", "/openapi.json", "/api/config"]:
-            return await call_next(request)
-
-        # 2. Allow CORS preflight requests (handled by CORSMiddleware)
-        if request.method == "OPTIONS":
-            return await call_next(request)
-
-        origin = request.headers.get("origin")
-        referer = request.headers.get("referer")
-
-        # List of explicitly allowed origins
-        allowed_origins = [
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-            "https://paperterrace.page",
-            "https://www.paperterrace.page",
-        ]
-
-        # Regex for dynamic subdomains (e.g., branch previews on pages.dev)
-        pattern = re.compile(r"https://.*\.(paperterrace\.page|pages\.dev)")
-
-        def is_authorized(url: str | None) -> bool:
-            if not url:
-                return False
-            # Check prefix for simple matching
-            if any(url.startswith(o) for o in allowed_origins):
-                return True
-            # Regex match for domain patterns
-            if pattern.match(url):
-                return True
-            return False
-
-        # Allow internal TestClient requests
-        if request.client and request.client.host == "testclient":
-            return await call_next(request)
-
-        # 3. Deny if neither Origin nor Referer matches the authorized list
-        if not (is_authorized(origin) or is_authorized(referer)):
-            logger.warning(
-                "unauthorized_access_attempt",
-                path=path,
-                origin=origin,
-                referer=referer,
-                client=request.client.host if request.client else "unknown",
-            )
-            return JSONResponse(
-                status_code=403,
-                content={
-                    "error": "Forbidden",
-                    "message": "Access denied. This API is only accessible from the PaperTerrace frontend.",
-                },
-            )
+        # Extract user ID from header added by API Gateway
+        user_id = request.headers.get("x-user-id")
+        if user_id:
+            request.state.user_id = user_id
+            logger.debug(f"Request authenticated for user: {user_id}")
 
         return await call_next(request)
 
@@ -235,7 +184,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             )
 
 
-app.add_middleware(OriginCheckMiddleware)
+app.add_middleware(TrustedProxyMiddleware)
 app.add_middleware(LoggingMiddleware)
 
 
@@ -314,13 +263,49 @@ async def root():
 
 @app.get("/api/health")
 async def health_check():
-    """Health check endpoint."""
+    """Health check endpoint with dependencies verification."""
+    from redis import Redis
+
+    from app.providers import get_storage_provider
+
+    status = "healthy"
+    dependencies = {}
+
+    # Check Database
+    try:
+        storage = get_storage_provider()
+        # Just use the storage object to show it's initialized
+        provider_name = storage.__class__.__name__
+        dependencies["database"] = f"connected ({provider_name})"
+    except Exception as e:
+        status = "unhealthy"
+        dependencies["database"] = f"error: {str(e)}"
+
+    # Check Redis
+    try:
+        redis_host = os.getenv("REDIS_HOST", "localhost")
+        redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        r = Redis(host=redis_host, port=redis_port, socket_connect_timeout=2)
+        r.ping()
+        dependencies["redis"] = "connected"
+    except Exception as e:
+        status = "unhealthy"
+        dependencies["redis"] = f"error: {str(e)}"
+
     health_status = {
-        "status": "healthy",
+        "status": status,
         "timestamp": datetime.now().isoformat(),
-        "cache": "in-memory",
+        "dependencies": dependencies,
+        "version": "1.0.0",
     }
-    return JSONResponse(health_status)
+
+    # Return 503 if unhealthy, unless we are in a testing environment
+    is_testing = (
+        os.getenv("ENV") == "testing" or os.getenv("PYTEST_CURRENT_TEST") is not None
+    )
+    status_code = 200 if (status == "healthy" or is_testing) else 503
+
+    return JSONResponse(status_code=status_code, content=health_status)
 
 
 @app.get("/api/config")

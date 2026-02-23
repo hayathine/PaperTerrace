@@ -1,4 +1,3 @@
-
 logs/
 *.png
 *.jpg
@@ -21,11 +20,19 @@ config.ts
 !frontend/src/config.ts
 # C extensions
 *.so
+
 # local
+*.toml
+!pyproject.toml
+!backend/pyproject.toml
+!inference-service/pyproject.toml
+!redis_provider/pyproject.toml
+!wrangler.toml
 *tests/
 assets/
 *.db
 plans/
+
 # Distribution / packaging
 .Python
 build/

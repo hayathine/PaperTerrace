@@ -620,3 +620,170 @@ tasks:
       - echo "🧹 Cleaning up Docker resources..."
       - docker system prune -f
       - echo "✅ Docker cleanup complete!"
+
+  # ============================================================================
+  # Home Server (k3s) Deployment Tasks
+  # ============================================================================
+
+  k3s:secrets:
+    desc: "Setup K8s secrets on home server"
+    cmds:
+      - ./scripts/create-secrets.sh
+
+  k3s:deploy:
+    desc: "Deploy all services to k3s"
+    cmds:
+      - echo "🚀 Deploying to k3s..."
+      - kubectl apply -k infrastructure/k8s/
+
+  k3s:status:
+    desc: "Show status of k3s resources"
+    cmds:
+      - kubectl get pods,svc,deploy -n paperterrace
+
+  k3s:logs:backend:
+    desc: "View backend logs in k3s"
+    cmds:
+      - kubectl logs -f -l app=backend -n paperterrace
+
+  k3s:logs:inference:
+    desc: "View inference logs in k3s"
+    cmds:
+      - kubectl logs -f -l app=inference -n paperterrace
+
+  k3s:restart:backend:
+    desc: "Restart backend in k3s"
+    cmds:
+      - kubectl rollout restart deployment/backend -n paperterrace
+
+  k3s:health:
+    desc: "Check health of services in k3s"
+    cmds:
+      - echo "🔍 Checking service health..."
+      - |
+        echo "Backend:"
+        kubectl exec -n paperterrace deployment/backend -- curl -s http://localhost:8000/api/health || echo "❌ Unhealthy"
+        echo ""
+        echo "Inference Server:"
+        kubectl exec -n paperterrace deployment/inference -- curl -s http://localhost:8080/health || echo "❌ Unhealthy"
+        echo ""
+        echo "Redis:"
+        kubectl exec -n paperterrace deployment/redis -- redis-cli ping || echo "❌ Unhealthy"
+
+  homeserver:health:
+    desc: "Check health of all services"
+    cmds:
+      - task: k3s:health
+
+  homeserver:build:
+    desc: "Build Docker images for home server"
+    env:
+      REGISTRY: "{{.REGISTRY}}"
+    cmds:
+      - ./scripts/build-images.sh
+
+  homeserver:deploy:
+    desc: "Full deployment to home server (k3s)"
+    cmds:
+      - task: homeserver:build
+      - task: k3s:secrets
+      - task: k3s:deploy
+      - echo "✅ Home server deployment complete!"
+
+  homeserver:ps:
+    desc: "Show status of all services"
+    cmds:
+      - task: k3s:status
+
+  # ============================================================================
+  # Cloudflare Deployment Tasks
+  # ============================================================================
+
+  cf:tunnel:setup:
+    desc: "Setup Cloudflare Tunnel"
+    cmds:
+      - ./scripts/setup-tunnel.sh
+
+  cf:tunnel:start:
+    desc: "Start Cloudflare Tunnel (k3s)"
+    cmds:
+      - kubectl scale deployment/cloudflared --replicas=1 -n paperterrace
+
+  cf:tunnel:logs:
+    desc: "View Cloudflare Tunnel logs (k3s)"
+    cmds:
+      - kubectl logs -f -l app=cloudflared -n paperterrace
+
+  cf:workers:install:
+    desc: "Install dependencies for Cloudflare Workers"
+    cmds:
+      - cd cloudflare-workers && npm install
+
+  cf:workers:dev:
+    desc: "Run Cloudflare Workers in development mode"
+    cmds:
+      - npx wrangler dev
+
+  cf:workers:deploy:
+    desc: "Deploy Cloudflare Workers API Gateway"
+    cmds:
+      - npx wrangler deploy
+
+  cf:workers:secrets:
+    desc: "Configure Cloudflare Workers secrets"
+    cmds:
+      - echo "Setting up Cloudflare Workers secrets..."
+      - echo "Run these commands manually:"
+      - echo "  npx wrangler secret put FIREBASE_PROJECT_ID"
+      - echo "  npx wrangler secret put FIREBASE_CLIENT_EMAIL"
+      - echo "  npx wrangler secret put FIREBASE_PRIVATE_KEY"
+
+  cf:pages:deploy:
+    desc: "Deploy frontend to Cloudflare Pages"
+    cmds:
+      - cd frontend && npm run build
+      - cd frontend && wrangler pages deploy dist
+
+  cf:deploy:
+    desc: "Deploy all Cloudflare services (Workers + Pages)"
+    cmds:
+      - ./scripts/deploy-cloudflare.sh
+
+  # ============================================================================
+  # Migration Tasks
+  # ============================================================================
+
+  migrate:prepare:
+    desc: "Prepare for migration to home server"
+    cmds:
+      - echo "📋 Migration preparation checklist:"
+      - echo "1. ✓ Ensure .env file is configured"
+      - echo "2. ✓ Ensure service account key is in secrets/sa-key.json"
+      - echo "3. ✓ Ensure models are downloaded to ./models/"
+      - echo "4. ✓ Ensure Cloudflare Tunnel is set up"
+      - echo "5. ✓ Test home server deployment"
+      - echo "6. ✓ Test Cloudflare Workers deployment"
+      - echo "7. ✓ Verify end-to-end flow"
+
+  migrate:test:
+    desc: "Test new architecture"
+    cmds:
+      - echo "🧪 Testing new architecture..."
+      - task: k3s:health
+      - echo "Testing API Gateway..."
+      - echo "Manual test required -- Visit Cloudflare Workers URL with valid token"
+
+  migrate:switch:
+    desc: "Switch traffic to new architecture"
+    cmds:
+      - echo "⚠️  This will switch traffic to the new architecture"
+      - echo "Make sure you have tested thoroughly!"
+      - echo "Update DNS to point to Cloudflare Pages"
+      - echo "Monitor logs and metrics closely"
+
+  migrate:rollback:
+    desc: "Rollback to Cloud Run"
+    cmds:
+      - echo "🔄 Rolling back to Cloud Run..."
+      - echo "Revert DNS changes to point back to Cloud Run"
+      - echo "Monitor Cloud Run logs"

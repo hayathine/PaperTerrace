@@ -24,6 +24,7 @@ class CloudSQLStorage(StorageInterface):
     """
 
     def __init__(self):
+        self.db_url = os.getenv("DATABASE_URL")
         self.db_user = os.getenv("DB_USER")
         self.db_password = os.getenv("DB_PASSWORD")
         self.db_name = os.getenv("DB_NAME")
@@ -33,7 +34,7 @@ class CloudSQLStorage(StorageInterface):
         self.instance_connection_name = os.getenv("CLOUDSQL_CONNECTION_NAME")
 
         logger.info(
-            f"CloudSQLStorage initialized - host: {self.host}, db: {self.db_name}"
+            f"CloudSQLStorage initialized - host: {self.host}, db: {self.db_name}, has_url: {self.db_url is not None}"
         )
 
     def _get_connection(self):
@@ -46,8 +47,13 @@ class CloudSQLStorage(StorageInterface):
         def get_conn():
             conn = None
             try:
+                if self.db_url:
+                    # Use provided connection string
+                    conn = psycopg2.connect(self.db_url)
                 # Cloud Run環境: Unixソケット経由で接続
-                if self.instance_connection_name and self.host.startswith("/cloudsql"):
+                elif self.instance_connection_name and self.host.startswith(
+                    "/cloudsql"
+                ):
                     conn = psycopg2.connect(
                         user=self.db_user,
                         password=self.db_password,

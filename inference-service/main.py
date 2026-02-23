@@ -123,9 +123,20 @@ async def ensure_initialized():
 
 @app.get("/health")
 async def health_check():
+    import subprocess
+
+    gpu_status = "unknown"
+    try:
+        # Check for NVIDIA GPU presence using nvidia-smi
+        subprocess.run(["nvidia-smi"], capture_output=True, check=True)
+        gpu_status = "available"
+    except (subprocess.CalledProcessError, FileNotFoundError):
+        gpu_status = "not_found"
+
     return {
         "status": "healthy" if _initialized else "starting",
         "initialized": _initialized,
+        "gpu": gpu_status,
         "uptime_sec": None if not _init_started_at else time.time() - _init_started_at,
     }
 
