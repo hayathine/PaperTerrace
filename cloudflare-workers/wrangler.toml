@@ -1,5 +1,5 @@
 name = "paperterrace"
-main = "cloudflare-workers/src/index.ts"
+main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
 # Workers configuration
@@ -22,3 +22,17 @@ id = "e699d25a697542babdc2343bfc75866b"
 # - FIREBASE_CLIENT_EMAIL
 # - FIREBASE_PRIVATE_KEY
 
+[observability]
+enabled = false
+head_sampling_rate = 1
+
+[observability.logs]
+enabled = true
+head_sampling_rate = 1
+persist = true
+invocation_logs = true
+
+[observability.traces]
+enabled = false
+persist = true
+head_sampling_rate = 1
