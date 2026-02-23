@@ -18,6 +18,7 @@ settings.json
 CLAUDE.md
 *.md
 config.ts
+!frontend/src/config.ts
 # C extensions
 *.so
 # local
