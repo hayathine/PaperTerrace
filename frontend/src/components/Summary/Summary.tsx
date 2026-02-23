@@ -1,6 +1,6 @@
 import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { API_URL } from "../../config";
+import { API_URL } from "@/config";
 import { useLoading } from "../../contexts/LoadingContext";
 import type { CritiqueResponse, RadarResponse } from "./types";
 

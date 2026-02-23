@@ -1,6 +1,6 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
-import { API_URL } from "../../config";
+import { API_URL } from "@/config";
 import { STAMP_CATEGORIES, type StampType } from "./types";
 
 interface StampPaletteProps {

@@ -1,7 +1,7 @@
 import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { API_URL } from "../../config";
+import { API_URL } from "@/config";
 import { useAuth } from "../../contexts/AuthContext";
 import AddNoteForm from "./AddNoteForm";
 import NoteItem from "./NoteItem";

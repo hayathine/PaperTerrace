@@ -15,8 +15,8 @@ import {
 	useEffect,
 	useState,
 } from "react";
+import { API_URL } from "@/config";
 import { auth, githubProvider, googleProvider } from "@/lib/firebase";
-import { API_URL } from "../config";
 
 interface AuthContextType {
 	user: User | null;

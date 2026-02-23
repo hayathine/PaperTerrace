@@ -1,5 +1,6 @@
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { API_URL } from "@/config";
 import Login from "./components/Auth/Login";
 import ErrorBoundary from "./components/Error/ErrorBoundary";
 import PDFViewer from "./components/PDF/PDFViewer";
@@ -7,7 +8,6 @@ import SearchBar from "./components/Search/SearchBar";
 import Sidebar from "./components/Sidebar/Sidebar";
 import GlobalLoading from "./components/UI/GlobalLoading";
 import UploadScreen from "./components/Upload/UploadScreen";
-import { API_URL } from "./config";
 import { useAuth } from "./contexts/AuthContext";
 import { useLoading } from "./contexts/LoadingContext";
 

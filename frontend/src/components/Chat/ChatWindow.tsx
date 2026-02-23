@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { v4 as uuidv4 } from "uuid";
-import { API_URL } from "../../config";
+import { API_URL } from "@/config";
 import { useLoading } from "../../contexts/LoadingContext";
 import InputArea from "./InputArea";
 import MessageList from "./MessageList";

@@ -6,7 +6,7 @@ export type DictionaryEntryWithCoords = DictionaryEntry & {
 };
 
 import { useTranslation } from "react-i18next";
-import { API_URL } from "../../config";
+import { API_URL } from "@/config";
 import { useAuth } from "../../contexts/AuthContext";
 
 interface DictionaryProps {
