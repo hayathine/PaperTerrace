@@ -40,3 +40,6 @@ dev = [
     "ruff>=0.15.0",
     "ty>=0.0.15",
 ]
+
+[tool.pytest.ini_options]
+addopts = "--testmon"

@@ -27,3 +27,6 @@ dev = [
     "unidic-lite>=1.0.8",
     "git-filter-repo>=2.47.0",
 ]
+
+[tool.pytest.ini_options]
+addopts = "--testmon"

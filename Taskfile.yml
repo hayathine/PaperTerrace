@@ -142,17 +142,17 @@ tasks:
   test:backend:
     desc: "Run backend tests"
     cmds:
-      - uv run --directory backend env PYTHONPATH=.:.. pytest -n auto --testmon
+      - uv run --directory backend env PYTHONPATH=.:.. pytest -n auto
 
   test:inference:
     desc: "Run inference service tests"
     cmds:
-      - uv run --directory inference-service env PYTHONPATH=.:.. pytest -n auto --testmon
+      - uv run --directory inference-service env PYTHONPATH=.:.. pytest -n auto
 
   test:redis:
     desc: "Run redis provider tests"
     cmds:
-      - uv run --directory redis_provider env PYTHONPATH=.:.. pytest --testmon
+      - uv run --directory redis_provider env PYTHONPATH=.:.. pytest
 
   test:frontend:
     desc: "Run frontend tests (Vitest)"
