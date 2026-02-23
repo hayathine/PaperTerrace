@@ -62,4 +62,58 @@ describe("API Gateway Worker", () => {
     const callArgs = (global.fetch as any).mock.calls[0][1];
     expect(callArgs.headers.get("X-User-ID")).toBe("guest_127.0.0.1");
   });
+
+  it("should add correct CORS headers to the response", async () => {
+    const request = new Request("https://api.paperterrace.page/api/health", {
+      headers: {
+        Origin: "https://paperterrace.page",
+      },
+    });
+
+    // Mock rate limit
+    env.RATE_LIMIT.get.mockResolvedValue(null);
+
+    const response = await worker.fetch(request, env as any, {} as any);
+
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://paperterrace.page",
+    );
+    expect(response.headers.get("Access-Control-Allow-Credentials")).toBe(
+      "true",
+    );
+    expect(response.headers.get("Access-Control-Expose-Headers")).toContain(
+      "Content-Length",
+    );
+    expect(response.headers.get("Access-Control-Allow-Headers")).toContain(
+      "X-User-ID",
+    );
+  });
+
+  it("should preserve existing backend headers when adding CORS", async () => {
+    // Mock fetch to return a specific header
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "X-Backend-Version": "1.0.0",
+        },
+      }),
+    ) as any;
+
+    const request = new Request("https://api.paperterrace.page/api/health", {
+      headers: {
+        Origin: "https://paperterrace.page",
+      },
+    });
+
+    env.RATE_LIMIT.get.mockResolvedValue(null);
+
+    const response = await worker.fetch(request, env as any, {} as any);
+
+    expect(response.headers.get("X-Backend-Version")).toBe("1.0.0");
+    expect(response.headers.get("Access-Control-Allow-Origin")).toBe(
+      "https://paperterrace.page",
+    );
+  });
 });

@@ -200,7 +200,9 @@ function isOriginAllowed(origin: string, allowedOrigins: string[]): boolean {
 
   // Check for Cloudflare Pages preview URLs and root domain
   // This matches: https://*.paperterrace.page, https://paperterrace.page, https://*.pages.dev
-  if (origin.match(/^https:\/\/(.*\.)?(paperterrace\.page|pages\.dev)$/)) {
+  if (
+    origin.match(/^https:\/\/((.*?\.)?paperterrace\.page|(.*?\.)?pages\.dev)$/)
+  ) {
     return true;
   }
 
