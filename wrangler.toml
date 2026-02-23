@@ -1,0 +1,26 @@
+name = "paperterrace-api-gateway"
+main = "cloudflare-workers/src/index.ts"
+compatibility_date = "2024-01-01"
+
+# Workers configuration
+workers_dev = true
+
+# Environment variables (non-sensitive)
+[vars]
+BACKEND_TUNNEL_URL = "https://backend.paperterrace.page"
+ALLOWED_ORIGINS = "https://paperterrace.pages.dev,https://www.paperterrace.page,https://paperterrace.page,http://localhost:5173"
+RATE_LIMIT_REQUESTS = "100"
+RATE_LIMIT_WINDOW = "60"
+
+# KV Namespace for rate limiting
+[[kv_namespaces]]
+binding = "RATE_LIMIT"
+id = "e699d25a697542babdc2343bfc75866b"
+
+# Secrets (set via: wrangler secret put SECRET_NAME)
+# - FIREBASE_PROJECT_ID
+# - FIREBASE_CLIENT_EMAIL
+# - FIREBASE_PRIVATE_KEY
+
+[build]
+command = "npm run --prefix cloudflare-workers build"

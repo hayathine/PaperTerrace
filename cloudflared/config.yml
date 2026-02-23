@@ -1,0 +1,64 @@
+# Cloudflare Tunnel Configuration for PaperTerrace
+#
+# This configuration routes requests from Cloudflare's network to services
+# running on the home server via a secure tunnel.
+#
+# Setup Instructions:
+# 1. Install cloudflared: https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/install-and-setup/
+# 2. Authenticate: cloudflared tunnel login
+# 3. Create tunnel: cloudflared tunnel create paperterrace
+# 4. Copy the tunnel ID and credentials file path
+# 5. Configure DNS: cloudflared tunnel route dns <tunnel-id> backend.paperterrace.page
+# 6. Update this file with your tunnel ID
+# 7. Run: cloudflared tunnel run paperterrace
+
+# Tunnel ID (replace with your actual tunnel ID)
+tunnel: YOUR_TUNNEL_ID_HERE
+
+# Credentials file (generated when you create the tunnel)
+# For Docker, this should be mounted as a volume
+credentials-file: /etc/cloudflared/credentials.json
+
+# Ingress rules define how requests are routed to local services
+ingress:
+  # Backend API - Main application server
+  # All API requests from Cloudflare Workers will be routed here
+  - hostname: backend.paperterrace.page
+    service: http://traefik.kube-system.svc.cluster.local:80
+    originRequest:
+      # Disable TLS verification for local services
+      noTLSVerify: true
+      # Connection timeout
+      connectTimeout: 30s
+      # Keep-alive settings
+      keepAliveConnections: 100
+      keepAliveTimeout: 90s
+
+  # Inference Server (optional - if you want direct external access)
+  # Uncomment if you need to access the inference server directly from outside
+  # - hostname: inference.paperterrace.page
+  #   service: http://inference:8080
+  #   originRequest:
+  #     noTLSVerify: true
+  #     connectTimeout: 60s
+
+  # Catch-all rule (required) - returns 404 for unmatched requests
+  - service: http_status:404
+
+# Logging configuration
+# Options: debug, info, warn, error, fatal
+loglevel: info
+
+# Metrics server (optional)
+# Uncomment to enable Prometheus metrics
+# metrics: 0.0.0.0:2000
+
+# Auto-update configuration
+# Set to false in production to control updates manually
+no-autoupdate: true
+
+# Retry configuration
+retries: 5
+
+# Grace period for graceful shutdown
+grace-period: 30s
