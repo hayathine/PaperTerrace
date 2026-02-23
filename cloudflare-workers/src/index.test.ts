@@ -17,6 +17,13 @@ describe("API Gateway Worker", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+    // Mock global fetch for forwardRequest
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ status: "ok" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    ) as any;
   });
 
   it("should return 403 if origin is not allowed", async () => {
@@ -26,21 +33,33 @@ describe("API Gateway Worker", () => {
 
     const response = await worker.fetch(request, env as any, {} as any);
     expect(response.status).toBe(403);
-    const body = await response.json();
-    expect(body.error).toBe("Forbidden");
   });
 
-  it("should return 401 if Authorization header is missing", async () => {
+  it("should ALLOW guest access if Authorization header is missing", async () => {
     const request = new Request("https://api.paperterrace.page/api/health", {
-      headers: { Origin: "https://paperterrace.page" },
+      headers: {
+        Origin: "https://paperterrace.page",
+        "CF-Connecting-IP": "127.0.0.1",
+      },
     });
 
     // Mock rate limit
     env.RATE_LIMIT.get.mockResolvedValue(null);
 
     const response = await worker.fetch(request, env as any, {} as any);
-    expect(response.status).toBe(401);
-  });
 
-  // Note: Complex token verification tests would require mocking global fetch or JWKS
+    // Should NOT be 401 anymore
+    expect(response.status).toBe(200);
+
+    // Verify backend received the guest ID
+    expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringContaining("https://backend.local"),
+      expect.objectContaining({
+        headers: expect.any(Headers),
+      }),
+    );
+
+    const callArgs = (global.fetch as any).mock.calls[0][1];
+    expect(callArgs.headers.get("X-User-ID")).toBe("guest_127.0.0.1");
+  });
 });

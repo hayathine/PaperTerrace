@@ -78,35 +78,33 @@ export default {
         );
       }
 
-      // Verify Firebase Auth token
+      // Verify Firebase Auth token or fallback to Guest
       const authHeader = request.headers.get("Authorization");
-      if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return new Response(
-          JSON.stringify({
-            error: "Unauthorized",
-            message: "Authorization header required",
-          }),
-          {
-            status: 401,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      }
+      let decodedToken: DecodedToken | null = null;
 
-      const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-      const decodedToken = await verifyFirebaseToken(token, env);
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+        decodedToken = await verifyFirebaseToken(token, env);
 
-      if (!decodedToken) {
-        return new Response(
-          JSON.stringify({
-            error: "Unauthorized",
-            message: "Invalid authentication token",
-          }),
-          {
-            status: 401,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
+        if (!decodedToken) {
+          return new Response(
+            JSON.stringify({
+              error: "Unauthorized",
+              message: "Invalid authentication token",
+            }),
+            {
+              status: 401,
+              headers: { "Content-Type": "application/json" },
+            },
+          );
+        }
+      } else {
+        // GUEST ACCESS: Identify by IP for basic tracking/rate limiting on backend
+        const clientIP = request.headers.get("CF-Connecting-IP") || "anonymous";
+        decodedToken = {
+          uid: `guest_${clientIP}`,
+          isGuest: true,
+        };
       }
 
       // Forward request to backend with user ID header

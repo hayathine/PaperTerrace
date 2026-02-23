@@ -89,24 +89,31 @@ function App() {
 	}, [stackedPapers]);
 
 	useEffect(() => {
-		if (user) {
-			setShowLoginModal(false);
+		const fetchPapers = async () => {
+			try {
+				const headers: Record<string, string> = {};
+				if (user) {
+					const idToken = await user.getIdToken();
+					headers["Authorization"] = `Bearer ${idToken}`;
+				}
 
-			fetch(`${API_URL}/api/papers`)
-				.then((res) => res.json())
-				.then((data) => {
-					if (data && Array.isArray(data.papers)) {
-						setUploadedPapers(data.papers);
-					} else {
-						setUploadedPapers([]);
-					}
-				})
-				.catch((err) => {
-					console.error("Failed to fetch papers:", err);
+				const res = await fetch(`${API_URL}/api/papers`, { headers });
+				const data = await res.json();
+				if (data && Array.isArray(data.papers)) {
+					setUploadedPapers(data.papers);
+				} else {
 					setUploadedPapers([]);
-				});
-		}
+				}
+			} catch (err) {
+				console.error("Failed to fetch papers:", err);
+				setUploadedPapers([]);
+			}
+		};
+
+		fetchPapers();
 	}, [user]);
+
+	const { loginAsGuest: handleLoginAsGuest } = useAuth();
 
 	// Context Cache Lifecycle Management
 	useEffect(() => {
@@ -722,7 +729,12 @@ function App() {
 									/>
 								</svg>
 							</button>
-							<Login onGuestAccess={() => setShowLoginModal(false)} />
+							<Login
+								onGuestAccess={() => {
+									handleLoginAsGuest();
+									setShowLoginModal(false);
+								}}
+							/>
 						</div>
 					</div>
 				)}
