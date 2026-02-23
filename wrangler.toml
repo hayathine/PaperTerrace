@@ -1,4 +1,4 @@
-name = "paperterrace-api-gateway"
+name = "paperterrace"
 main = "cloudflare-workers/src/index.ts"
 compatibility_date = "2024-01-01"
 
