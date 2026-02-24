@@ -14,7 +14,7 @@ WORKDIR /app
 # Install uv
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # 依存関係ファイルのコピー
-COPY backend/pyproject.toml ./
+COPY backend/pyproject.toml backend/uv.lock ./
 
 RUN uv sync --no-dev
 
@@ -48,8 +48,8 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
     PYTHONUNBUFFERED=1
 
-EXPOSE 8000
+EXPOSE 8080
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/api/health || exit 1
+    CMD curl -f http://localhost:${PORT:-8080}/api/health || exit 1
 
-CMD ["/bin/bash", "-c", "/app/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["/bin/bash", "-c", "/app/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

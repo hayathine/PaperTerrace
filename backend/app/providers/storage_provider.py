@@ -1053,7 +1053,9 @@ def get_storage_provider() -> StorageInterface:
     if _storage_provider_instance is not None:
         return _storage_provider_instance
 
-    provider_type = os.getenv("STORAGE_PROVIDER", "sqlite").lower()
+    database_url = os.getenv("DATABASE_URL")
+    default_provider = "cloudsql" if database_url else "sqlite"
+    provider_type = os.getenv("STORAGE_PROVIDER", default_provider).lower()
 
     if provider_type == "cloudsql":
         try:

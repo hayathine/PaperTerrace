@@ -103,7 +103,7 @@ tasks:
     desc: "Run backend server with hot reload"
     cmds:
       - mkdir -p logs
-      - PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 | tee -a logs/local.log
+      - PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8080 | tee -a logs/local.log
 
   dev:
     desc: "Run frontend dev server"
@@ -118,7 +118,7 @@ tasks:
       - echo "🚀 Starting full development environment..."
       - |
         # Start backend in background
-        PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 &
+        PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8080 &
         BACKEND_PID=$!
 
         # Start frontend in background  
@@ -663,7 +663,7 @@ tasks:
       - echo "🔍 Checking service health..."
       - |
         echo "Backend:"
-        kubectl exec -n paperterrace deployment/backend -- curl -s http://localhost:8000/api/health || echo "❌ Unhealthy"
+        kubectl exec -n paperterrace deployment/backend -- curl -s http://localhost:8080/api/health || echo "❌ Unhealthy"
         echo ""
         echo "Inference Server:"
         kubectl exec -n paperterrace deployment/inference -- curl -s http://localhost:8080/health || echo "❌ Unhealthy"
@@ -723,12 +723,12 @@ tasks:
   cf:workers:dev:
     desc: "Run Cloudflare Workers in development mode"
     cmds:
-      - npx wrangler dev
+      - cd cloudflare-workers && npx wrangler dev
 
   cf:workers:deploy:
     desc: "Deploy Cloudflare Workers API Gateway"
     cmds:
-      - npx wrangler deploy
+      - cd cloudflare-workers && npx wrangler deploy
 
   cf:workers:secrets:
     desc: "Configure Cloudflare Workers secrets"
@@ -743,7 +743,7 @@ tasks:
     desc: "Deploy frontend to Cloudflare Pages"
     cmds:
       - npm run build -w frontend
-      - npx wrangler pages deploy frontend/dist
+      - npx wrangler pages deploy frontend/dist --project-name paperterrace
 
   cf:deploy:
     desc: "Deploy all Cloudflare services (Workers + Pages)"

@@ -21,21 +21,19 @@ class QueueWorker:
     """Background job processor using Redis as queue."""
 
     def __init__(self):
-        self.redis_host = os.getenv("REDIS_HOST", "localhost")
-        self.redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        # self.redis_host = os.getenv("REDIS_HOST", "localhost")
+        # self.redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        self.redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
         self.redis = None
         self.running = False
 
     def connect(self):
         """Connect to Redis."""
+        logger.info(f"Attempting to connect to Redis using URL: {self.redis_url}")
         try:
-            self.redis = Redis(
-                host=self.redis_host,
-                port=self.redis_port,
-                decode_responses=True,
-            )
+            self.redis = Redis.from_url(self.redis_url, socket_connect_timeout=2)
             self.redis.ping()
-            logger.info(f"Connected to Redis at {self.redis_host}:{self.redis_port}")
+            logger.info(f"Connected to Redis at {self.redis_url}")
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
             raise

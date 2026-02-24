@@ -20,63 +20,63 @@ export default defineConfig({
 		port: 5173,
 		proxy: {
 			"/api": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/auth": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/stamps": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/analyze-pdf-json": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/stream": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/note": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/explain": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/summarize": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/research-radar": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/critique": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/chat": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/papers": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/explore": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/upload": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 			"/static": {
-				target: "http://127.0.0.1:8000",
+				target: "http://127.0.0.1:8080",
 				changeOrigin: true,
 			},
 		},

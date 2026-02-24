@@ -87,7 +87,16 @@ async def lifespan(app: FastAPI):
         await _prewarm_models()
         logger.info("All models loaded. Server is ready.")
     except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
+        # If tables already exist, we might get a DuplicateTable error.
+        # We log and continue so the app can still run.
+        if "already exists" in str(e).lower():
+            logger.warning(
+                f"Database tables already exist, skipping initial migration: {e}"
+            )
+        else:
+            logger.error(f"Failed to initialize database: {e}")
+            # Re-raise for non-existence errors if necessary, or just continue
+            # For now, let's allow the app to try to run.
 
     yield
 
@@ -190,7 +199,6 @@ app.add_middleware(LoggingMiddleware)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-
     logger.error(f"Global exception: {request.method} {request.url.path}")
     logger.error(traceback.format_exc())
     return JSONResponse(
@@ -283,9 +291,10 @@ async def health_check():
 
     # Check Redis
     try:
-        redis_host = os.getenv("REDIS_HOST", "localhost")
-        redis_port = int(os.getenv("REDIS_PORT", "6379"))
-        r = Redis(host=redis_host, port=redis_port, socket_connect_timeout=2)
+        # redis_host = os.getenv("REDIS_HOST", "redis")
+        # redis_port = int(os.getenv("REDIS_PORT", "6379"))
+        redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
+        r = Redis.from_url(redis_url, socket_connect_timeout=2)
         r.ping()
         dependencies["redis"] = "connected"
     except Exception as e:

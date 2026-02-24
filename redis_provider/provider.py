@@ -9,8 +9,9 @@ from common.logger import get_service_logger
 log = get_service_logger("Cache")
 
 # Load Redis host/port from env
-REDIS_HOST = os.getenv("REDIS_SERVER", "localhost")
-REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+# REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
+# REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
+REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 REDIS_DB = int(os.getenv("REDIS_DB", 0))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
 
@@ -27,24 +28,19 @@ def get_redis_client():
     if _redis_client is None and not _redis_attempted:
         _redis_attempted = True
         try:
-            _redis_client = redis.Redis(
-                host=REDIS_HOST,
-                port=REDIS_PORT,
-                db=REDIS_DB,
-                password=REDIS_PASSWORD,
+            _redis_client = redis.Redis.from_url(
+                REDIS_URL,
                 decode_responses=True,
                 socket_timeout=5.0,
                 socket_connect_timeout=5.0,
             )
             # test connection
             _redis_client.ping()
-            log.info(
-                "init", f"Connected to Redis at {REDIS_HOST}:{REDIS_PORT}/{REDIS_DB}"
-            )
+            log.info("init", f"Connected to Redis at {REDIS_URL}")
         except Exception as e:
             log.warning(
                 "init",
-                f"Failed to connect to Redis ({REDIS_HOST}:{REDIS_PORT}): {e}. Using in-memory fallback.",
+                f"Failed to connect to Redis ({REDIS_URL}): {e}. Using in-memory fallback.",
             )
             _redis_client = None
     return _redis_client
@@ -61,7 +57,7 @@ class RedisService:
         self.memory_cache = RedisService._shared_cache
         if not hasattr(RedisService, "_initialized"):
             if self.client:
-                log.info("init", f"RedisService initialized with host: {REDIS_HOST}")
+                log.info("init", f"RedisService initialized with host: {REDIS_URL}")
             else:
                 log.info("init", "RedisService initialized with in-memory fallback")
             RedisService._initialized = True

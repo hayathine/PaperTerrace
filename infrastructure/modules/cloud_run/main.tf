@@ -13,7 +13,7 @@ resource "google_cloud_run_v2_service" "main" {
       image = var.image_url
 
       ports {
-        container_port = 8000
+        container_port = 8080
         name = "http1"
       }
 

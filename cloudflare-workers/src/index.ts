@@ -11,7 +11,9 @@
 interface Env {
   // Environment variables
   BACKEND_TUNNEL_URL: string;
-  ALLOWED_ORIGINS: string;
+  CLIENT_ID: string;
+  CLIENT_SECRET: string;
+
   RATE_LIMIT_REQUESTS: string;
   RATE_LIMIT_WINDOW: string;
 
@@ -308,6 +310,9 @@ async function forwardRequest(
   headers.set("X-User-ID", decodedToken.uid);
   headers.set("X-Forwarded-For", request.headers.get("CF-Connecting-IP") || "");
   headers.set("X-Real-IP", request.headers.get("CF-Connecting-IP") || "");
+  // ★ Access Service Token
+  headers.set("CF-Access-Client-Id", env.CLIENT_ID);
+  headers.set("CF-Access-Client-Secret", env.CLIENT_SECRET);
 
   // Remove Authorization header (already verified)
   headers.delete("Authorization");

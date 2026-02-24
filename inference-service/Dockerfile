@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ワークスペース構造をコピー
-COPY inference-service/pyproject.toml uv.lock ./
+COPY inference-service/pyproject.toml inference-service/uv.lock ./
 
 # llama-cpp-python: ネイティブCPU最適化を無効化（ビルドマシンとターゲットマシンのCPUが異なるため）
 # -march=x86-64-v2: SSE4.2/SSSE3/POPCNT（Intel/AMD共通の安全な命令セット）
