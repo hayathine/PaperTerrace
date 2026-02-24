@@ -6,11 +6,11 @@ import tempfile
 from collections.abc import AsyncGenerator
 
 import pdfplumber
+
 from app.crud import get_ocr_from_db, save_ocr_to_db
 from app.providers import get_ai_provider
 from app.providers.image_storage import get_page_images, save_page_image
 from app.utils import _get_file_hash
-
 from common.logger import get_service_logger, logger
 from common.utils.bbox import scale_bbox
 
@@ -473,11 +473,32 @@ class PDFOCRService:
 
     def _finalize_ocr(self, file_hash, filename, all_text_parts, all_layout_parts=None):
         """Save final OCR output to database."""
-        full_text = "\n\n---\n\n".join(all_text_parts)
-        layout_json = json.dumps(all_layout_parts) if all_layout_parts else None
+        # Sanitize all strings to remove NUL bytes for PostgreSQL
+        sanitized_text_parts = [
+            p.replace("\0", "") if p else "" for p in all_text_parts
+        ]
+        full_text = "\n\n---\n\n".join(sanitized_text_parts)
+
+        sanitized_layout = None
+        if all_layout_parts:
+            # We need to deeply sanitize the layout list/dict
+            def sanitize_obj(obj):
+                if isinstance(obj, str):
+                    return obj.replace("\0", "")
+                if isinstance(obj, list):
+                    return [sanitize_obj(i) for i in obj]
+                if isinstance(obj, dict):
+                    return {k: sanitize_obj(v) for k, v in obj.items()}
+                return obj
+
+            sanitized_layout = sanitize_obj(all_layout_parts)
+            layout_json = json.dumps(sanitized_layout)
+        else:
+            layout_json = None
+
         save_ocr_to_db(
             file_hash=file_hash,
-            filename=filename,
+            filename=filename.replace("\0", ""),
             ocr_text=full_text,
             model_name=self.model,
             layout_json=layout_json,

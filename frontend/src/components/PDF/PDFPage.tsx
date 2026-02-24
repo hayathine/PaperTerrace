@@ -480,8 +480,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
 												: "none",
 										padding: 0,
 										font: "inherit",
-										color: "inherit",
+										color: "transparent",
 										textAlign: "left",
+										userSelect: "none", // Prevent accidental browser text selection interaction with overlay text content itself
 									}}
 									onMouseDown={(e) => {
 										if (isStampMode || isAreaMode || !isClickMode) return;
@@ -526,7 +527,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 									}}
 									title={w.word}
 								>
-									{w.word}
+									{/* Text is hidden to prevent doubling effect with background image */}
 								</button>
 							);
 						})}

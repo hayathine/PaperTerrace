@@ -101,6 +101,12 @@ class CloudSQLStorage(StorageInterface):
         owner_id: str | None = None,
         visibility: str = "private",
     ) -> str:
+        # Sanitize for PostgreSQL NUL bytes
+        ocr_text = ocr_text.replace("\0", "") if ocr_text else ""
+        html_content = html_content.replace("\0", "") if html_content else ""
+        if layout_json:
+            layout_json = layout_json.replace("\0", "")
+
         now = datetime.now()
         with self._get_connection() as conn:
             with conn.cursor() as cur:
