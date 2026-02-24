@@ -20,7 +20,7 @@ class LayoutAnalysisService:
 
     def __init__(self):
         # 推論サービスのURL (環境変数から取得)
-        # デフォルトはDocker Compose / Cloud Runのサービス名
+        # デフォルトはK8sクラスター内のサービス名
         self.inference_service_url = os.getenv(
             "INFERENCE_SERVICE_URL", "http://paperterrace-inference:8080"
         )

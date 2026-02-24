@@ -28,7 +28,7 @@ class CloudSQLStorage(StorageInterface):
         self.db_user = os.getenv("DB_USER")
         self.db_password = os.getenv("DB_PASSWORD")
         self.db_name = os.getenv("DB_NAME")
-        # Cloud Run uses Unix socket default, or TCP for local
+        # Connect via Unix socket (e.g. for Google Cloud SQL) or TCP for local
         self.host = os.getenv("DB_HOST", "127.0.0.1")
         self.port = os.getenv("DB_PORT", "5432")
         self.instance_connection_name = os.getenv("CLOUDSQL_CONNECTION_NAME")
@@ -40,7 +40,6 @@ class CloudSQLStorage(StorageInterface):
     def _get_connection(self):
         """
         Cloud SQL接続を取得する。
-        Cloud Run環境ではUnixソケット、ローカル環境ではTCP接続を使用。
         """
 
         @contextmanager
@@ -54,7 +53,7 @@ class CloudSQLStorage(StorageInterface):
                     if dsn.startswith("postgresql+psycopg2://"):
                         dsn = dsn.replace("postgresql+psycopg2://", "postgresql://", 1)
                     conn = psycopg2.connect(dsn)
-                # Cloud Run環境: Unixソケット経由で接続
+                # Unixソケット経由で接続 (e.g. Cloud SQL Proxy)
                 elif self.instance_connection_name and self.host.startswith(
                     "/cloudsql"
                 ):

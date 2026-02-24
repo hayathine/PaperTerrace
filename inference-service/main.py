@@ -1,6 +1,5 @@
 """
 推論専用サービス（ServiceB）
-Cloud Run 最適化版
 - 即 listen
 - 遅延初期化（lazy init）
 - ヘルスチェック常時応答

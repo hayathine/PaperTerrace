@@ -146,16 +146,20 @@ class GCSImageStorage(ImageStorageStrategy):
         image_bytes = base64.b64decode(image_b64)
         blob.upload_from_string(image_bytes, content_type="image/png")
 
-        # Cloud Run等では署名付きURLか、公開URLか、アプリ経由で配信するか考慮が必要
-        # ここでは単純に公開URLに近い形か、あるいはプロキシ用のパスを返す
-        # GCSの画像に直接アクセスさせるなら公開設定が必要だが、セキュリティ上アプリ経由が望ましい場合も。
-        # 今回はシンプルに、アプリがプロキシするためのパスルールに合わせるか、
+        # 署名付きURLか、公開URLか、アプリ経由で配信するか考慮が必要
+        if self.storage_type == "gcs":
+            # GCSの場合は署名付きURLの生成を検討
+            # 現時点ではとりあえずプロキシ経由で配信
+            pass
+
+        # 環境によっては静的ファイルの配信に制限があるため、
+        # アプリがプロキシするためのパスルールに合わせるか、
         # あるいは GCS の Media Link を使うか。
         # PaperTerraceの現状の実装では /static/... でアクセスしているため、
         # 本番では /static/ のマッピングを変えるか、署名付きURLを払い出すのが良い。
 
         # 署名付きURLを発行して画像にアクセス可能にする
-        # Cloud Run環境では静的ファイルの配信に制限があるため、
+        # 環境によっては静的ファイルの配信に制限があるため、
         # GCSの署名付きURLを使用してクライアントが直接アクセスできるようにする
         import datetime
 
