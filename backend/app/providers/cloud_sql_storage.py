@@ -49,7 +49,11 @@ class CloudSQLStorage(StorageInterface):
             try:
                 if self.db_url:
                     # Use provided connection string
-                    conn = psycopg2.connect(self.db_url)
+                    # psycopg2 doesn't support 'postgresql+psycopg2://', so we strip '+psycopg2'
+                    dsn = self.db_url
+                    if dsn.startswith("postgresql+psycopg2://"):
+                        dsn = dsn.replace("postgresql+psycopg2://", "postgresql://", 1)
+                    conn = psycopg2.connect(dsn)
                 # Cloud Run環境: Unixソケット経由で接続
                 elif self.instance_connection_name and self.host.startswith(
                     "/cloudsql"
