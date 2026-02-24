@@ -70,12 +70,11 @@ class LlamaCppTranslationService:
                             use_mlock=self.use_mlock,
                         ),
                     )
-                else:
+                elif os.getenv("LLAMACPP_ALLOW_DOWNLOAD", "false").lower() == "true":
                     logger.info(
                         f"Hugging Face Hub から読み込みます: {self.repo_id} ({self.filename})"
                     )
                     # llama-cpp-python の from_pretrained を使用
-                    # filename に .gguf が含まれていない場合、拡張子を補完するロジックが必要な場合がある
                     target_filename = (
                         self.filename
                         if self.filename.endswith(".gguf")
@@ -95,6 +94,11 @@ class LlamaCppTranslationService:
                             verbose=False,
                         ),
                     )
+                else:
+                    logger.warning(
+                        "LLAMACPP_MODEL_PATH が設定されていないか見つかりません。ダウンロードも許可されていないため、LLM初期化をスキップします。"
+                    )
+                    return
 
                 logger.info("Llama-cpp モデルの読み込みが完了しました。")
             except Exception as e:
