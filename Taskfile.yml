@@ -2,11 +2,12 @@
 
 version: "3"
 
-dotenv: ["secrets/.env"]
+dotenv: ["local-files/secrets/.env"]
 
 vars:
   PROJECT_ID: '{{.PROJECT_ID | default "gen-lang-client-0800253336"}}'
   REGION: '{{.REGION | default "asia-northeast1"}}'
+  REGISTRY: '{{.REGISTRY | default "192.168.10.123:5000"}}'
 
   # Resource Configurations from JSON
   BE_CPU:
@@ -83,8 +84,8 @@ tasks:
   run:
     desc: "Run backend server with hot reload"
     cmds:
-      - mkdir -p logs
-      - PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8080 | tee -a logs/local.log
+      - mkdir -p local-files/logs
+      - PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8080 | tee -a local-files/logs/local.log
 
   dev:
     desc: "Run frontend dev server"
@@ -179,7 +180,7 @@ tasks:
       - rm -rf frontend/node_modules/.cache frontend/dist
       - sqlite3 ocr_reader.db "DELETE FROM ocr_reader;" 2>/dev/null || true
       - rm -rf backend/app/static/paper_images/* 2>/dev/null || true
-      - rm -rf logs/*.log
+      - rm -rf local-files/logs/*.log
       - echo "✅ Cache cleared!"
 
   # ============================================================================
@@ -242,28 +243,28 @@ tasks:
     desc: "Initialize Terraform for production"
     cmds:
       - echo "🔧 Initializing Terraform for production..."
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform init
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform init
 
   infra:import:production:
     desc: "Import existing GCP resources into Terraform state (production)"
     cmds:
       - echo "📥 Importing existing resources to Terraform..."
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.artifact_registry.google_artifact_registry_repository.main projects/{{.PROJECT_ID}}/locations/{{.REGION}}/repositories/paperterrace || echo "⚠️ Already imported or not found"
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.iam.google_service_account.app_sa projects/{{.PROJECT_ID}}/serviceAccounts/paperterrace-sa@{{.PROJECT_ID}}.iam.gserviceaccount.com || echo "⚠️ Already imported or not found"
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.networking.google_compute_network.main projects/{{.PROJECT_ID}}/global/networks/paperterrace-vpc || echo "⚠️ Already imported or not found"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.artifact_registry.google_artifact_registry_repository.main projects/{{.PROJECT_ID}}/locations/{{.REGION}}/repositories/paperterrace || echo "⚠️ Already imported or not found"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.iam.google_service_account.app_sa projects/{{.PROJECT_ID}}/serviceAccounts/paperterrace-sa@{{.PROJECT_ID}}.iam.gserviceaccount.com || echo "⚠️ Already imported or not found"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.networking.google_compute_network.main projects/{{.PROJECT_ID}}/global/networks/paperterrace-vpc || echo "⚠️ Already imported or not found"
       - echo "✅ Import complete!"
 
   infra:plan:production:
     desc: "Plan Terraform changes for production"
     cmds:
       - echo "📋 Planning Terraform changes for production..."
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform plan -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform plan -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest"
 
   infra:apply:production:
     desc: "Apply Terraform changes for production"
     cmds:
       - echo "🚀 Applying Terraform changes for production..."
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform apply -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform apply -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest"
 
   # ============================================================================
   # Utility Tasks
@@ -284,7 +285,7 @@ tasks:
     desc: "Deploy PaperTerrace using Helm"
     cmds:
       - echo "🚀 Deploying with Helm..."
-      - helm upgrade --install paperterrace ./infrastructure/helm/paperterrace --namespace paperterrace --create-namespace
+      - helm upgrade --install paperterrace ./local-files/infrastructure/helm/paperterrace --namespace paperterrace --create-namespace
 
   helm:undeploy:
     desc: "Undeploy PaperTerrace using Helm"
@@ -295,7 +296,7 @@ tasks:
   helm:lint:
     desc: "Lint Helm chart"
     cmds:
-      - helm lint ./infrastructure/helm/paperterrace
+      - helm lint ./local-files/infrastructure/helm/paperterrace
 
   # ============================================================================
   # Home Server (k3s) Deployment Tasks
@@ -304,7 +305,7 @@ tasks:
   k3s:secrets:
     desc: "Setup K8s secrets on home server"
     cmds:
-      - ./scripts/create-secrets.sh
+      - ./local-files/scripts/create-secrets.sh
 
   k3s:deploy:
     desc: "Deploy all services to k3s using Helm"
@@ -331,16 +332,31 @@ tasks:
     cmds:
       - kubectl rollout restart deployment/backend -n paperterrace
 
+  k3s:restart:inference:
+    desc: "Restart inference server in k3s"
+    cmds:
+      - kubectl rollout restart deployment/inference -n paperterrace
+
+  k3s:restart:all:
+    desc: "Restart all application services in k3s"
+    cmds:
+      - task: k3s:restart:backend
+      - task: k3s:restart:inference
+
   k3s:health:
     desc: "Check health of services in k3s"
     cmds:
       - echo "🔍 Checking service health..."
       - |
         echo "Backend:"
-        kubectl exec -n paperterrace deployment/backend -- curl -s http://localhost:8080/api/health || echo "❌ Unhealthy"
+        kubectl exec -n paperterrace deployment/backend -- curl -s http://localhost:8080/api/health || \
+        kubectl exec -n paperterrace deployment/backend -- python3 -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/api/health').read().decode())" || \
+        echo "❌ Unhealthy"
         echo ""
         echo "Inference Server:"
-        kubectl exec -n paperterrace deployment/inference -- curl -s http://localhost:8080/health || echo "❌ Unhealthy"
+        kubectl exec -n paperterrace deployment/inference -- curl -s http://localhost:8080/health || \
+        kubectl exec -n paperterrace deployment/inference -- python3 -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/health').read().decode())" || \
+        echo "❌ Unhealthy"
         echo ""
         echo "Redis:"
         kubectl exec -n paperterrace statefulset/paperterrace-redis-master -- redis-cli ping || echo "❌ Unhealthy"
@@ -355,7 +371,7 @@ tasks:
     env:
       REGISTRY: "{{.REGISTRY}}"
     cmds:
-      - ./scripts/build-images.sh
+      - ./local-files/scripts/build-images.sh
 
   homeserver:deploy:
     desc: "Full deployment to home server (k3s)"
@@ -377,7 +393,7 @@ tasks:
   cf:tunnel:setup:
     desc: "Setup Cloudflare Tunnel"
     cmds:
-      - ./scripts/setup-tunnel.sh
+      - ./local-files/scripts/setup-tunnel.sh
 
   cf:tunnel:start:
     desc: "Start Cloudflare Tunnel (k3s)"
@@ -422,7 +438,7 @@ tasks:
   cf:deploy:
     desc: "Deploy all Cloudflare services (Workers + Pages)"
     cmds:
-      - ./scripts/deploy-cloudflare.sh
+      - ./local-files/scripts/deploy-cloudflare.sh
 
   # ============================================================================
   # Migration Tasks
@@ -433,7 +449,7 @@ tasks:
     cmds:
       - echo "📋 Migration preparation checklist:"
       - echo "1. ✓ Ensure .env file is configured"
-      - echo "2. ✓ Ensure service account key is in secrets/sa-key.json"
+      - echo "2. ✓ Ensure service account key is in local-files/secrets/sa-key.json"
       - echo "3. ✓ Ensure models are downloaded to ./models/"
       - echo "4. ✓ Ensure Cloudflare Tunnel is set up"
       - echo "5. ✓ Test home server deployment"
