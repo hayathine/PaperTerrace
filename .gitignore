@@ -29,7 +29,7 @@ infrastructure/
 !inference-service/pyproject.toml
 !redis_provider/pyproject.toml
 !wrangler.toml
-logs/
+local-files/logs/
 *tests/
 assets/
 migrations/
@@ -257,3 +257,6 @@ coverage/
 # AI Models
 models/
 .kube
+CLOUD.md
+.kiro
+.agents
