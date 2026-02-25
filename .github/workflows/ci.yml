@@ -3,11 +3,42 @@ name: CI
 on:
   push:
     branches: ["**"]
+    paths-ignore:
+      - "**.md"
+      - "local-files/**"
+      - ".gitignore"
   pull_request:
     branches: ["**"]
+    paths-ignore:
+      - "**.md"
+      - "local-files/**"
+      - ".gitignore"
 
 jobs:
+  filter:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+              - 'common/**'
+              - 'Taskfile.yml'
+              - '.github/workflows/ci.yml'
+            frontend:
+              - 'frontend/**'
+              - 'Taskfile.yml'
+              - '.github/workflows/ci.yml'
+
   backend-lint:
+    needs: filter
+    if: needs.filter.outputs.backend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -27,8 +58,9 @@ jobs:
         run: uv run --directory backend ruff format --check .
 
   backend-test:
+    needs: [filter, backend-lint]
+    if: needs.filter.outputs.backend == 'true'
     runs-on: ubuntu-latest
-    needs: backend-lint
     steps:
       - uses: actions/checkout@v4
 
@@ -48,6 +80,8 @@ jobs:
         run: uv run --directory backend pytest
 
   frontend-lint:
+    needs: filter
+    if: needs.filter.outputs.frontend == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
