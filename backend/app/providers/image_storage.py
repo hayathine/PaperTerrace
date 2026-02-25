@@ -49,6 +49,7 @@ class LocalImageStorage(ImageStorageStrategy):
     def __init__(self):
         self.images_dir = Path(os.getenv("IMAGES_DIR", "src/static/paper_images"))
         self._ensure_dir()
+        self.storage_type = "local"
 
     def _ensure_dir(self):
         self.images_dir.mkdir(parents=True, exist_ok=True)
@@ -138,6 +139,7 @@ class GCSImageStorage(ImageStorageStrategy):
             )
         self.client = storage.Client()
         self.bucket = self.client.bucket(self.bucket_name)
+        self.storage_type = "gcs"
 
     def save(self, file_hash: str, page_num: int | str, image_b64: str) -> str:
         blob_name = f"paper_images/{file_hash}/page_{page_num}.png"
