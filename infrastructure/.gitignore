@@ -3,6 +3,7 @@
 *.tfstate.*
 .terraform/
 .terraform.lock.hcl
+values.yaml
 
 # Plan files
 *.tfplan

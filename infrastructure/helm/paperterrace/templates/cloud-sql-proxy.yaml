@@ -1,0 +1,55 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: cloud-sql-proxy
+  labels:
+    app: cloud-sql-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cloud-sql-proxy
+  template:
+    metadata:
+      labels:
+        app: cloud-sql-proxy
+    spec:
+      {{- with .Values.cloudSqlProxy.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: cloud-sql-proxy
+          image: "{{ .Values.cloudSqlProxy.image.repository }}:{{ .Values.cloudSqlProxy.image.tag }}"
+          command:
+            - "/cloud-sql-proxy"
+            - "--address"
+            - "0.0.0.0"
+            - "--port"
+            - "5432"
+            - {{ .Values.cloudSqlProxy.instanceConnectionName | quote }}
+          securityContext:
+            runAsNonRoot: true
+          volumeMounts:
+            - name: secrets
+              mountPath: /secrets
+              readOnly: true
+          env:
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/secrets/sa-key.json"
+      volumes:
+        - name: secrets
+          secret:
+            secretName: paperterrace-credentials
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloud-sql-proxy
+spec:
+  selector:
+    app: cloud-sql-proxy
+  ports:
+    - protocol: TCP
+      port: 5432
+      targetPort: 5432

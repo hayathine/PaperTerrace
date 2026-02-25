@@ -37,6 +37,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
     libopenblas-dev \
     liblapack-dev \
+    curl \
     && rm -rf /var/lib/apt/lists/*
 
 # 仮想環境とアプリケーションコードのコピー

@@ -1,0 +1,94 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend
+  labels:
+    app: backend
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      app: backend
+  template:
+    metadata:
+      labels:
+        app: backend
+    spec:
+      {{- with .Values.backend.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      initContainers:
+        - name: wait-for-redis
+          image: busybox:1.28
+          command: ['sh', '-c', 'until nc -z {{ .Release.Name }}-redis-master 6379; do echo waiting for redis; sleep 2; done;']
+      containers:
+        - name: backend
+          image: "{{ .Values.global.registry }}/{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          env:
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: paperterrace-secrets
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              value: "redis://{{ .Release.Name }}-redis-master:6379/0"
+            - name: INFERENCE_SERVICE_URL
+              value: {{ .Values.backend.env.inferenceServiceUrl | quote }}
+            - name: STORAGE_TYPE
+              value: {{ .Values.backend.env.storageType | quote }}
+            - name: GCS_BUCKET_NAME
+              valueFrom:
+                secretKeyRef:
+                  name: paperterrace-secrets
+                  key: GCS_BUCKET_NAME
+            - name: GOOGLE_APPLICATION_CREDENTIALS
+              value: "/secrets/sa-key.json"
+            - name: FIREBASE_PROJECT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: paperterrace-secrets
+                  key: FIREBASE_PROJECT_ID
+            - name: STORAGE_PROVIDER
+              value: {{ .Values.backend.env.storageProvider | quote }}
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: paperterrace-secrets
+                  key: GEMINI_API_KEY
+            - name: LOG_LEVEL
+              value: {{ .Values.backend.env.logLevel | quote }}
+          ports:
+            - containerPort: {{ .Values.backend.service.port }}
+          volumeMounts:
+            - name: secrets
+              mountPath: /secrets
+              readOnly: true
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: {{ .Values.backend.service.port }}
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: {{ .Values.backend.service.port }}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+      volumes:
+        - name: secrets
+          secret:
+            secretName: paperterrace-credentials
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+spec:
+  selector:
+    app: backend
+  ports:
+    - port: {{ .Values.backend.service.port }}
+      targetPort: {{ .Values.backend.service.port }}

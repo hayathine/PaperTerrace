@@ -277,6 +277,27 @@ tasks:
       - echo "✅ Docker cleanup complete!"
 
   # ============================================================================
+  # Helm Deployment Tasks
+  # ============================================================================
+
+  helm:deploy:
+    desc: "Deploy PaperTerrace using Helm"
+    cmds:
+      - echo "🚀 Deploying with Helm..."
+      - helm upgrade --install paperterrace ./infrastructure/helm/paperterrace --namespace paperterrace --create-namespace
+
+  helm:undeploy:
+    desc: "Undeploy PaperTerrace using Helm"
+    cmds:
+      - echo "🔥 Removing Helm release..."
+      - helm uninstall paperterrace --namespace paperterrace
+
+  helm:lint:
+    desc: "Lint Helm chart"
+    cmds:
+      - helm lint ./infrastructure/helm/paperterrace
+
+  # ============================================================================
   # Home Server (k3s) Deployment Tasks
   # ============================================================================
 
@@ -286,10 +307,9 @@ tasks:
       - ./scripts/create-secrets.sh
 
   k3s:deploy:
-    desc: "Deploy all services to k3s"
+    desc: "Deploy all services to k3s using Helm"
     cmds:
-      - echo "🚀 Deploying to k3s..."
-      - kubectl apply -k infrastructure/k8s/
+      - task: helm:deploy
 
   k3s:status:
     desc: "Show status of k3s resources"
@@ -323,7 +343,7 @@ tasks:
         kubectl exec -n paperterrace deployment/inference -- curl -s http://localhost:8080/health || echo "❌ Unhealthy"
         echo ""
         echo "Redis:"
-        kubectl exec -n paperterrace deployment/redis -- redis-cli ping || echo "❌ Unhealthy"
+        kubectl exec -n paperterrace statefulset/paperterrace-redis-master -- redis-cli ping || echo "❌ Unhealthy"
 
   homeserver:health:
     desc: "Check health of all services"
