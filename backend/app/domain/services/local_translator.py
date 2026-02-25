@@ -6,6 +6,7 @@
 import os
 
 import httpx
+
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.domain.prompts import DICT_TRANSLATE_WORD_SIMPLE_PROMPT
 from app.providers.inference_client import (
@@ -13,7 +14,6 @@ from app.providers.inference_client import (
     InferenceServiceError,
     get_inference_client,
 )
-
 from common.logger import get_service_logger
 
 log = get_service_logger("LocalTranslator")
@@ -73,11 +73,17 @@ class LocalTranslator:
         )
 
         # Check if we should use custom backend
-        use_custom = os.getenv("USE_CUSTOM_TRANSLATION", "true").lower() == "true"
+        use_custom = os.getenv("USE_CUSTOM_TRANSLATION", "false").lower() == "true"
 
         if use_custom and custom_url:
+            log.info(
+                "translate_async", f"Using Custom Translation Backend: {custom_url}"
+            )
             return await self._translate_via_custom(text, tgt_lang, custom_url)
         else:
+            log.debug(
+                "translate_async", "Using ServiceB (Inference Service) for translation"
+            )
             return await self._translate_via_service_b(text, tgt_lang)
 
     async def _translate_via_custom(self, text: str, tgt_lang: str, url: str) -> str:
