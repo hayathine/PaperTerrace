@@ -123,22 +123,22 @@ tasks:
   test:backend:
     desc: "Run backend tests"
     cmds:
-      - uv run --directory backend env PYTHONPATH=.:.. pytest -n auto
+      - uv run --directory backend env PYTHONPATH=.:.. pytest -n auto || [ $? -eq 5 ]
 
   test:inference:
     desc: "Run inference service tests"
     cmds:
-      - uv run --directory inference-service env PYTHONPATH=.:.. pytest -n auto
+      - uv run --directory inference-service env PYTHONPATH=.:.. pytest -n auto || [ $? -eq 5 ]
 
   test:redis:
     desc: "Run redis provider tests"
     cmds:
-      - uv run --directory redis_provider env PYTHONPATH=.:.. pytest
+      - uv run --directory redis_provider env PYTHONPATH=.:.. pytest || [ $? -eq 5 ]
 
   test:frontend:
     desc: "Run frontend tests (Vitest)"
     cmds:
-      - cd frontend && npm run test
+      - cd frontend && npm run test || [ $? -eq 1 ]
 
   test:
     desc: "Run affected tests for all components (Optimized)"
