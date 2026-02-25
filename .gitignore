@@ -257,6 +257,6 @@ coverage/
 # AI Models
 models/
 .kube
-CLOUD.md
 .kiro
 .agents
+CLAUDE.md
