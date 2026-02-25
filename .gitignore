@@ -260,3 +260,4 @@ models/
 .kiro
 .agents
 CLAUDE.md
+local-files/
