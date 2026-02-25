@@ -344,7 +344,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								>
 									<img
 										src={fig.image_url}
-										className="w-full h-full object-contain"
+										className="w-full h-full object-fill"
 										alt={fig.label}
 									/>
 									{isClickMode && (
