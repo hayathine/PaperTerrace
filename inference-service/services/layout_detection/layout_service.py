@@ -20,6 +20,7 @@ class LayoutAnalysisService:
     """レイアウト解析サービス"""
 
     # ラベルマップ (PP-DocLayoutの標準クラス)
+    # ラベルマップ (PP-DocLayoutの標準クラス)
     LABELS = LAYOUT_LABELS
 
     def __init__(self, lang: str = "en", model_path: str | None = None):
@@ -43,12 +44,13 @@ class LayoutAnalysisService:
         self.image_input_name = None
         self.scale_input_name = None
         self.im_shape_input_name = None
+        self.engine = "ONNX"
 
         self._initialize_model()
 
     def _initialize_model(self):
         """モデルを初期化"""
-        logger.info("Initializing LayoutAnalysisService...")
+        logger.info("Initializing LayoutAnalysisService (Backend: ONNX)...")
         logger.info(f"Model path: {self.model_path}")
 
         # モデルファイルの存在確認

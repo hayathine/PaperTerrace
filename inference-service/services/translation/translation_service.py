@@ -37,7 +37,7 @@ class TranslationService:
         self.ct2_intra_threads = int(os.getenv("CT2_INTRA_THREADS", "4"))
 
         # 翻訳パラメータ (単語翻訳用に最適化)
-        self.beam_size = int(os.getenv("TRANSLATION_BEAM_SIZE", "1"))
+        self.beam_size = int(os.getenv("TRANSLATION_BEAM_SIZE", "2"))
         self.repetition_penalty = float(
             os.getenv("TRANSLATION_REPETITION_PENALTY", "1.1")
         )
@@ -236,10 +236,10 @@ class TranslationService:
                 lambda: self.translator.translate_batch(
                     input_batches,
                     target_prefix=[[tgt_code]] * len(input_batches),
-                    # beam_size=self.beam_size,
-                    # repetition_penalty=self.repetition_penalty,
-                    # no_repeat_ngram_size=self.no_repeat_ngram_size,
-                    # max_decoding_length=self.max_decoding_length,
+                    beam_size=self.beam_size,
+                    repetition_penalty=self.repetition_penalty,
+                    no_repeat_ngram_size=self.no_repeat_ngram_size,
+                    max_decoding_length=self.max_decoding_length,
                 ),
             )
 
@@ -248,7 +248,7 @@ class TranslationService:
             for i, result in enumerate(results):
                 if input_batches[i] and result.hypotheses:
                     output_tokens = result.hypotheses[0]
-                    translation = self._postprocess_output(output_tokens)
+                    translation = self._postprocess_output(output_tokens, tgt_code)
                     translations.append(translation)
                 else:
                     translations.append("")

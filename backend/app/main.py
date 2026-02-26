@@ -153,9 +153,11 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
+        is_health_check = request.url.path == "/api/health"
+        log_func = logger.debug if is_health_check else logger.info
 
         # Log request start
-        logger.info(
+        log_func(
             "request_started",
             method=request.method,
             path=request.url.path,
@@ -168,7 +170,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             duration = time.time() - start_time
 
             # Log request completion
-            logger.info(
+            log_func(
                 "request_completed",
                 method=request.method,
                 path=request.url.path,

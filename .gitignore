@@ -1,4 +1,4 @@
-logs/
+
 *.tgz
 *.png
 *.jpg
@@ -12,7 +12,6 @@ infrastructure/k8s/
 __pycache__/
 *.py[codz]
 *$py.class
-migrations/
 *.pdf
 settings.json
 CLAUDE.md
@@ -24,13 +23,16 @@ config.ts
 
 # local
 *.toml
+infrastructure/
 !pyproject.toml
 !backend/pyproject.toml
 !inference-service/pyproject.toml
 !redis_provider/pyproject.toml
 !wrangler.toml
+local-files/logs/
 *tests/
 assets/
+migrations/
 *.db
 plans/
 
@@ -255,3 +257,7 @@ coverage/
 # AI Models
 models/
 .kube
+.kiro
+.agents
+CLAUDE.md
+local-files/

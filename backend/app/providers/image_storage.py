@@ -16,6 +16,9 @@ load_dotenv("secrets/.env")
 
 
 class ImageStorageStrategy(ABC):
+    def __init__(self):
+        self.storage_type = "base"
+
     @abstractmethod
     def save(self, file_hash: str, page_num: int | str, image_b64: str) -> str:
         pass
@@ -49,6 +52,7 @@ class LocalImageStorage(ImageStorageStrategy):
     def __init__(self):
         self.images_dir = Path(os.getenv("IMAGES_DIR", "src/static/paper_images"))
         self._ensure_dir()
+        self.storage_type = "local"
 
     def _ensure_dir(self):
         self.images_dir.mkdir(parents=True, exist_ok=True)
@@ -138,75 +142,32 @@ class GCSImageStorage(ImageStorageStrategy):
             )
         self.client = storage.Client()
         self.bucket = self.client.bucket(self.bucket_name)
+        self.storage_type = "gcs"
+        logger.info(f"GCSImageStorage initialized with bucket: {self.bucket_name}")
 
     def save(self, file_hash: str, page_num: int | str, image_b64: str) -> str:
-        blob_name = f"paper_images/{file_hash}/page_{page_num}.png"
-        blob = self.bucket.blob(blob_name)
-
-        image_bytes = base64.b64decode(image_b64)
-        blob.upload_from_string(image_bytes, content_type="image/png")
-
-        # GCSの場合は署名付きURLの生成を検討
-        # 現時点ではとりあえずプロキシ経由で配信
-        # 環境によっては静的ファイルの配信に制限があるため、
-        # アプリがプロキシするためのパスルールに合わせるか、
-        # あるいは GCS の Media Link を使うか。
-        # PaperTerraceの現状の実装では /static/... でアクセスしているため、
-        # 本番では /static/ のマッピングを変えるか、署名付きURLを払い出すのが良い。
-
-        # 署名付きURLを発行して画像にアクセス可能にする
-        # 環境によっては静的ファイルの配信に制限があるため、
-        # GCSの署名付きURLを使用してクライアントが直接アクセスできるようにする
-        import datetime
-
-        # 環境によってCredentialsに秘密鍵が含まれない場合があるため、
-        # IAM API経由で署名を行うように明示的に指定する
         try:
-            url = blob.generate_signed_url(
-                version="v4",
-                expiration=datetime.timedelta(hours=12),
-                method="GET",
-                service_account_email=self.client.get_service_account_email(),
-            )
-        except Exception as e:
-            logger.warning(
-                f"Failed to generate signed URL using IAM, falling back: {e}"
-            )
-            # 署名付きURLが使えない場合のフォールバック（アクセストークンの有無などに依存）
-            url = blob.public_url
+            blob_name = f"paper_images/{file_hash}/page_{page_num}.png"
+            blob = self.bucket.blob(blob_name)
 
-        logger.debug(f"Saved page image (GCS): {blob_name}")
-        return url
+            image_bytes = base64.b64decode(image_b64)
+            blob.upload_from_string(image_bytes, content_type="image/png")
 
-    def get_list(self, file_hash: str) -> list[str]:
-        # GCSからprefix検索
-        blobs = self.client.list_blobs(self.bucket, prefix=f"paper_images/{file_hash}/")
+            # GCSの場合は署名付きURLの生成を検討
+            # 現時点ではとりあえずプロキシ経由で配信
+            # 環境によっては静的ファイルの配信に制限があるため、
+            # アプリがプロキシするためのパスルールに合わせるか、
+            # あるいは GCS の Media Link を使うか。
+            # PaperTerraceの現状の実装では /static/... でアクセスしているため、
+            # 本番では /static/ のマッピングを変えるか、署名付きURLを払い出すのが良い。
 
-        # ページ順にソートしたい
-        # page_1.png, page_2.png...
-        def extract_page_num_and_filter(blob):
-            try:
-                basename = os.path.basename(blob.name).replace(".png", "")
-                parts = basename.split("_")
-                if len(parts) == 2 and parts[1].isdigit():
-                    return int(parts[1])
-                return -1
-            except Exception:
-                return -1
-
-        blob_list = []
-        for b in blobs:
-            num = extract_page_num_and_filter(b)
-            if num >= 0:
-                blob_list.append((num, b))
-
-        blob_list.sort()
-
-        urls = []
+            # 署名付きURLを発行して画像にアクセス可能にする
+            # 環境によっては静的ファイルの配信に制限があるため、
+            # GCSの署名付きURLを使用してクライアントが直接アクセスできるようにする
         import datetime
 
-        for _, blob in blob_list:
-            # 署名付きURL生成
+            # 環境によってCredentialsに秘密鍵が含まれない場合があるため、
+            # IAM API経由で署名を行うように明示的に指定する
             try:
                 url = blob.generate_signed_url(
                     version="v4",
@@ -215,46 +176,136 @@ class GCSImageStorage(ImageStorageStrategy):
                     service_account_email=self.client.get_service_account_email(),
                 )
             except Exception as e:
-                logger.warning(f"Failed to generate signed URL for list result: {e}")
+                logger.warning(
+                    f"Failed to generate signed URL using IAM, falling back: {e}"
+                )
+                # 署名付きURLが使えない場合のフォールバック（アクセストークンの有無などに依存）
                 url = blob.public_url
-            urls.append(url)
 
-        return urls
+            logger.debug(f"Saved page image (GCS): {blob_name}")
+            return url
+        except Exception as e:
+            logger.error(
+                f"Error saving image to GCS (hash={file_hash}, page={page_num}): {e}",
+                exc_info=True,
+            )
+            raise
+
+    def get_list(self, file_hash: str) -> list[str]:
+        try:
+            # GCSからprefix検索
+            blobs = self.client.list_blobs(
+                self.bucket, prefix=f"paper_images/{file_hash}/"
+            )
+
+            # ページ順にソートしたい
+            # page_1.png, page_2.png...
+            def extract_page_num_and_filter(blob):
+                try:
+                    basename = os.path.basename(blob.name).replace(".png", "")
+                    parts = basename.split("_")
+                    if len(parts) == 2 and parts[1].isdigit():
+                        return int(parts[1])
+                    return -1
+                except Exception:
+                    return -1
+
+            blob_list = []
+            for b in blobs:
+                num = extract_page_num_and_filter(b)
+                if num >= 0:
+                    blob_list.append((num, b))
+
+            blob_list.sort()
+
+            urls = []
+            import datetime
+
+            for _, blob in blob_list:
+                # 署名付きURL生成
+                try:
+                    url = blob.generate_signed_url(
+                        version="v4",
+                        expiration=datetime.timedelta(hours=12),
+                        method="GET",
+                        service_account_email=self.client.get_service_account_email(),
+                    )
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to generate signed URL for list result: {e}"
+                    )
+                    url = blob.public_url
+                urls.append(url)
+
+            return urls
+        except Exception as e:
+            logger.error(
+                f"Error listing images from GCS (hash={file_hash}): {e}", exc_info=True
+            )
+            return []
 
     def delete(self, file_hash: str) -> bool:
-        blobs = self.client.list_blobs(self.bucket, prefix=f"paper_images/{file_hash}/")
-        deleted = False
-        for blob in blobs:
-            blob.delete()
-            deleted = True
+        try:
+            blobs = self.client.list_blobs(
+                self.bucket, prefix=f"paper_images/{file_hash}/"
+            )
+            deleted = False
+            for blob in blobs:
+                blob.delete()
+                deleted = True
 
-        if deleted:
-            logger.info(f"Deleted images (GCS) for hash: {file_hash}")
-        return deleted
+            if deleted:
+                logger.info(f"Deleted images (GCS) for hash: {file_hash}")
+            return deleted
+        except Exception as e:
+            logger.error(
+                f"Error deleting images from GCS (hash={file_hash}): {e}", exc_info=True
+            )
+            return False
 
     def get_image_bytes(self, image_url: str) -> bytes:
-        # GCSの場合、URLから直接取得するか、URLをパースしてBlobとして取得する
-        # ここではシンプルにrequestsでURLから取得する（署名付きURLならアクセス可能）
-        import requests
+        try:
+            # GCSの場合、URLから直接取得するか、URLをパースしてBlobとして取得する
+            # ここではシンプルにrequestsでURLから取得する（署名付きURLならアクセス可能）
+            import requests
 
-        response = requests.get(image_url)
-        response.raise_for_status()
-        return response.content
+            response = requests.get(image_url)
+            response.raise_for_status()
+            return response.content
+        except Exception as e:
+            logger.error(
+                f"Error getting image bytes from GCS (url={image_url}): {e}",
+                exc_info=True,
+            )
+            raise
 
     def save_doc(self, file_hash: str, doc_bytes: bytes) -> str:
-        blob_name = f"pdfs/{file_hash}.pdf"
-        blob = self.bucket.blob(blob_name)
-        blob.upload_from_string(doc_bytes, content_type="application/pdf")
-        logger.info(f"Saved PDF to GCS: {blob_name}")
-        return blob_name
+        try:
+            blob_name = f"pdfs/{file_hash}.pdf"
+            blob = self.bucket.blob(blob_name)
+            blob.upload_from_string(doc_bytes, content_type="application/pdf")
+            logger.info(f"Saved PDF to GCS: {blob_name}")
+            return blob_name
+        except Exception as e:
+            logger.error(
+                f"Error saving PDF to GCS (hash={file_hash}): {e}", exc_info=True
+            )
+            raise
 
     def get_doc_path(self, file_hash: str) -> str:
         # GCSの場合はパスというよりはBlob名
         return f"pdfs/{file_hash}.pdf"
 
     def get_doc_bytes(self, doc_path: str) -> bytes:
-        blob = self.bucket.blob(doc_path)
-        return blob.download_as_bytes()
+        try:
+            blob = self.bucket.blob(doc_path)
+            return blob.download_as_bytes()
+        except Exception as e:
+            logger.error(
+                f"Error getting PDF bytes from GCS (path={doc_path}): {e}",
+                exc_info=True,
+            )
+            raise
 
 
 # Factory

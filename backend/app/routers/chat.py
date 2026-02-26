@@ -50,13 +50,15 @@ async def chat(request: ChatRequest):
     history = redis_service.get(history_key) or []
 
     if request.author_mode:
-        response = await chat_service.author_agent_response(
+        response_data = await chat_service.author_agent_response(
             request.message, context, target_lang=request.lang
         )
-        # Author agent is stateless/different flow? Or should we append to history too?
-        # Usually author agent answers just the question. Let's not mix it with main chat history for now,
-        # or treat it as a special interaction.
-        # For now, let's keep it separate or just return without history update.
+        if isinstance(response_data, dict):
+            response_text = response_data["text"]
+            grounding = response_data.get("grounding")
+        else:
+            response_text = response_data
+            grounding = None
     else:
         # Check chat limit (max 10 turns)
         user_msg_count = sum(1 for m in history if m.get("role") == "user")
@@ -83,18 +85,47 @@ async def chat(request: ChatRequest):
                         error=str(e),
                     )
 
-        response = await chat_service.chat(
+        # Fetch PDF bytes for grounding if paper_id exists
+        pdf_bytes = None
+        if paper_id:
+            try:
+                paper_info = storage.get_paper(paper_id)
+                if paper_info and paper_info.get("file_hash"):
+                    from app.providers import get_image_storage
+
+                    img_storage = get_image_storage()
+                    pdf_bytes = img_storage.get_doc_bytes(
+                        img_storage.get_doc_path(paper_info["file_hash"])
+                    )
+                    log.debug(
+                        "chat", "PDF bytes loaded for grounding", paper_id=paper_id
+                    )
+            except Exception as e:
+                log.warning("chat", f"Failed to load PDF bytes for grounding: {e}")
+
+        response_data = await chat_service.chat(
             request.message,
             history=history,
             document_context=context,
             target_lang=request.lang,
             paper_id=paper_id,
             image_bytes=image_bytes,
+            pdf_bytes=pdf_bytes,
         )
+
+        # Handle grounding if available
+        if isinstance(response_data, dict):
+            response_text = response_data["text"]
+            grounding = response_data.get("grounding")
+        else:
+            response_text = response_data
+            grounding = None
 
         # Update history
         history.append({"role": "user", "content": request.message})
-        history.append({"role": "assistant", "content": response})
+        history.append(
+            {"role": "assistant", "content": response_text, "grounding": grounding}
+        )
 
         # Trim history (keep last 40)
         if len(history) > 40:
@@ -103,7 +134,15 @@ async def chat(request: ChatRequest):
         # Save to cache (Note: expire parameter ignored in in-memory mode)
         redis_service.set(history_key, json.dumps(history), expire=86400)
 
-    return JSONResponse({"response": response})
+    # Return response with text and grounding
+    return JSONResponse(
+        {
+            "response": response_text
+            if not isinstance(response_data, dict)
+            else response_data["text"],
+            "grounding": grounding,
+        }
+    )
 
 
 @router.get("/chat/history")

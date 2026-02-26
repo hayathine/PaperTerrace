@@ -16,6 +16,7 @@ interface ChatWindowProps {
 	initialPrompt?: string | null;
 	onInitialPromptSent?: () => void;
 	onStackPaper?: (url: string, title?: string) => void;
+	onEvidenceClick?: (grounding: any) => void;
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -27,6 +28,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 	initialPrompt,
 	onInitialPromptSent,
 	onStackPaper,
+	onEvidenceClick,
 }) => {
 	const { t, i18n } = useTranslation();
 	const { startLoading, stopLoading } = useLoading();
@@ -53,10 +55,11 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 					const data = await res.json();
 					if (data.history && Array.isArray(data.history)) {
 						const loadedMessages: Message[] = data.history.map((h: any) => ({
-							id: uuidv4(), // We generate ID as it's not persisted in simple history (role/content)
+							id: uuidv4(),
 							role: h.role,
 							content: h.content,
 							timestamp: Date.now(),
+							grounding: h.grounding,
 						}));
 						setMessages(loadedMessages);
 					}
@@ -130,12 +133,12 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 				role: "assistant",
 				content: data.response,
 				timestamp: Date.now(),
+				grounding: data.grounding,
 			};
 
 			setMessages((prev) => [...prev, aiMsg]);
 		} catch (error) {
 			console.error("Chat error:", error);
-			// Determine error message based on error type? For now generic.
 			const errorMsg: Message = {
 				id: uuidv4(),
 				role: "assistant",
@@ -175,6 +178,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 				messages={messages}
 				isLoading={isLoading}
 				onStackPaper={onStackPaper}
+				onEvidenceClick={onEvidenceClick}
 			/>
 			<InputArea onSendMessage={handleSendMessage} isLoading={isLoading} />
 		</div>

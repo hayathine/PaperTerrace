@@ -1,0 +1,21 @@
+# Cloudflare Tunnel Configuration for PaperTerrace (DEV)
+# REPLACE with dev tunnel ID if using a separate tunnel
+tunnel: 7220faaf-4a25-4e25-9f25-3823f87a0704
+credentials-file: /etc/cloudflared/credentials.json
+originRequest:
+  noTLSVerify: true
+  connectTimeout: 30s
+  keepAliveConnections: 100
+  keepAliveTimeout: 90s
+ingress:
+  - hostname: dev-tunnel.paperterrace.page
+    service: http://backend.paperterrace-dev.svc.cluster.local:8080
+  - service: http_status:404
+loglevel: info
+no-autoupdate: true
+retries: 5
+protocol: quic
+grace-period: 30s
+heartbeat-interval: 30s
+compression: true
+metrics: 0.0.0.0:2000

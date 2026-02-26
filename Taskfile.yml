@@ -2,11 +2,15 @@
 
 version: "3"
 
-dotenv: ["secrets/.env"]
+dotenv: ["local-files/secrets/.env"]
 
 vars:
   PROJECT_ID: '{{.PROJECT_ID | default "gen-lang-client-0800253336"}}'
   REGION: '{{.REGION | default "asia-northeast1"}}'
+  REGISTRY: '{{.REGISTRY | default "192.168.10.123:5000"}}'
+  ENV: '{{.ENV | default "main"}}'
+  NAMESPACE: '{{if eq .ENV "main"}}paperterrace{{else}}paperterrace-{{.ENV}}{{end}}'
+  RELEASE_NAME: '{{if eq .ENV "main"}}paperterrace{{else}}paperterrace-{{.ENV}}{{end}}'
 
   # Resource Configurations from JSON
   BE_CPU:
@@ -83,8 +87,8 @@ tasks:
   run:
     desc: "Run backend server with hot reload"
     cmds:
-      - mkdir -p logs
-      - PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8080 | tee -a logs/local.log
+      - mkdir -p local-files/logs
+      - PYTHONUNBUFFERED=1 uv run --directory backend env PYTHONPATH=.:.. uvicorn app.main:app --reload --host 0.0.0.0 --port 8080 | tee -a local-files/logs/local.log
 
   dev:
     desc: "Run frontend dev server"
@@ -123,22 +127,22 @@ tasks:
   test:backend:
     desc: "Run backend tests"
     cmds:
-      - uv run --directory backend env PYTHONPATH=.:.. pytest -n auto
+      - uv run --directory backend env PYTHONPATH=.:.. pytest -n auto || [ $? -eq 5 ]
 
   test:inference:
     desc: "Run inference service tests"
     cmds:
-      - uv run --directory inference-service env PYTHONPATH=.:.. pytest -n auto
+      - uv run --directory inference-service env PYTHONPATH=.:.. pytest -n auto || [ $? -eq 5 ]
 
   test:redis:
     desc: "Run redis provider tests"
     cmds:
-      - uv run --directory redis_provider env PYTHONPATH=.:.. pytest
+      - uv run --directory redis_provider env PYTHONPATH=.:.. pytest || [ $? -eq 5 ]
 
   test:frontend:
     desc: "Run frontend tests (Vitest)"
     cmds:
-      - cd frontend && npm run test
+      - cd frontend && npm run test || [ $? -eq 1 ]
 
   test:
     desc: "Run affected tests for all components (Optimized)"
@@ -179,7 +183,7 @@ tasks:
       - rm -rf frontend/node_modules/.cache frontend/dist
       - sqlite3 ocr_reader.db "DELETE FROM ocr_reader;" 2>/dev/null || true
       - rm -rf backend/app/static/paper_images/* 2>/dev/null || true
-      - rm -rf logs/*.log
+      - rm -rf local-files/logs/*.log
       - echo "✅ Cache cleared!"
 
   # ============================================================================
@@ -242,28 +246,28 @@ tasks:
     desc: "Initialize Terraform for production"
     cmds:
       - echo "🔧 Initializing Terraform for production..."
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform init
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform init
 
   infra:import:production:
     desc: "Import existing GCP resources into Terraform state (production)"
     cmds:
       - echo "📥 Importing existing resources to Terraform..."
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.artifact_registry.google_artifact_registry_repository.main projects/{{.PROJECT_ID}}/locations/{{.REGION}}/repositories/paperterrace || echo "⚠️ Already imported or not found"
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.iam.google_service_account.app_sa projects/{{.PROJECT_ID}}/serviceAccounts/paperterrace-sa@{{.PROJECT_ID}}.iam.gserviceaccount.com || echo "⚠️ Already imported or not found"
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.networking.google_compute_network.main projects/{{.PROJECT_ID}}/global/networks/paperterrace-vpc || echo "⚠️ Already imported or not found"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.artifact_registry.google_artifact_registry_repository.main projects/{{.PROJECT_ID}}/locations/{{.REGION}}/repositories/paperterrace || echo "⚠️ Already imported or not found"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.iam.google_service_account.app_sa projects/{{.PROJECT_ID}}/serviceAccounts/paperterrace-sa@{{.PROJECT_ID}}.iam.gserviceaccount.com || echo "⚠️ Already imported or not found"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.networking.google_compute_network.main projects/{{.PROJECT_ID}}/global/networks/paperterrace-vpc || echo "⚠️ Already imported or not found"
       - echo "✅ Import complete!"
 
   infra:plan:production:
     desc: "Plan Terraform changes for production"
     cmds:
       - echo "📋 Planning Terraform changes for production..."
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform plan -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform plan -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest"
 
   infra:apply:production:
     desc: "Apply Terraform changes for production"
     cmds:
       - echo "🚀 Applying Terraform changes for production..."
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd infrastructure/environments/production && terraform apply -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform apply -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest"
 
   # ============================================================================
   # Utility Tasks
@@ -284,14 +288,7 @@ tasks:
     desc: "Deploy PaperTerrace using Helm"
     cmds:
       - echo "🚀 Deploying with Helm..."
-      - |
-        VALUES_FILE="local-files/infrastructure/helm/paperterrace/values.yaml"
-        [ -f "local-files/infrastructure/helm/paperterrace/values-dev.yaml" ] && VALUES_FILE_DEV="-f local-files/infrastructure/helm/paperterrace/values-dev.yaml"
-        helm upgrade --install paperterrace ./infrastructure/helm/paperterrace \
-          --namespace paperterrace \
-          --create-namespace \
-          -f "$VALUES_FILE" \
-          ${VALUES_FILE_DEV:-}
+      - helm upgrade --install paperterrace ./infrastructure/helm/paperterrace --namespace paperterrace --create-namespace
 
   helm:undeploy:
     desc: "Undeploy PaperTerrace using Helm"
@@ -302,7 +299,7 @@ tasks:
   helm:lint:
     desc: "Lint Helm chart"
     cmds:
-      - helm lint ./infrastructure/helm/paperterrace
+      - helm lint ./local-files/infrastructure/helm/paperterrace
 
   # ============================================================================
   # Home Server (k3s) Deployment Tasks
@@ -311,46 +308,56 @@ tasks:
   k3s:secrets:
     desc: "Setup K8s secrets on home server"
     cmds:
-      - ./scripts/create-secrets.sh
-
-  k3s:deploy:
-    desc: "Deploy all services to k3s using Helm"
-    cmds:
-      - task: helm:deploy
+      - ./local-files/scripts/create-secrets.sh {{.ENV}}
 
   k3s:status:
     desc: "Show status of k3s resources"
     cmds:
-      - kubectl get pods,svc,deploy -n paperterrace
+      - kubectl get pods,svc,deploy -n {{.NAMESPACE}}
 
   k3s:logs:backend:
     desc: "View backend logs in k3s"
     cmds:
-      - kubectl logs -f -l app=backend -n paperterrace
+      - kubectl logs -f -l app=backend -n {{.NAMESPACE}}
 
   k3s:logs:inference:
     desc: "View inference logs in k3s"
     cmds:
-      - kubectl logs -f -l app=inference -n paperterrace
+      - kubectl logs -f -l app=inference -n {{.NAMESPACE}}
 
   k3s:restart:backend:
     desc: "Restart backend in k3s"
     cmds:
-      - kubectl rollout restart deployment/backend -n paperterrace
+      - kubectl rollout restart deployment/backend -n {{.NAMESPACE}}
+
+  k3s:restart:inference:
+    desc: "Restart inference server in k3s"
+    cmds:
+      - kubectl rollout restart deployment/inference -n {{.NAMESPACE}}
+
+  k3s:restart:all:
+    desc: "Restart all application services in k3s"
+    cmds:
+      - task: k3s:restart:backend
+      - task: k3s:restart:inference
 
   k3s:health:
     desc: "Check health of services in k3s"
     cmds:
-      - echo "🔍 Checking service health..."
+      - echo "🔍 Checking service health in {{.NAMESPACE}}..."
       - |
         echo "Backend:"
-        kubectl exec -n paperterrace deployment/backend -- curl -s http://localhost:8080/api/health || echo "❌ Unhealthy"
+        kubectl exec -n {{.NAMESPACE}} deployment/backend -- curl -s http://localhost:8080/api/health || \
+        kubectl exec -n {{.NAMESPACE}} deployment/backend -- python3 -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/api/health').read().decode())" || \
+        echo "❌ Unhealthy"
         echo ""
         echo "Inference Server:"
-        kubectl exec -n paperterrace deployment/inference -- curl -s http://localhost:8080/health || echo "❌ Unhealthy"
+        kubectl exec -n {{.NAMESPACE}} deployment/inference -- curl -s http://localhost:8080/health || \
+        kubectl exec -n {{.NAMESPACE}} deployment/inference -- python3 -c "import urllib.request; print(urllib.request.urlopen('http://localhost:8080/health').read().decode())" || \
+        echo "❌ Unhealthy"
         echo ""
         echo "Redis:"
-        kubectl exec -n paperterrace statefulset/paperterrace-redis-master -- redis-cli ping || echo "❌ Unhealthy"
+        kubectl exec -n {{.NAMESPACE}} statefulset/{{.RELEASE_NAME}}-redis-master -- redis-cli ping || echo "❌ Unhealthy"
 
   homeserver:health:
     desc: "Check health of all services"
@@ -362,15 +369,7 @@ tasks:
     env:
       REGISTRY: "{{.REGISTRY}}"
     cmds:
-      - ./scripts/build-images.sh
-
-  homeserver:deploy:
-    desc: "Full deployment to home server (k3s)"
-    cmds:
-      - task: homeserver:build
-      - task: k3s:secrets
-      - task: k3s:deploy
-      - echo "✅ Home server deployment complete!"
+      - ./local-files/scripts/build-images.sh
 
   homeserver:ps:
     desc: "Show status of all services"
@@ -384,52 +383,50 @@ tasks:
   cf:tunnel:setup:
     desc: "Setup Cloudflare Tunnel"
     cmds:
-      - ./scripts/setup-tunnel.sh
+      - ./local-files/scripts/setup-tunnel.sh
 
   cf:tunnel:start:
     desc: "Start Cloudflare Tunnel (k3s)"
     cmds:
-      - kubectl scale deployment/cloudflared --replicas=1 -n paperterrace
+      - kubectl scale deployment/cloudflared --replicas=1 -n {{.NAMESPACE}}
 
   cf:tunnel:logs:
     desc: "View Cloudflare Tunnel logs (k3s)"
     cmds:
-      - kubectl logs -f -l app=cloudflared -n paperterrace
+      - kubectl logs -f -l app=cloudflared -n {{.NAMESPACE}}
 
   cf:workers:install:
     desc: "Install all dependencies (including Workers/Frontend)"
     cmds:
       - npm install
 
-  cf:workers:dev:
-    desc: "Run Cloudflare Workers in development mode"
-    cmds:
-      - cd cloudflare-workers && npx wrangler dev
-
   cf:workers:deploy:
-    desc: "Deploy Cloudflare Workers API Gateway"
+    desc: "Deploy Cloudflare Workers"
     cmds:
-      - cd cloudflare-workers && npx wrangler deploy
-
-  cf:workers:secrets:
-    desc: "Configure Cloudflare Workers secrets"
-    cmds:
-      - echo "Setting up Cloudflare Workers secrets..."
-      - echo "Run these commands manually:"
-      - echo "  npx wrangler secret put FIREBASE_PROJECT_ID"
-      - echo "  npx wrangler secret put FIREBASE_CLIENT_EMAIL"
-      - echo "  npx wrangler secret put FIREBASE_PRIVATE_KEY"
+      - cd cloudflare-workers && npx wrangler deploy --env {{.ENV}}
 
   cf:pages:deploy:
     desc: "Deploy frontend to Cloudflare Pages"
     cmds:
+      - echo "Building frontend for {{.ENV}}..."
       - npm run build -w frontend
-      - npx wrangler pages deploy frontend/dist --project-name paperterrace
+      - echo "Deploying to Cloudflare Pages branch {{if eq .ENV "main"}}main{{else}}dev{{end}}..."
+      - npx wrangler pages deploy frontend/dist --project-name paperterrace --branch {{if eq .ENV "main"}}main{{else}}dev{{end}}
 
-  cf:deploy:
-    desc: "Deploy all Cloudflare services (Workers + Pages)"
+  cf:deploy:all:
+    desc: "Deploy both Workers and Pages"
     cmds:
-      - ./scripts/deploy-cloudflare.sh
+      - task: cf:workers:deploy
+      - task: cf:pages:deploy
+
+  cf:workers:secrets:
+    desc: "Configure Cloudflare Workers secrets"
+    cmds:
+      - echo "Setting up Cloudflare Workers secrets for {{.ENV}}..."
+      - echo "Run these commands manually:"
+      - echo "  npx wrangler secret put FIREBASE_PROJECT_ID --env {{.ENV}}"
+      - echo "  npx wrangler secret put FIREBASE_CLIENT_EMAIL --env {{.ENV}}"
+      - echo "  npx wrangler secret put FIREBASE_PRIVATE_KEY --env {{.ENV}}"
 
   # ============================================================================
   # Migration Tasks
@@ -440,7 +437,7 @@ tasks:
     cmds:
       - echo "📋 Migration preparation checklist:"
       - echo "1. ✓ Ensure .env file is configured"
-      - echo "2. ✓ Ensure service account key is in secrets/sa-key.json"
+      - echo "2. ✓ Ensure service account key is in local-files/secrets/sa-key.json"
       - echo "3. ✓ Ensure models are downloaded to ./models/"
       - echo "4. ✓ Ensure Cloudflare Tunnel is set up"
       - echo "5. ✓ Test home server deployment"

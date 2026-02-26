@@ -177,6 +177,8 @@ const TextModePage: React.FC<TextModePageProps> = ({
 											pointerEvents: "auto",
 											display: "flex",
 											alignItems: "flex-end",
+											color: "transparent", // Ensure transparency even if Tailwind class is overridden
+											WebkitTextFillColor: "transparent",
 										}}
 									>
 										{line.words.map((w, wIdx) => {

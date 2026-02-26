@@ -36,3 +36,10 @@ invocation_logs = true
 enabled = false
 persist = true
 head_sampling_rate = 1
+[env.dev]
+name = "paperterrace-dev"
+[env.dev.vars]
+BACKEND_TUNNEL_URL = "https://dev-tunnel.paperterrace.page"
+ALLOWED_ORIGINS = "https://paperterrace-dev.pages.dev,http://localhost:5173"
+RATE_LIMIT_REQUESTS = "100"
+RATE_LIMIT_WINDOW = "60"
