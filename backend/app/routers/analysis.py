@@ -528,14 +528,14 @@ async def analyze_layout_lazy(
             for fig in all_figures:
                 fid = await anyio.to_thread.run_sync(
                     save_figure_to_db,
-                    paper_id=paper_id,
-                    page_number=fig["page_num"],
-                    bbox=fig["bbox"],
-                    image_url=fig.get("image_url", ""),
-                    caption="",
-                    explanation="",
-                    label=fig.get("label", "figure"),
-                    latex="",
+                    paper_id,
+                    fig["page_num"],
+                    fig["bbox"],
+                    fig.get("image_url", ""),
+                    "",
+                    "",
+                    fig.get("label", "figure"),
+                    "",
                 )
                 # Trigger figure analysis for figures with images
                 if fig.get("image_url"):

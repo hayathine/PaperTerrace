@@ -152,10 +152,13 @@ async def explain(
     element_id: str | None = None,
 ):
     """単語の解説 (Local: Cache -> local-MT)"""
+    start_time = asyncio.get_event_loop().time()
     # Robust element_id detection: Try query param, then fallback to HTMX header
     element_id = element_id or req.headers.get("HX-Trigger")
 
-    log.debug("explain", f"Word lookup: {word}", element_id=element_id)
+    log.debug(
+        "explain", f"Word lookup: {word}", element_id=element_id, paper_id=paper_id
+    )
 
     loop = asyncio.get_event_loop()
     is_htmx = req.headers.get("HX-Request") == "true"
@@ -182,6 +185,13 @@ async def explain(
                     "element_id": element_id,
                 }
             )
+        elapsed = asyncio.get_event_loop().time() - start_time
+        log.info(
+            "explain",
+            f"Lookup completed (Cache) in {elapsed:.3f}s",
+            word=word,
+            paper_id=paper_id,
+        )
         return HTMLResponse(
             build_dict_card_html(
                 original_word,
@@ -236,6 +246,13 @@ async def explain(
                     "source": source,
                 }
             )
+        elapsed = asyncio.get_event_loop().time() - start_time
+        log.info(
+            "explain",
+            f"Lookup completed (ServiceB) in {elapsed:.3f}s",
+            word=word,
+            paper_id=paper_id,
+        )
         return HTMLResponse(
             build_dict_card_html(
                 original_word,
@@ -304,6 +321,13 @@ async def explain(
                 }
             )
 
+        elapsed = asyncio.get_event_loop().time() - start_time
+        log.info(
+            "explain",
+            f"Lookup completed (Gemini) in {elapsed:.3f}s",
+            word=word,
+            paper_id=paper_id,
+        )
         return HTMLResponse(
             build_dict_card_html(
                 original_word,
@@ -358,6 +382,7 @@ async def explain_deep(
     element_id = element_id or req.headers.get("HX-Trigger")
 
     is_htmx = req.headers.get("HX-Request") == "true"
+    start_time = asyncio.get_event_loop().time()
     # 0. Lemmatize input
     clean_input = word.replace("\n", " ").strip(r" .,;!?(){}[\]\"'")
     if not clean_input:
@@ -421,6 +446,13 @@ async def explain_deep(
                 }
             )
 
+        elapsed = asyncio.get_event_loop().time() - start_time
+        log.info(
+            "explain_deep",
+            f"Deep lookup completed in {elapsed:.3f}s",
+            word=word,
+            paper_id=paper_id,
+        )
         return HTMLResponse(
             build_dict_card_html(
                 original_word,
@@ -469,11 +501,13 @@ class ExplainContextRequest(BaseModel):
 @router.post("/explain/context")
 async def explain_with_context(req: ExplainContextRequest):
     """Explain word with context using Gemini"""
+    start_time = asyncio.get_event_loop().time()
     lang_name = SUPPORTED_LANGUAGES.get(req.lang, req.lang)
     provider = get_ai_provider()
 
     # Retrieve Paper Summary Context if session_id is provided
     summary_context = ""
+    paper_id = None
     if req.session_id:
         paper_id = storage.get_session_paper_id(req.session_id)
         if paper_id:
@@ -492,6 +526,13 @@ async def explain_with_context(req: ExplainContextRequest):
     try:
         explanation = await provider.generate(
             prompt, model=translate_model, system_instruction=CORE_SYSTEM_PROMPT
+        )
+        elapsed = asyncio.get_event_loop().time() - start_time
+        log.info(
+            "explain_context",
+            f"Context lookup completed in {elapsed:.3f}s",
+            word=req.word,
+            paper_id=paper_id,
         )
         return JSONResponse(
             {

@@ -163,13 +163,9 @@ async def analyze_pdf_json(
         # Cache check
         cached_paper = storage.get_paper_by_hash(file_hash)
         raw_text = None
-        paper_id = "pending"
 
         if cached_paper:
-            # If cached, we might want to update owner if it was anonymous before?
-            # But generally we just return existing paper.
             paper_id = cached_paper["paper_id"]
-
             # Safe image check + regeneration logic
             try:
                 from app.providers.image_storage import get_page_images
@@ -191,7 +187,12 @@ async def analyze_pdf_json(
                 else:
                     raw_text = cached_paper.get("ocr_text")
         else:
-            logger.info("[analyze-pdf-json] Cache MISS: Deferring OCR to stream")
+            import uuid6
+
+            paper_id = str(uuid6.uuid7())
+            logger.info(
+                f"[analyze-pdf-json] Cache MISS: Generated new paper_id={paper_id}"
+            )
             raw_text = None
 
         task_id = str(uuid.uuid4())
@@ -453,10 +454,9 @@ async def stream(task_id: str):
                 yield f"event: message\ndata: {json.dumps({'type': 'assist_mode_ready'})}\n\n"
                 await asyncio.sleep(0.01)
 
-                import uuid6
-
                 full_text = "\n\n---\n\n".join(full_text_fragments)
-                new_paper_id = str(uuid6.uuid7())
+                # paper_id is now pre-generated and passed in task data
+                new_paper_id = paper_id
 
                 # Save to DB (Background or here)
                 try:
@@ -667,12 +667,18 @@ async def stream(task_id: str):
             return Response("Error: PDF source not found", status_code=404)
 
         async def ocr_generate():
-            import uuid6
+            # paper_id is pre-generated in analyze_pdf or analyze_pdf_json
+            nonlocal paper_id
+            if not paper_id or paper_id == "pending":
+                import uuid6
 
-            # OCR処理中の表示
+                paper_id = str(uuid6.uuid7())
+
+            logger.info(f"[stream] ocr_generate using paper_id={paper_id}")
             yield 'event: message\ndata: <div id="paper-content" hx-swap-oob="innerHTML"><div class="flex flex-col items-center justify-center min-h-[400px] text-center"><div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-4"></div><p class="text-slate-500 font-medium">📄 PDFを解析中...</p><p class="text-xs text-slate-400 mt-2">AI OCRで文字認識を実行しています<br>ページごとに順次表示されます</p></div></div>\n\n'
 
             full_text_fragments = []
+            all_layout_data = []  # Added to collect layout data
             collected_figures = []
 
             # ページ単位OCRストリーム
@@ -702,6 +708,7 @@ async def stream(task_id: str):
                     return
 
                 full_text_fragments.append(page_text)
+                all_layout_data.append(layout_data)
 
                 # Collect figures for HTMX flow
                 if layout_data and "figures" in layout_data:
@@ -765,7 +772,7 @@ async def stream(task_id: str):
                     page_prefix = f"p-pg{page_num}"
                     async for chunk in service.tokenize_stream(
                         page_text,
-                        paper_id=None,
+                        paper_id=paper_id,
                         target_id=content_id,
                         id_prefix=page_prefix,
                         save_to_db=False,
@@ -776,7 +783,6 @@ async def stream(task_id: str):
 
             # 全ページ完了後、DB保存
             full_text = "\n\n---\n\n".join(full_text_fragments)
-            paper_id = str(uuid6.uuid7())
 
             try:
                 storage.save_paper(
@@ -786,6 +792,8 @@ async def stream(task_id: str):
                     ocr_text=full_text,
                     html_content="",
                     target_language="ja",
+                    layout_json=json.dumps(all_layout_data),
+                    owner_id=user_id,
                 )
                 logger.info(f"Paper saved completed: {paper_id}")
 
