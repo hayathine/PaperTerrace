@@ -750,7 +750,7 @@ async def stream(task_id: str):
                             f' style="left:{left}%; top:{top}%; width:{width}%; height:{height}%;"'
                             f' hx-get="/explain/{word_text}?lang={lang}&element_id={word_id}"'
                             f' hx-trigger="click"'
-                            f' hx-target="#definition-box"'
+                            f' hx-target="#dict-stack"'
                             f' hx-swap="afterbegin">'
                             f"</a>"
                         )

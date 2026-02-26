@@ -159,10 +159,15 @@
   function jumpToElement(id) {
     const el = document.getElementById(id);
     if (el) {
+      // Smoothly scroll to the element
       el.scrollIntoView({ behavior: "smooth", block: "center" });
-      el.classList.remove("highlight-jump");
-      void el.offsetWidth; // trigger reflow
-      el.classList.add("highlight-jump");
+
+      // Delay the highlight flash to ensure the element is visible when it happens
+      setTimeout(() => {
+        el.classList.remove("highlight-jump");
+        void el.offsetWidth; // trigger reflow
+        el.classList.add("highlight-jump");
+      }, 500); // 500ms is a good compromise for the smooth scroll
     } else {
       console.warn("Element not found:", id);
     }

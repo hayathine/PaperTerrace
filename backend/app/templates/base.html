@@ -120,17 +120,27 @@
         visibility: visible;
         transform: translateY(0);
       }
-      @keyframes highlight-pulse {
+      @keyframes highlight-flash {
         0% {
-          background-color: rgba(99, 102, 241, 0.4);
+          background-color: rgba(251, 191, 36, 0.8);
+          box-shadow: 0 0 15px rgba(251, 191, 36, 0.6);
+          outline: 2px solid #fbbf24;
+        }
+        70% {
+          background-color: rgba(251, 191, 36, 0.3);
+          box-shadow: 0 0 5px rgba(251, 191, 36, 0.3);
+          outline: 1px solid rgba(251, 191, 36, 0.5);
         }
         100% {
           background-color: transparent;
+          box-shadow: none;
+          outline: none;
         }
       }
       .highlight-jump {
-        animation: highlight-pulse 2s ease-out;
+        animation: highlight-flash 1.5s cubic-bezier(0.4, 0, 0.2, 1) forwards;
         border-radius: 4px;
+        z-index: 50;
       }
     </style>
   </head>
