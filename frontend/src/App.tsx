@@ -703,7 +703,7 @@ function App() {
 								stackedPapers={stackedPapers}
 								onStackPaper={handleStackPaper}
 								onRemoveFromStack={handleRemoveFromStack}
-								onEvidenceClick={(g) => {
+								onEvidenceClick={(g: any) => {
 									setActiveEvidence(g);
 									// Optionally switch to PDF view if in plaintext mode?
 									// For now just set evidence.
