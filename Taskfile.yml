@@ -284,7 +284,14 @@ tasks:
     desc: "Deploy PaperTerrace using Helm"
     cmds:
       - echo "🚀 Deploying with Helm..."
-      - helm upgrade --install paperterrace ./infrastructure/helm/paperterrace --namespace paperterrace --create-namespace
+      - |
+        VALUES_FILE="local-files/infrastructure/helm/paperterrace/values.yaml"
+        [ -f "local-files/infrastructure/helm/paperterrace/values-dev.yaml" ] && VALUES_FILE_DEV="-f local-files/infrastructure/helm/paperterrace/values-dev.yaml"
+        helm upgrade --install paperterrace ./infrastructure/helm/paperterrace \
+          --namespace paperterrace \
+          --create-namespace \
+          -f "$VALUES_FILE" \
+          ${VALUES_FILE_DEV:-}
 
   helm:undeploy:
     desc: "Undeploy PaperTerrace using Helm"

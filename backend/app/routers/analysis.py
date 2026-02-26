@@ -8,6 +8,7 @@ import io
 import tempfile
 from pathlib import Path
 
+import anyio
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -306,7 +307,7 @@ async def analyze_layout_lazy(
         )
 
         # Get paper data
-        paper = storage.get_paper(paper_id)
+        paper = await anyio.to_thread.run_sync(storage.get_paper, paper_id)
         if not paper:
             raise HTTPException(status_code=404, detail="Paper not found")
 
@@ -369,8 +370,8 @@ async def analyze_layout_lazy(
                     from pathlib import Path
 
                     img_path = Path("src") / image_url.lstrip("/")
-                    if img_path.exists():
-                        img_bytes = img_path.read_bytes()
+                    if await anyio.to_thread.run_sync(img_path.exists):
+                        img_bytes = await anyio.to_thread.run_sync(img_path.read_bytes)
                     else:
                         logger.warning(f"Image not found: {img_path}")
                         continue
@@ -384,11 +385,18 @@ async def analyze_layout_lazy(
                             logger.warning(f"Failed to download image: {image_url}")
                             continue
 
-                # JPEG圧縮で転送サイズを削減
-                img_pil = Image.open(io.BytesIO(img_bytes))
-                buffer = io.BytesIO()
-                img_pil.save(buffer, format="JPEG", quality=85, optimize=True)
-                compressed_bytes = buffer.getvalue()
+                def _prepare_image(data: bytes):
+                    from PIL import Image
+
+                    img_pil = Image.open(io.BytesIO(data))
+                    buffer = io.BytesIO()
+                    img_pil.save(buffer, format="JPEG", quality=85, optimize=True)
+                    return buffer.getvalue()
+
+                # JPEG圧縮で転送サイズを削減 (Run in thread to avoid blocking loop)
+                compressed_bytes = await anyio.to_thread.run_sync(
+                    _prepare_image, img_bytes
+                )
 
                 image_data_list.append(compressed_bytes)
                 page_info_list.append(page_num)
@@ -456,6 +464,19 @@ async def analyze_layout_lazy(
 
                     # Crop the figure from the page image
                     try:
+
+                        def _crop_and_encode(
+                            img_data: bytes,
+                            box: tuple[float, float, float, float],
+                        ):
+                            from PIL import Image
+
+                            img = Image.open(io.BytesIO(img_data))
+                            crop = img.crop(box).convert("RGB")
+                            buf = io.BytesIO()
+                            crop.save(buf, format="JPEG", quality=85, optimize=True)
+                            return base64.b64encode(buf.getvalue()).decode("utf-8")
+
                         margin = 5
                         crop_box = (
                             max(0, x_min - margin),
@@ -463,18 +484,19 @@ async def analyze_layout_lazy(
                             min(img_w, x_max + margin),
                             min(img_h, y_max + margin),
                         )
-                        crop_pil = img_pil.crop(crop_box).convert("RGB")
 
-                        # Encode as JPEG
+                        # Run cropping and encoding in thread
                         import base64
 
-                        buffer = io.BytesIO()
-                        crop_pil.save(buffer, format="JPEG", quality=85, optimize=True)
-                        img_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
+                        img_b64 = await anyio.to_thread.run_sync(
+                            _crop_and_encode, img_bytes, crop_box
+                        )
 
                         # Save the cropped image
                         img_name = f"p{page_num}_{class_name}_{fig_idx}"
-                        figure_image_url = save_page_image(file_hash, img_name, img_b64)
+                        figure_image_url = await anyio.to_thread.run_sync(
+                            save_page_image, file_hash, img_name, img_b64
+                        )
                         fig_idx += 1
 
                         all_figures.append(
@@ -504,7 +526,8 @@ async def analyze_layout_lazy(
                 f"[analyze-layout-lazy] Saving {len(all_figures)} figures to DB"
             )
             for fig in all_figures:
-                fid = save_figure_to_db(
+                fid = await anyio.to_thread.run_sync(
+                    save_figure_to_db,
                     paper_id=paper_id,
                     page_number=fig["page_num"],
                     bbox=fig["bbox"],
@@ -550,7 +573,9 @@ async def analyze_layout_lazy(
                         layout["figures"] = page_figures[page_num]
 
                 # Save updated layout_json
-                storage.update_paper_layout(paper_id, json.dumps(layout_list))
+                await anyio.to_thread.run_sync(
+                    storage.update_paper_layout, paper_id, json.dumps(layout_list)
+                )
                 logger.info(
                     f"[analyze-layout-lazy] Updated layout_json with {len(all_figures)} figures"
                 )
