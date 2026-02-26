@@ -20,6 +20,7 @@ config.ts
 !frontend/src/config.ts
 # C extensions
 *.so
+local-files/
 
 # local
 *.toml
