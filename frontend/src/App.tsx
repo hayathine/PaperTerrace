@@ -94,7 +94,7 @@ function App() {
 				const headers: Record<string, string> = {};
 				if (user) {
 					const idToken = await user.getIdToken();
-					headers["Authorization"] = `Bearer ${idToken}`;
+					headers.Authorization = `Bearer ${idToken}`;
 				}
 
 				const res = await fetch(`${API_URL}/api/papers`, { headers });

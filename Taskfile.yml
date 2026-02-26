@@ -388,19 +388,33 @@ tasks:
     cmds:
       - npm install
 
-  cf:workers:dev:
-    desc: "Run Cloudflare Workers in development mode"
+  cf:workers:deploy:
+    desc: "Deploy Cloudflare Workers"
     cmds:
-      - cd cloudflare-workers && npx wrangler dev
+      - cd cloudflare-workers && npx wrangler deploy --env {{.ENV}}
+
+  cf:pages:deploy:
+    desc: "Deploy frontend to Cloudflare Pages"
+    cmds:
+      - echo "Building frontend for {{.ENV}}..."
+      - npm run build -w frontend
+      - echo "Deploying to Cloudflare Pages branch {{if eq .ENV "main"}}main{{else}}dev{{end}}..."
+      - npx wrangler pages deploy frontend/dist --project-name paperterrace --branch {{if eq .ENV "main"}}main{{else}}dev{{end}}
+
+  cf:deploy:all:
+    desc: "Deploy both Workers and Pages"
+    cmds:
+      - task: cf:workers:deploy
+      - task: cf:pages:deploy
 
   cf:workers:secrets:
     desc: "Configure Cloudflare Workers secrets"
     cmds:
-      - echo "Setting up Cloudflare Workers secrets..."
-      - echo "Run these commands manually (add --env dev if needed):"
-      - echo "  npx wrangler secret put FIREBASE_PROJECT_ID"
-      - echo "  npx wrangler secret put FIREBASE_CLIENT_EMAIL"
-      - echo "  npx wrangler secret put FIREBASE_PRIVATE_KEY"
+      - echo "Setting up Cloudflare Workers secrets for {{.ENV}}..."
+      - echo "Run these commands manually:"
+      - echo "  npx wrangler secret put FIREBASE_PROJECT_ID --env {{.ENV}}"
+      - echo "  npx wrangler secret put FIREBASE_CLIENT_EMAIL --env {{.ENV}}"
+      - echo "  npx wrangler secret put FIREBASE_PRIVATE_KEY --env {{.ENV}}"
 
   # ============================================================================
   # Migration Tasks
