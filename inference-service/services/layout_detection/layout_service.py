@@ -13,15 +13,20 @@ import numpy as np
 import onnxruntime as ort
 
 from common.logger import logger
-from common.schemas.layout import LAYOUT_LABELS, BBoxModel, LayoutItem
+from common.schemas.layout import LABELS, BBoxModel, LayoutItem
+from services.layout_detection.preprocess import (
+    LetterBoxResize,
+    NormalizeImage,
+    Permute,
+    preprocess,
+)
 
 
 class LayoutAnalysisService:
     """レイアウト解析サービス"""
 
-    # ラベルマップ (PP-DocLayoutの標準クラス)
-    # ラベルマップ (PP-DocLayoutの標準クラス)
-    LABELS = LAYOUT_LABELS
+    # ラベルマップ
+    LABELS = LABELS
 
     def __init__(self, lang: str = "en", model_path: str | None = None):
         """
@@ -149,15 +154,18 @@ class LayoutAnalysisService:
         start_time = time.time()
 
         try:
-            img, ori_shape, scale_factor = self._preprocess(image_path)
+            img, ori_shape, scale, pad_info = self._preprocess(image_path)
 
-            # im_shapeを準備（元画像のサイズ）
-            im_shape = np.array(
-                [[ori_shape[0], ori_shape[1]]], dtype=np.float32
-            )  # [height, width]
+            # im_shape を準備（モデル入力サイズ）
+            im_shape = np.array([[img.shape[2], img.shape[3]]], dtype=np.float32)
+
+            # scale_factor を準備 (1.0, 1.0 にして後処理で自前で計算する方式に統一)
+            scale_factor = np.array([[1.0, 1.0]], dtype=np.float32)
 
             outputs = self._inference(img, scale_factor, im_shape)
-            results = self._postprocess(outputs, ori_shape, scale_factor=scale_factor)
+            results = self._postprocess(
+                outputs, ori_shape, scale=scale, pad_info=pad_info
+            )
 
             total_time = time.time() - start_time
             logger.info(
@@ -186,42 +194,41 @@ class LayoutAnalysisService:
 
     def _preprocess(
         self, img_path: str | Path, target_size: tuple[int, int] = (640, 640)
-    ) -> tuple[np.ndarray, tuple[int, int], np.ndarray]:
+    ) -> tuple[np.ndarray, tuple[int, int], float, np.ndarray]:
         """画像前処理"""
         # 画像の読み込み
-        img = cv2.imread(str(img_path))
-        if img is None:
+        img_bgr = cv2.imread(str(img_path))
+        if img_bgr is None:
             raise FileNotFoundError(f"Could not load image: {img_path}")
 
-        ori_h, ori_w = img.shape[:2]
+        ori_h, ori_w = img_bgr.shape[:2]
+        img_rgb = cv2.cvtColor(img_bgr, cv2.COLOR_BGR2RGB)
 
-        # BGR to RGB
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # 統一されたプリプロセッサを使用
+        ops = [
+            LetterBoxResize(target_size=target_size),
+            NormalizeImage(
+                mean=[0.485, 0.456, 0.406],
+                std=[0.229, 0.224, 0.225],
+                is_scale=True,
+                norm_type="mean_std",
+            ),
+            Permute(),
+        ]
 
-        # リサイズ
-        img = cv2.resize(img, target_size)
+        processed_img, info = preprocess(img_rgb, ops)
 
-        # Scale factor (h, w)
-        scale_h = target_size[1] / ori_h
-        scale_w = target_size[0] / ori_w
-        scale_factor = np.array([scale_h, scale_w], dtype=np.float32).reshape((1, 2))
+        # Batch dimension
+        processed_img = np.expand_dims(processed_img, axis=0).astype(np.float32)
 
-        # 正規化 (PaddleOCRの標準設定)
-        img = img.astype(np.float32) / 255.0
-        mean = np.array([0.485, 0.456, 0.406], dtype=np.float32)
-        std = np.array([0.229, 0.224, 0.225], dtype=np.float32)
-        img = (img - mean) / std
-
-        # HWC to CHW & Batch dimension
-        img = img.transpose(2, 0, 1)
-        img = np.expand_dims(img, axis=0).astype(np.float32)
+        scale = info["scale_factor"][0]  # new_w / ori_w
+        pad_info = info["pad_info"]  # [pad_h, pad_w]
 
         logger.info(
-            f"Preprocess complete - ori_shape: {ori_h}x{ori_w}, scale_factor: {scale_factor}, target_img_shape: {img.shape}"
+            f"Preprocess complete - ori_shape: {ori_h}x{ori_w}, scale: {scale:.4f}, pad: {pad_info}"
         )
-        logger.debug(f"[Layout] Preprocess: scale_h={scale_h}, scale_w={scale_w}")
 
-        return img, (ori_h, ori_w), scale_factor
+        return processed_img, (ori_h, ori_w), scale, pad_info
 
     def _inference(
         self,
@@ -252,8 +259,9 @@ class LayoutAnalysisService:
         outputs: list,
         ori_shape: tuple[int, int],
         target_size: tuple[int, int] = (640, 640),
-        threshold: float = os.getenv("LAYOUT_THRESHOLD", 0.9),
-        scale_factor: np.ndarray | None = None,
+        threshold: float = 0.5,
+        scale: float = 1.0,
+        pad_info: np.ndarray | None = None,
     ) -> list[dict[str, Any]]:
         """後処理：座標変換とフィルタリング
 
@@ -273,13 +281,13 @@ class LayoutAnalysisService:
         predictions = outputs[0]
         ori_h, ori_w = ori_shape
 
-        # スケールファクタを取得 (h, w)
-        sh, sw = (1.0, 1.0)
-        if scale_factor is not None:
-            sh, sw = scale_factor[0]
+        # パディング情報を取得
+        pad_h, pad_w = (0.0, 0.0)
+        if pad_info is not None:
+            pad_h, pad_w = pad_info
 
         logger.debug(
-            f"[Layout] Postprocess: sw={sw}, sh={sh}, ori_w={ori_w}, ori_h={ori_h}"
+            f"[Layout] Postprocess: scale={scale:.4f}, pad=({pad_h}, {pad_w}), ori={ori_w}x{ori_h}"
         )
 
         # デバッグログ追加: 推論データの生の状態を確認
@@ -316,32 +324,22 @@ class LayoutAnalysisService:
             for res in valid_predictions:
                 class_id, score, xxmin, yymin, xxmax, yymax = res
 
-                # 座標変換ロジックの修正
-                # モデル出力は入力時のscale_factorで除算された巨大な座標系になっているため
-                # 元画像座標に戻すには scale_factor を「掛ける」必要がある
-                x1 = max(0, min(ori_w, int(xxmin * sw)))
-                y1 = max(0, min(ori_h, int(yymin * sh)))
-                x2 = max(0, min(ori_w, int(xxmax * sw)))
-                y2 = max(0, min(ori_h, int(yymax * sh)))
+                # モデル出力は 640x640 等のキャンバス座標系
+                # 1. パディングを除去
+                # 2. スケールを元に戻す
+                x1 = max(0, min(ori_w, int((xxmin - pad_w) / scale)))
+                y1 = max(0, min(ori_h, int((yymin - pad_h) / scale)))
+                x2 = max(0, min(ori_w, int((xxmax - pad_w) / scale)))
+                y2 = max(0, min(ori_h, int((yymax - pad_h) / scale)))
 
-                logger.info(
-                    f"Postprocess - Coordinates: ({xxmin:.1f}, {yymin:.1f}, {xxmax:.1f}, {yymax:.1f}) * ({sw:.3f}, {sh:.3f}) -> Final: ({x1}, {y1}, {x2}, {y2})"
+                logger.debug(
+                    f"Postprocess - Coordinates: ({xxmin:.1f}, {yymin:.1f}, {xxmax:.1f}, {yymax:.1f}) -> Final: ({x1}, {y1}, {x2}, {y2})"
                 )
 
                 box = [x1, y1, x2, y2]
 
                 if box[2] > box[0] and box[3] > box[1]:
-                    # class_id=10 対策: 範囲外の場合は Figure (2) に書き換える
-                    # または呼び出し元で処理しやすいように class_id を変更して返す
                     final_class_id = int(class_id)
-                    if final_class_id >= len(self.LABELS):
-                        # class_id=10 (Unknown) -> Figure (2)
-                        # ログに出力した通り class_id=10 が Figure 相当であると仮定
-                        logger.warning(
-                            f"Postprocess - Unknown class_id {class_id} detected. Mapping to Figure (2)."
-                        )
-                        final_class_id = 2  # Figure
-
                     results.append(
                         {
                             "class_id": final_class_id,
@@ -349,4 +347,53 @@ class LayoutAnalysisService:
                             "bbox": box,
                         }
                     )
-        return results
+        return self._apply_nms(results)
+
+    def _apply_nms(
+        self,
+        results: list[dict],
+        iou_threshold: float = 0.5,
+        ioa_threshold: float = 0.8,
+    ) -> list[dict]:
+        if not results:
+            return []
+
+        boxes = np.array([r["bbox"] for r in results])
+        scores = np.array([r["score"] for r in results])
+
+        x1 = boxes[:, 0]
+        y1 = boxes[:, 1]
+        x2 = boxes[:, 2]
+        y2 = boxes[:, 3]
+
+        areas = (x2 - x1) * (y2 - y1)
+        # ゼロ割りなど防止
+        areas[areas <= 0] = 1e-6
+
+        order = scores.argsort()[::-1]
+        keep = []
+
+        while order.size > 0:
+            i = order[0]
+            keep.append(i)
+
+            if order.size == 1:
+                break
+
+            xx1 = np.maximum(x1[i], x1[order[1:]])
+            yy1 = np.maximum(y1[i], y1[order[1:]])
+            xx2 = np.minimum(x2[i], x2[order[1:]])
+            yy2 = np.minimum(y2[i], y2[order[1:]])
+
+            w = np.maximum(0.0, xx2 - xx1)
+            h = np.maximum(0.0, yy2 - yy1)
+            inter = w * h
+
+            ovr = inter / (areas[i] + areas[order[1:]] - inter)
+            ioa = inter / np.minimum(areas[i], areas[order[1:]])
+
+            # IoU閾値以下、かつIoA閾値以下のものを残す
+            inds = np.where((ovr <= iou_threshold) & (ioa <= ioa_threshold))[0]
+            order = order[inds + 1]
+
+        return [results[i] for i in keep]

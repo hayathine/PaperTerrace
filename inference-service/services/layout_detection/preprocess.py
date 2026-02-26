@@ -16,14 +16,16 @@ class LetterBoxResize:
         resized_img = cv2.resize(img, (new_w, new_h))
 
         canvas = np.zeros((target_h, target_w, 3), dtype=np.uint8)
-        canvas[:new_h, :new_w, :] = resized_img
+
+        # Centering the image
+        pad_h = (target_h - new_h) // 2
+        pad_w = (target_w - new_w) // 2
+        canvas[pad_h : pad_h + new_h, pad_w : pad_w + new_w, :] = resized_img
 
         data["image"] = canvas
         data["im_shape"] = np.array([new_h, new_w], dtype=np.float32)
         data["scale_factor"] = np.array([scale, scale], dtype=np.float32)
-        data["pad_info"] = np.array(
-            [0, 0], dtype=np.float32
-        )  # In this simple case we just top-left align
+        data["pad_info"] = np.array([pad_h, pad_w], dtype=np.float32)
         return data
 
 

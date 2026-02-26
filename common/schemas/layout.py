@@ -12,15 +12,16 @@ class LayoutItem(BaseModel):
 
 
 # PP-DocLayoutの標準ラベル
-LAYOUT_LABELS = [
-    # "Text",
-    # "Title",
-    "Figure",
-    "Figure caption",
-    "Table",
-    "Table caption",
-    # "Header",
-    # "Footer",
-    # "Reference",
-    "Equation",
-]
+LABELS = {
+    0: "Table",
+    1: "Figure",
+    2: "Picture",
+    3: "Formula",
+    4: "Chart",
+    5: "Algorithm",
+    # 互換性のためのエイリアス
+    9: "Equation",
+    10: "Figure",
+}
+
+LAYOUT_LABELS = list(set(LABELS.values()))

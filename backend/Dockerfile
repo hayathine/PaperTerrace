@@ -49,7 +49,7 @@ ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1
 
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
+HEALTHCHECK --interval=60s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8080}/api/health || exit 1
 
 CMD ["/bin/bash", "-c", "/app/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

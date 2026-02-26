@@ -8,7 +8,7 @@ import numpy as np
 import openvino as ov
 
 from common.logger import logger
-from common.schemas.layout import BBoxModel, LayoutItem
+from common.schemas.layout import LABELS, BBoxModel, LayoutItem
 from services.layout_detection.preprocess import (
     LetterBoxResize,
     NormalizeImage,
@@ -20,20 +20,7 @@ from services.layout_detection.preprocess import (
 class OpenVINOLayoutAnalysisService:
     """OpenVINOを使用したレイアウト解析サービス"""
 
-    # PP-DocLayout標準ラベル
-    LABELS = {
-        0: "Text",
-        1: "Title",
-        2: "Figure",
-        3: "Figure caption",
-        4: "Table",
-        5: "Table caption",
-        6: "Header",
-        7: "Footer",
-        8: "Reference",
-        9: "Equation",
-        10: "Figure",  # 10 is often used for figures in some versions
-    }
+    LABELS = LABELS
 
     def __init__(self, lang: str = "en", model_path: str | None = None):
         if model_path is None:
@@ -143,10 +130,6 @@ class OpenVINOLayoutAnalysisService:
         except Exception as e:
             logger.error(f"Failed to initialize OpenVINOLayoutAnalysisService: {e}")
             self.compiled_model = None
-
-    async def analyze_async(self, pdf_path: str) -> list[dict]:
-        """PDF解析（スタブ）"""
-        return []
 
     def analyze_image(
         self, image_path: str | Path, target_classes: list[str] | None = None

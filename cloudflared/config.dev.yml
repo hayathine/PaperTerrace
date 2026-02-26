@@ -16,6 +16,6 @@ no-autoupdate: true
 retries: 5
 protocol: quic
 grace-period: 30s
-heartbeat-interval: 30s
+heartbeat-interval: 60s
 compression: true
 metrics: 0.0.0.0:2000
