@@ -146,12 +146,8 @@ class GCSImageStorage(ImageStorageStrategy):
         image_bytes = base64.b64decode(image_b64)
         blob.upload_from_string(image_bytes, content_type="image/png")
 
-        # 署名付きURLか、公開URLか、アプリ経由で配信するか考慮が必要
-        if self.storage_type == "gcs":
-            # GCSの場合は署名付きURLの生成を検討
-            # 現時点ではとりあえずプロキシ経由で配信
-            pass
-
+        # GCSの場合は署名付きURLの生成を検討
+        # 現時点ではとりあえずプロキシ経由で配信
         # 環境によっては静的ファイルの配信に制限があるため、
         # アプリがプロキシするためのパスルールに合わせるか、
         # あるいは GCS の Media Link を使うか。
