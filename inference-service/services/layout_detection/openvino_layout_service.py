@@ -57,10 +57,12 @@ class OpenVINOLayoutAnalysisService:
             Permute(),
         ]
 
+        self.engine = "OpenVINO"
+
         self._initialize_model()
 
     def _initialize_model(self):
-        logger.info("Initializing OpenVINOLayoutAnalysisService...")
+        logger.info("Initializing OpenVINOLayoutAnalysisService (Backend: OpenVINO)...")
         logger.info(f"Model path: {self.model_path}")
 
         if not os.path.exists(self.model_path):

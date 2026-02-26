@@ -155,6 +155,9 @@ async def analyze_layout_image(request: Request, file: UploadFile = File(...)):
         with temp_path.open("wb") as f:
             f.write(await file.read())
 
+        if hasattr(layout_service, "engine"):
+            logger.info(f"Using {layout_service.engine} for layout analysis")
+
         results = await run_in_threadpool(layout_service.analyze_image, str(temp_path))
 
         serializable = [

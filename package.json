@@ -4,7 +4,9 @@
   "scripts": {
     "lint": "biome lint .",
     "format": "biome format --write .",
-    "check": "biome check --write ."
+    "check": "biome check --write .",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm test --workspaces --if-present"
   },
   "workspaces": [
     "frontend",
