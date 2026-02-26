@@ -5,10 +5,8 @@ from app.domain.prompts import (
     ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT,
     CORE_SYSTEM_PROMPT,
 )
-from app.domain.services.local_translator import get_local_translator
 from app.providers import RedisService, get_ai_provider
 from app.providers.dictionary_provider import get_dictionary_provider
-
 from common.logger import logger
 from common.utils.text import truncate_context
 
@@ -17,6 +15,8 @@ from .correspondence_lang_dict import SUPPORTED_LANGUAGES
 
 class WordAnalysisService:
     def __init__(self):
+        from app.domain.services.local_translator import get_local_translator
+
         self.ai_provider = get_ai_provider()
         self.dict_provider = get_dictionary_provider()
         self.local_translator = get_local_translator()
@@ -30,7 +30,6 @@ class WordAnalysisService:
     async def translate(
         self, lemma: str, lang: str = "ja", context: str | None = None
     ) -> dict | None:
-
         # 3.5 Local Machine Translation (M2M100) - ServiceB経由
         try:
             local_translation = await self.local_translator.translate_async(lemma)
