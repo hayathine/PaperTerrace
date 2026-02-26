@@ -51,6 +51,10 @@ def build_dict_card_html(
     paper_param = f"&paper_id={paper_id}" if paper_id else ""
     element_param = f"&element_id={element_id}" if element_id else ""
 
+    # JS safety: escape single quotes for word and lemma, backticks for translation
+    js_word = word.replace("'", "\\'").replace('"', '\\"')
+    js_translation = translation.replace("`", "\\`").replace("$", "\\$")
+
     # 1. AI Re-translate Button (Lemma based)
     deep_btn = ""
     if show_deep_btn:
@@ -70,11 +74,12 @@ def build_dict_card_html(
         """
 
     # 2. AI Explanation Button (Context Aware)
+    # Note: Use js_word for context explanation to keep original word as title
     context_btn = ""
     if element_id:
         context_btn = f"""
         <button 
-            onclick="explainWithContext('{element_id}', '{lemma}', '{lang}', '{paper_id or ""}')"
+            onclick="explainWithContext('{element_id}', '{js_word}', '{lang}', '{paper_id or ""}')"
             class="flex-1 py-1.5 flex items-center justify-center gap-1.5 text-[9px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-all border border-emerald-100 shadow-sm"
         >
             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -84,9 +89,9 @@ def build_dict_card_html(
         </button>
         """
 
-    # Note saving button
+    # Note saving button: User wants original 'word' as Title, 'translation' as Memo
     save_btn = f"""
-    <button onclick="saveWordToNote('{lemma}', '{translation}')" title="Save to Note" 
+    <button onclick="saveWordToNote('{js_word}', `{js_translation}`)" title="Save to Note" 
         class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all">
         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
