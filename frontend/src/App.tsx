@@ -1,5 +1,6 @@
 import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import Login from "./components/Auth/Login";
 import ErrorBoundary from "./components/Error/ErrorBoundary";
@@ -13,6 +14,7 @@ import { useLoading } from "./contexts/LoadingContext";
 
 function App() {
 	const { user, logout } = useAuth();
+	const { t } = useTranslation();
 	const { startLoading, stopLoading } = useLoading();
 	const [uploadFile, setUploadFile] = useState<File | null>(null);
 
@@ -410,7 +412,7 @@ function App() {
 								type="button"
 								onClick={() => setIsLeftSidebarOpen(false)}
 								className="p-1.5 rounded-md hover:bg-gray-800 text-gray-400 hover:text-white transition-colors"
-								title="メニューを閉じる"
+								title={t("nav.close_menu")}
 							>
 								<svg
 									className="w-5 h-5"
@@ -430,13 +432,13 @@ function App() {
 						</div>
 						<div className="flex-1 overflow-y-auto px-2 mt-4 custom-scrollbar">
 							<p className="text-[10px] font-bold text-gray-500 uppercase tracking-[0.2em] mb-4 px-2">
-								Paper Library
+								{t("nav.paper_library")}
 							</p>
 
 							<div className="space-y-1">
 								{uploadedPapers.length === 0 ? (
 									<div className="px-2 py-4 text-xs text-gray-500 italic">
-										No papers uploaded yet
+										{t("nav.no_papers")}
 									</div>
 								) : (
 									uploadedPapers.map((paper) => (
@@ -512,9 +514,11 @@ function App() {
 										G
 									</div>
 									<div className="overflow-hidden">
-										<p className="text-sm font-medium truncate">Guest User</p>
+										<p className="text-sm font-medium truncate">
+											{t("nav.guest_user")}
+										</p>
 										<p className="text-xs text-gray-400 truncate">
-											Limited Access
+											{t("nav.limited_access")}
 										</p>
 									</div>
 								</div>
@@ -525,7 +529,7 @@ function App() {
 									onClick={logout}
 									className="w-full py-2 px-4 bg-red-600 hover:bg-red-700 rounded text-sm transition-colors"
 								>
-									Sign Out
+									{t("nav.signout")}
 								</button>
 							) : (
 								<button
@@ -533,7 +537,7 @@ function App() {
 									onClick={() => setShowLoginModal(true)}
 									className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 rounded text-sm transition-colors"
 								>
-									Sign In / Sign Up
+									{t("nav.signin_signup")}
 								</button>
 							)}
 						</div>
@@ -543,12 +547,10 @@ function App() {
 								htmlFor="pdf-upload-input"
 								className="block text-xs font-bold mb-2 text-gray-400"
 							>
-								UPLOAD PDF
+								{t("nav.upload_pdf")}
 							</label>
 							<p className="text-[10px] text-amber-400/80 mb-2 leading-tight">
-								*現在、英語の論文のみサポートしています。
-								<br />
-								(Only English papers are supported)
+								{t("nav.only_english_supported")}
 							</p>
 							<input
 								id="pdf-upload-input"
@@ -586,7 +588,7 @@ function App() {
 										id="dev-load-pdf-btn"
 										className="w-full py-1 px-3 bg-indigo-900/50 hover:bg-indigo-900 text-indigo-200 text-xs rounded border border-indigo-800 transition-colors"
 									>
-										[DEV] Load Test.pdf
+										{t("viewer.loading_test")}
 									</button>
 								</div>
 							)}
@@ -602,7 +604,7 @@ function App() {
 								type="button"
 								onClick={() => setIsLeftSidebarOpen(true)}
 								className="mr-4 p-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 hover:text-indigo-600 hover:border-indigo-200 transition-all duration-200 flex items-center justify-center shadow-sm"
-								title="メニューを開く"
+								title={t("nav.open_menu")}
 							>
 								<svg
 									className="w-4 h-4"
@@ -620,7 +622,7 @@ function App() {
 							</button>
 						)}
 						<span className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-							Reading Mode
+							{t("nav.reading_mode")}
 						</span>
 						<div className="flex-1" />
 						{uploadFile && (

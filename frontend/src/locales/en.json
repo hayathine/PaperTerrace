@@ -35,7 +35,8 @@
 		"github": "Sign in with GitHub",
 		"guest": "Continue as Guest",
 		"redirect_hint": "If popup doesn't work, try redirect:",
-		"terms_hint": "By signing in, you agree to our Terms of Service and Privacy Policy."
+		"terms_hint": "By signing in, you agree to our Terms of Service and Privacy Policy.",
+		"signing_in": "Signing in..."
 	},
 	"sidebar": {
 		"tabs": {

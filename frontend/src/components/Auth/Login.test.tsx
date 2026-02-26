@@ -21,13 +21,14 @@ vi.mock("../../contexts/AuthContext", () => ({
 describe("Login Component", () => {
 	it("renders PaperTerrace title", () => {
 		render(<Login onGuestAccess={() => {}} />);
-		expect(screen.getByText("PaperTerrace")).toBeDefined();
+		expect(screen.getByText(/Paper/)).toBeDefined();
+		expect(screen.getByText(/Terrace/)).toBeDefined();
 	});
 
 	it("renders login buttons", () => {
 		render(<Login onGuestAccess={() => {}} />);
-		expect(screen.getByText("auth.login_google")).toBeDefined();
-		expect(screen.getByText("auth.login_github")).toBeDefined();
-		expect(screen.getByText("auth.guest_access")).toBeDefined();
+		expect(screen.getByText("auth.google")).toBeDefined();
+		expect(screen.getByText("auth.github")).toBeDefined();
+		expect(screen.getByText("auth.guest")).toBeDefined();
 	});
 });

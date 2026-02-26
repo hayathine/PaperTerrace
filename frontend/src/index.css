@@ -2,6 +2,20 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer base {
+	:root {
+		--font-inter: "Inter", system-ui, -apple-system, sans-serif;
+	}
+
+	body {
+		font-family: var(--font-inter);
+		@apply text-slate-900 antialiased;
+		text-rendering: optimizeLegibility;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+	}
+}
+
 /* PDF Text Layer - transparent text overlay for native search/selection */
 .pdf-page-viewport {
 	container-type: size;

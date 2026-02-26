@@ -42,21 +42,39 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 	};
 
 	return (
-		<div className="flex items-center justify-center p-8">
-			<div className="max-w-md w-full space-y-6">
-				<div className="text-center">
-					<h2 className="text-3xl font-bold text-gray-900 tracking-tight">
-						PaperTerrace
+		<div className="flex flex-col w-full relative">
+			{/* Decorative background element */}
+			<div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-br from-indigo-600 to-purple-700 opacity-[0.03]" />
+
+			<div className="px-8 pt-10 pb-12 relative z-10">
+				<div className="text-center mb-10">
+					<div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-tr from-indigo-600 to-purple-500 rounded-2xl shadow-lg shadow-indigo-200 mb-4 animate-in zoom-in duration-500">
+						<svg
+							className="w-8 h-8 text-white"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth="2"
+								d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+							/>
+						</svg>
+					</div>
+					<h2 className="text-4xl font-black text-slate-800 tracking-tight mb-2">
+						Paper<span className="text-indigo-600">Terrace</span>
 					</h2>
-					<p className="mt-2 text-sm text-gray-500">{t("auth.tagline")}</p>
+					<p className="text-slate-500 font-medium">{t("auth.tagline")}</p>
 				</div>
 
 				{error && (
-					<div className="bg-red-50 border-l-4 border-red-400 p-4 rounded animate-in fade-in slide-in-from-top-1 duration-300">
+					<div className="mb-6 bg-red-50 border border-red-100 p-4 rounded-xl animate-in fade-in slide-in-from-top-2 duration-300">
 						<div className="flex">
 							<div className="flex-shrink-0">
 								<svg
-									className="h-5 w-5 text-red-400"
+									className="h-5 w-5 text-red-500"
 									viewBox="0 0 20 20"
 									fill="currentColor"
 								>
@@ -68,66 +86,142 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 								</svg>
 							</div>
 							<div className="ml-3">
-								<p className="text-sm text-red-700">{error}</p>
+								<p className="text-sm text-red-700 font-medium">{error}</p>
 							</div>
 						</div>
 					</div>
 				)}
 
 				<div className="space-y-4">
-					<div className="flex flex-col gap-2">
+					<div className="grid grid-cols-1 gap-3">
 						<button
 							type="button"
 							onClick={() => handleSignIn("google", "popup")}
 							disabled={!!loading}
-							className="group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-semibold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none transition-all disabled:opacity-70"
+							className="group relative w-full flex items-center justify-center py-3.5 px-4 border border-transparent text-sm font-bold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] focus:outline-none transition-all shadow-md shadow-indigo-100 disabled:opacity-70"
 						>
-							{loading === "google"
-								? t("auth.signing_in")
-								: t("auth.login_google")}
+							<div className="flex items-center gap-2">
+								{loading === "google" ? (
+									<svg
+										className="animate-spin h-5 w-5 text-white"
+										xmlns="http://www.w3.org/2000/svg"
+										fill="none"
+										viewBox="0 0 24 24"
+									>
+										<circle
+											className="opacity-25"
+											cx="12"
+											cy="12"
+											r="10"
+											stroke="currentColor"
+											strokeWidth="4"
+										></circle>
+										<path
+											className="opacity-75"
+											fill="currentColor"
+											d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+										></path>
+									</svg>
+								) : (
+									<svg
+										className="w-5 h-5"
+										viewBox="0 0 24 24"
+										fill="currentColor"
+									>
+										<path d="M12.48 10.92v3.28h7.84c-.24 1.84-.908 3.152-1.928 4.176-1.232 1.232-3.156 2.508-6.192 2.508-4.832 0-8.62-3.908-8.62-8.74s3.788-8.74 8.62-8.74c2.592 0 5.168.996 6.944 2.768l2.312-2.312C18.948 1.412 15.936 0 12.48 0 5.832 0 0 5.368 0 12s5.832 12 12.48 12c3.552 0 6.228-1.172 8.328-3.288 2.152-2.152 2.828-5.18 2.828-7.624 0-.748-.068-1.464-.176-2.176H12.48z" />
+									</svg>
+								)}
+								<span>
+									{loading === "google"
+										? t("auth.signing_in")
+										: t("auth.google")}
+								</span>
+							</div>
 						</button>
 
 						<button
 							type="button"
 							onClick={() => handleSignIn("github", "popup")}
 							disabled={!!loading}
-							className="group relative w-full flex justify-center py-2.5 px-4 border border-gray-300 text-sm font-semibold rounded-xl text-gray-700 bg-white hover:bg-gray-50 focus:outline-none transition-all disabled:opacity-70"
+							className="group relative w-full flex items-center justify-center py-3.5 px-4 border border-slate-200 text-sm font-bold rounded-xl text-slate-700 bg-white hover:bg-slate-50 active:scale-[0.98] focus:outline-none transition-all shadow-sm disabled:opacity-70"
 						>
-							{loading === "github"
-								? t("auth.signing_in")
-								: t("auth.login_github")}
+							<div className="flex items-center gap-2">
+								{loading === "github" ? (
+									<svg
+										className="animate-spin h-5 w-5 text-indigo-600"
+										xmlns="http://www.w3.org/2000/svg"
+										fill="none"
+										viewBox="0 0 24 24"
+									>
+										<circle
+											className="opacity-25"
+											cx="12"
+											cy="12"
+											r="10"
+											stroke="currentColor"
+											strokeWidth="4"
+										></circle>
+										<path
+											className="opacity-75"
+											fill="currentColor"
+											d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+										></path>
+									</svg>
+								) : (
+									<svg
+										className="w-5 h-5"
+										fill="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											fillRule="evenodd"
+											d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+											clipRule="evenodd"
+										/>
+									</svg>
+								)}
+								<span>
+									{loading === "github"
+										? t("auth.signing_in")
+										: t("auth.github")}
+								</span>
+							</div>
 						</button>
 					</div>
 
-					<div className="pt-2">
-						<p className="text-[10px] text-gray-400 text-center mb-2">
-							{t("auth.login_redirect_hint")}
-						</p>
+					<div className="py-4">
+						<div className="flex items-center gap-4 mb-4">
+							<div className="h-px w-full bg-slate-100" />
+							<span className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] whitespace-nowrap">
+								{t("auth.redirect_hint")}
+							</span>
+							<div className="h-px w-full bg-slate-100" />
+						</div>
 
-						<div className="flex gap-2">
+						<div className="grid grid-cols-2 gap-3">
 							<button
 								type="button"
 								onClick={() => handleSignIn("google", "redirect")}
-								className="flex-1 py-1.5 px-2 border border-black/10 rounded-lg text-[10px] text-gray-500 hover:bg-gray-50 transition-colors"
+								className="py-2.5 px-3 border border-slate-100 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-50 active:scale-[0.98] transition-all"
 							>
-								Google (Redirect)
+								Google
 							</button>
 							<button
 								type="button"
 								onClick={() => handleSignIn("github", "redirect")}
-								className="flex-1 py-1.5 px-2 border border-black/10 rounded-lg text-[10px] text-gray-500 hover:bg-gray-50 transition-colors"
+								className="py-2.5 px-3 border border-slate-100 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-50 active:scale-[0.98] transition-all"
 							>
-								GitHub (Redirect)
+								GitHub
 							</button>
 						</div>
 					</div>
 
 					<div className="relative py-4">
 						<div className="absolute inset-0 flex items-center">
-							<div className="w-full border-t border-gray-100" />
+							<div className="w-full border-t border-slate-100" />
 						</div>
-						<div className="relative flex justify-center text-xs">
-							<span className="px-3 bg-white text-gray-400 uppercase tracking-widest font-medium">
+						<div className="relative flex justify-center text-[10px]">
+							<span className="px-4 bg-white text-slate-300 font-black uppercase tracking-[0.3em]">
 								Or
 							</span>
 						</div>
@@ -136,15 +230,30 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 					<button
 						type="button"
 						onClick={onGuestAccess}
-						className="group relative w-full flex justify-center py-3 px-4 border border-dashed border-gray-300 text-sm font-medium rounded-xl text-gray-500 bg-gray-50/50 hover:bg-gray-50 hover:text-gray-700 transition-all duration-200"
+						className="group relative w-full flex items-center justify-center py-4 px-4 border-2 border-dashed border-slate-200 text-sm font-bold rounded-2xl text-slate-500 bg-slate-50/30 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 transition-all duration-300"
 					>
-						{t("auth.guest_access")}
+						<span className="flex items-center gap-2">
+							<svg
+								className="w-5 h-5"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth="2"
+									d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+								/>
+							</svg>
+							{t("auth.guest")}
+						</span>
 					</button>
-				</div>
 
-				<p className="text-center text-[10px] text-gray-400 pt-4">
-					{t("auth.terms_agreement")}
-				</p>
+					<p className="text-center text-[10px] text-slate-400 font-medium leading-relaxed px-4 mt-8">
+						{t("auth.terms_hint")}
+					</p>
+				</div>
 			</div>
 		</div>
 	);
