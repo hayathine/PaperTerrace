@@ -51,6 +51,12 @@ interface PDFPageProps {
 	currentSearchMatch?: { page: number; wordIndex: number } | null;
 	// Click mode (text mode) flag
 	isClickMode?: boolean;
+	evidenceHighlights?: Array<{
+		x: number;
+		y: number;
+		width: number;
+		height: number;
+	}>;
 }
 
 const PDFPage: React.FC<PDFPageProps> = ({
@@ -67,6 +73,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 	searchTerm,
 	currentSearchMatch,
 	isClickMode = false,
+	evidenceHighlights = [],
 }) => {
 	const { t } = useTranslation();
 	const { width, height, words, figures, image_url, page_num } = page;
@@ -405,6 +412,20 @@ const PDFPage: React.FC<PDFPageProps> = ({
 						}
 					}}
 				/>
+
+				{/* Evidence Highlights */}
+				{evidenceHighlights.map((highlight, idx) => (
+					<div
+						key={`evidence-${idx}`}
+						className="absolute bg-emerald-400/30 border-2 border-emerald-500/50 rounded-sm z-30 pointer-events-none animate-[pulse_2s_infinite]"
+						style={{
+							left: `${highlight.x * 100}%`,
+							top: `${highlight.y * 100}%`,
+							width: `${highlight.width * 100}%`,
+							height: `${highlight.height * 100}%`,
+						}}
+					/>
+				))}
 
 				{/* Word Overlays */}
 				<div className="absolute inset-0 w-full h-full z-40 pointer-events-none">

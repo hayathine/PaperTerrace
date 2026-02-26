@@ -64,6 +64,7 @@ function App() {
 	const [sidebarWidth, setSidebarWidth] = useState(384);
 	const [isResizing, setIsResizing] = useState(false);
 	const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
+	const [activeEvidence, setActiveEvidence] = useState<any>(null);
 	const [stackedPapers, setStackedPapers] = useState<
 		{ url: string; title?: string; addedAt: number }[]
 	>(() => {
@@ -648,6 +649,7 @@ function App() {
 										searchTerm={searchTerm}
 										onSearchMatchesUpdate={handleSearchMatchesUpdate}
 										currentSearchMatch={currentSearchMatch}
+										evidence={activeEvidence}
 									/>
 								</div>
 							) : (
@@ -701,6 +703,11 @@ function App() {
 								stackedPapers={stackedPapers}
 								onStackPaper={handleStackPaper}
 								onRemoveFromStack={handleRemoveFromStack}
+								onEvidenceClick={(g) => {
+									setActiveEvidence(g);
+									// Optionally switch to PDF view if in plaintext mode?
+									// For now just set evidence.
+								}}
 							/>
 						</div>
 					</div>
