@@ -14,11 +14,10 @@ from app.domain.prompts import (
     CORE_SYSTEM_PROMPT,
 )
 from app.providers import get_ai_provider
+from common.logger import logger
 from redis_provider.provider import (
     RedisService,
 )  # RedisService now uses in-memory cache
-
-from common.logger import logger
 
 
 class ChatError(Exception):
@@ -90,7 +89,7 @@ class ChatService:
                     history_text=history_text_for_prompt,
                     user_message=user_message,
                 )
-                response = await self.ai_provider.generate_with_pdf(
+                response_data = await self.ai_provider.generate_with_pdf(
                     prompt, pdf_bytes, model=self.model
                 )
             elif image_bytes:
@@ -109,7 +108,7 @@ class ChatService:
                     history_text=history_text_for_prompt,
                     user_message=user_message,
                 )
-                response = await self.ai_provider.generate_with_image(
+                response_data = await self.ai_provider.generate_with_image(
                     prompt, image_bytes, "image/png", model=self.model
                 )
             else:
@@ -157,24 +156,36 @@ class ChatService:
                     user_message=user_message,  # Added
                 )
 
-                response = await self.ai_provider.generate(
-                    prompt,
-                    model=self.model,
-                    system_instruction=CORE_SYSTEM_PROMPT,
-                    cached_content_name=cache_name,
-                )
+            response_data = await self.ai_provider.generate(
+                prompt,
+                model=self.model,
+                system_instruction=CORE_SYSTEM_PROMPT,
+                cached_content_name=cache_name,
+            )
 
-            response = response.strip()
+            # Handle response with grounding metadata
+            if isinstance(response_data, dict):
+                response_text = response_data.get("text", "").strip()
+                grounding = response_data.get("grounding")
+            else:
+                response_text = str(response_data or "").strip()
+                grounding = None
 
-            if not response:
+            if not response_text:
                 logger.warning("Empty chat response received")
                 raise ChatError("Empty response from AI")
 
             logger.info(
                 "Chat response generated",
-                extra={"response_length": len(response)},
+                extra={
+                    "response_length": len(response_text),
+                    "has_grounding": grounding is not None,
+                },
             )
-            return response
+
+            if grounding:
+                return {"text": response_text, "grounding": grounding}
+            return response_text
         except ChatError:
             raise
         except Exception as e:
@@ -220,7 +231,7 @@ class ChatService:
                 prompt = CHAT_AUTHOR_FROM_PDF_PROMPT.format(
                     lang_name=lang_name, question=question
                 )
-                response = await self.ai_provider.generate_with_pdf(
+                response_data = await self.ai_provider.generate_with_pdf(
                     prompt, pdf_bytes, model=self.model
                 )
             else:
@@ -237,19 +248,33 @@ class ChatService:
                     paper_text=paper_text[:20000],
                     question=question,
                 )
-                response = await self.ai_provider.generate(prompt, model=self.model)
+                response_data = await self.ai_provider.generate(
+                    prompt, model=self.model
+                )
 
-            response = response.strip()
+            # Handle response with grounding metadata
+            if isinstance(response_data, dict):
+                response_text = response_data.get("text", "").strip()
+                grounding = response_data.get("grounding")
+            else:
+                response_text = str(response_data or "").strip()
+                grounding = None
 
-            if not response:
+            if not response_text:
                 logger.warning("Empty author agent response")
                 raise ChatError("Empty response from author agent")
 
             logger.info(
                 "Author agent response generated",
-                extra={"response_length": len(response)},
+                extra={
+                    "response_length": len(response_text),
+                    "has_grounding": grounding is not None,
+                },
             )
-            return response
+
+            if grounding:
+                return {"text": response_text, "grounding": grounding}
+            return response_text
         except ChatError:
             raise
         except Exception as e:

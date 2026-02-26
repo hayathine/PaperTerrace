@@ -24,6 +24,7 @@ interface SidebarProps {
 	stackedPapers: { url: string; title?: string; addedAt: number }[];
 	onStackPaper: (url: string, title?: string) => void;
 	onRemoveFromStack: (url: string) => void;
+	onEvidenceClick?: (grounding: any) => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -44,6 +45,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	stackedPapers,
 	onStackPaper,
 	onRemoveFromStack,
+	onEvidenceClick,
 }) => {
 	const { t } = useTranslation();
 
@@ -148,6 +150,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						initialPrompt={pendingChatPrompt}
 						onInitialPromptSent={onPendingChatConsumed}
 						onStackPaper={onStackPaper}
+						onEvidenceClick={onEvidenceClick}
 					/>
 				</div>
 

@@ -458,7 +458,7 @@ async def stream(task_id: str):
                 full_text = "\n\n---\n\n".join(full_text_fragments)
                 new_paper_id = str(uuid6.uuid7())
 
-                # Save to DB (Background or here)
+                # Save to DB and trigger tasks (Always save to support analysis tasks)
                 try:
                     storage.save_paper(
                         paper_id=new_paper_id,
@@ -468,7 +468,7 @@ async def stream(task_id: str):
                         html_content="",
                         target_language="ja",
                         layout_json=json.dumps(all_layout_data),
-                        owner_id=user_id,  # Pass owner_id
+                        owner_id=user_id,  # None for guess
                     )
 
                     # Save Collected Figures and Trigger Auto-Explanation
@@ -494,23 +494,21 @@ async def stream(task_id: str):
                                 process_figure_analysis_task(fid, fig["image_url"])
                             )
 
+                    # --- Auto-Summarization for Abstract ---
+                    asyncio.create_task(
+                        process_paper_summary_task(new_paper_id, lang=lang)
+                    )
+
+                    # DBにもセッションマッピングを保存
+                    if session_id:
+                        storage.save_session_context(session_id, new_paper_id)
+
                 except Exception as e:
-                    logger.error(f"Failed to save paper: {e}")
+                    logger.error(f"Failed to save paper record: {e}")
 
-                # セッションコンテキスト保存 (Summary等のために必要)
+                # Redisセッションコンテキストを1時間保持
                 s_id = session_id or new_paper_id
-                res = redis_service.set(f"session:{s_id}", full_text, expire=86400)
-
-                # DBにもセッションマッピングを保存 (再起動対策)
-                if s_id:
-                    storage.save_session_context(s_id, new_paper_id)
-
-                # --- Auto-Summarization for Abstract ---
-                asyncio.create_task(process_paper_summary_task(new_paper_id, lang=lang))
-
-                logger.info(
-                    f"Saved session context for: {s_id} (result: {res}, length: {len(full_text)})"
-                )
+                redis_service.set(f"session:{s_id}", full_text, expire=3600)
 
                 yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': new_paper_id})}\n\n"
                 await asyncio.sleep(0.01)
@@ -774,7 +772,7 @@ async def stream(task_id: str):
                         yield chunk
                         await asyncio.sleep(0.005)
 
-            # 全ページ完了後、DB保存
+            # 全ページ完了後、DB保存 (Backup for analysis tasks)
             full_text = "\n\n---\n\n".join(full_text_fragments)
             paper_id = str(uuid6.uuid7())
 
@@ -786,8 +784,9 @@ async def stream(task_id: str):
                     ocr_text=full_text,
                     html_content="",
                     target_language="ja",
+                    owner_id=user_id,
                 )
-                logger.info(f"Paper saved completed: {paper_id}")
+                logger.info(f"Paper record saved: {paper_id}")
 
                 # Save Collected Figures and Explain
                 if collected_figures:
@@ -802,27 +801,29 @@ async def stream(task_id: str):
                             page_number=fig["page_num"],
                             bbox=fig["bbox"],
                             image_url=fig["image_url"],
-                            caption="",
-                            explanation="",
+                            caption="",  # Can't easily extract yet
+                            explanation="",  # Initially empty
                             label=fig.get("label", "figure"),
                             latex=fig.get("latex", ""),
                         )
-                        if True:  # Always trigger async task
-                            asyncio.create_task(
-                                process_figure_analysis_task(fid, fig["image_url"])
-                            )
+                        # Trigger figure analysis via asyncio task
+                        asyncio.create_task(
+                            process_figure_analysis_task(fid, fig["image_url"])
+                        )
+
+                # --- Auto-Summarization for Abstract ---
+                asyncio.create_task(process_paper_summary_task(paper_id, lang=lang))
+
+                # DBにもセッションマッピングを保存
+                if session_id:
+                    storage.save_session_context(session_id, paper_id)
 
             except Exception as e:
-                logger.error(f"Failed to save paper: {e}")
+                logger.error(f"Failed to save paper record: {e}")
 
-            # セッションコンテキスト保存
+            # Redisセッションコンテキストを1時間保持
             if session_id:
-                redis_service.set(f"session:{session_id}", full_text, expire=86400)
-                # DBにも保存
-                storage.save_session_context(session_id, paper_id)
-
-            # --- Auto-Summarization for Abstract ---
-            asyncio.create_task(process_paper_summary_task(paper_id, lang=lang))
+                redis_service.set(f"session:{session_id}", full_text, expire=3600)
 
             # 完了処理
 

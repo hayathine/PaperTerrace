@@ -43,6 +43,7 @@ interface PDFViewerProps {
 		matches: Array<{ page: number; wordIndex: number }>,
 	) => void;
 	currentSearchMatch?: { page: number; wordIndex: number } | null;
+	evidence?: any;
 }
 
 const PDFViewer: React.FC<PDFViewerProps> = ({
@@ -59,6 +60,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	searchTerm,
 	onSearchMatchesUpdate,
 	currentSearchMatch,
+	evidence,
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token } = useAuth();
@@ -86,12 +88,81 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	const [selectedStamp, setSelectedStamp] = useState<StampType>("👍");
 
 	const pagesRef = useRef<PageData[]>([]);
+	const [evidenceHighlights, setEvidenceHighlights] = useState<
+		Record<number, any[]>
+	>({});
 
 	useEffect(() => {
 		if (onStatusChange) {
 			onStatusChange(status);
 		}
 	}, [status, onStatusChange]);
+
+	useEffect(() => {
+		if (!evidence || !pages.length) {
+			setEvidenceHighlights({});
+			return;
+		}
+
+		const highlights: Record<number, any[]> = {};
+
+		if (evidence.supports) {
+			evidence.supports.forEach((support: any) => {
+				const text = support.segment_text;
+				if (!text || text.length < 5) return;
+
+				const tokens = text
+					.toLowerCase()
+					.split(/\s+/)
+					.filter((t: string) => t.length > 0);
+				if (tokens.length === 0) return;
+
+				pages.forEach((page) => {
+					for (let i = 0; i <= (page.words?.length || 0) - tokens.length; i++) {
+						let match = true;
+						for (let j = 0; j < tokens.length; j++) {
+							if (!page.words[i + j].word.toLowerCase().includes(tokens[j])) {
+								match = false;
+								break;
+							}
+						}
+						if (match) {
+							const matchedWords = page.words.slice(i, i + tokens.length);
+							const x1 = Math.min(...matchedWords.map((w) => w.bbox[0]));
+							const y1 = Math.min(...matchedWords.map((w) => w.bbox[1]));
+							const x2 = Math.max(...matchedWords.map((w) => w.bbox[2]));
+							const y2 = Math.max(...matchedWords.map((w) => w.bbox[3]));
+
+							if (!highlights[page.page_num]) highlights[page.page_num] = [];
+							highlights[page.page_num].push({
+								x: x1 / (page.width || 1),
+								y: y1 / (page.height || 1),
+								width: (x2 - x1) / (page.width || 1),
+								height: (y2 - y1) / (page.height || 1),
+							});
+							// To avoid too many highlights for the same segment, we can break after some matches
+							if (highlights[page.page_num].length > 5) break;
+						}
+					}
+				});
+			});
+		}
+
+		setEvidenceHighlights(highlights);
+
+		// Auto-scroll to first evidence
+		const firstPage = Object.keys(highlights).sort(
+			(a, b) => Number(a) - Number(b),
+		)[0];
+		if (firstPage) {
+			const p = Number(firstPage);
+			setTimeout(() => {
+				document
+					.getElementById(`page-${p}`)
+					?.scrollIntoView({ behavior: "smooth", block: "center" });
+			}, 100);
+		}
+	}, [evidence, pages]);
 
 	// Sync ref with state
 	useEffect(() => {
@@ -1118,6 +1189,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 									searchTerm={searchTerm}
 									currentSearchMatch={currentSearchMatch}
 									isClickMode={mode === "text"}
+									evidenceHighlights={evidenceHighlights[page.page_num]}
 								/>
 							))}
 						</div>

@@ -185,6 +185,22 @@ class GeminiProvider(AIProviderInterface):
                 config=config,
             )
 
+            # Log grounding metadata for debugging (Visual Grounding / Evidence)
+            try:
+                if response.candidates and response.candidates[0].grounding_metadata:
+                    gm = response.candidates[0].grounding_metadata
+                    logger.debug(
+                        f"Grounding Metadata found: {type(gm)}",
+                        extra={
+                            "has_chunks": hasattr(gm, "grounding_chunks")
+                            and gm.grounding_chunks,
+                            "has_supports": hasattr(gm, "grounding_supports")
+                            and gm.grounding_supports,
+                        },
+                    )
+            except Exception as e:
+                logger.warning(f"Failed to log grounding metadata: {e}")
+
             if response_model:
                 # If parsed is available in the SDK version and it works for Pydantic
                 # Otherwise we might need to manual parse response.text
@@ -208,12 +224,65 @@ class GeminiProvider(AIProviderInterface):
                         text_to_parse = text_to_parse[3:].strip("` \n")
                     return response_model.model_validate_json(text_to_parse)
 
-            result = str(response.text or "").strip()
+            result_text = str(response.text or "").strip()
+
+            # Extract grounding metadata
+            grounding_data = None
+            try:
+                if response.candidates and response.candidates[0].grounding_metadata:
+                    gm = response.candidates[0].grounding_metadata
+                    grounding_data = {}
+
+                    # Convert to serializable format
+                    if hasattr(gm, "grounding_chunks") and gm.grounding_chunks:
+                        grounding_data["chunks"] = []
+                        for chunk in gm.grounding_chunks:
+                            chunk_dict = {}
+                            if hasattr(chunk, "web") and chunk.web:
+                                chunk_dict["web"] = {
+                                    "uri": chunk.web.uri,
+                                    "title": chunk.web.title,
+                                }
+                            if (
+                                hasattr(chunk, "retrieved_context")
+                                and chunk.retrieved_context
+                            ):
+                                chunk_dict["retrieved_context"] = {
+                                    "uri": chunk.retrieved_context.uri,
+                                    "title": chunk.retrieved_context.title,
+                                    "text": chunk.retrieved_context.text,
+                                }
+                            grounding_data["chunks"].append(chunk_dict)
+
+                    if hasattr(gm, "grounding_supports") and gm.grounding_supports:
+                        grounding_data["supports"] = []
+                        for support in gm.grounding_supports:
+                            support_dict = {
+                                "segment_text": support.segment.text
+                                if hasattr(support, "segment")
+                                else "",
+                                "indices": list(support.grounding_chunk_indices)
+                                if hasattr(support, "grounding_chunk_indices")
+                                else [],
+                                "confidence_scores": list(support.confidence_scores)
+                                if hasattr(support, "confidence_scores")
+                                else [],
+                            }
+                            grounding_data["supports"].append(support_dict)
+            except Exception as e:
+                logger.warning(f"Failed to extract grounding metadata: {e}")
+
             logger.debug(
                 "Gemini generate response",
-                extra={"response_length": len(result)},
+                extra={
+                    "response_length": len(result_text),
+                    "has_grounding": grounding_data is not None,
+                },
             )
-            return result
+
+            if grounding_data:
+                return {"text": result_text, "grounding": grounding_data}
+            return result_text
         except Exception as e:
             logger.exception(
                 "Gemini generation failed",
