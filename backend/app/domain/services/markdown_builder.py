@@ -21,18 +21,32 @@ def sort_blocks(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     span_col = []  # ページ全体をまたぐようなブロック
 
     for b in blocks:
-        x1, _, x2, _ = b["bbox"]
-        width = x2 - x1
+        bbox = b["bbox"]
+        # Handle both list [x1, y1, x2, y2] and dict {"x_min": x1, ...} formats
+        if isinstance(bbox, dict):
+            bx1 = bbox.get("x_min") or bbox.get("x0") or bbox.get("left")
+            bx2 = bbox.get("x_max") or bbox.get("x1") or bbox.get("right")
+            by1 = bbox.get("y_min") or bbox.get("top") or bbox.get("y0")
+        else:
+            bx1, by1, bx2, _ = bbox
+
+        width = bx2 - bx1
         if width > max_x * 0.7:  # 70%以上の幅があれば1段ぶち抜きと判断
             span_col.append(b)
-        elif (x1 + x2) / 2 < mid_x:
+        elif (bx1 + bx2) / 2 < mid_x:
             left_col.append(b)
         else:
             right_col.append(b)
 
-    # それぞれを Y座標(bbox[1]) でソート
+    # それぞれを Y座標 でソート
     def sort_by_y(col):
-        return sorted(col, key=lambda x: x["bbox"][1])
+        def get_y(item):
+            bbox = item["bbox"]
+            if isinstance(bbox, dict):
+                return bbox.get("y_min") or bbox.get("top") or bbox.get("y0")
+            return bbox[1]
+
+        return sorted(col, key=get_y)
 
     left_col = sort_by_y(left_col)
     right_col = sort_by_y(right_col)
@@ -88,7 +102,15 @@ def generate_markdown_from_layout(
 
         assigned = False
         for b in sorted_blocks:
-            bx1, by1, bx2, by2 = b["bbox"]
+            bbox = b["bbox"]
+            if isinstance(bbox, dict):
+                bx1 = bbox.get("x_min") or bbox.get("x0") or bbox.get("left")
+                bx2 = bbox.get("x_max") or bbox.get("x1") or bbox.get("right")
+                by1 = bbox.get("y_min") or bbox.get("top") or bbox.get("y0")
+                by2 = bbox.get("y_max") or bbox.get("bottom") or bbox.get("y1")
+            else:
+                bx1, by1, bx2, by2 = bbox
+
             margin = 5  # ブロックの境界の少し外側も許容
             if (bx1 - margin) <= wx_center <= (bx2 + margin) and (
                 by1 - margin

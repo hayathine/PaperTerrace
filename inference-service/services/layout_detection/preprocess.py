@@ -17,10 +17,10 @@ class LetterBoxResize:
 
         canvas = np.zeros((target_h, target_w, 3), dtype=np.uint8)
 
-        # Centering the image
-        pad_h = (target_h - new_h) // 2
-        pad_w = (target_w - new_w) // 2
-        canvas[pad_h : pad_h + new_h, pad_w : pad_w + new_w, :] = resized_img
+        # Top-Left padding (not centered)
+        pad_h = 0
+        pad_w = 0
+        canvas[0:new_h, 0:new_w, :] = resized_img
 
         data["image"] = canvas
         data["im_shape"] = np.array([new_h, new_w], dtype=np.float32)

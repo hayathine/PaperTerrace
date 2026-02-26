@@ -269,8 +269,17 @@ class OpenVINOLayoutAnalysisService:
             scores = valid_predictions[:, 1]
             boxes = valid_predictions[:, 2:6].copy()
 
+            logger.info(
+                f"Postprocess - ratio: {ratio:.4f}, pad_h: {pad_h}, pad_w: {pad_w}"
+            )
+            logger.info(
+                f"Postprocess - sample raw bbox (first 3): {predictions[:3, 2:6]}"
+            )
+
             boxes[:, [0, 2]] = (boxes[:, [0, 2]] - pad_w) / ratio
             boxes[:, [1, 3]] = (boxes[:, [1, 3]] - pad_h) / ratio
+
+            logger.info(f"Postprocess - sample transformed bbox (first 3): {boxes[:3]}")
 
             boxes = np.round(boxes).astype(int)
             boxes = np.maximum(boxes, 0)
