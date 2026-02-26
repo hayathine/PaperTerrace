@@ -9,6 +9,7 @@ from fastapi import APIRouter, Form
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
+from app.auth import OptionalUser
 from app.domain.features import ChatService
 from app.providers import (
     RedisService,
@@ -37,7 +38,14 @@ class ChatRequest(BaseModel):
 
 
 @router.post("/chat")
-async def chat(request: ChatRequest):
+async def chat(request: ChatRequest, user: OptionalUser = None):
+    # Check registration status
+    user_id = user.uid if user else None
+    is_registered = False
+    if user_id:
+        if storage.get_user(user_id):
+            is_registered = True
+
     context = redis_service.get(f"session:{request.session_id}") or ""
 
     # Resolve paper_id
@@ -46,7 +54,17 @@ async def chat(request: ChatRequest):
         paper_id = storage.get_session_paper_id(request.session_id)
 
     # Get history from Redis
-    history_key = f"chat:{request.session_id}:{paper_id if paper_id else 'global'}"
+    # Registered users: History linked to user_id and paper_id
+    # Guests: History linked to session_id and paper_id
+    if is_registered:
+        history_key = (
+            f"chat:{user_id}:{request.paper_id if request.paper_id else 'global'}"
+        )
+        expire = 30 * 24 * 3600  # 30 days for registered users
+    else:
+        history_key = f"chat:{request.session_id}:{request.paper_id if request.paper_id else 'global'}"
+        expire = 3600  # 1 hour for guests (short-lived)
+
     history = redis_service.get(history_key) or []
 
     if request.author_mode:
@@ -131,8 +149,8 @@ async def chat(request: ChatRequest):
         if len(history) > 40:
             history = history[-40:]
 
-        # Save to cache (Note: expire parameter ignored in in-memory mode)
-        redis_service.set(history_key, json.dumps(history), expire=86400)
+        # Save to cache
+        redis_service.set(history_key, json.dumps(history), expire=expire)
 
     # Return response with text and grounding
     return JSONResponse(
@@ -146,23 +164,42 @@ async def chat(request: ChatRequest):
 
 
 @router.get("/chat/history")
-async def get_chat_history(session_id: str, paper_id: str | None = None):
-    # Resolve paper_id if missing
-    if not paper_id:
-        paper_id = storage.get_session_paper_id(session_id)
+async def get_chat_history(
+    session_id: str, paper_id: str | None = None, user: OptionalUser = None
+):
+    user_id = user.uid if user else None
+    is_registered = False
+    if user_id:
+        if storage.get_user(user_id):
+            is_registered = True
 
-    auth_key = f"chat:{session_id}:{paper_id if paper_id else 'global'}"
-    history = redis_service.get(auth_key) or []
+    if is_registered:
+        history_key = f"chat:{user_id}:{paper_id if paper_id else 'global'}"
+    else:
+        history_key = f"chat:{session_id}:{paper_id if paper_id else 'global'}"
+
+    history = redis_service.get(history_key) or []
 
     return JSONResponse({"history": history})
 
 
 @router.post("/chat/clear")
-async def clear_chat(session_id: str = Form(...), paper_id: str | None = Form(None)):
-    if not paper_id:
-        paper_id = storage.get_session_paper_id(session_id)
+async def clear_chat(
+    session_id: str = Form(...),
+    paper_id: str | None = Form(None),
+    user: OptionalUser = None,
+):
+    user_id = user.uid if user else None
+    is_registered = False
+    if user_id:
+        if storage.get_user(user_id):
+            is_registered = True
 
-    history_key = f"chat:{session_id}:{paper_id if paper_id else 'global'}"
+    if is_registered:
+        history_key = f"chat:{user_id}:{paper_id if paper_id else 'global'}"
+    else:
+        history_key = f"chat:{session_id}:{paper_id if paper_id else 'global'}"
+
     redis_service.delete(history_key)
     return JSONResponse({"status": "ok"})
 

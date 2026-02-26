@@ -3,8 +3,9 @@ sidebarに用語やノートを表示・保存する機能を提供するモジ�
 """
 
 import uuid6
-from common.logger import logger
+
 from app.providers import get_storage_provider
+from common.logger import logger
 
 
 class NoteError(Exception):
@@ -55,29 +56,45 @@ class SidebarNoteService:
             if not note_id:
                 note_id = str(uuid6.uuid7())
 
-            self.storage.save_note(
-                note_id,
-                session_id,
-                term,
-                note,
-                image_url,
-                page_number,
-                x,
-                y,
-                user_id,
-                paper_id,
-            )
-            logger.info(
-                "Note added/updated",
-                extra={
-                    "note_id": note_id,
-                    "session_id": session_id,
-                    "paper_id": paper_id,
-                    "term": term,
-                    "user_id": user_id,
-                    "page": page_number,
-                },
-            )
+            # Check if user is registered (exists in our DB)
+            is_registered = False
+            if user_id:
+                if self.storage.get_user(user_id):
+                    is_registered = True
+
+            if is_registered:
+                self.storage.save_note(
+                    note_id,
+                    session_id,
+                    term,
+                    note,
+                    image_url,
+                    page_number,
+                    x,
+                    y,
+                    user_id,
+                    paper_id,
+                )
+                logger.info(
+                    "Note added/updated (Persistent)",
+                    extra={
+                        "note_id": note_id,
+                        "session_id": session_id,
+                        "paper_id": paper_id,
+                        "term": term,
+                        "user_id": user_id,
+                    },
+                )
+            else:
+                logger.info(
+                    "Note added (Guest/Memory only)",
+                    extra={
+                        "note_id": note_id,
+                        "term": term,
+                        "user_id": user_id,
+                    },
+                )
+
             return {
                 "note_id": note_id,
                 "session_id": session_id,

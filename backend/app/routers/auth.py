@@ -71,8 +71,10 @@ async def get_current_user_profile(user: CurrentUser):
 
     user_data = storage.get_user(user.uid)
     if not user_data:
-        # Auto-register if not found
-        return await register_user(user)
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="ユーザープロファイルが見つかりません。ゲストとして実行中です。",
+        )
 
     return UserInDB(**user_data)
 

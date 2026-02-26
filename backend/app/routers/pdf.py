@@ -84,6 +84,15 @@ async def analyze_pdf(
         if cached_paper.get("ocr_text"):
             raw_text = cached_paper["ocr_text"]
 
+    # Check if user is registered (exists in our DB)
+    is_registered = False
+    if user_id:
+        try:
+            if storage.get_user(user_id):
+                is_registered = True
+        except Exception:
+            pass
+
     task_id = str(uuid.uuid4())
 
     task_data = {
@@ -93,6 +102,7 @@ async def analyze_pdf(
         "filename": file.filename,
         "file_hash": file_hash,
         "user_id": user_id,
+        "is_registered": is_registered,
     }
 
     if raw_text is None:
@@ -195,10 +205,26 @@ async def analyze_pdf_json(
             )
             raw_text = None
 
+        # Check if user is registered (exists in our DB)
+        is_registered = False
+        if user_id:
+            try:
+                if storage.get_user(user_id):
+                    is_registered = True
+                    logger.info(f"[analyze-pdf-json] User {user_id} is registered")
+                else:
+                    logger.info(
+                        f"[analyze-pdf-json] User {user_id} is a guest (not in DB)"
+                    )
+            except Exception as e:
+                logger.error(
+                    f"[analyze-pdf-json] Failed to check user registration: {e}"
+                )
+
         task_id = str(uuid.uuid4())
 
-        # Save session context immediately if using existing paper
-        if session_id and paper_id and paper_id != "pending":
+        # Save session context immediately if using existing paper AND registered
+        if is_registered and session_id and paper_id and paper_id != "pending":
             try:
                 storage.save_session_context(session_id, paper_id)
                 logger.info(
@@ -216,6 +242,7 @@ async def analyze_pdf_json(
             "filename": file.filename,
             "file_hash": file_hash,
             "user_id": user_id,  # Store user_id for stream processing
+            "is_registered": is_registered,
         }
 
         if raw_text is None:
@@ -275,6 +302,15 @@ async def analyze_paper(
             {"error": "Paper record is corrupt (missing hash)"}, status_code=400
         )
 
+    user_id = user.uid if user else None
+    is_registered = False
+    if user_id:
+        try:
+            if storage.get_user(user_id):
+                is_registered = True
+        except Exception:
+            pass
+
     task_id = str(uuid.uuid4())
     task_data = {
         "format": "json",
@@ -283,7 +319,8 @@ async def analyze_paper(
         "filename": paper.get("filename", "unknown.pdf"),
         "file_hash": file_hash,
         "paper_id": paper_id,
-        "user_id": user.uid if user else None,
+        "user_id": user_id,
+        "is_registered": is_registered,
     }
 
     # If we already have HTML content or OCR text, we can skip reprocessing
@@ -328,6 +365,7 @@ async def stream(task_id: str):
     lang = data.get("lang", "ja")
     session_id = data.get("session_id")
     user_id = data.get("user_id")  # Retrieve user_id
+    is_registered = data.get("is_registered", False)
 
     # --- JSON STREAMING HANDLER ---
     if is_json:
@@ -458,53 +496,56 @@ async def stream(task_id: str):
                 # paper_id is now pre-generated and passed in task data
                 new_paper_id = paper_id
 
-                # Save to DB and trigger tasks (Always save to support analysis tasks)
-                try:
-                    storage.save_paper(
-                        paper_id=new_paper_id,
-                        file_hash=file_hash,
-                        filename=filename,
-                        ocr_text=full_text,
-                        html_content="",
-                        target_language="ja",
-                        layout_json=json.dumps(all_layout_data),
-                        owner_id=user_id,  # None for guess
-                    )
-
-                    # Save Collected Figures and Trigger Auto-Explanation
-                    if collected_figures:
-                        from app.crud import save_figure_to_db
-
-                        logger.info(
-                            f"Saving {len(collected_figures)} extracted figures for paper {new_paper_id}"
+                # Save to DB and trigger tasks only if user is registered
+                if is_registered:
+                    try:
+                        storage.save_paper(
+                            paper_id=new_paper_id,
+                            file_hash=file_hash,
+                            filename=filename,
+                            ocr_text=full_text,
+                            html_content="",
+                            target_language="ja",
+                            layout_json=json.dumps(all_layout_data),
+                            owner_id=user_id,
                         )
-                        for fig in collected_figures:
-                            fid = save_figure_to_db(
-                                paper_id=new_paper_id,
-                                page_number=fig["page_num"],
-                                bbox=fig["bbox"],
-                                image_url=fig["image_url"],
-                                caption="",  # Can't easily extract yet
-                                explanation="",  # Initially empty
-                                label=fig.get("label", "figure"),
-                                latex=fig.get("latex", ""),
+
+                        # Save Collected Figures and Trigger Auto-Explanation
+                        if collected_figures:
+                            from app.crud import save_figure_to_db
+
+                            logger.info(
+                                f"Saving {len(collected_figures)} extracted figures for paper {new_paper_id}"
                             )
-                            # Trigger figure analysis via asyncio task
-                            asyncio.create_task(
-                                process_figure_analysis_task(fid, fig["image_url"])
-                            )
+                            for fig in collected_figures:
+                                fid = save_figure_to_db(
+                                    paper_id=new_paper_id,
+                                    page_number=fig["page_num"],
+                                    bbox=fig["bbox"],
+                                    image_url=fig["image_url"],
+                                    caption="",  # Can't easily extract yet
+                                    explanation="",  # Initially empty
+                                    label=fig.get("label", "figure"),
+                                    latex=fig.get("latex", ""),
+                                )
+                                # Trigger figure analysis via asyncio task
+                                asyncio.create_task(
+                                    process_figure_analysis_task(fid, fig["image_url"])
+                                )
 
-                    # --- Auto-Summarization for Abstract ---
-                    asyncio.create_task(
-                        process_paper_summary_task(new_paper_id, lang=lang)
-                    )
+                        # --- Auto-Summarization for Abstract ---
+                        asyncio.create_task(
+                            process_paper_summary_task(new_paper_id, lang=lang)
+                        )
 
-                    # DBにもセッションマッピングを保存
-                    if session_id:
-                        storage.save_session_context(session_id, new_paper_id)
+                        # DBにもセッションマッピングを保存
+                        if session_id:
+                            storage.save_session_context(session_id, new_paper_id)
 
-                except Exception as e:
-                    logger.error(f"Failed to save paper record: {e}")
+                    except Exception as e:
+                        logger.error(f"Failed to save paper record: {e}")
+                else:
+                    logger.info(f"Skipping DB save for guest task: {task_id}")
 
                 # Redisセッションコンテキストを1時間保持
                 s_id = session_id or new_paper_id
@@ -595,8 +636,9 @@ async def stream(task_id: str):
                     res = redis_service.set(
                         f"session:{s_id}", paper_data["ocr_text"], expire=86400
                     )
-                    # DBにも保存
-                    storage.save_session_context(s_id, paper_id)
+                    # DBにも保存 (登録済みユーザーの場合のみ)
+                    if is_registered:
+                        storage.save_session_context(s_id, paper_id)
                     logger.info(f"Restored session context for: {s_id} (result: {res})")
                 else:
                     logger.warning(

@@ -15,9 +15,8 @@ from PIL import Image
 from pydantic import BaseModel
 
 from app.auth import OptionalUser
-from common.logger import get_service_logger
-
 from app.providers import get_storage_provider
+from common.logger import get_service_logger
 
 logger = get_service_logger("Stamps")
 
@@ -43,14 +42,28 @@ async def add_paper_stamp(paper_id: str, request: StampRequest, user: OptionalUs
     """Add a stamp to a paper."""
     user_id = user.uid if user else None
 
-    stamp_id = storage.add_paper_stamp(
-        paper_id,
-        request.stamp_type,
-        user_id,
-        page_number=request.page_number,
-        x=request.x,
-        y=request.y,
-    )
+    # Check if user is registered
+    is_registered = False
+    if user_id:
+        if storage.get_user(user_id):
+            is_registered = True
+
+    if is_registered:
+        stamp_id = storage.add_paper_stamp(
+            paper_id,
+            request.stamp_type,
+            user_id,
+            page_number=request.page_number,
+            x=request.x,
+            y=request.y,
+        )
+        logger.info(f"Stamp {stamp_id} added persistently for user {user_id}")
+    else:
+        import uuid6
+
+        stamp_id = f"guest-{uuid6.uuid7()}"
+        logger.info(f"Stamp added for guest {user_id} (not saved to DB)")
+
     return JSONResponse(
         {
             "stamp_id": stamp_id,
