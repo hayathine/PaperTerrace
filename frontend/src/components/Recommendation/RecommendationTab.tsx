@@ -100,11 +100,13 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 						</svg>
 					</div>
 					<h3 className="text-lg font-bold text-slate-800 mb-2">
-						Explore Next Papers
+						{t("recommendation.explore_title", "Explore Next Papers")}
 					</h3>
 					<p className="text-sm text-slate-500 mb-6">
-						Based on your reading history and reading behavior, we will generate
-						personalized recommendations for your next deep dive.
+						{t(
+							"recommendation.explore_description",
+							"Based on your reading history and behavior, we'll generate personalized recommendations.",
+						)}
 					</p>
 					<button
 						type="button"
@@ -124,7 +126,7 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 								d="M13 10V3L4 14h7v7l9-11h-7z"
 							/>
 						</svg>
-						Generate Recommendations
+						{t("summary.generate_recommend", "Generate Recommendations")}
 					</button>
 					{error && <p className="mt-4 text-xs text-red-500">{error}</p>}
 				</div>
@@ -138,14 +140,20 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 								<div className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce"></div>
 							</div>
 							<p className="text-sm font-medium text-slate-500 animate-pulse">
-								Analyzing user profile and generating insights...
+								{t(
+									"recommendation.analyzing",
+									"Analyzing user profile and generating insights...",
+								)}
 							</p>
 						</div>
 					) : response ? (
 						<div className="space-y-6">
 							<div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
 								<h4 className="text-sm font-bold text-indigo-900 mb-2">
-									Recommendation Reasoning
+									{t(
+										"recommendation.reasoning_title",
+										"Recommendation Reasoning",
+									)}
 								</h4>
 								<p className="text-xs text-indigo-700 leading-relaxed mb-3">
 									{response.reasoning}
@@ -167,7 +175,10 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 
 							<div className="space-y-3">
 								<h4 className="text-sm font-bold border-b border-slate-200 pb-2 text-slate-700">
-									Top Recommendations
+									{t(
+										"recommendation.top_recommendations",
+										"Top Recommendations",
+									)}
 								</h4>
 								{response.recommendations.map((paper, idx) => (
 									<div
@@ -210,7 +221,9 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 														d="M12 6v6m0 0v6m0-6h6m-6 0H6"
 													/>
 												</svg>
-												{clickedPapers.has(paper.title) ? "Clicked" : "Explore"}
+												{clickedPapers.has(paper.title)
+													? t("recommendation.status_clicked", "Clicked")
+													: t("recommendation.action_explore", "Explore")}
 											</button>
 											{paper.citationCount !== undefined && (
 												<span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">
@@ -225,10 +238,13 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 							{/* Feedback UI */}
 							<div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mt-8 border-t-4 border-t-amber-400">
 								<h4 className="text-sm font-bold text-slate-800 mb-1">
-									Help us improve
+									{t("recommendation.feedback.title", "Help us improve")}
 								</h4>
 								<p className="text-[10px] text-slate-500 mb-4">
-									Rate these recommendations to improve your future suggestions.
+									{t(
+										"recommendation.feedback.description",
+										"Rate these recommendations to improve your future suggestions.",
+									)}
 								</p>
 
 								{!submittedFeedback ? (
@@ -246,8 +262,10 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 											))}
 										</div>
 										<div className="flex justify-between px-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-											<span>Poor</span>
-											<span>Excellent</span>
+											<span>{t("recommendation.feedback.poor", "Poor")}</span>
+											<span>
+												{t("recommendation.feedback.excellent", "Excellent")}
+											</span>
 										</div>
 
 										{feedbackScore > 0 && (
@@ -263,7 +281,10 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 													onClick={handleSubmitFeedback}
 													className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg transition-colors"
 												>
-													Submit Feedback
+													{t(
+														"recommendation.feedback.submit",
+														"Submit Feedback",
+													)}
 												</button>
 											</div>
 										)}
@@ -286,7 +307,10 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 											</svg>
 										</div>
 										<p className="text-xs font-bold text-green-700">
-											Thanks for your feedback!
+											{t(
+												"recommendation.feedback.thank_you",
+												"Thanks for your feedback!",
+											)}
 										</p>
 									</div>
 								)}

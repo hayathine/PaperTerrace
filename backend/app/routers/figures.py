@@ -11,7 +11,7 @@ storage = get_storage_provider()
 figure_service = FigureInsightService()
 
 
-@router.get("/api/papers/{paper_id}/figures")
+@router.get("/papers/{paper_id}/figures")
 async def get_paper_figures(paper_id: str, user: OptionalUser = None):
     """Get all figures for a paper."""
     try:
@@ -22,7 +22,7 @@ async def get_paper_figures(paper_id: str, user: OptionalUser = None):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
-@router.post("/api/figures/{figure_id}/explain")
+@router.post("/figures/{figure_id}/explain")
 async def explain_figure(figure_id: str, user: OptionalUser = None):
     """Generate or retrieve explanation for a figure."""
     try:

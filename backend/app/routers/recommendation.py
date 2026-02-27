@@ -3,11 +3,11 @@ import json
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 
+from app.database import get_db
 from app.domain.dspy.config import load_dspy_module_from_gcs, setup_dspy
 from app.domain.dspy.modules import RecommendationModule, UserProfileModule
 from app.domain.services.paper_acquisition import PaperAcquisitionService
 from app.models.orm.recommendation import Feedback, Trajectory
-from app.providers import get_storage_provider
 from app.schemas.recommendation import (
     RecommendationFeedbackRequest,
     RecommendationGenerateRequest,
@@ -16,13 +16,6 @@ from app.schemas.recommendation import (
 )
 
 router = APIRouter(prefix="/recommendation", tags=["Recommendation"])
-
-
-def get_db():
-    storage = get_storage_provider()
-    # If storage doesn't expose get_session, you might need to adjust this depending on how you get DB sessions.
-    with storage.get_session() as session:
-        yield session
 
 
 @router.post("/sync", summary="セッションの軌跡データを同期する")

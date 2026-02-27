@@ -114,7 +114,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 			className="relative shadow-sm bg-white border border-slate-200 group mx-auto"
 			style={{
 				maxWidth: "100%",
-				userSelect: "none",
+				userSelect: "auto",
 			}}
 		>
 			{/* Header */}
@@ -255,7 +255,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 								{page.lines.map((line, lIdx) => (
 									<div key={lIdx} className="mb-2">
 										{line.words.map((w, wIdx) => {
-											const [lx1, ly1, lx2, ly2] = line.bbox;
+											const [, ly1, , ly2] = line.bbox;
 											const lineCenterY = (ly1 + ly2) / 2 / (page.height || 1);
 											const cleanWord = w.word.replace(
 												/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g,
@@ -275,9 +275,9 @@ const TextModePage: React.FC<TextModePageProps> = ({
 													Math.abs(lineCenterY - jumpTarget.y) < 0.05) ||
 													(Math.abs(lineCenterY - jumpTarget.y) < 0.05 &&
 														Math.abs(
-															(lx1 + lx2) / 2 / (page.width || 1) -
+															(w.bbox[0] + w.bbox[2]) / 2 / (page.width || 1) -
 																jumpTarget.x,
-														) < 0.2));
+														) < 0.05));
 
 											const isSearchMatch =
 												searchTerm &&

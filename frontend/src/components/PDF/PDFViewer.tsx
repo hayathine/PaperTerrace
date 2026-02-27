@@ -626,6 +626,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					activeTaskIdRef.current = null;
 				} else if (eventData.type === "coordinates_ready") {
 					console.log("[PDFViewer] Coordinates ready, enabling assist mode");
+					setMode("text");
 				} else if (eventData.type === "assist_mode_ready") {
 					console.log("[PDFViewer] Assist mode ready");
 				} else if (eventData.type === "error") {
@@ -863,6 +864,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					if (cachedPages.length > 0) {
 						setPages(cachedPages);
 						setStatus("done");
+						setMode("text");
 						// Cached papers have coordinates ready
 						// If we have content, we could stop here.
 
