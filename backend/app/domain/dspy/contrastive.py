@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.domain.features.recommendation.trajectory import TrajectoryRecord
+from app.domain.dspy.trajectory import TrajectoryRecord
 
 
 @dataclass
