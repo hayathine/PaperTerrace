@@ -4,6 +4,7 @@ M2M100を使用した翻訳サービス
 
 import asyncio
 import logging
+import math
 import os
 
 import ctranslate2
@@ -118,6 +119,7 @@ class M2M100TranslationService:
                 repetition_penalty=self.repetition_penalty,
                 no_repeat_ngram_size=self.no_repeat_ngram_size,
                 max_decoding_length=self.max_decoding_length,
+                return_scores=True,
             ),
         )
 
@@ -125,8 +127,6 @@ class M2M100TranslationService:
             result = results[0]
             output_tokens = result.hypotheses[0]
             score = result.scores[0] if result.scores else 0.0
-            import math
-
             conf = math.exp(score)
 
             # Postprocess
@@ -158,6 +158,7 @@ class M2M100TranslationService:
                 repetition_penalty=self.repetition_penalty,
                 no_repeat_ngram_size=self.no_repeat_ngram_size,
                 max_decoding_length=self.max_decoding_length,
+                return_scores=True,
             ),
         )
 
@@ -166,8 +167,6 @@ class M2M100TranslationService:
             if input_batches[i] and result.hypotheses:
                 output_tokens = result.hypotheses[0]
                 score = result.scores[0] if result.scores else 0.0
-                import math
-
                 conf = math.exp(score)
 
                 if output_tokens and output_tokens[0] == tgt_code:

@@ -155,9 +155,17 @@ async def explain(
     lang: str = "ja",
     paper_id: str | None = None,
     element_id: str | None = None,
-    conf: float | None = None,
+    conf: str | None = None,
 ):
     """単語の解説 (Local: Cache -> local-MT)"""
+    # Parse conf safely
+    f_conf: float | None = None
+    if conf:
+        try:
+            f_conf = float(conf)
+        except (ValueError, TypeError):
+            f_conf = None
+
     start_time = asyncio.get_event_loop().time()
     # Robust element_id detection: Try query param, then fallback to HTMX header
     element_id = element_id or req.headers.get("HX-Trigger")
@@ -211,10 +219,10 @@ async def explain(
         )
 
     # Low confidence override -> Qwen3
-    use_llamacpp = conf is not None and conf <= 0.5
+    use_llamacpp = f_conf is not None and f_conf <= 0.5
     if use_llamacpp:
         log.info(
-            "explain", f"Word confidence {conf} <= 0.5, using LlamaCpp for {lemma}"
+            "explain", f"Word confidence {f_conf} <= 0.5, using LlamaCpp for {lemma}"
         )
         try:
             from app.providers.inference_client import get_inference_client

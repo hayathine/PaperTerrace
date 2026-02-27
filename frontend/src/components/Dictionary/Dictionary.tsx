@@ -88,8 +88,16 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				const headers: HeadersInit = {};
 				if (token) headers.Authorization = `Bearer ${token}`;
 
+				const queryParams = new URLSearchParams({
+					lang: i18n.language,
+					paper_id: paperId || "",
+				});
+				if (conf !== undefined && conf !== null) {
+					queryParams.append("conf", conf.toString());
+				}
+
 				const res = await fetch(
-					`${API_URL}/api/explain/${encodeURIComponent(term)}?lang=${i18n.language}&paper_id=${paperId || ""}&conf=${conf !== undefined ? conf : ""}`,
+					`${API_URL}/api/explain/${encodeURIComponent(term)}?${queryParams.toString()}`,
 					{ headers },
 				);
 
