@@ -4,11 +4,6 @@ Handles paper analysis features: summary, research radar,
 figure/table analysis, layout detection, and adversarial review.
 """
 
-import io
-import tempfile
-from pathlib import Path
-
-import anyio
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
@@ -20,7 +15,7 @@ from app.domain.features import (
     ResearchRadarService,
     SummaryService,
 )
-from app.domain.services.layout_service import get_layout_service
+from app.domain.services.layout_analysis_service import LayoutAnalysisService
 from app.providers import (
     RedisService,
     get_storage_provider,
@@ -38,49 +33,31 @@ cite_intent_service = CiteIntentService()
 claim_service = ClaimVerificationService()
 redis_service = RedisService()
 storage = get_storage_provider()
-layout_service = get_layout_service()
+layout_analysis_service = LayoutAnalysisService()
 
 
 def _get_context(session_id: str) -> str | None:
     """Get paper context from cache or DB fallback."""
-    # 1. Try in-memory cache
-    context = redis_service.get(f"session:{session_id}")
-    if context:
-        logger.debug(
-            f"[_get_context] Cache HIT for session {session_id} (len={len(context)})"
-        )
-        return context
-
-    logger.info(
-        f"[_get_context] Cache MISS for session {session_id}. debug: exists={redis_service.exists(f'session:{session_id}')}"
-    )
-
-    # 2. Try DB persistence (Session mapping)
+    # 1. Try DB first for analysis reliability and to prevent Redis OOM with large blobs.
+    # Higher reliability by always ensuring we have the full document.
     paper_id = storage.get_session_paper_id(session_id)
     resolved_paper_id = paper_id or session_id
 
-    logger.info(
-        f"[_get_context] DB Session Lookup: session_id={session_id} -> paper_id={paper_id}. resolved={resolved_paper_id}"
-    )
-
-    # 3. Get Paper
+    # Try DB persistence
     paper = storage.get_paper(resolved_paper_id)
-    if paper:
-        if paper.get("ocr_text"):
-            context = paper["ocr_text"]
-            # Restore cache
-            redis_service.set(f"session:{session_id}", context, expire=3600)
-            logger.info(
-                f"[_get_context] Restored context from DB for session {session_id} -> paper {resolved_paper_id} (len={len(context)})"
-            )
-            return context
-        else:
-            logger.warning(
-                f"[_get_context] Paper found in DB ({resolved_paper_id}) but 'ocr_text' is Empty/None."
-            )
-    else:
-        logger.warning(f"[_get_context] Paper NOT found in DB. ID: {resolved_paper_id}")
+    if paper and paper.get("ocr_text"):
+        context = paper["ocr_text"]
+        logger.debug(
+            f"[_get_context] Fetched FULL context from DB for {resolved_paper_id}"
+        )
+        return context
 
+    # 2. Fallback to session cache (recent context)
+    context = redis_service.get(f"session:{session_id}")
+    if context:
+        logger.debug(f"[_get_context] Cache HIT for session {session_id}")
+        redis_service.expire(f"session:{session_id}", 3600)
+        return context
     return None
 
 
@@ -224,18 +201,6 @@ async def detect_layout(
 ):
     """
     画像からレイアウト要素（図、表、数式など）を検出
-
-    Parameters
-    ----------
-    file : UploadFile
-        解析対象のPDF画像ファイル（PNG, JPEG対応）
-    page_number : int
-        ページ番号（参照用）
-
-    Returns
-    -------
-    JSONResponse
-        検出されたレイアウト要素のリスト
     """
     # ファイル形式チェック
     if not file.content_type or not file.content_type.startswith("image/"):
@@ -245,94 +210,19 @@ async def detect_layout(
         )
 
     try:
-        logger.info(
-            f"Layout detection request: file={file.filename}, page={page_number}, type={file.content_type}"
+        content = await file.read()
+        results = await layout_analysis_service.detect_layout(
+            content, file.filename, page_number
         )
 
-        # 一時ファイルに保存
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
-            content = await file.read()
-            temp_file.write(content)
-            temp_file_path = temp_file.name
-
-        try:
-            # レイアウト解析実行
-            layout_items = await layout_service.analyze_image(temp_file_path)
-
-            # Process results: crop images and save
-            import base64
-            import hashlib
-
-            from PIL import Image
-
-            from app.providers.image_storage import save_page_image
-
-            file_hash = hashlib.sha256(content).hexdigest()
-            img_pil = Image.open(io.BytesIO(content))
-            img_w, img_h = img_pil.size
-
-            results = []
-            for i, item in enumerate(layout_items):
-                class_name = item.class_name.lower()
-                res_dict = {
-                    "class_name": item.class_name,
-                    "confidence": item.score,
-                    "bbox": {
-                        "x_min": item.bbox.x_min,
-                        "y_min": item.bbox.y_min,
-                        "x_max": item.bbox.x_max,
-                        "y_max": item.bbox.y_max,
-                    },
-                }
-
-                # 特定のクラス（図、表、数式、アルゴリズム等）はクロップして保存
-                target_classes = [
-                    "table",
-                    "figure",
-                    "picture",
-                    "formula",
-                    "chart",
-                    "algorithm",
-                    "equation",
-                ]
-                if any(c in class_name for c in target_classes):
-                    try:
-                        margin = 5
-                        x1 = max(0, item.bbox.x_min - margin)
-                        y1 = max(0, item.bbox.y_min - margin)
-                        x2 = min(img_w, item.bbox.x_max + margin)
-                        y2 = min(img_h, item.bbox.y_max + margin)
-
-                        if x2 > x1 and y2 > y1:
-                            crop = img_pil.crop((x1, y1, x2, y2)).convert("RGB")
-                            buf = io.BytesIO()
-                            crop.save(buf, format="JPEG", quality=85, optimize=True)
-                            img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-
-                            img_name = f"detect_pg{page_number}_{class_name}_{i}"
-                            image_url = await anyio.to_thread.run_sync(
-                                save_page_image, file_hash, img_name, img_b64
-                            )
-                            res_dict["image_url"] = image_url
-                    except Exception as crop_err:
-                        logger.warning(f"Failed to crop {class_name}: {crop_err}")
-
-                results.append(res_dict)
-
-            logger.info(f"Layout detection completed: {len(results)} elements detected")
-
-            return JSONResponse(
-                {
-                    "success": True,
-                    "page_number": page_number,
-                    "total_elements": len(results),
-                    "elements": results,
-                }
-            )
-
-        finally:
-            # 一時ファイルを削除
-            Path(temp_file_path).unlink(missing_ok=True)
+        return JSONResponse(
+            {
+                "success": True,
+                "page_number": page_number,
+                "total_elements": len(results),
+                "elements": results,
+            }
+        )
 
     except Exception as e:
         logger.error(f"Layout detection failed: {str(e)}")
@@ -344,336 +234,38 @@ async def detect_layout(
 @router.post("/analyze-layout-lazy")
 async def analyze_layout_lazy(
     paper_id: str = Form(...),
-    page_numbers: str = Form(None),  # Comma-separated page numbers, e.g., "1,2,3"
+    page_numbers: str | None = Form(None),
 ):
     """
     画面表示後に遅延実行されるレイアウト解析エンドポイント（バッチ処理版）
-
-    Parameters
-    ----------
-    paper_id : str
-        論文ID
-    page_numbers : str, optional
-        解析対象のページ番号（カンマ区切り）。指定がない場合は全ページ
-
-    Returns
-    -------
-    JSONResponse
-        解析結果のステータス
     """
     try:
-        logger.info(
-            f"[analyze-layout-lazy] Starting for paper_id={paper_id}, pages={page_numbers}"
-        )
-
-        # Get paper data
-        paper = await anyio.to_thread.run_sync(storage.get_paper, paper_id)
-        if not paper:
-            raise HTTPException(status_code=404, detail="Paper not found")
-
-        file_hash = paper.get("file_hash")
-        if not file_hash:
-            raise HTTPException(status_code=400, detail="Paper has no file_hash")
-
         # Parse page numbers
-        pages_to_analyze = None
+        parsed_pages = None
         if page_numbers:
             try:
-                pages_to_analyze = [int(p.strip()) for p in page_numbers.split(",")]
+                parsed_pages = [int(p.strip()) for p in page_numbers.split(",")]
             except ValueError:
                 raise HTTPException(
                     status_code=400, detail="Invalid page_numbers format"
                 )
 
-        # Get cached images
-        from app.providers.image_storage import get_page_images
-
-        cached_images = get_page_images(file_hash)
-
-        logger.info(
-            f"[analyze-layout-lazy] Found {len(cached_images) if cached_images else 0} cached images for file_hash={file_hash}"
-        )
-
-        if not cached_images:
-            raise HTTPException(
-                status_code=404, detail="No cached images found for this paper"
-            )
-
-        # Filter pages if specified
-        if pages_to_analyze:
-            pages_to_process = [
-                (i, url)
-                for i, url in enumerate(cached_images, 1)
-                if i in pages_to_analyze
-            ]
-        else:
-            pages_to_process = list(enumerate(cached_images, 1))
-
-        logger.info(f"[analyze-layout-lazy] Processing {len(pages_to_process)} pages")
-
-        # Import figure service
-        from PIL import Image
-
-        from app.providers.inference_client import get_inference_client
-
-        # Collect all images for batch processing
-        image_data_list = []
-        page_info_list = []
-
-        for page_num, image_url in pages_to_process:
-            try:
-                # Download image
-                import httpx
-
-                if image_url.startswith("/static/"):
-                    # Local file
-                    from pathlib import Path
-
-                    img_path = Path("src") / image_url.lstrip("/")
-                    if await anyio.to_thread.run_sync(img_path.exists):
-                        img_bytes = await anyio.to_thread.run_sync(img_path.read_bytes)
-                    else:
-                        logger.warning(f"Image not found: {img_path}")
-                        continue
-                else:
-                    # Remote URL
-                    async with httpx.AsyncClient() as client:
-                        resp = await client.get(image_url, timeout=30.0)
-                        if resp.status_code == 200:
-                            img_bytes = resp.content
-                        else:
-                            logger.warning(f"Failed to download image: {image_url}")
-                            continue
-
-                def _prepare_image(data: bytes):
-                    from PIL import Image
-
-                    img_pil = Image.open(io.BytesIO(data))
-                    buffer = io.BytesIO()
-                    img_pil.save(buffer, format="JPEG", quality=85, optimize=True)
-                    return buffer.getvalue()
-
-                # JPEG圧縮で転送サイズを削減 (Run in thread to avoid blocking loop)
-                compressed_bytes = await anyio.to_thread.run_sync(
-                    _prepare_image, img_bytes
-                )
-
-                image_data_list.append(compressed_bytes)
-                page_info_list.append(page_num)
-
-            except Exception as e:
-                logger.error(
-                    f"[analyze-layout-lazy] Failed to load page {page_num}: {e}"
-                )
-                continue
-
-        if not image_data_list:
-            raise HTTPException(status_code=400, detail="No valid images to process")
-
-        # バッチ処理で一括解析（通信回数を大幅削減）
-        logger.info(
-            f"[analyze-layout-lazy] Batch analyzing {len(image_data_list)} images"
-        )
-        client = await get_inference_client()
-        batch_results = await client.analyze_images_batch(
-            image_data_list, max_batch_size=10
-        )
-
-        logger.info(
-            f"[analyze-layout-lazy] Batch analysis complete. Results count: {len(batch_results)}"
-        )
-
-        # Log sample results for debugging
-        if batch_results:
-            logger.info(
-                f"[analyze-layout-lazy] Sample result[0]: {batch_results[0][:2] if len(batch_results[0]) > 2 else batch_results[0]}"
-            )
-
-        # Process results: crop figure images and save
-        from app.providers.image_storage import save_page_image
-
-        all_figures = []
-        for page_num, img_bytes, results in zip(
-            page_info_list, image_data_list, batch_results
-        ):
-            img_pil = Image.open(io.BytesIO(img_bytes))
-            img_w, img_h = img_pil.size
-            fig_idx = 0
-
-            for res in results:
-                class_name = res.get("class_name", "").lower()
-                target_classes = [
-                    "table",
-                    "figure",
-                    "picture",
-                    "formula",
-                    "chart",
-                    "algorithm",
-                    "equation",
-                ]
-                if class_name in target_classes:
-                    bbox_dict = res.get("bbox", {})
-                    if not bbox_dict:
-                        continue
-
-                    x_min = bbox_dict.get("x_min", 0)
-                    y_min = bbox_dict.get("y_min", 0)
-                    x_max = bbox_dict.get("x_max", 0)
-                    y_max = bbox_dict.get("y_max", 0)
-
-                    # Ensure coordinates are within image boundaries
-                    x_min = max(0, min(img_w, x_min))
-                    y_min = max(0, min(img_h, y_min))
-                    x_max = max(0, min(img_w, x_max))
-                    y_max = max(0, min(img_h, y_max))
-
-                    # Skip invalid bboxes
-                    if x_max <= x_min or y_max <= y_min:
-                        continue
-
-                    # Crop the figure from the page image
-                    try:
-
-                        def _crop_and_encode(
-                            img_data: bytes,
-                            box: tuple[float, float, float, float],
-                        ):
-                            from PIL import Image
-
-                            img = Image.open(io.BytesIO(img_data))
-                            crop = img.crop(box).convert("RGB")
-                            buf = io.BytesIO()
-                            crop.save(buf, format="JPEG", quality=85, optimize=True)
-                            return base64.b64encode(buf.getvalue()).decode("utf-8")
-
-                        margin = 5
-                        crop_box = (
-                            max(0, x_min - margin),
-                            max(0, y_min - margin),
-                            min(img_w, x_max + margin),
-                            min(img_h, y_max + margin),
-                        )
-
-                        # Run cropping and encoding in thread
-                        import base64
-
-                        img_b64 = await anyio.to_thread.run_sync(
-                            _crop_and_encode, img_bytes, crop_box
-                        )
-
-                        # Save the cropped image
-                        img_name = f"p{page_num}_{class_name}_{fig_idx}"
-                        figure_image_url = await anyio.to_thread.run_sync(
-                            save_page_image, file_hash, img_name, img_b64
-                        )
-                        fig_idx += 1
-
-                        all_figures.append(
-                            {
-                                "page_num": page_num,
-                                "bbox": [x_min, y_min, x_max, y_max],
-                                "label": class_name,
-                                "image_url": figure_image_url,
-                            }
-                        )
-                    except Exception as crop_err:
-                        logger.warning(
-                            f"[analyze-layout-lazy] Failed to crop {class_name} on page {page_num}: {crop_err}"
-                        )
-                        continue
-
-        # Save figures to database
-        if all_figures:
-            import asyncio
-
-            from app.crud import save_figure_to_db
-            from app.domain.services.paper_processing import (
-                process_figure_analysis_task,
-            )
-
-            logger.info(
-                f"[analyze-layout-lazy] Saving {len(all_figures)} figures to DB"
-            )
-            for fig in all_figures:
-                fid = await anyio.to_thread.run_sync(
-                    save_figure_to_db,
-                    paper_id,
-                    fig["page_num"],
-                    fig["bbox"],
-                    fig.get("image_url", ""),
-                    "",
-                    "",
-                    fig.get("label", "figure"),
-                    "",
-                )
-                # Trigger figure analysis for figures with images
-                if fig.get("image_url"):
-                    asyncio.create_task(
-                        process_figure_analysis_task(fid, fig["image_url"])
-                    )
-
-        # Update layout_json in paper record to include figures
-        try:
-            existing_layout = paper.get("layout_json")
-            if existing_layout:
-                import json
-
-                layout_list = json.loads(existing_layout)
-
-                # Group figures by page
-                page_figures: dict[int, list] = {}
-                for fig in all_figures:
-                    pn = fig["page_num"]
-                    if pn not in page_figures:
-                        page_figures[pn] = []
-                    page_figures[pn].append(
-                        {
-                            "bbox": fig["bbox"],
-                            "image_url": fig["image_url"],
-                            "label": fig.get("label", "figure"),
-                            "page_num": fig["page_num"],
-                        }
-                    )
-
-                # Merge figures into layout_json
-                for i, layout in enumerate(layout_list):
-                    page_num = i + 1
-                    if page_num in page_figures:
-                        layout["figures"] = page_figures[page_num]
-
-                # Save updated layout_json
-                await anyio.to_thread.run_sync(
-                    storage.update_paper_layout, paper_id, json.dumps(layout_list)
-                )
-                logger.info(
-                    f"[analyze-layout-lazy] Updated layout_json with {len(all_figures)} figures"
-                )
-        except Exception as layout_err:
-            logger.warning(
-                f"[analyze-layout-lazy] Failed to update layout_json: {layout_err}"
-            )
-
-        logger.info(
-            f"[analyze-layout-lazy] Completed: {len(all_figures)} figures detected"
+        all_figures = await layout_analysis_service.analyze_layout_lazy(
+            paper_id, parsed_pages
         )
 
         return JSONResponse(
             {
                 "success": True,
                 "paper_id": paper_id,
-                "pages_processed": len(pages_to_process),
                 "figures_detected": len(all_figures),
-                "figures": [
-                    {
-                        "page_num": f["page_num"],
-                        "bbox": f["bbox"],
-                        "label": f["label"],
-                        "image_url": f["image_url"],
-                    }
-                    for f in all_figures
-                ],
+                "figures": all_figures,
             }
         )
+
+    except Exception as e:
+        logger.error(f"[analyze-layout-lazy] Unexpected error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Layout analysis failed: {str(e)}")
 
     except HTTPException:
         raise

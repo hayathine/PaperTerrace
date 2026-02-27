@@ -23,7 +23,7 @@ class LlamaCppTranslationService:
             "LLAMACPP_REPO_ID", "byteshape/Qwen3-30B-A3B-Instruct-2507-GGUF"
         )
         self.filename = os.getenv(
-            "LLAMACPP_FILENAME", "Q3_K_S-2.66bow"
+            "LLAMACPP_MODEL_NAME", "Q3_K_S-2.66bow.gguf"
         )  # 本来は .gguf が付くはずだがユーザー指定に合わせる
 
         # ローカルパスが優先される設定

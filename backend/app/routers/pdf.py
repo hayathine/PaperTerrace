@@ -111,7 +111,7 @@ async def analyze_pdf(
     else:
         task_data.update({"text": raw_text, "paper_id": paper_id})
 
-    redis_service.set(f"task:{task_id}", task_data, expire=3600)
+    redis_service.set(f"task:{task_id}", task_data, expire=3600)  # 1-hour session
 
     return HTMLResponse(f"""
     <div hx-ext="sse" sse-connect="/stream/{task_id}" sse-swap="message">
@@ -262,10 +262,8 @@ async def analyze_pdf_json(
                 }
             )
 
-        # Set longer expiration for streaming tasks to prevent premature deletion
-        redis_service.set(
-            f"task:{task_id}", task_data, expire=7200
-        )  # 2 hours instead of 1
+        # Set 1-hour sliding expiration for paper sessions (3600s)
+        redis_service.set(f"task:{task_id}", task_data, expire=3600)
 
         total_elapsed = time.time() - start_time
         logger.info(
@@ -334,7 +332,7 @@ async def analyze_paper(
             {"error": "Paper content is missing, please re-upload"}, status_code=400
         )
 
-    redis_service.set(f"task:{task_id}", task_data, expire=3600)
+    redis_service.set(f"task:{task_id}", task_data, expire=3600)  # 1-hour session
 
     return JSONResponse({"task_id": task_id, "stream_url": f"/api/stream/{task_id}"})
 
@@ -348,6 +346,9 @@ async def stream(task_id: str):
     logger.info(f"[stream] START: task_id={task_id}")
 
     data = redis_service.get(f"task:{task_id}")
+    if data:
+        # Refresh task TTL on access
+        redis_service.expire(f"task:{task_id}", 3600)
 
     # Task not found - return proper error response instead of 204
     if not data:
@@ -365,7 +366,6 @@ async def stream(task_id: str):
     lang = data.get("lang", "ja")
     session_id = data.get("session_id")
     user_id = data.get("user_id")  # Retrieve user_id
-    is_registered = data.get("is_registered", False)
 
     # --- JSON STREAMING HANDLER ---
     if is_json:
@@ -375,7 +375,6 @@ async def stream(task_id: str):
                 pdf_path = data.get("pdf_path")
                 pdf_b64 = data.get("pdf_b64", "")
                 filename = data.get("filename", "unknown.pdf")
-                file_hash = data.get("file_hash", "")
 
                 if pdf_path:
                     try:
@@ -496,60 +495,53 @@ async def stream(task_id: str):
                 # paper_id is now pre-generated and passed in task data
                 new_paper_id = paper_id
 
-                # Save to DB and trigger tasks only if user is registered
-                if is_registered:
-                    try:
-                        storage.save_paper(
-                            paper_id=new_paper_id,
-                            file_hash=file_hash,
-                            filename=filename,
-                            ocr_text=full_text,
-                            html_content="",
-                            target_language="ja",
-                            layout_json=json.dumps(all_layout_data),
-                            owner_id=user_id,
-                        )
+                # Save to permanent DB ALWAYS (Offload from Redis to prevent OOM)
+                try:
+                    from app.crud import save_figure_to_db
+                    from app.domain.services.paper_processing import (
+                        process_figure_analysis_task,
+                        process_paper_summary_task,
+                    )
 
-                        # Save Collected Figures and Trigger Auto-Explanation
-                        if collected_figures:
-                            from app.crud import save_figure_to_db
+                    storage.save_paper(
+                        paper_id=new_paper_id,
+                        file_hash=file_hash,
+                        filename=filename,
+                        ocr_text=full_text,
+                        html_content="",
+                        target_language="ja",
+                        layout_json=json.dumps(all_layout_data),
+                        owner_id=user_id,
+                    )
+                    # DBにもセッションマッピングを保存
+                    if session_id:
+                        storage.save_session_context(session_id, new_paper_id)
 
-                            logger.info(
-                                f"Saving {len(collected_figures)} extracted figures for paper {new_paper_id}"
+                    # Trigger async tasks (Summarization / Figure analysis)
+                    asyncio.create_task(
+                        process_paper_summary_task(new_paper_id, lang=lang)
+                    )
+                    if collected_figures:
+                        for fig in collected_figures:
+                            fid = save_figure_to_db(
+                                new_paper_id,
+                                fig["page_num"],
+                                fig["bbox"],
+                                fig["image_url"],
+                                label=fig.get("label", "figure"),
+                                latex=fig.get("latex", ""),
                             )
-                            for fig in collected_figures:
-                                fid = save_figure_to_db(
-                                    paper_id=new_paper_id,
-                                    page_number=fig["page_num"],
-                                    bbox=fig["bbox"],
-                                    image_url=fig["image_url"],
-                                    caption="",  # Can't easily extract yet
-                                    explanation="",  # Initially empty
-                                    label=fig.get("label", "figure"),
-                                    latex=fig.get("latex", ""),
-                                )
-                                # Trigger figure analysis via asyncio task
-                                asyncio.create_task(
-                                    process_figure_analysis_task(fid, fig["image_url"])
-                                )
+                            asyncio.create_task(
+                                process_figure_analysis_task(fid, fig["image_url"])
+                            )
+                except Exception as e:
+                    logger.error(f"Failed to save paper record: {e}")
 
-                        # --- Auto-Summarization for Abstract ---
-                        asyncio.create_task(
-                            process_paper_summary_task(new_paper_id, lang=lang)
-                        )
-
-                        # DBにもセッションマッピングを保存
-                        if session_id:
-                            storage.save_session_context(session_id, new_paper_id)
-
-                    except Exception as e:
-                        logger.error(f"Failed to save paper record: {e}")
-                else:
-                    logger.info(f"Skipping DB save for guest task: {task_id}")
-
-                # Redisセッションコンテキストを1時間保持
+                # Redis session context (1-hour sliding limit, TRUNCATED to 20k chars to prevent OOM)
                 s_id = session_id or new_paper_id
-                redis_service.set(f"session:{s_id}", full_text, expire=3600)
+                # Store only the first 20,000 characters in Redis as "recent context"
+                recent_context = full_text[:20000]
+                redis_service.set(f"session:{s_id}", recent_context, expire=3600)
 
                 yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': new_paper_id})}\n\n"
                 await asyncio.sleep(0.01)
@@ -633,13 +625,10 @@ async def stream(task_id: str):
                 # キャッシュ時もセッションコンテキストを保存（Summary等のため）
                 s_id = session_id or paper_id
                 if s_id and paper_data and paper_data.get("ocr_text"):
-                    res = redis_service.set(
-                        f"session:{s_id}", paper_data["ocr_text"], expire=86400
-                    )
-                    # DBにも保存 (登録済みユーザーの場合のみ)
-                    if is_registered:
-                        storage.save_session_context(s_id, paper_id)
-                    logger.info(f"Restored session context for: {s_id} (result: {res})")
+                    redis_service.set(
+                        f"session:{s_id}", paper_data["ocr_text"], expire=3600
+                    )  # Align TTL to 1 hour
+                    logger.info(f"Restored session context for: {s_id} (Expires in 1h)")
                 else:
                     logger.warning(
                         f"Failed to restore session context: session_id={session_id}, paper_data={paper_data is not None}"
@@ -869,11 +858,9 @@ async def stream(task_id: str):
             except Exception as e:
                 logger.error(f"Failed to save paper record: {e}")
 
-            # Redisセッションコンテキストを1時間保持
+            # Redisセッションコンテキストを1時間保持 (sliding)
             if session_id:
                 redis_service.set(f"session:{session_id}", full_text, expire=3600)
-
-            # 完了処理
 
             # 完了処理
             redis_service.delete(f"task:{task_id}")

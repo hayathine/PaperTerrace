@@ -63,7 +63,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         expire = 30 * 24 * 3600  # 30 days for registered users
     else:
         history_key = f"chat:{request.session_id}:{request.paper_id if request.paper_id else 'global'}"
-        expire = 3600  # 1 hour for guests (short-lived)
+        expire = 3600  # 1 hour for guests (sliding window)
 
     history = redis_service.get(history_key) or []
 
@@ -149,8 +149,10 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         if len(history) > 40:
             history = history[-40:]
 
-        # Save to cache
+        # Save to cache & Refresh context TTL
         redis_service.set(history_key, json.dumps(history), expire=expire)
+        if context:
+            redis_service.expire(f"session:{request.session_id}", 3600)
 
     # Return response with text and grounding
     return JSONResponse(

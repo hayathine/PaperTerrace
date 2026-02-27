@@ -89,6 +89,7 @@ Output Format (use 4 sections with ## markdown headers, all in {lang_name}):
 2. Key Contributions section: 2-4 bullet points
 3. Methodology section: Concise explanation of methods used
 4. Conclusion section: Key findings and implications
+5. Key Words section: 5-10 keywords (in English)
 
 All section headers and content MUST be written in {lang_name}. Never use English headers like "Overview" or "Key Contributions".
 """

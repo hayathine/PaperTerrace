@@ -52,7 +52,7 @@ class TranslationService:
             return await self.llamacpp.translate_with_llamacpp(
                 original_word=text,
                 paper_context=paper_context or "No specific context available.",
-                lang_name="Japanese" if target_lang == "ja" else "English",
+                lang_name=target_lang,
             )
 
         return translation
@@ -81,7 +81,7 @@ class TranslationService:
                 translation = await self.llamacpp.translate_with_llamacpp(
                     original_word=texts[i],
                     paper_context=paper_context or "No specific context available.",
-                    lang_name="Japanese" if target_lang == "ja" else "English",
+                    lang_name=target_lang,
                 )
 
             final_translations.append(translation)

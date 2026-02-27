@@ -20,6 +20,7 @@ class RecommendationSyncRequest(BaseModel):
     conversation_history: Optional[str] = None
     word_clicks: Optional[List[WordClickEvent]] = None
     session_duration: Optional[float] = None
+    is_final: bool = False
 
 
 class RecommendationFeedbackRequest(BaseModel):
