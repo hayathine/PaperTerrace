@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import ChatWindow from "../Chat/ChatWindow";
 import Dictionary from "../Dictionary/Dictionary";
 import NoteList from "../Notes/NoteList";
+import RecommendationTab from "../Recommendation/RecommendationTab";
 import Summary from "../Summary/Summary";
 import PaperStack from "./PaperStack";
 
@@ -112,6 +113,32 @@ const Sidebar: React.FC<SidebarProps> = ({
 				>
 					{t("sidebar.tabs.stack")}
 				</button>
+
+				<button
+					type="button"
+					onClick={() => onTabChange("explore")}
+					className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 flex items-center justify-center gap-1 ${
+						activeTab === "explore"
+							? "bg-white text-amber-600 border-amber-600 shadow-none"
+							: "text-slate-400 border-transparent hover:text-amber-600"
+					}`}
+					title="Explore Recommendations"
+				>
+					<svg
+						className="w-3 h-3"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth="2.5"
+							d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+						/>
+					</svg>
+					Explore
+				</button>
 			</div>
 
 			{/* Tab Content - All rendered but hidden when not active to preserve state */}
@@ -172,6 +199,15 @@ const Sidebar: React.FC<SidebarProps> = ({
 					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "stack" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
 				>
 					<PaperStack papers={stackedPapers} onRemove={onRemoveFromStack} />
+				</div>
+
+				<div
+					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "explore" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
+				>
+					<RecommendationTab
+						sessionId={sessionId}
+						onStackPaper={onStackPaper}
+					/>
 				</div>
 			</div>
 		</div>
