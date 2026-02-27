@@ -11,6 +11,7 @@ import GlobalLoading from "./components/UI/GlobalLoading";
 import UploadScreen from "./components/Upload/UploadScreen";
 import { useAuth } from "./contexts/AuthContext";
 import { useLoading } from "./contexts/LoadingContext";
+import { syncTrajectory } from "./lib/recommendation";
 
 function App() {
 	const { user, logout } = useAuth();
@@ -257,6 +258,22 @@ function App() {
 		if (isLink(word)) {
 			handleStackPaper(word);
 			return;
+		}
+
+		// Fire telemetry for translation
+		if (currentPaperId) {
+			syncTrajectory({
+				session_id: sessionId,
+				paper_id: currentPaperId,
+				word_clicks: [
+					{
+						word,
+						context: context || "",
+						section: "Unknown", // Can be inferred if PDF structure allows, or left as Unknown
+						timestamp: Date.now() / 1000,
+					},
+				],
+			});
 		}
 
 		setSelectedWord(word);
