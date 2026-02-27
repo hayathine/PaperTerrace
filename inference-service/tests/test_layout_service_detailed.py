@@ -102,8 +102,9 @@ class TestLayoutAnalysisService:
         assert ori_shape == (100, 200)
         # scale = min(640/100, 640/200) = 3.2
         assert scale == 3.2
-        # new_h = 100 * 3.2 = 320, new_w = 200 * 3.2 = 640
-        # For Top-Left padding, pad_h and pad_w should be 0
-        assert pad_info[0] == 0
+        # For Center padding:
+        # pad_h = (640 - 320) // 2 = 160
+        # pad_w = (640 - 640) // 2 = 0
+        assert pad_info[0] == 160
         assert pad_info[1] == 0
         assert processed_img.shape == (1, 3, 640, 640)
