@@ -83,7 +83,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	// Stamp State
 	// Modes: 'plaintext' (default), 'text', 'stamp', 'area'
 	const [mode, setMode] = useState<"text" | "stamp" | "area" | "plaintext">(
-		"plaintext",
+		"text",
 	);
 	const [stamps, setStamps] = useState<Stamp[]>([]);
 	const [selectedStamp, setSelectedStamp] = useState<StampType>("👍");
