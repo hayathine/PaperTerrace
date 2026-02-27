@@ -484,61 +484,107 @@ function App() {
 							</div>
 						</div>
 
-						<div className="mt-auto mb-4">
-							{user && (
-								<div className="flex items-center gap-2 mb-4 p-2 bg-gray-800 rounded">
-									{user.photoURL ? (
-										<img
-											src={user.photoURL}
-											alt="User"
-											className="w-8 h-8 rounded-full"
-										/>
-									) : (
-										<div className="w-8 h-8 rounded-full bg-indigo-500 flex items-center justify-center text-xs font-bold">
-											{user.displayName?.[0] || "U"}
-										</div>
-									)}
-									<div className="overflow-hidden">
-										<p className="text-sm font-medium truncate">
-											{user.displayName || "User"}
-										</p>
-										<p className="text-xs text-gray-400 truncate">
-											{user.email || ""}
-										</p>
-									</div>
-								</div>
-							)}
-							{!user && (
-								<div className="flex items-center gap-2 mb-4 p-2 bg-gray-800 rounded">
-									<div className="w-8 h-8 rounded-full bg-gray-600 flex items-center justify-center text-xs font-bold">
-										G
-									</div>
-									<div className="overflow-hidden">
-										<p className="text-sm font-medium truncate">
-											{t("nav.guest_user")}
-										</p>
-										<p className="text-xs text-gray-400 truncate">
-											{t("nav.limited_access")}
-										</p>
-									</div>
-								</div>
-							)}
+						<div className="mt-auto pt-6 border-t border-gray-800/50 mb-4 px-2">
 							{user ? (
-								<button
-									type="button"
-									onClick={logout}
-									className="w-full py-2 px-4 bg-red-600 hover:bg-red-700 rounded text-sm transition-colors"
-								>
-									{t("nav.signout")}
-								</button>
+								<div className="space-y-4">
+									<div className="flex items-center gap-3 p-3 bg-gray-800/40 rounded-xl border border-gray-700/30 backdrop-blur-sm">
+										<div className="relative">
+											{user.photoURL ? (
+												<img
+													src={user.photoURL}
+													alt="User"
+													className="w-10 h-10 rounded-full border-2 border-indigo-500/30 shadow-inner"
+												/>
+											) : (
+												<div className="w-10 h-10 rounded-full bg-gradient-to-tr from-indigo-600 to-purple-500 flex items-center justify-center text-sm font-black shadow-lg shadow-indigo-500/20">
+													{user.displayName?.[0] || user.email?.[0] || "U"}
+												</div>
+											)}
+											<div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 border-2 border-gray-900 rounded-full shadow-sm" />
+										</div>
+										<div className="overflow-hidden">
+											<div className="flex items-center gap-1.5">
+												<p className="text-sm font-bold text-gray-100 truncate">
+													{user.displayName ||
+														user.email?.split("@")[0] ||
+														"User"}
+												</p>
+											</div>
+											<p className="text-[10px] text-green-400 font-bold uppercase tracking-wider flex items-center gap-1">
+												<span className="w-1 h-1 bg-green-400 rounded-full animate-pulse" />
+												{t("nav.status_logged_in")}
+											</p>
+										</div>
+									</div>
+									<button
+										type="button"
+										onClick={logout}
+										className="group w-full py-2.5 px-4 bg-gray-800 hover:bg-red-900/20 text-gray-400 hover:text-red-400 rounded-xl text-xs font-bold transition-all duration-300 border border-gray-700 hover:border-red-900/30 flex items-center justify-center gap-2"
+									>
+										<svg
+											className="w-4 h-4 transition-transform group-hover:-translate-x-0.5"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth="2.5"
+												d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+											/>
+										</svg>
+										{t("nav.signout")}
+									</button>
+								</div>
 							) : (
-								<button
-									type="button"
-									onClick={() => setShowLoginModal(true)}
-									className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 rounded text-sm transition-colors"
-								>
-									{t("nav.signin_signup")}
-								</button>
+								<div className="space-y-4">
+									<div className="flex items-center gap-3 p-3 bg-gray-800/20 rounded-xl border border-dashed border-gray-700/50">
+										<div className="w-10 h-10 rounded-full bg-gray-700/50 flex items-center justify-center text-xs font-bold text-gray-500">
+											<svg
+												className="w-5 h-5"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth="2"
+													d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+												/>
+											</svg>
+										</div>
+										<div className="overflow-hidden">
+											<p className="text-sm font-bold text-gray-400 truncate">
+												{t("nav.guest_user")}
+											</p>
+											<p className="text-[10px] text-gray-500 font-medium truncate uppercase tracking-tight">
+												{t("nav.limited_access")}
+											</p>
+										</div>
+									</div>
+									<button
+										type="button"
+										onClick={() => setShowLoginModal(true)}
+										className="w-full py-3 px-4 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black transition-all duration-300 shadow-lg shadow-indigo-600/20 active:scale-[0.98] flex items-center justify-center gap-2"
+									>
+										<svg
+											className="w-4 h-4"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth="2.5"
+												d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"
+											/>
+										</svg>
+										{t("nav.signin_signup")}
+									</button>
+								</div>
 							)}
 						</div>
 
@@ -717,15 +763,38 @@ function App() {
 
 				{/* Login Modal */}
 				{showLoginModal && (
-					<div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-						<div className="relative bg-white rounded-lg shadow-xl w-full max-w-md mx-4 overflow-hidden">
+					<button
+						type="button"
+						className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity duration-300 w-full h-full border-none p-0 cursor-default"
+						onClick={() => setShowLoginModal(false)}
+						onKeyDown={(e) => {
+							if (e.key === "Enter" || e.key === " ") {
+								setShowLoginModal(false);
+							}
+						}}
+						aria-label="Close login modal"
+					>
+						<div
+							className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-in zoom-in-95 duration-200"
+							onClick={(e) => e.stopPropagation()}
+							onKeyDown={(e) => e.stopPropagation()}
+							role="dialog"
+							aria-modal="true"
+						>
+							<Login
+								onGuestAccess={() => {
+									handleLoginAsGuest();
+									setShowLoginModal(false);
+								}}
+							/>
 							<button
 								type="button"
 								onClick={() => setShowLoginModal(false)}
-								className="absolute top-2 right-2 text-gray-400 hover:text-gray-600"
+								className="absolute top-4 right-4 p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-full transition-all duration-200 z-[60]"
+								aria-label="Close"
 							>
 								<svg
-									className="w-6 h-6"
+									className="w-5 h-5"
 									fill="none"
 									stroke="currentColor"
 									viewBox="0 0 24 24"
@@ -733,19 +802,13 @@ function App() {
 									<path
 										strokeLinecap="round"
 										strokeLinejoin="round"
-										strokeWidth="2"
+										strokeWidth="2.5"
 										d="M6 18L18 6M6 6l12 12"
 									/>
 								</svg>
 							</button>
-							<Login
-								onGuestAccess={() => {
-									handleLoginAsGuest();
-									setShowLoginModal(false);
-								}}
-							/>
 						</div>
-					</div>
+					</button>
 				)}
 
 				{/* Search Bar */}

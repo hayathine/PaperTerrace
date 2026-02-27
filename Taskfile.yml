@@ -137,7 +137,7 @@ tasks:
   test:redis:
     desc: "Run redis provider tests"
     cmds:
-      - uv run --directory redis_provider env PYTHONPATH=.:.. pytest || [ $? -eq 5 ]
+      - uv run --directory redis_provider env PYTHONPATH=.:.. pytest -o "addopts=" || [ $? -eq 5 ]
 
   test:frontend:
     desc: "Run frontend tests (Vitest)"
@@ -157,7 +157,7 @@ tasks:
     cmds:
       - uv run --directory backend env PYTHONPATH=.:.. pytest -n auto
       - uv run --directory inference-service env PYTHONPATH=.:.. pytest -n auto
-      - uv run --directory redis_provider env PYTHONPATH=.:.. pytest
+      - uv run --directory redis_provider env PYTHONPATH=.:.. pytest -o "addopts="
       - cd frontend && npm run test
 
   lint:
@@ -246,28 +246,27 @@ tasks:
     desc: "Initialize Terraform for production"
     cmds:
       - echo "🔧 Initializing Terraform for production..."
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform init
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure && terraform init
 
   infra:import:production:
     desc: "Import existing GCP resources into Terraform state (production)"
     cmds:
       - echo "📥 Importing existing resources to Terraform..."
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.artifact_registry.google_artifact_registry_repository.main projects/{{.PROJECT_ID}}/locations/{{.REGION}}/repositories/paperterrace || echo "⚠️ Already imported or not found"
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.iam.google_service_account.app_sa projects/{{.PROJECT_ID}}/serviceAccounts/paperterrace-sa@{{.PROJECT_ID}}.iam.gserviceaccount.com || echo "⚠️ Already imported or not found"
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest" module.networking.google_compute_network.main projects/{{.PROJECT_ID}}/global/networks/paperterrace-vpc || echo "⚠️ Already imported or not found"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" module.iam.google_service_account.app_sa projects/{{.PROJECT_ID}}/serviceAccounts/paperterrace-sa@{{.PROJECT_ID}}.iam.gserviceaccount.com || echo "⚠️ Already imported or not found"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure && terraform import -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" module.networking.google_compute_network.main projects/{{.PROJECT_ID}}/global/networks/paperterrace-vpc || echo "⚠️ Already imported or not found"
       - echo "✅ Import complete!"
 
   infra:plan:production:
     desc: "Plan Terraform changes for production"
     cmds:
       - echo "📋 Planning Terraform changes for production..."
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform plan -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure && terraform plan -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}"
 
   infra:apply:production:
     desc: "Apply Terraform changes for production"
     cmds:
       - echo "🚀 Applying Terraform changes for production..."
-      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure/environments/production && terraform apply -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}" -var="image_url={{.REGION}}-docker.pkg.dev/{{.PROJECT_ID}}/paperterrace/app:latest"
+      - unset GOOGLE_APPLICATION_CREDENTIALS && cd local-files/infrastructure && terraform apply -var="project_id={{.PROJECT_ID}}" -var="region={{.REGION}}" -var="gemini_api_key=${GEMINI_API_KEY}" -var="db_password=${DB_PASSWORD}"
 
   # ============================================================================
   # Utility Tasks

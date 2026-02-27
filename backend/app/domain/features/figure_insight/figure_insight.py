@@ -1,3 +1,5 @@
+import os
+
 from app.domain.prompts import (
     VISION_ANALYZE_FIGURE_PROMPT,
     VISION_ANALYZE_TABLE_PROMPT,
@@ -9,7 +11,6 @@ from app.schemas.gemini_schema import (
     FigureComparisonResponse,
     TableAnalysisResponse,
 )
-
 from common.logger import logger
 
 
@@ -18,6 +19,7 @@ class FigureInsightService:
 
     def __init__(self):
         self.ai_provider = get_ai_provider()
+        self.model = os.getenv("FIGURE_EXPLAIN_MODEL", "gemini-2.0-flash-lite")
 
     async def analyze_figure(
         self,
@@ -57,6 +59,7 @@ class FigureInsightService:
                     prompt,
                     image_bytes,
                     mime_type,
+                    model=self.model,
                     response_model=FigureAnalysisResponse,
                 )
             )
@@ -110,7 +113,7 @@ class FigureInsightService:
 
         try:
             analysis: TableAnalysisResponse = await self.ai_provider.generate(
-                prompt, response_model=TableAnalysisResponse
+                prompt, model=self.model, response_model=TableAnalysisResponse
             )
 
             result_lines = [
@@ -153,7 +156,7 @@ class FigureInsightService:
 
         try:
             comparison: FigureComparisonResponse = await self.ai_provider.generate(
-                prompt, response_model=FigureComparisonResponse
+                prompt, model=self.model, response_model=FigureComparisonResponse
             )
 
             result_lines = [
