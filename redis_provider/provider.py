@@ -127,3 +127,13 @@ class RedisService:
                 log.warning("exists", f"Redis error: {e}. Falling back to memory.")
 
         return key in self.memory_cache
+
+    def expire(self, key: str, time: int) -> bool:
+        """Set a timeout on key."""
+        if self.client:
+            try:
+                return bool(self.client.expire(key, time))
+            except Exception as e:
+                log.warning("expire", f"Redis error: {e}. Falling back to memory.")
+
+        return key in self.memory_cache

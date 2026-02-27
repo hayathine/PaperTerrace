@@ -27,6 +27,7 @@ interface SidebarProps {
 	onStackPaper: (url: string, title?: string) => void;
 	onRemoveFromStack: (url: string) => void;
 	onEvidenceClick?: (grounding: any) => void;
+	onClose?: () => void;
 }
 
 const Sidebar: React.FC<SidebarProps> = ({
@@ -49,13 +50,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 	onStackPaper,
 	onRemoveFromStack,
 	onEvidenceClick,
+	onClose,
 }) => {
 	const { t } = useTranslation();
 
 	return (
 		<div className="flex flex-col h-full bg-white border-l border-slate-200 shadow-sm overflow-hidden font-sans">
 			{/* Tab Navigation */}
-			<div className="flex bg-slate-50 border-b border-slate-200 overflow-x-auto">
+			<div className="flex bg-slate-50 border-b border-slate-200 overflow-x-auto items-center pr-2">
 				<button
 					type="button"
 					onClick={() => onTabChange("dict")}
@@ -141,9 +143,33 @@ const Sidebar: React.FC<SidebarProps> = ({
 					</svg>
 					{t("nav.explore")}
 				</button>
+
+				{onClose && (
+					<button
+						type="button"
+						onClick={onClose}
+						className="md:hidden ml-2 p-2 text-slate-400 hover:text-slate-600 shrink-0 border border-transparent hover:bg-slate-200 rounded-md transition-all"
+						title={t("nav.close_panel", "Close panel")}
+					>
+						<svg
+							className="w-5 h-5"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth="2.5"
+								d="M6 18L18 6M6 6l12 12"
+							/>
+						</svg>
+					</button>
+				)}
 			</div>
 
 			{/* Tab Content - All rendered but hidden when not active to preserve state */}
+
 			<div className="flex-1 overflow-hidden relative">
 				<div
 					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "dict" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}

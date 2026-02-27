@@ -160,6 +160,16 @@ function App() {
 		return () => window.removeEventListener("beforeunload", handleBeforeUnload);
 	}, [currentPaperId, sessionId]);
 
+	const [isMobile, setIsMobile] = useState(false);
+	const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
+
+	useEffect(() => {
+		const checkMobile = () => setIsMobile(window.innerWidth < 768);
+		checkMobile();
+		window.addEventListener("resize", checkMobile);
+		return () => window.removeEventListener("resize", checkMobile);
+	}, []);
+
 	useEffect(() => {
 		const handleMouseMove = (e: MouseEvent) => {
 			if (!isResizing) return;
@@ -285,6 +295,7 @@ function App() {
 		setSelectedCoordinates(coords);
 		setSelectedConf(conf);
 		setActiveTab("dict");
+		setIsRightSidebarOpen(true);
 	};
 
 	const handleTextSelect = (
@@ -303,6 +314,7 @@ function App() {
 		setSelectedImage(undefined); // Clear image
 		setSelectedCoordinates(coords);
 		setActiveTab("notes"); // Switch to notes for saving selection
+		setIsRightSidebarOpen(true);
 	};
 
 	const handleAreaSelect = (
@@ -314,6 +326,7 @@ function App() {
 		setSelectedImage(imageUrl);
 		setSelectedCoordinates(coords);
 		setActiveTab("notes");
+		setIsRightSidebarOpen(true);
 	};
 
 	const handleJumpToLocation = (
@@ -335,6 +348,7 @@ function App() {
 	const handleAskAI = (prompt: string) => {
 		setPendingChatPrompt(prompt);
 		setActiveTab("chat");
+		setIsRightSidebarOpen(true);
 	};
 
 	const handleStackPaper = (url: string, title?: string) => {
@@ -351,6 +365,7 @@ function App() {
 			return [...prev, { url: cleanedUrl, title, addedAt: Date.now() }];
 		});
 		setActiveTab("stack");
+		setIsRightSidebarOpen(true);
 	};
 
 	const handleRemoveFromStack = (url: string) => {
@@ -424,9 +439,23 @@ function App() {
 	return (
 		<ErrorBoundary>
 			<div className="flex h-screen w-full bg-gray-100 overflow-hidden">
-				{/* Sidebar Placeholder */}
+				{/* Mobile Backdrop for Left Sidebar */}
+				{isLeftSidebarOpen && (
+					<button
+						type="button"
+						className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity w-full h-full border-none p-0 cursor-default"
+						onClick={() => setIsLeftSidebarOpen(false)}
+						aria-label="Close left sidebar"
+					/>
+				)}
+
+				{/* Left Sidebar */}
 				<div
-					className={`bg-gray-900 text-white transition-all duration-300 ease-in-out hidden md:flex flex-col shrink-0 ${isLeftSidebarOpen ? "w-64 opacity-100" : "w-0 opacity-0 overflow-hidden"}`}
+					className={`bg-gray-900 text-white transition-all duration-300 ease-in-out flex flex-col shrink-0 absolute md:relative z-50 h-full ${
+						isLeftSidebarOpen
+							? "w-72 md:w-64 translate-x-0"
+							: "-translate-x-full md:translate-x-0 w-72 md:w-0 overflow-hidden"
+					}`}
 				>
 					<div className="w-64 p-4 flex flex-col h-full">
 						<div className="flex items-center gap-3 mb-8">
@@ -694,10 +723,30 @@ function App() {
 						</span>
 						<div className="flex-1" />
 						{uploadFile && (
-							<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+							<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-4 truncate max-w-[150px] sm:max-w-xs">
 								{uploadFile.name}
 							</span>
 						)}
+						<button
+							type="button"
+							onClick={() => setIsRightSidebarOpen(true)}
+							className="md:hidden p-2 rounded-md bg-indigo-50 text-indigo-600 hover:bg-indigo-100 transition-colors shadow-sm border border-indigo-100"
+							title={t("nav.open_right_panel")}
+						>
+							<svg
+								className="w-5 h-5"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth="2"
+									d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+								/>
+							</svg>
+						</button>
 					</header>
 
 					<div className="flex-1 flex overflow-hidden">
@@ -736,7 +785,7 @@ function App() {
 							aria-valuemin={150}
 							aria-valuemax={500}
 							tabIndex={0}
-							className={`w-1.5 h-full cursor-col-resize hover:bg-indigo-500/30 transition-colors z-30 shrink-0 border-none m-0 p-0 ${isResizing ? "bg-indigo-500/50" : "bg-transparent"}`}
+							className={`hidden md:block w-1.5 h-full cursor-col-resize hover:bg-indigo-500/30 transition-colors z-30 shrink-0 border-none m-0 p-0 ${isResizing ? "bg-indigo-500/50" : "bg-transparent"}`}
 							onMouseDown={(e) => {
 								e.preventDefault();
 								setIsResizing(true);
@@ -750,12 +799,27 @@ function App() {
 							}}
 						/>
 
+						{/* Mobile Backdrop for Right Sidebar */}
+						{isRightSidebarOpen && (
+							<button
+								type="button"
+								className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity w-full h-full border-none p-0 cursor-default"
+								onClick={() => setIsRightSidebarOpen(false)}
+								aria-label="Close right sidebar"
+							/>
+						)}
+
 						{/* Right Sidebar */}
 						<div
-							style={{ width: sidebarWidth }}
-							className="h-full shadow-xl z-20 bg-white overflow-hidden shrink-0"
+							style={{ width: isMobile ? "85vw" : sidebarWidth }}
+							className={`absolute md:relative right-0 h-full shadow-xl z-50 md:z-20 bg-white overflow-hidden shrink-0 transition-transform duration-300 ${
+								isRightSidebarOpen
+									? "translate-x-0"
+									: "translate-x-full md:translate-x-0"
+							}`}
 						>
 							<Sidebar
+								onClose={() => setIsRightSidebarOpen(false)}
 								sessionId={sessionId}
 								activeTab={activeTab}
 								onTabChange={setActiveTab}
