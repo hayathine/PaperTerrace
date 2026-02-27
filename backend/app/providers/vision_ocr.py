@@ -100,6 +100,7 @@ class VisionOCRService:
                                         float(x1),
                                         float(y1),
                                     ],
+                                    "conf": word.confidence,
                                 }
                             )
 

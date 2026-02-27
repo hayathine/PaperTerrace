@@ -261,9 +261,13 @@ class InferenceServiceClient:
             logger.error(f"バッチレイアウト解析エラー: {e}")
             raise
 
-    async def translate_text(self, text: str, target_lang: str = "ja") -> str:
+    async def translate_text(
+        self, text: str, target_lang: str = "ja", paper_context: str | None = None
+    ) -> str:
         """単一テキストの翻訳"""
-        request_data = TranslationRequest(text=text, target_lang=target_lang)
+        request_data = TranslationRequest(
+            text=text, target_lang=target_lang, paper_context=paper_context
+        )
 
         try:
             logger.debug(f"翻訳リクエスト: {text[:50]}...")

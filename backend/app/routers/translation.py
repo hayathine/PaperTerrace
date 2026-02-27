@@ -69,7 +69,7 @@ def build_dict_card_html(
             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
-            AI再翻訳
+            Advanced Translation
         </button>
         """
 
@@ -155,6 +155,7 @@ async def explain(
     lang: str = "ja",
     paper_id: str | None = None,
     element_id: str | None = None,
+    conf: float | None = None,
 ):
     """単語の解説 (Local: Cache -> local-MT)"""
     start_time = asyncio.get_event_loop().time()
@@ -208,6 +209,67 @@ async def explain(
                 element_id=element_id,
             )
         )
+
+    # Low confidence override -> Qwen3
+    use_llamacpp = conf is not None and conf <= 0.5
+    if use_llamacpp:
+        log.info(
+            "explain", f"Word confidence {conf} <= 0.5, using LlamaCpp for {lemma}"
+        )
+        try:
+            from app.providers.inference_client import get_inference_client
+
+            client = await get_inference_client()
+
+            # Fetch paper_context
+            paper_context_str = ""
+            if paper_id:
+                paper = storage.get_paper(paper_id)
+                if paper:
+                    summary = paper.get("abstract") or paper.get("summary")
+                    if summary:
+                        paper_context_str = f"\n[Paper Context / Summary]\n{summary}\n"
+
+            if not paper_context_str:
+                paper_context_str = (
+                    "No specific context available, but please translate carefully."
+                )
+
+            local_translation = await client.translate_text(
+                lemma, lang, paper_context=paper_context_str
+            )
+            source = "Qwen3"
+
+            if not is_htmx:
+                return JSONResponse(
+                    {
+                        "word": original_word,
+                        "lemma": lemma,
+                        "translation": local_translation,
+                        "source": source,
+                        "element_id": element_id,
+                    }
+                )
+
+            elapsed = asyncio.get_event_loop().time() - start_time
+            log.info(
+                "explain", f"Lookup completed (Qwen3) in {elapsed:.3f}s", word=word
+            )
+            return HTMLResponse(
+                build_dict_card_html(
+                    original_word,
+                    lemma,
+                    local_translation,
+                    source,
+                    lang,
+                    paper_id,
+                    element_id=element_id,
+                    show_deep_btn=False,
+                )
+            )
+        except Exception as e:
+            log.warning("explain", f"LlamaCpp translation failed: {e}", lemma=lemma)
+            # Fall back to rest
 
     # Stage 2: ServiceB Machine Translation (M2M100)
     translator = local_translator.get_local_translator()

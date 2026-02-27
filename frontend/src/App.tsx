@@ -49,6 +49,9 @@ function App() {
 	const [selectedCoordinates, setSelectedCoordinates] = useState<
 		{ page: number; x: number; y: number } | undefined
 	>(undefined);
+	const [selectedConf, setSelectedConf] = useState<number | undefined>(
+		undefined,
+	);
 	const [selectedImage, setSelectedImage] = useState<string | undefined>(
 		undefined,
 	);
@@ -254,6 +257,7 @@ function App() {
 		word: string,
 		context?: string,
 		coords?: { page: number; x: number; y: number },
+		conf?: number,
 	) => {
 		if (isLink(word)) {
 			handleStackPaper(word);
@@ -279,6 +283,7 @@ function App() {
 		setSelectedWord(word);
 		setSelectedContext(context);
 		setSelectedCoordinates(coords);
+		setSelectedConf(conf);
 		setActiveTab("dict");
 	};
 
@@ -757,6 +762,7 @@ function App() {
 								selectedWord={selectedWord}
 								context={selectedContext}
 								coordinates={selectedCoordinates}
+								conf={selectedConf}
 								selectedImage={selectedImage}
 								onJump={handleJumpToLocation}
 								isAnalyzing={isAnalyzing}

@@ -21,6 +21,7 @@ interface PDFViewerProps {
 		word: string,
 		context?: string,
 		coords?: { page: number; x: number; y: number },
+		conf?: number,
 	) => void;
 	onTextSelect?: (
 		text: string,

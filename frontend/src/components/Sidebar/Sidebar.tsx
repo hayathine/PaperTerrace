@@ -14,6 +14,7 @@ interface SidebarProps {
 	selectedWord?: string;
 	context?: string;
 	coordinates?: { page: number; x: number; y: number };
+	conf?: number;
 	selectedImage?: string;
 	onJump?: (page: number, x: number, y: number, term?: string) => void;
 	isAnalyzing?: boolean;
@@ -35,6 +36,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	selectedWord,
 	context,
 	coordinates,
+	conf,
 	selectedImage,
 	onJump,
 	isAnalyzing = false,
@@ -152,6 +154,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						term={selectedWord}
 						context={context}
 						coordinates={coordinates}
+						conf={conf}
 						onJump={onJump}
 					/>
 				</div>

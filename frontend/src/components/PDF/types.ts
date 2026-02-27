@@ -22,6 +22,7 @@ export interface Link {
 export interface PageWord {
 	word: string;
 	bbox: number[]; // [x1, y1, x2, y2]
+	conf?: number;
 }
 
 export interface Figure {

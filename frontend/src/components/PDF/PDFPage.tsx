@@ -26,6 +26,7 @@ interface PDFPageProps {
 		word: string,
 		context?: string,
 		coords?: { page: number; x: number; y: number },
+		conf?: number,
 	) => void;
 	onTextSelect?: (
 		text: string,
@@ -545,11 +546,16 @@ const PDFPage: React.FC<PDFPageProps> = ({
 												const wordCenterX = (x1 + x2) / 2 / pageWidth;
 												const wordCenterY = (y1 + y2) / 2 / pageHeight;
 
-												onWordClick(cleanWord, context, {
-													page: page_num,
-													x: wordCenterX,
-													y: wordCenterY,
-												});
+												onWordClick(
+													cleanWord,
+													context,
+													{
+														page: page_num,
+														x: wordCenterX,
+														y: wordCenterY,
+													},
+													w.conf,
+												);
 											}
 										}
 									}}

@@ -8,6 +8,7 @@ interface TextModePageProps {
 		word: string,
 		context?: string,
 		coords?: { page: number; x: number; y: number },
+		conf?: number,
 	) => void;
 	onTextSelect?: (
 		text: string,
@@ -291,11 +292,16 @@ const TextModePage: React.FC<TextModePageProps> = ({
 													className={`${isJumpHighlight ? "bg-yellow-400/60 px-1 rounded" : ""} ${isSearchMatch ? "bg-amber-300/60 px-1 rounded" : ""} text-left`}
 													onClick={() => {
 														if (onWordClick) {
-															onWordClick(w.word, undefined, {
-																page: page.page_num,
-																x: 0.5,
-																y: 0.5,
-															});
+															onWordClick(
+																w.word,
+																undefined,
+																{
+																	page: page.page_num,
+																	x: 0.5,
+																	y: 0.5,
+																},
+																w.conf,
+															);
 														}
 													}}
 													style={{

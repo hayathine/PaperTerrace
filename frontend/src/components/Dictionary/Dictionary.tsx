@@ -15,6 +15,7 @@ interface DictionaryProps {
 	paperId?: string | null;
 	context?: string;
 	coordinates?: { page: number; x: number; y: number };
+	conf?: number;
 	onJump?: (page: number, x: number, y: number, term?: string) => void;
 }
 
@@ -24,6 +25,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	paperId,
 	context,
 	coordinates,
+	conf,
 	onJump,
 }) => {
 	const { t, i18n } = useTranslation();
@@ -87,7 +89,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				if (token) headers.Authorization = `Bearer ${token}`;
 
 				const res = await fetch(
-					`${API_URL}/api/explain/${encodeURIComponent(term)}?lang=${i18n.language}&paper_id=${paperId || ""}`,
+					`${API_URL}/api/explain/${encodeURIComponent(term)}?lang=${i18n.language}&paper_id=${paperId || ""}&conf=${conf !== undefined ? conf : ""}`,
 					{ headers },
 				);
 
