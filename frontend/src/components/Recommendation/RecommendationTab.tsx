@@ -4,8 +4,8 @@ import { useTranslation } from "react-i18next";
 import {
 	generateRecommendations,
 	type RecommendationGenerateResponse,
-	submitRecommendationFeedback,
 } from "@/lib/recommendation";
+import FeedbackSection from "../Common/FeedbackSection";
 
 interface RecommendationTabProps {
 	sessionId: string;
@@ -22,17 +22,11 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 	const [error, setError] = useState<string | null>(null);
 	const [response, setResponse] =
 		useState<RecommendationGenerateResponse | null>(null);
-	const [feedbackScore, setFeedbackScore] = useState<number>(0);
-	const [feedbackComment, setFeedbackComment] = useState("");
-	const [submittedFeedback, setSubmittedFeedback] = useState(false);
 	const [clickedPapers, setClickedPapers] = useState<Set<string>>(new Set());
 
 	const handleGenerate = async () => {
 		setIsLoading(true);
 		setError(null);
-		setFeedbackScore(0);
-		setFeedbackComment("");
-		setSubmittedFeedback(false);
 		setClickedPapers(new Set());
 		try {
 			const res = await generateRecommendations(sessionId);
@@ -51,25 +45,8 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 		}
 	};
 
-	const handleSubmitFeedback = async () => {
-		if (feedbackScore === 0) return;
-		try {
-			await submitRecommendationFeedback({
-				session_id: sessionId,
-				user_score: feedbackScore,
-				user_comment: feedbackComment,
-				clicked_paper: Array.from(clickedPapers)[0] || undefined,
-			});
-			setSubmittedFeedback(true);
-		} catch (err) {
-			console.error("Failed to submit feedback:", err);
-		}
-	};
-
 	const handlePaperClick = (paperTitle: string, url: string | undefined) => {
 		setClickedPapers((prev) => new Set(prev).add(paperTitle));
-		// Also inform the backend immediately if we had the API exposed individually
-		// Or just let it sync on feedback submission / session end
 
 		if (url) {
 			onStackPaper(url, paperTitle);
@@ -236,85 +213,11 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 							</div>
 
 							{/* Feedback UI */}
-							<div className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm mt-8 border-t-4 border-t-amber-400">
-								<h4 className="text-sm font-bold text-slate-800 mb-1">
-									{t("recommendation.feedback.title", "Help us improve")}
-								</h4>
-								<p className="text-[10px] text-slate-500 mb-4">
-									{t(
-										"recommendation.feedback.description",
-										"Rate these recommendations to improve your future suggestions.",
-									)}
-								</p>
-
-								{!submittedFeedback ? (
-									<div className="space-y-4">
-										<div className="flex items-center justify-between gap-1">
-											{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map((score) => (
-												<button
-													type="button"
-													key={score}
-													onClick={() => setFeedbackScore(score)}
-													className={`w-8 h-8 rounded flex items-center justify-center text-xs font-bold transition-transform hover:scale-110 ${feedbackScore === score ? "bg-amber-500 text-white shadow-md shadow-amber-500/30" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
-												>
-													{score}
-												</button>
-											))}
-										</div>
-										<div className="flex justify-between px-1 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-											<span>{t("recommendation.feedback.poor", "Poor")}</span>
-											<span>
-												{t("recommendation.feedback.excellent", "Excellent")}
-											</span>
-										</div>
-
-										{feedbackScore > 0 && (
-											<div className="space-y-3 animate-in fade-in slide-in-from-top-2">
-												<textarea
-													value={feedbackComment}
-													onChange={(e) => setFeedbackComment(e.target.value)}
-													placeholder="Any specific comments? (Optional)"
-													className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-xs focus:ring-2 focus:ring-amber-500 focus:border-amber-500 outline-none resize-none h-16"
-												/>
-												<button
-													type="button"
-													onClick={handleSubmitFeedback}
-													className="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white text-xs font-bold rounded-lg transition-colors"
-												>
-													{t(
-														"recommendation.feedback.submit",
-														"Submit Feedback",
-													)}
-												</button>
-											</div>
-										)}
-									</div>
-								) : (
-									<div className="text-center py-4 bg-green-50 rounded-lg border border-green-100">
-										<div className="w-8 h-8 bg-green-500 text-white rounded-full flex items-center justify-center mx-auto mb-2 shadow-lg shadow-green-500/30">
-											<svg
-												className="w-5 h-5"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-											>
-												<path
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													strokeWidth="3"
-													d="M5 13l4 4L19 7"
-												/>
-											</svg>
-										</div>
-										<p className="text-xs font-bold text-green-700">
-											{t(
-												"recommendation.feedback.thank_you",
-												"Thanks for your feedback!",
-											)}
-										</p>
-									</div>
-								)}
-							</div>
+							<FeedbackSection
+								sessionId={sessionId}
+								targetType="recommendation"
+								targetId={Array.from(clickedPapers)[0]}
+							/>
 							<div className="pb-8 flex justify-center">
 								<button
 									type="button"

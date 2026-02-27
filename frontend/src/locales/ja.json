@@ -8,7 +8,13 @@
 		"cancel": "キャンセル",
 		"delete": "削除",
 		"edit": "編集",
-		"close": "閉じる"
+		"close": "閉じる",
+		"feedback": {
+			"title": "この結果はいかがでしたか？",
+			"good": "役立った",
+			"bad": "期待外れ",
+			"submitted": "評価ありがとうございます！"
+		}
 	},
 	"nav": {
 		"explore": "見つける",

@@ -20,6 +20,7 @@ from app.routers import (
     auth_router,
     chat_router,
     explore_router,
+    feedback_router,
     figures_router,
     note_router,
     papers_router,
@@ -253,6 +254,7 @@ app.include_router(pdf_router, prefix="/api")
 app.include_router(analysis_router, prefix="/api")
 app.include_router(figures_router, prefix="/api")
 app.include_router(recommendation_router, prefix="/api")
+app.include_router(feedback_router, prefix="/api")
 
 
 # ============================================================================

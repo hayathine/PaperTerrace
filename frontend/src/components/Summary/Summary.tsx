@@ -2,6 +2,7 @@ import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import { useLoading } from "../../contexts/LoadingContext";
+import FeedbackSection from "../Common/FeedbackSection";
 import type { CritiqueResponse, RecommendResponse } from "./types";
 
 interface SummaryProps {
@@ -250,6 +251,11 @@ const Summary: React.FC<SummaryProps> = ({
 								<div className="prose prose-sm max-w-none text-sm text-slate-600 leading-relaxed whitespace-pre-wrap bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
 									{summaryData}
 								</div>
+								<FeedbackSection
+									sessionId={sessionId}
+									targetType="summary"
+									targetId={paperId || undefined}
+								/>
 							</div>
 						)}
 					</div>
@@ -272,70 +278,79 @@ const Summary: React.FC<SummaryProps> = ({
 							</div>
 						)}
 						{critiqueData && (
-							<div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm space-y-4">
-								<div className="text-sm text-slate-700 leading-relaxed font-medium mb-4">
-									{critiqueData.overall_assessment}
+							<div className="space-y-4">
+								<div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm space-y-4">
+									<div className="text-sm text-slate-700 leading-relaxed font-medium mb-4">
+										{critiqueData.overall_assessment}
+									</div>
+
+									{critiqueData.hidden_assumptions &&
+										critiqueData.hidden_assumptions.length > 0 && (
+											<div className="bg-red-50 p-4 rounded-lg flex flex-col gap-2">
+												<h4 className="text-xs font-bold text-red-800 uppercase mb-2">
+													{t("summary.assumptions")}
+												</h4>
+
+												<div className="space-y-4">
+													{critiqueData.hidden_assumptions.map((h, i) => (
+														<div key={i} className="text-sm text-red-700">
+															<span className="font-bold">
+																● {h.assumption}
+															</span>
+															<p className="ml-4 mt-1 opacity-80 text-xs">
+																{h.risk}
+															</p>
+														</div>
+													))}
+												</div>
+											</div>
+										)}
+
+									{critiqueData.unverified_conditions &&
+										critiqueData.unverified_conditions.length > 0 && (
+											<div className="bg-orange-50 p-4 rounded-lg flex flex-col gap-2">
+												<h4 className="text-xs font-bold text-orange-800 uppercase mb-2">
+													{t("summary.unverified")}
+												</h4>
+
+												<div className="space-y-4">
+													{critiqueData.unverified_conditions.map((h, i) => (
+														<div key={i} className="text-sm text-orange-700">
+															<span className="font-bold">● {h.condition}</span>
+															<p className="ml-4 mt-1 opacity-80 text-xs">
+																{h.impact}
+															</p>
+														</div>
+													))}
+												</div>
+											</div>
+										)}
+
+									{critiqueData.reproducibility_risks &&
+										critiqueData.reproducibility_risks.length > 0 && (
+											<div className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-col gap-2">
+												<h4 className="text-xs font-bold text-slate-800 uppercase mb-2">
+													{t("summary.reproducibility")}
+												</h4>
+
+												<div className="space-y-4">
+													{critiqueData.reproducibility_risks.map((h, i) => (
+														<div key={i} className="text-sm text-slate-700">
+															<span className="font-bold">● {h.risk}</span>
+															<p className="ml-4 mt-1 opacity-80 text-xs">
+																{h.detail}
+															</p>
+														</div>
+													))}
+												</div>
+											</div>
+										)}
 								</div>
-
-								{critiqueData.hidden_assumptions &&
-									critiqueData.hidden_assumptions.length > 0 && (
-										<div className="bg-red-50 p-4 rounded-lg flex flex-col gap-2">
-											<h4 className="text-xs font-bold text-red-800 uppercase mb-2">
-												{t("summary.assumptions")}
-											</h4>
-
-											<div className="space-y-4">
-												{critiqueData.hidden_assumptions.map((h, i) => (
-													<div key={i} className="text-sm text-red-700">
-														<span className="font-bold">● {h.assumption}</span>
-														<p className="ml-4 mt-1 opacity-80 text-xs">
-															{h.risk}
-														</p>
-													</div>
-												))}
-											</div>
-										</div>
-									)}
-
-								{critiqueData.unverified_conditions &&
-									critiqueData.unverified_conditions.length > 0 && (
-										<div className="bg-orange-50 p-4 rounded-lg flex flex-col gap-2">
-											<h4 className="text-xs font-bold text-orange-800 uppercase mb-2">
-												{t("summary.unverified")}
-											</h4>
-
-											<div className="space-y-4">
-												{critiqueData.unverified_conditions.map((h, i) => (
-													<div key={i} className="text-sm text-orange-700">
-														<span className="font-bold">● {h.condition}</span>
-														<p className="ml-4 mt-1 opacity-80 text-xs">
-															{h.impact}
-														</p>
-													</div>
-												))}
-											</div>
-										</div>
-									)}
-
-								{critiqueData.reproducibility_risks &&
-									critiqueData.reproducibility_risks.length > 0 && (
-										<div className="bg-slate-50 p-4 rounded-lg border border-slate-200 flex flex-col gap-2">
-											<h4 className="text-xs font-bold text-slate-800 uppercase mb-2">
-												{t("summary.reproducibility")}
-											</h4>
-
-											<div className="space-y-4">
-												{critiqueData.reproducibility_risks.map((h, i) => (
-													<div key={i} className="text-sm text-slate-700">
-														<span className="font-bold">● {h.risk}</span>
-														<p className="ml-4 mt-1 opacity-80 text-xs">
-															{h.detail}
-														</p>
-													</div>
-												))}
-											</div>
-										</div>
-									)}
+								<FeedbackSection
+									sessionId={sessionId}
+									targetType="critique"
+									targetId={paperId || undefined}
+								/>
 							</div>
 						)}
 					</div>
@@ -408,6 +423,11 @@ const Summary: React.FC<SummaryProps> = ({
 											))}
 										</div>
 									)}
+								<FeedbackSection
+									sessionId={sessionId}
+									targetType="related_papers"
+									targetId={paperId || undefined}
+								/>
 							</div>
 						)}
 					</div>

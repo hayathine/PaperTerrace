@@ -7,6 +7,7 @@ from app.routers.analysis import router as analysis_router
 from app.routers.auth import router as auth_router
 from app.routers.chat import router as chat_router
 from app.routers.explore import router as explore_router
+from app.routers.feedback import router as feedback_router
 from app.routers.figures import router as figures_router
 from app.routers.note import router as note_router
 from app.routers.papers import router as papers_router
@@ -31,4 +32,5 @@ __all__ = [
     "stamps_router",
     "upload_router",
     "recommendation_router",
+    "feedback_router",
 ]

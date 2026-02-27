@@ -287,7 +287,7 @@ tasks:
     desc: "Deploy PaperTerrace using Helm"
     cmds:
       - echo "🚀 Deploying with Helm..."
-      - helm upgrade --install paperterrace ./infrastructure/helm/paperterrace --namespace paperterrace --create-namespace
+      - helm upgrade --install paperterrace ./local-files/infrastructure/helm/paperterrace --namespace paperterrace --create-namespace
 
   helm:undeploy:
     desc: "Undeploy PaperTerrace using Helm"
