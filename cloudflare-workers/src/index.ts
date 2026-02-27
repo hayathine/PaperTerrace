@@ -41,82 +41,20 @@ export default {
     env: Env,
     ctx: ExecutionContext,
   ): Promise<Response> {
+    // Handle CORS preflight requests
+    if (request.method === "OPTIONS") {
+      return handleCORS(request, env);
+    }
+
     try {
-      // Handle CORS preflight requests
-      if (request.method === "OPTIONS") {
-        return handleCORS(request, env);
-      }
+      // Process the main request and get the base response
+      const response = await handleRequest(request, env, ctx);
 
-      // Validate origin
-      const originCheck = validateOrigin(request, env);
-      if (!originCheck.valid) {
-        return new Response(
-          JSON.stringify({
-            error: "Forbidden",
-            message: "Origin not allowed",
-          }),
-          {
-            status: 403,
-            headers: { "Content-Type": "application/json" },
-          },
-        );
-      }
-
-      // Check rate limit
-      const rateLimitCheck = await checkRateLimit(request, env);
-      if (!rateLimitCheck.allowed) {
-        return new Response(
-          JSON.stringify({
-            error: "Too Many Requests",
-            message: "Rate limit exceeded",
-          }),
-          {
-            status: 429,
-            headers: {
-              "Content-Type": "application/json",
-              "Retry-After": rateLimitCheck.retryAfter?.toString() || "60",
-            },
-          },
-        );
-      }
-
-      // Verify Firebase Auth token or fallback to Guest
-      const authHeader = request.headers.get("Authorization");
-      let decodedToken: DecodedToken | null = null;
-
-      if (authHeader && authHeader.startsWith("Bearer ")) {
-        const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-        decodedToken = await verifyFirebaseToken(token, env);
-
-        if (!decodedToken) {
-          return new Response(
-            JSON.stringify({
-              error: "Unauthorized",
-              message: "Invalid authentication token",
-            }),
-            {
-              status: 401,
-              headers: { "Content-Type": "application/json" },
-            },
-          );
-        }
-      } else {
-        // GUEST ACCESS: Identify by IP for basic tracking/rate limiting on backend
-        const clientIP = request.headers.get("CF-Connecting-IP") || "anonymous";
-        decodedToken = {
-          uid: `guest_${clientIP}`,
-          isGuest: true,
-        };
-      }
-
-      // Forward request to backend with user ID header
-      const response = await forwardRequest(request, decodedToken, env);
-
-      // Add CORS headers to response
+      // Add CORS headers to ALL responses
       return addCORSHeaders(response, request, env);
     } catch (error) {
       console.error("API Gateway error:", error);
-      return new Response(
+      const errorResponse = new Response(
         JSON.stringify({
           error: "Internal Server Error",
           message: error instanceof Error ? error.message : "Unknown error",
@@ -126,9 +64,86 @@ export default {
           headers: { "Content-Type": "application/json" },
         },
       );
+
+      // Even internal server errors need CORS headers so the client can read them
+      return addCORSHeaders(errorResponse, request, env);
     }
   },
 };
+
+/**
+ * Handle business logic of the request
+ */
+async function handleRequest(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  // Validate origin
+  const originCheck = validateOrigin(request, env);
+  if (!originCheck.valid) {
+    return new Response(
+      JSON.stringify({
+        error: "Forbidden",
+        message: "Origin not allowed",
+      }),
+      {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  // Check rate limit
+  const rateLimitCheck = await checkRateLimit(request, env);
+  if (!rateLimitCheck.allowed) {
+    return new Response(
+      JSON.stringify({
+        error: "Too Many Requests",
+        message: "Rate limit exceeded",
+      }),
+      {
+        status: 429,
+        headers: {
+          "Content-Type": "application/json",
+          "Retry-After": rateLimitCheck.retryAfter?.toString() || "60",
+        },
+      },
+    );
+  }
+
+  // Verify Firebase Auth token or fallback to Guest
+  const authHeader = request.headers.get("Authorization");
+  let decodedToken: DecodedToken | null = null;
+
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    decodedToken = await verifyFirebaseToken(token, env);
+
+    if (!decodedToken) {
+      return new Response(
+        JSON.stringify({
+          error: "Unauthorized",
+          message: "Invalid authentication token",
+        }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+  } else {
+    // GUEST ACCESS: Identify by IP for basic tracking/rate limiting on backend
+    const clientIP = request.headers.get("CF-Connecting-IP") || "anonymous";
+    decodedToken = {
+      uid: `guest_${clientIP}`,
+      isGuest: true,
+    };
+  }
+
+  // Forward request to backend with user ID header
+  return await forwardRequest(request, decodedToken, env);
+}
 
 /**
  * Handle CORS preflight requests

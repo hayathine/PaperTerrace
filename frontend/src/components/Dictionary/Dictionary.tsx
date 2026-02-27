@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import type { DictionaryEntry } from "./types";
 
 export type DictionaryEntryWithCoords = DictionaryEntry & {
@@ -125,6 +125,43 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 	const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
 
+	const fetchSavedNotes = useCallback(async () => {
+		try {
+			const headers: HeadersInit = {};
+			if (token) headers.Authorization = `Bearer ${token}`;
+
+			const baseUrl = API_URL || window.location.origin;
+			const url = new URL(`/api/note/${sessionId}`, baseUrl);
+			if (paperId) url.searchParams.append("paper_id", paperId);
+
+			const res = await fetch(url.toString(), { headers });
+			if (res.ok) {
+				const data = await res.json();
+				if (data.notes) {
+					const terms = data.notes.map((n: any) => n.term);
+					setSavedItems(new Set(terms));
+				}
+			}
+		} catch (e) {
+			console.error("Dictionary fetchSavedNotes error:", e);
+		}
+	}, [sessionId, paperId, token]);
+
+	useEffect(() => {
+		if (sessionId && paperId) {
+			fetchSavedNotes();
+		}
+
+		const handleNotesUpdated = () => {
+			if (sessionId && paperId) fetchSavedNotes();
+		};
+
+		window.addEventListener("notes-updated", handleNotesUpdated);
+		return () => {
+			window.removeEventListener("notes-updated", handleNotesUpdated);
+		};
+	}, [sessionId, paperId, fetchSavedNotes]);
+
 	const handleDeepTranslate = async (entry: DictionaryEntryWithCoords) => {
 		if (!entry) return;
 		setLoading(true);
@@ -197,14 +234,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			if (res.ok) {
 				const key = entry.word;
 				setSavedItems((prev) => new Set(prev).add(key));
-				// Fade out "Saved" status after 2 seconds
-				setTimeout(() => {
-					setSavedItems((prev) => {
-						const next = new Set(prev);
-						next.delete(key);
-						return next;
-					});
-				}, 2000);
+				window.dispatchEvent(new Event("notes-updated"));
 			}
 		} catch (e) {
 			console.error(e);

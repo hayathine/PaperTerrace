@@ -72,6 +72,15 @@ const NoteList: React.FC<NoteListProps> = ({
 		if (sessionId && paperId) {
 			fetchNotes();
 		}
+
+		const handleNotesUpdated = () => {
+			if (sessionId && paperId) fetchNotes();
+		};
+
+		window.addEventListener("notes-updated", handleNotesUpdated);
+		return () => {
+			window.removeEventListener("notes-updated", handleNotesUpdated);
+		};
 	}, [sessionId, paperId, fetchNotes]);
 
 	const handleAddNote = async (
@@ -101,6 +110,7 @@ const NoteList: React.FC<NoteListProps> = ({
 			if (res.ok) {
 				// Refresh list
 				fetchNotes();
+				window.dispatchEvent(new Event("notes-updated"));
 			}
 		} catch (e) {
 			console.error(e);
@@ -136,6 +146,7 @@ const NoteList: React.FC<NoteListProps> = ({
 			if (res.ok) {
 				fetchNotes();
 				setEditingNote(null);
+				window.dispatchEvent(new Event("notes-updated"));
 			}
 		} catch (e) {
 			console.error(e);
@@ -149,6 +160,7 @@ const NoteList: React.FC<NoteListProps> = ({
 
 			await fetch(`${API_URL}/api/note/${id}`, { method: "DELETE", headers });
 			setNotes((prev) => prev.filter((n) => n.note_id !== id));
+			window.dispatchEvent(new Event("notes-updated"));
 		} catch (e) {
 			console.error(e);
 		}
