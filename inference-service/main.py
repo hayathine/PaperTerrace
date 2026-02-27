@@ -22,10 +22,9 @@ if os.getenv("USE_OPENVINO", "true").lower() == "true":
     )
 else:
     from services.layout_detection.layout_service import LayoutAnalysisService
+from services.translation.llamacpp_service import LlamaCppTranslationService
+from services.translation.m2m100_service import M2M100TranslationService
 from services.translation.translation_service import TranslationService
-from services.translation_with_llamacpp.llamacpp_service import (
-    LlamaCppTranslationService,
-)
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -100,13 +99,19 @@ async def ensure_initialized():
         logger.info("Initializing inference services...")
 
         layout_service = LayoutAnalysisService(lang="en")
-        translation_service = TranslationService()
-        await translation_service.initialize()
 
+        # M2M100
+        m2m100_service = M2M100TranslationService()
+        await m2m100_service.initialize()
+
+        # LlamaCpp
         llamacpp_service = LlamaCppTranslationService()
-        # LLMの初期化は重くメモリを食うため、必要に応じて遅延実行するか
-        # または起動時に一気に行ってしまう（ここでは一気に行う）
         await llamacpp_service.initialize()
+
+        # Orchestrator
+        translation_service = TranslationService(
+            m2m100_service=m2m100_service, llamacpp_service=llamacpp_service
+        )
 
         _initialized = True
         logger.info(
@@ -346,8 +351,10 @@ async def translate_text(request: Request, req: TranslationRequest):
                 lang_name="Japanese" if req.target_lang == "ja" else "English",
             )
         else:
-            # それ以外は通常の M2M100 翻訳を実行
-            translation = await translation_service.translate(req.text, req.target_lang)
+            # それ以外は通常の M2M100 翻訳を実行 (内部で確信度により LLM へフォールバック)
+            translation = await translation_service.translate(
+                req.text, req.target_lang, paper_context=req.paper_context or ""
+            )
 
         return TranslationResponse(
             success=True,
