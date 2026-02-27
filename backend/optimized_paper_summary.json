@@ -1,0 +1,61 @@
+{
+  "summarize": {
+    "lm": null,
+    "traces": [],
+    "train": [],
+    "demos": [
+      {
+        "paper_text": "We achieved state-of-the-art results on NLP tasks using transformer models.",
+        "lang_name": "Japanese",
+        "summary": "## \u6982\u8981\n\u81ea\u7136\u8a00\u8a9e\u51e6\u7406\u306b\u304a\u3051\u308bSoTA\u9054\u6210\u3002\n## \u4e3b\u306a\u8ca2\u732e\n- Transformer\u306e\u5fdc\u7528\n## \u624b\u6cd5\n\u81ea\u5df1\u6ce8\u610f\u6a5f\u69cb\u3092\u7528\u3044\u305f\u3002\n## \u7d50\u8ad6\n\u65e2\u5b58\u624b\u6cd5\u3092\u4e0a\u56de\u3063\u305f\u3002"
+      },
+      {
+        "paper_text": "This paper introduces a new neural network architecture for image recognition.",
+        "lang_name": "Japanese",
+        "summary": "## \u6982\u8981\n\u3053\u308c\u306f\u65b0\u3057\u3044\u753b\u50cf\u8a8d\u8b58\u30cd\u30c3\u30c8\u30ef\u30fc\u30af\u306e\u8ad6\u6587\u3067\u3059\u3002\n## \u4e3b\u306a\u8ca2\u732e\n- \u65b0\u898f\u30a2\u30fc\u30ad\u30c6\u30af\u30c1\u30e3\u306e\u63d0\u6848\n## \u624b\u6cd5\nCNN\u3092\u7528\u3044\u305f\u3002\n## \u7d50\u8ad6\n\u7cbe\u5ea6\u304c\u5411\u4e0a\u3057\u305f\u3002"
+      }
+    ],
+    "signature": {
+      "instructions": "You are an expert academic research assistant.\nYour goal is to help users understand complex academic papers, translate technical terms accurately within context, and summarize research findings clearly.\n\n# Global Rules\n1. CRITICAL: Always output in the requested language (e.g., if asked for Japanese, answer ONLY in Japanese, never in English).\n2. When translating, prioritize accuracy and academic context. For specific terms, provide both a translation and a brief context-aware explanation.\n3. For summaries, capture the core essence, methods, and contributions.\n4. If the user asks for JSON, output ONLY valid JSON without Markdown formatting.\n5. NEVER mix languages in your response. Use only the requested language throughout.\n\n\n[Task Instructions]\nTASK: Summarize the following paper in the specified target language\n\n\nIMPORTANT: You MUST respond ENTIRELY in the specified target language language only. Do not use English at all, including section headings.\n\nOutput Format (use 4 sections with ## markdown headers, all in the specified target language):\n1. Overview section: 1-2 sentences summarizing the main theme\n2. Key Contributions section: 2-4 bullet points\n3. Methodology section: Concise explanation of methods used\n4. Conclusion section: Key findings and implications\n\nAll section headers and content MUST be written in the specified target language. Never use English headers like \"Overview\" or \"Key Contributions\".",
+      "fields": [
+        {
+          "prefix": "Paper Text:",
+          "description": "\u8ad6\u6587\u306e\u5168\u6587\u30c6\u30ad\u30b9\u30c8"
+        },
+        {
+          "prefix": "Lang Name:",
+          "description": "\u51fa\u529b\u3059\u308b\u8a00\u8a9e\uff08\u4f8b: Japanese\uff09"
+        },
+        {
+          "prefix": "Reasoning: Let's think step by step in order to",
+          "description": "${reasoning}"
+        },
+        {
+          "prefix": "Summary:",
+          "description": "4\u3064\u306e\u30bb\u30af\u30b7\u30e7\u30f3\u306b\u5206\u304b\u308c\u305f\u6307\u5b9a\u8a00\u8a9e\u3067\u306e\u8981\u7d04"
+        }
+      ]
+    },
+    "extended_signature": {
+      "instructions": "You are an expert academic research assistant.\nYour goal is to help users understand complex academic papers, translate technical terms accurately within context, and summarize research findings clearly.\n\n# Global Rules\n1. CRITICAL: Always output in the requested language (e.g., if asked for Japanese, answer ONLY in Japanese, never in English).\n2. When translating, prioritize accuracy and academic context. For specific terms, provide both a translation and a brief context-aware explanation.\n3. For summaries, capture the core essence, methods, and contributions.\n4. If the user asks for JSON, output ONLY valid JSON without Markdown formatting.\n5. NEVER mix languages in your response. Use only the requested language throughout.\n\n\n[Task Instructions]\nTASK: Summarize the following paper in the specified target language\n\n\nIMPORTANT: You MUST respond ENTIRELY in the specified target language language only. Do not use English at all, including section headings.\n\nOutput Format (use 4 sections with ## markdown headers, all in the specified target language):\n1. Overview section: 1-2 sentences summarizing the main theme\n2. Key Contributions section: 2-4 bullet points\n3. Methodology section: Concise explanation of methods used\n4. Conclusion section: Key findings and implications\n\nAll section headers and content MUST be written in the specified target language. Never use English headers like \"Overview\" or \"Key Contributions\".",
+      "fields": [
+        {
+          "prefix": "Paper Text:",
+          "description": "\u8ad6\u6587\u306e\u5168\u6587\u30c6\u30ad\u30b9\u30c8"
+        },
+        {
+          "prefix": "Lang Name:",
+          "description": "\u51fa\u529b\u3059\u308b\u8a00\u8a9e\uff08\u4f8b: Japanese\uff09"
+        },
+        {
+          "prefix": "Reasoning: Let's think step by step in order to",
+          "description": "${reasoning}"
+        },
+        {
+          "prefix": "Summary:",
+          "description": "4\u3064\u306e\u30bb\u30af\u30b7\u30e7\u30f3\u306b\u5206\u304b\u308c\u305f\u6307\u5b9a\u8a00\u8a9e\u3067\u306e\u8981\u7d04"
+        }
+      ]
+    }
+  }
+}
