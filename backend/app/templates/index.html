@@ -298,18 +298,18 @@
     }
   }
 
-  // Research Radar functionality
-  async function findRelatedPapers() {
+  // Recommended Papers functionality
+  async function recommendPapers() {
     const content = document.getElementById("summary-content");
     switchTab("summary");
-    content.innerHTML = `<div class="animate-pulse">関連論文を探索中...</div>`;
+    content.innerHTML = `<div class="animate-pulse">お薦め論文を探索中...</div>`;
 
     try {
       const formData = new FormData();
       formData.append("session_id", sessionId);
       formData.append("lang", currentLanguage);
 
-      const response = await fetch("/research-radar", {
+      const response = await fetch("/recommend", {
         method: "POST",
         body: formData,
       });
@@ -318,7 +318,7 @@
       if (data.error) {
         content.innerHTML = `<p class="text-xs">${data.error}</p>`;
       } else {
-        let html = `<h4 class="text-[10px] font-bold uppercase opacity-70 mb-2">📡 Research Radar</h4>`;
+        let html = `<h4 class="text-[10px] font-bold uppercase opacity-70 mb-2">✨ Recommended Papers</h4>`;
 
         if (data.related_papers?.length) {
           html += `<div class="space-y-2">`;

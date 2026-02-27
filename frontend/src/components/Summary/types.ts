@@ -46,7 +46,7 @@ export interface RelatedPaper {
 	url?: string;
 }
 
-export interface RadarResponse {
+export interface RecommendResponse {
 	related_papers?: RelatedPaper[];
 	search_queries?: string[];
 	error?: string;

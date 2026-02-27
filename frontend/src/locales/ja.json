@@ -78,16 +78,16 @@
 		"modes": {
 			"summary": "要約",
 			"critique": "レビュー",
-			"radar": "レーダー"
+			"recommend": "お薦め論文"
 		},
 		"generate": "要約を生成",
 		"start_critique": "レビューを開始",
-		"scan_radar": "レーダーをスキャン",
+		"generate_recommend": "論文を推薦",
 		"processing": "解析中...",
 		"hints": {
 			"summary": "論文全体の包括的な要約を生成します。",
 			"critique": "潜在的な欠陥や仮定を特定するための批判的レビューを行います。",
-			"radar": "関連論文や引用漏れを調査します。"
+			"recommend": "この論文に関連する興味深い論文をAIが推薦します。"
 		},
 		"overall": "総合評価",
 		"assumptions": "隠れた仮定",

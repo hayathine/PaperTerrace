@@ -457,13 +457,20 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g,
 								"",
 							);
-
 							const isJumpHighlight =
 								jumpTarget &&
 								jumpTarget.page === page_num &&
-								// Use a small epsilon for coordinate matching
-								Math.abs(centerX - jumpTarget.x) < 0.005 &&
-								Math.abs(centerY - jumpTarget.y) < 0.005;
+								((jumpTarget.term &&
+									(cleanWord
+										.toLowerCase()
+										.includes(jumpTarget.term.toLowerCase()) ||
+										jumpTarget.term
+											.toLowerCase()
+											.includes(cleanWord.toLowerCase())) &&
+									Math.abs(centerX - jumpTarget.x) < 0.1 &&
+									Math.abs(centerY - jumpTarget.y) < 0.05) ||
+									(Math.abs(centerX - jumpTarget.x) < 0.005 &&
+										Math.abs(centerY - jumpTarget.y) < 0.005));
 
 							// 検索マッチのハイライト
 							const isSearchMatch =

@@ -2,7 +2,7 @@ import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import { useLoading } from "../../contexts/LoadingContext";
-import type { CritiqueResponse, RadarResponse } from "./types";
+import type { CritiqueResponse, RecommendResponse } from "./types";
 
 interface SummaryProps {
 	sessionId: string;
@@ -10,7 +10,7 @@ interface SummaryProps {
 	isAnalyzing?: boolean;
 }
 
-type Mode = "summary" | "critique" | "radar";
+type Mode = "summary" | "critique" | "recommend";
 
 const Summary: React.FC<SummaryProps> = ({
 	sessionId,
@@ -28,13 +28,15 @@ const Summary: React.FC<SummaryProps> = ({
 	const [critiqueData, setCritiqueData] = useState<CritiqueResponse | null>(
 		null,
 	);
-	const [radarData, setRadarData] = useState<RadarResponse | null>(null);
+	const [recommendData, setRecommendData] = useState<RecommendResponse | null>(
+		null,
+	);
 
 	// Reset data when paperId changes
 	React.useEffect(() => {
 		setSummaryData(null);
 		setCritiqueData(null);
-		setRadarData(null);
+		setRecommendData(null);
 		setError(null);
 	}, [paperId]);
 
@@ -105,7 +107,7 @@ const Summary: React.FC<SummaryProps> = ({
 		}
 	}, [sessionId, i18n.language, t, startLoading, stopLoading]);
 
-	const handleRadar = useCallback(async () => {
+	const handleRecommend = useCallback(async () => {
 		setLoading(true);
 		startLoading(t("summary.processing"));
 		setError(null);
@@ -113,7 +115,7 @@ const Summary: React.FC<SummaryProps> = ({
 			const formData = new FormData();
 			formData.append("session_id", sessionId);
 			formData.append("lang", i18n.language);
-			const res = await fetch(`${API_URL}/api/research-radar`, {
+			const res = await fetch(`${API_URL}/api/recommend`, {
 				method: "POST",
 				body: formData,
 			});
@@ -123,7 +125,7 @@ const Summary: React.FC<SummaryProps> = ({
 				throw new Error(errorText || `Status ${res.status}`);
 			}
 			const data = await res.json();
-			setRadarData(data);
+			setRecommendData(data);
 		} catch (e: any) {
 			setError(`Error: ${e.message}`);
 			console.error(e);
@@ -167,10 +169,10 @@ const Summary: React.FC<SummaryProps> = ({
 				</button>
 				<button
 					type="button"
-					onClick={() => setMode("radar")}
-					className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "radar" ? "bg-emerald-50 text-emerald-600" : "text-slate-400"}`}
+					onClick={() => setMode("recommend")}
+					className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "recommend" ? "bg-emerald-50 text-emerald-600" : "text-slate-400"}`}
 				>
-					{t("summary.modes.radar")}
+					{t("summary.modes.recommend")}
 				</button>
 			</div>
 
@@ -339,40 +341,42 @@ const Summary: React.FC<SummaryProps> = ({
 					</div>
 				)}
 
-				{!loading && mode === "radar" && (
+				{!loading && mode === "recommend" && (
 					<div className="space-y-4">
-						{!radarData && (
+						{!recommendData && (
 							<div className="text-center py-8">
 								<p className="text-xs text-slate-400 mb-4">
-									{t("summary.hints.radar")}
+									{t("summary.hints.recommend")}
 								</p>
 								<button
 									type="button"
-									onClick={handleRadar}
+									onClick={handleRecommend}
 									className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-emerald-700"
 								>
-									{t("summary.scan_radar")}
+									{t("summary.generate_recommend")}
 								</button>
 							</div>
 						)}
-						{radarData && (
+						{recommendData && (
 							<div className="space-y-4">
-								{radarData.search_queries && (
+								{recommendData.search_queries && (
 									<div className="flex flex-wrap gap-2">
-										{radarData.search_queries.map((q, i) => (
-											<span
-												key={i}
-												className="bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full border border-emerald-100 italic"
-											>
-												"{q}"
-											</span>
-										))}
+										{recommendData.search_queries.map(
+											(q: string, i: number) => (
+												<span
+													key={i}
+													className="bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full border border-emerald-100 italic"
+												>
+													"{q}"
+												</span>
+											),
+										)}
 									</div>
 								)}
-								{radarData.related_papers &&
-									radarData.related_papers.length > 0 && (
+								{recommendData.related_papers &&
+									recommendData.related_papers.length > 0 && (
 										<div className="space-y-3">
-											{radarData.related_papers.map((p, i) => (
+											{recommendData.related_papers.map((p: any, i: number) => (
 												<div
 													key={i}
 													className="bg-white p-4 rounded-lg border border-emerald-100 shadow-sm hover:shadow-md transition-shadow"
@@ -382,7 +386,7 @@ const Summary: React.FC<SummaryProps> = ({
 													</p>
 													<div className="flex items-center gap-2 mt-1.5">
 														<span className="text-xs font-medium text-slate-400">
-															{p.year || "N/A"}
+															{p.year || "n/a"}
 														</span>
 														{p.url && (
 															<a

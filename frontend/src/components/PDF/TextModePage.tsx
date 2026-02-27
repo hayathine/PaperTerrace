@@ -184,13 +184,28 @@ const TextModePage: React.FC<TextModePageProps> = ({
 										{line.words.map((w, wIdx) => {
 											const globalWordIndex = page.words?.indexOf(w) ?? -1;
 
+											const lineCenterY = (ly1 + ly2) / 2 / (page.height || 1);
+											const cleanWord = w.word.replace(
+												/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g,
+												"",
+											);
+
 											const isJumpHighlight =
 												jumpTarget &&
 												jumpTarget.page === page.page_num &&
-												jumpTarget.term &&
-												w.word
-													.toLowerCase()
-													.includes(jumpTarget.term.toLowerCase());
+												((jumpTarget.term &&
+													(cleanWord
+														.toLowerCase()
+														.includes(jumpTarget.term.toLowerCase()) ||
+														jumpTarget.term
+															.toLowerCase()
+															.includes(cleanWord.toLowerCase())) &&
+													Math.abs(lineCenterY - jumpTarget.y) < 0.05) ||
+													(Math.abs(lineCenterY - jumpTarget.y) < 0.05 &&
+														Math.abs(
+															(lx1 + lx2) / 2 / (page.width || 1) -
+																jumpTarget.x,
+														) < 0.2));
 
 											const isSearchMatch =
 												searchTerm &&
@@ -240,13 +255,29 @@ const TextModePage: React.FC<TextModePageProps> = ({
 								{page.lines.map((line, lIdx) => (
 									<div key={lIdx} className="mb-2">
 										{line.words.map((w, wIdx) => {
+											const [lx1, ly1, lx2, ly2] = line.bbox;
+											const lineCenterY = (ly1 + ly2) / 2 / (page.height || 1);
+											const cleanWord = w.word.replace(
+												/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g,
+												"",
+											);
+
 											const isJumpHighlight =
 												jumpTarget &&
 												jumpTarget.page === page.page_num &&
-												jumpTarget.term &&
-												w.word
-													.toLowerCase()
-													.includes(jumpTarget.term.toLowerCase());
+												((jumpTarget.term &&
+													(cleanWord
+														.toLowerCase()
+														.includes(jumpTarget.term.toLowerCase()) ||
+														jumpTarget.term
+															.toLowerCase()
+															.includes(cleanWord.toLowerCase())) &&
+													Math.abs(lineCenterY - jumpTarget.y) < 0.05) ||
+													(Math.abs(lineCenterY - jumpTarget.y) < 0.05 &&
+														Math.abs(
+															(lx1 + lx2) / 2 / (page.width || 1) -
+																jumpTarget.x,
+														) < 0.2));
 
 											const isSearchMatch =
 												searchTerm &&

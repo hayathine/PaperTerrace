@@ -78,16 +78,16 @@
 		"modes": {
 			"summary": "Summary",
 			"critique": "Critique",
-			"radar": "Radar"
+			"recommend": "Recommend"
 		},
 		"generate": "Generate Summary",
 		"start_critique": "Start Critique",
-		"scan_radar": "Scan Radar",
+		"generate_recommend": "Generate Recommendations",
 		"processing": "Analyzing...",
 		"hints": {
 			"summary": "Generate a comprehensive summary of the paper.",
 			"critique": "Perform an adversarial review to find flaws.",
-			"radar": "Find related papers and missing citations."
+			"recommend": "AI recommends interesting papers related to this one."
 		},
 		"overall": "Overall Assessment",
 		"assumptions": "Hidden Assumptions",

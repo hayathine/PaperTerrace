@@ -125,19 +125,35 @@ async def summarize(
 
 
 # ============================================================================
-# Research Radar
+# Research Radar (Deprecated) / Recommended Papers
 # ============================================================================
 
 
-@router.post("/research-radar")
-async def research_radar(session_id: str = Form(...), lang: str = Form("ja")):
+@router.post("/recommend")
+async def recommend_papers(session_id: str = Form(...), lang: str = Form("ja")):
+    """
+    Generate recommended papers based on the current paper's context.
+    This replaces the deprecated research-radar feature.
+    """
     context = _get_context(session_id)
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
+    # Use ResearchRadarService but for "recommendation" purposes
     papers = await research_radar_service.find_related_papers(context[:3000])
     queries = await research_radar_service.generate_search_queries(context[:3000])
     return JSONResponse({"related_papers": papers, "search_queries": queries})
+
+
+@router.post("/research-radar")
+async def research_radar(session_id: str = Form(...), lang: str = Form("ja")):
+    """
+    Deprecated: Use /recommend instead.
+    """
+    logger.warning(
+        f"Deprecated endpoint /research-radar called by session {session_id}"
+    )
+    return await recommend_papers(session_id, lang)
 
 
 @router.post("/analyze-citations")

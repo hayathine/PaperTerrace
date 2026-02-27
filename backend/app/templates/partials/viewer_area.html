@@ -10,7 +10,10 @@
       <div class="flex space-x-4">
         <button
           id="stamp-mode-btn"
-          onclick="StampsLayer.init(); StampsLayer.toggleMode()"
+          onclick="
+            StampsLayer.init();
+            StampsLayer.toggleMode();
+          "
           class="px-3 py-1 bg-slate-100 text-slate-500 rounded-lg hover:bg-slate-200 transition-all flex items-center gap-1"
         >
           <span>👍</span> Stamps
@@ -28,10 +31,10 @@
           🧠 Critique
         </button>
         <button
-          onclick="findRelatedPapers()"
+          onclick="recommendPapers()"
           class="px-3 py-1 bg-emerald-100 text-emerald-600 rounded-lg hover:bg-emerald-200 transition-all"
         >
-          📡 Research Radar
+          ✨ Recommended Papers
         </button>
       </div>
     </div>
