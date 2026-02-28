@@ -21,7 +21,7 @@ config.ts
 # C extensions
 *.so
 local-files/
-
+.claude
 # local
 *.toml
 infrastructure/
