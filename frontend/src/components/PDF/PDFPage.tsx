@@ -103,7 +103,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
 	// Debug: Log page data when component mounts or updates
 	useEffect(() => {
-		console.log(`[PDFPage ${page_num}] Rendering with data:`, {
+		console.debug(`[PDFPage ${page_num}] Rendering with data:`, {
 			width,
 			height,
 			words_count: words?.length || 0,
@@ -333,12 +333,14 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								height: `${((y2 - y1) / pageHeight) * 100}%`,
 							};
 
+							/*
 							console.log(`[PDFPage ${page_num}] Rendering figure ${idx}:`, {
 								label: fig.label,
 								bbox: fig.bbox,
 								style,
 								isClickMode,
 							});
+							*/
 
 							return (
 								<div

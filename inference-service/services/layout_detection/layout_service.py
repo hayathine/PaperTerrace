@@ -221,14 +221,15 @@ class LayoutAnalysisService:
         # Batch dimension
         processed_img = np.expand_dims(processed_img, axis=0).astype(np.float32)
 
-        scale = info["scale_factor"][0]  # new_w / ori_w
+        scale_h = info["scale_factor"][0]  # new_h / ori_h
+        scale_w = info["scale_factor"][1]  # new_w / ori_w
         pad_info = info["pad_info"]  # [pad_h, pad_w]
 
         logger.info(
-            f"Preprocess complete - ori_shape: {ori_h}x{ori_w}, scale: {scale:.4f}, pad: {pad_info}"
+            f"Preprocess complete - ori_shape: {ori_h}x{ori_w}, scale_h: {scale_h:.4f}, scale_w: {scale_w:.4f}, pad: {pad_info}"
         )
 
-        return processed_img, (ori_h, ori_w), scale, pad_info
+        return processed_img, (ori_h, ori_w), (scale_h, scale_w), pad_info
 
     def _inference(
         self,
@@ -260,7 +261,7 @@ class LayoutAnalysisService:
         ori_shape: tuple[int, int],
         target_size: tuple[int, int] = (640, 640),
         threshold: float = 0.5,
-        scale: float = 1.0,
+        scale: tuple[float, float] = (1.0, 1.0),
         pad_info: np.ndarray | None = None,
     ) -> list[dict[str, Any]]:
         """後処理：座標変換とフィルタリング
@@ -286,8 +287,10 @@ class LayoutAnalysisService:
         if pad_info is not None:
             pad_h, pad_w = pad_info
 
+        scale_h, scale_w = scale
+
         logger.debug(
-            f"[Layout] Postprocess: scale={scale:.4f}, pad=({pad_h}, {pad_w}), ori={ori_w}x{ori_h}"
+            f"[Layout] Postprocess: scale_h={scale_h:.4f}, scale_w={scale_w:.4f}, pad=({pad_h}, {pad_w}), ori={ori_w}x{ori_h}"
         )
 
         # デバッグログ追加: 推論データの生の状態を確認
@@ -327,10 +330,10 @@ class LayoutAnalysisService:
                 # モデル出力は 640x640 等のキャンバス座標系
                 # 1. パディングを除去
                 # 2. スケールを元に戻す
-                x1 = max(0, min(ori_w, int((xxmin - pad_w) / scale)))
-                y1 = max(0, min(ori_h, int((yymin - pad_h) / scale)))
-                x2 = max(0, min(ori_w, int((xxmax - pad_w) / scale)))
-                y2 = max(0, min(ori_h, int((yymax - pad_h) / scale)))
+                x1 = max(0, min(ori_w, int(round((xxmin - pad_w) / scale_w))))
+                y1 = max(0, min(ori_h, int(round((yymin - pad_h) / scale_h))))
+                x2 = max(0, min(ori_w, int(round((xxmax - pad_w) / scale_w))))
+                y2 = max(0, min(ori_h, int(round((yymax - pad_h) / scale_h))))
 
                 logger.debug(
                     f"Postprocess - Coordinates: ({xxmin:.1f}, {yymin:.1f}, {xxmax:.1f}, {yymax:.1f}) -> Final: ({x1}, {y1}, {x2}, {y2})"

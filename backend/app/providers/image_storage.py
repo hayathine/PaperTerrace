@@ -153,29 +153,12 @@ class GCSImageStorage(ImageStorageStrategy):
             image_bytes = base64.b64decode(image_b64)
             blob.upload_from_string(image_bytes, content_type="image/png")
 
-            # 署名付きURLを発行して画像にアクセス可能にする
-            # 環境によっては静的ファイルの配信に制限があるため、
-            # GCSの署名付きURLを使用してクライアントが直接アクセスできるようにする
-            import datetime
-
-            # 環境によってCredentialsに秘密鍵が含まれない場合があるため、
-            # IAM API経由で署名を行うように明示的に指定する
-            try:
-                url = blob.generate_signed_url(
-                    version="v4",
-                    expiration=datetime.timedelta(hours=12),
-                    method="GET",
-                    service_account_email=self.client.get_service_account_email(),
-                )
-            except Exception as e:
-                logger.warning(
-                    f"Failed to generate signed URL using IAM, falling back: {e}"
-                )
-                # 署名付きURLが使えない場合のフォールバック（アクセストークンの有無などに依存）
-                url = blob.public_url
-
-            logger.debug(f"Saved page image (GCS): {blob_name}")
-            return url
+            # Return a backend-relative URL instead of a GCS direct URL.
+            # This avoids CORS/OpaqueResponseBlocking issues in the browser.
+            # The frontend prepends API_URL, and the backend serves via /static/paper_images/ proxy.
+            relative_path = f"/static/paper_images/{file_hash}/page_{page_num}.png"
+            logger.debug(f"Saved page image (GCS): {blob_name} -> {relative_path}")
+            return relative_path
         except Exception as e:
             logger.error(
                 f"Error saving image to GCS (hash={file_hash}, page={page_num}): {e}",
@@ -210,24 +193,12 @@ class GCSImageStorage(ImageStorageStrategy):
 
             blob_list.sort()
 
+            # Return backend-relative URLs (consistent with save())
             urls = []
-            import datetime
-
             for _, blob in blob_list:
-                # 署名付きURL生成
-                try:
-                    url = blob.generate_signed_url(
-                        version="v4",
-                        expiration=datetime.timedelta(hours=12),
-                        method="GET",
-                        service_account_email=self.client.get_service_account_email(),
-                    )
-                except Exception as e:
-                    logger.warning(
-                        f"Failed to generate signed URL for list result: {e}"
-                    )
-                    url = blob.public_url
-                urls.append(url)
+                filename = os.path.basename(blob.name)
+                relative_url = f"/static/paper_images/{file_hash}/{filename}"
+                urls.append(relative_url)
 
             return urls
         except Exception as e:
@@ -257,13 +228,22 @@ class GCSImageStorage(ImageStorageStrategy):
 
     def get_image_bytes(self, image_url: str) -> bytes:
         try:
-            # GCSの場合、URLから直接取得するか、URLをパースしてBlobとして取得する
-            # ここではシンプルにrequestsでURLから取得する（署名付きURLならアクセス可能）
-            import requests
+            # Convert relative URL back to GCS blob name
+            # /static/paper_images/{hash}/page_{num}.png -> paper_images/{hash}/page_{num}.png
+            if image_url.startswith("/static/"):
+                blob_name = image_url.replace("/static/", "", 1)
+            elif image_url.startswith("http"):
+                # Legacy: direct GCS URL fallback
+                import requests
 
-            response = requests.get(image_url)
-            response.raise_for_status()
-            return response.content
+                response = requests.get(image_url)
+                response.raise_for_status()
+                return response.content
+            else:
+                blob_name = image_url
+
+            blob = self.bucket.blob(blob_name)
+            return blob.download_as_bytes()
         except Exception as e:
             logger.error(
                 f"Error getting image bytes from GCS (url={image_url}): {e}",

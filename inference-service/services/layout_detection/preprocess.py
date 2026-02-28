@@ -22,9 +22,15 @@ class LetterBoxResize:
         pad_w = (target_w - new_w) // 2
         canvas[pad_h : pad_h + new_h, pad_w : pad_w + new_w, :] = resized_img
 
+        # Actual scales used (might differ slightly from 'scale' due to integer resizing)
+        actual_scale_h = new_h / h
+        actual_scale_w = new_w / w
+
         data["image"] = canvas
         data["im_shape"] = np.array([new_h, new_w], dtype=np.float32)
-        data["scale_factor"] = np.array([scale, scale], dtype=np.float32)
+        data["scale_factor"] = np.array(
+            [actual_scale_h, actual_scale_w], dtype=np.float32
+        )
         data["pad_info"] = np.array([pad_h, pad_w], dtype=np.float32)
         return data
 

@@ -561,7 +561,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						// Use ref to get the latest pages collected during streaming
 						const finalPages = pagesRef.current;
 
-						// Debug: Log page structure
 						console.log(
 							"[PDFViewer] Final pages collected:",
 							finalPages.length,

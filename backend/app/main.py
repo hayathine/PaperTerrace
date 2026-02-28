@@ -258,6 +258,62 @@ app.include_router(feedback_router, prefix="/api")
 
 
 # ============================================================================
+# Static Files / Image Proxy (GCS-compatible)
+# ============================================================================
+
+_storage_type = os.getenv("STORAGE_TYPE", "local").lower()
+
+if _storage_type == "gcs":
+    # GCS mode: proxy image requests through the backend
+    from fastapi import Path as FastAPIPath
+    from fastapi.responses import Response as FastAPIResponse
+
+    @app.get("/static/paper_images/{file_hash}/{filename}")
+    async def serve_gcs_image(
+        file_hash: str = FastAPIPath(...),
+        filename: str = FastAPIPath(...),
+    ):
+        """Proxy GCS images to avoid CORS issues."""
+        try:
+            from app.providers.image_storage import _get_instance
+
+            storage_inst = _get_instance()
+            blob_name = f"paper_images/{file_hash}/{filename}"
+            blob = storage_inst.bucket.blob(blob_name)
+
+            if not blob.exists():
+                return FastAPIResponse(status_code=404, content=b"Not Found")
+
+            data = blob.download_as_bytes()
+            content_type = "image/png" if filename.endswith(".png") else "image/jpeg"
+            return FastAPIResponse(
+                content=data,
+                media_type=content_type,
+                headers={
+                    "Cache-Control": "public, max-age=86400",
+                    "Access-Control-Allow-Origin": "*",
+                },
+            )
+        except Exception as e:
+            logger.error(f"Failed to serve GCS image: {e}")
+            return FastAPIResponse(status_code=500, content=b"Internal Server Error")
+
+else:
+    # Local mode: mount static files directory
+    from pathlib import Path as PathLib
+
+    from starlette.staticfiles import StaticFiles
+
+    _images_dir = PathLib(os.getenv("IMAGES_DIR", "src/static/paper_images"))
+    _images_dir.mkdir(parents=True, exist_ok=True)
+    app.mount(
+        "/static/paper_images",
+        StaticFiles(directory=str(_images_dir)),
+        name="paper_images",
+    )
+
+
+# ============================================================================
 # Main Page
 # ============================================================================
 

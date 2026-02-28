@@ -80,6 +80,13 @@ class LayoutAnalysisService:
                                 save_page_image, file_hash, img_name, img_b64
                             )
                             res_dict["image_url"] = image_url
+                            # BBoxをクロップ範囲に更新
+                            res_dict["bbox"] = {
+                                "x_min": x1,
+                                "y_min": y1,
+                                "x_max": x2,
+                                "y_max": y2,
+                            }
                     except Exception as crop_err:
                         logger.warning(f"Failed to crop {class_name}: {crop_err}")
 
@@ -117,44 +124,28 @@ class LayoutAnalysisService:
         image_data_list = []
         page_info_list = []
 
-        import httpx
+        from app.providers.image_storage import get_image_bytes
 
-        async with httpx.AsyncClient() as client:
-            for page_num, image_url in pages_to_process:
-                try:
-                    if image_url.startswith("/static/"):
-                        from pathlib import Path
+        for page_num, image_url in pages_to_process:
+            try:
+                img_bytes = await anyio.to_thread.run_sync(get_image_bytes, image_url)
 
-                        img_path = Path("src") / image_url.lstrip("/")
-                        if await anyio.to_thread.run_sync(img_path.exists):
-                            img_bytes = await anyio.to_thread.run_sync(
-                                img_path.read_bytes
-                            )
-                        else:
-                            continue
-                    else:
-                        resp = await client.get(image_url, timeout=30.0)
-                        if resp.status_code == 200:
-                            img_bytes = resp.content
-                        else:
-                            continue
+                def _prepare_image(data: bytes):
+                    from PIL import Image
 
-                    def _prepare_image(data: bytes):
-                        from PIL import Image
+                    img_pil = Image.open(io.BytesIO(data))
+                    buffer = io.BytesIO()
+                    img_pil.save(buffer, format="JPEG", quality=85, optimize=True)
+                    return buffer.getvalue()
 
-                        img_pil = Image.open(io.BytesIO(data))
-                        buffer = io.BytesIO()
-                        img_pil.save(buffer, format="JPEG", quality=85, optimize=True)
-                        return buffer.getvalue()
-
-                    compressed_bytes = await anyio.to_thread.run_sync(
-                        _prepare_image, img_bytes
-                    )
-                    image_data_list.append(compressed_bytes)
-                    page_info_list.append(page_num)
-                except Exception as e:
-                    logger.error(f"Failed to load page {page_num}: {e}")
-                    continue
+                compressed_bytes = await anyio.to_thread.run_sync(
+                    _prepare_image, img_bytes
+                )
+                image_data_list.append(compressed_bytes)
+                page_info_list.append(page_num)
+            except Exception as e:
+                logger.error(f"Failed to load page {page_num}: {e}")
+                continue
 
         if not image_data_list:
             raise Exception("No valid images to process")
@@ -228,7 +219,12 @@ class LayoutAnalysisService:
                         all_figures.append(
                             {
                                 "page_num": page_num,
-                                "bbox": [x_min, y_min, x_max, y_max],
+                                "bbox": [
+                                    crop_box[0],
+                                    crop_box[1],
+                                    crop_box[2],
+                                    crop_box[3],
+                                ],
                                 "label": class_name,
                                 "image_url": figure_image_url,
                             }

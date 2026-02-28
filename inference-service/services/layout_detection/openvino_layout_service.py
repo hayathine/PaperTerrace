@@ -254,7 +254,8 @@ class OpenVINOLayoutAnalysisService:
         target_class_ids: list[int] | None = None,
     ) -> list[dict[str, Any]]:
         predictions = outputs[0]
-        ratio = real_scale[0][0]
+        # real_scale shape is (1, 2) -> (scale_h, scale_w)
+        scale_h, scale_w = real_scale[0]
         pad_h, pad_w = pad_info[0]
 
         valid_mask = predictions[:, 1] >= threshold
@@ -270,14 +271,14 @@ class OpenVINOLayoutAnalysisService:
             boxes = valid_predictions[:, 2:6].copy()
 
             logger.info(
-                f"Postprocess - ratio: {ratio:.4f}, pad_h: {pad_h}, pad_w: {pad_w}"
+                f"Postprocess - scale_h: {scale_h:.4f}, scale_w: {scale_w:.4f}, pad_h: {pad_h}, pad_w: {pad_w}"
             )
             logger.info(
                 f"Postprocess - sample raw bbox (first 3): {predictions[:3, 2:6]}"
             )
 
-            boxes[:, [0, 2]] = (boxes[:, [0, 2]] - pad_w) / ratio
-            boxes[:, [1, 3]] = (boxes[:, [1, 3]] - pad_h) / ratio
+            boxes[:, [0, 2]] = (boxes[:, [0, 2]] - pad_w) / scale_w
+            boxes[:, [1, 3]] = (boxes[:, [1, 3]] - pad_h) / scale_h
 
             logger.info(f"Postprocess - sample transformed bbox (first 3): {boxes[:3]}")
 
