@@ -797,3 +797,36 @@ class CloudSQLStorage(StorageInterface):
                     (file_hash, filename, ocr_text, layout_json, model_name),
                 )
             conn.commit()
+
+    def clear_all_data(self) -> bool:
+        """Clear all data from the database."""
+        # Using CASCADE is preferred in PostgreSQL to handle foreign key constraints
+        tables = [
+            "papers",
+            "paper_figures",
+            "paper_likes",
+            "paper_stamps",
+            "trajectories",
+            "app_sessions",
+            "notes",
+            "note_stamps",
+            "ocr_reader",
+        ]
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                # TRUNCATE ... CASCADE is powerful for clearing related tables
+                # But we can also use DELETE with handling.
+                for table in tables:
+                    try:
+                        # Postgres doesn't easily ignore non-existent tables in DELETE like SQLite,
+                        # so we check if the table exists first or just catch the error and rollback/next.
+                        cur.execute(f"DELETE FROM {table}")
+                    except Exception as e:
+                        logger.warning(
+                            f"CloudSQL: Table {table} clear failed or doesn't exist: {e}"
+                        )
+                        conn.rollback()  # Postgres needs rollback on error to continue
+                        continue
+            conn.commit()
+        logger.info("All data cleared from Cloud SQL database.")
+        return True

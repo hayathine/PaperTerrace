@@ -306,6 +306,11 @@ class StorageInterface(ABC):
         """Get paper ID for a session."""
         ...
 
+    @abstractmethod
+    def clear_all_data(self) -> bool:
+        """Clear all data from the database (papers, figures, stamps, notes, etc.)."""
+        ...
+
 
 class SQLiteStorage(StorageInterface):
     """SQLite storage implementation."""
@@ -1034,6 +1039,29 @@ class SQLiteStorage(StorageInterface):
                 (file_hash, filename, ocr_text, layout_json, model_name),
             )
             conn.commit()
+
+    def clear_all_data(self) -> bool:
+        """Clear all data from the database."""
+        tables = [
+            "papers",
+            "paper_figures",
+            "paper_likes",
+            "paper_stamps",
+            "trajectories",
+            "app_sessions",
+            "notes",
+            "note_stamps",
+            "ocr_reader",
+        ]
+        with self._get_connection() as conn:
+            for table in tables:
+                try:
+                    conn.execute(f"DELETE FROM {table}")
+                except sqlite3.OperationalError:
+                    log.warning("db", f"Table {table} does not exist, skipping.")
+            conn.commit()
+        log.info("db", "All data cleared from SQLite database.")
+        return True
 
 
 # Singleton instance cache

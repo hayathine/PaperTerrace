@@ -176,15 +176,21 @@ tasks:
       - cd frontend && npm run lint
 
   clean:
-    desc: "Clean cache and temporary files"
+    desc: "Clean temporary build files"
     cmds:
-      - echo "🧹 Cleaning cache..."
+      - echo "🧹 Cleaning build artifacts..."
       - rm -rf backend/.ruff_cache backend/__pycache__ backend/app/__pycache__
       - rm -rf frontend/node_modules/.cache frontend/dist
-      - sqlite3 ocr_reader.db "DELETE FROM ocr_reader;" 2>/dev/null || true
-      - rm -rf backend/app/static/paper_images/* 2>/dev/null || true
       - rm -rf local-files/logs/*.log
-      - echo "✅ Cache cleared!"
+      - echo "✅ Build artifacts cleaned!"
+
+  clean:data:
+    desc: "DANGER: Clear all papers, database records, and Redis cache"
+    cmds:
+      - echo "🧹 Clearing ALL application data..."
+      - uv run --directory backend env PYTHONPATH=.:.. python3 scripts/manual_clear_cache.py
+      - rm -rf backend/app/static/paper_images/* 2>/dev/null || true
+      - echo "✅ Application data cleared!"
 
   # ============================================================================
   # Production Tasks
