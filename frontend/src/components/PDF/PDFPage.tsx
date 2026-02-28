@@ -129,12 +129,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
 		coords: any;
 	} | null>(null);
 
-	// Figure lightbox state
-	const [lightboxFigure, setLightboxFigure] = React.useState<{
-		image_url: string;
-		label: string;
-	} | null>(null);
-
 	const handleMouseUp = () => {
 		if (isStampMode || isAreaMode || !isClickMode) return;
 
@@ -346,9 +340,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								<div
 									key={`fig-img-${idx}`}
 									className={`absolute bg-white shadow-sm group ${
-										isClickMode
-											? "pointer-events-auto cursor-pointer"
-											: "pointer-events-none"
+										isClickMode ? "pointer-events-auto" : "pointer-events-none"
 									}`}
 									style={style}
 								>
@@ -362,30 +354,38 @@ const PDFPage: React.FC<PDFPageProps> = ({
 											{/* Hover overlay for visual feedback */}
 											<div className="absolute inset-0 bg-indigo-500/0 hover:bg-indigo-500/10 transition-colors border-2 border-transparent hover:border-indigo-400 rounded-sm pointer-events-none" />
 
-											{/* Click handler */}
+											{/* Ask AI button shown on hover */}
+											<div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-50">
+												<button
+													type="button"
+													className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-md shadow shadow-indigo-500/30 hover:bg-indigo-700 hover:shadow-indigo-600/40 transition-all font-medium flex items-center gap-1.5 cursor-pointer transform hover:scale-105 active:scale-95"
+													onClick={(e) => {
+														e.stopPropagation();
+														if (onAskAI) {
+															const typeName = getFigTypeLabel(
+																t,
+																fig.label || "figure",
+															);
+															// Jump directly to explanation
+															onAskAI(
+																t("chat.explain_fig", { type: typeName }),
+															);
+														}
+													}}
+													title={t("menu.ask_ai")}
+												>
+													<span className="text-xs">✨</span>
+													{t("menu.ask_ai")}
+												</button>
+											</div>
+
+											{/* Transparent overlay to grab clicks on the rest of the image to prevent text selection underneath */}
 											<button
 												type="button"
-												className="absolute inset-0 w-full h-full opacity-0 z-40 cursor-pointer"
-												onClick={(e) => {
-													e.stopPropagation();
-													console.log(
-														"[PDFPage] Figure clicked:",
-														fig.label,
-														fig.image_url,
-													);
-													// Open in lightbox
-													setLightboxFigure({
-														image_url: fig.image_url,
-														label: fig.label || `Figure ${idx + 1}`,
-													});
-												}}
-												title={`Click to view ${getFigTypeLabel(t, fig.label || "figure")}`}
+												aria-label="Selection overlay"
+												className="absolute inset-0 w-full h-full z-40 bg-transparent"
+												onClick={(e) => e.stopPropagation()}
 											/>
-
-											{/* Small icon indicator */}
-											<div className="absolute top-1 right-1 bg-indigo-600 text-white text-xs px-1.5 py-0.5 rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-												🔍
-											</div>
 										</>
 									)}
 								</div>
@@ -682,75 +682,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 				)}
 			</div>
 
-			{/* Figure Lightbox Modal */}
-			{lightboxFigure && (
-				<button
-					type="button"
-					className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 cursor-default border-none"
-					onClick={() => setLightboxFigure(null)}
-					onKeyDown={(e) => {
-						if (e.key === "Escape") setLightboxFigure(null);
-					}}
-				>
-					<div
-						role="dialog"
-						aria-modal="true"
-						className="relative max-w-[90vw] max-h-[90vh] bg-white rounded-lg overflow-hidden shadow-2xl"
-						onClick={(e) => e.stopPropagation()}
-						onKeyDown={(e) => e.stopPropagation()}
-					>
-						{/* Header */}
-						<div className="bg-gray-50 px-4 py-3 border-b flex justify-between items-center">
-							<h3 className="font-semibold text-gray-800">
-								{lightboxFigure.label}
-							</h3>
-							<button
-								type="button"
-								onClick={() => setLightboxFigure(null)}
-								className="text-gray-500 hover:text-gray-700 text-xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-200 transition-colors"
-							>
-								×
-							</button>
-						</div>
-
-						{/* Image */}
-						<div className="p-4">
-							<img
-								src={lightboxFigure.image_url}
-								alt={lightboxFigure.label}
-								className="max-w-full max-h-[70vh] object-contain mx-auto"
-							/>
-						</div>
-
-						{/* Actions */}
-						<div className="bg-gray-50 px-4 py-3 border-t flex gap-2 justify-end">
-							{onAskAI && (
-								<button
-									type="button"
-									onClick={() => {
-										const typeName = getFigTypeLabel(
-											t,
-											lightboxFigure.label || "",
-										);
-										onAskAI(t("chat.explain_fig", { type: typeName }));
-										setLightboxFigure(null);
-									}}
-									className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 transition-colors text-sm font-medium"
-								>
-									{t("menu.ask_ai")}
-								</button>
-							)}
-							<button
-								type="button"
-								onClick={() => setLightboxFigure(null)}
-								className="px-4 py-2 bg-gray-200 text-gray-800 rounded-md hover:bg-gray-300 transition-colors text-sm font-medium"
-							>
-								{t("menu.close")}
-							</button>
-						</div>
-					</div>
-				</button>
-			)}
+			{/* Modal part removed */}
 		</section>
 	);
 };

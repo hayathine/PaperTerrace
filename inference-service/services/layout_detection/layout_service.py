@@ -51,6 +51,16 @@ class LayoutAnalysisService:
         self.im_shape_input_name = None
         self.engine = "ONNX"
 
+        # Read threshold from environment variable
+        env_threshold = os.getenv("LAYOUT_THRESHOLD", "0.5")
+        try:
+            self.threshold = float(env_threshold)
+        except ValueError:
+            logger.warning(
+                f"Invalid LAYOUT_THRESHOLD: {env_threshold}. Using default 0.5"
+            )
+            self.threshold = 0.5
+
         self._initialize_model()
 
     def _initialize_model(self):
@@ -164,7 +174,11 @@ class LayoutAnalysisService:
 
             outputs = self._inference(img, scale_factor, im_shape)
             results = self._postprocess(
-                outputs, ori_shape, scale=scale, pad_info=pad_info
+                outputs,
+                ori_shape,
+                scale=scale,
+                pad_info=pad_info,
+                threshold=self.threshold,
             )
 
             total_time = time.time() - start_time

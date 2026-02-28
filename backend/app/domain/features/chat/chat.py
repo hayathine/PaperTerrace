@@ -156,12 +156,12 @@ class ChatService:
                     user_message=user_message,  # Added
                 )
 
-            response_data = await self.ai_provider.generate(
-                prompt,
-                model=self.model,
-                system_instruction=CORE_SYSTEM_PROMPT,
-                cached_content_name=cache_name,
-            )
+                response_data = await self.ai_provider.generate(
+                    prompt,
+                    model=self.model,
+                    system_instruction=CORE_SYSTEM_PROMPT,
+                    cached_content_name=cache_name,
+                )
 
             # Handle response with grounding metadata
             if isinstance(response_data, dict):

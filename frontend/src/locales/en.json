@@ -8,7 +8,15 @@
 		"cancel": "Cancel",
 		"delete": "Delete",
 		"edit": "Edit",
-		"close": "Close"
+		"close": "Close",
+		"feedback": {
+			"title": "Was this helpful?",
+			"good": "Helpful",
+			"bad": "Not helpful",
+			"submitted": "Thanks for your feedback!",
+			"placeholder": "Tell us more (optional)",
+			"send": "Send Feedback"
+		}
 	},
 	"nav": {
 		"explore": "Explore",

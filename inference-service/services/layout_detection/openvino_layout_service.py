@@ -46,6 +46,16 @@ class OpenVINOLayoutAnalysisService:
 
         self.engine = "OpenVINO"
 
+        # Read threshold from environment variable
+        env_threshold = os.getenv("LAYOUT_THRESHOLD", "0.5")
+        try:
+            self.threshold = float(env_threshold)
+        except ValueError:
+            logger.warning(
+                f"Invalid LAYOUT_THRESHOLD: {env_threshold}. Using default 0.5"
+            )
+            self.threshold = 0.5
+
         self._initialize_model()
 
     def _initialize_model(self):
@@ -154,7 +164,7 @@ class OpenVINOLayoutAnalysisService:
                 outputs,
                 real_scale=real_scale,
                 pad_info=real_pad_info,
-                threshold=0.5,
+                threshold=self.threshold,
                 target_class_ids=target_class_ids,
             )
 
