@@ -66,7 +66,7 @@ class PaperSummary(dspy.Signature):
     __doc__ = clean_prompt_for_dspy(PAPER_SUMMARY_FULL_PROMPT)
     paper_text: str = dspy.InputField(desc="論文の全文テキスト")
     lang_name: str = dspy.InputField(desc="出力する言語（例: Japanese）")
-    summary: str = dspy.OutputField(desc="4つのセクションに分かれた指定言語での要約")
+    summary: str = dspy.OutputField(desc="5つのセクションに分かれた指定言語での要約")
 
 
 class PaperSummarySections(dspy.Signature):
@@ -201,6 +201,7 @@ class UserProfileEstimation(dspy.Signature):
     unknown_concepts: list[str] = dspy.OutputField(desc="理解できていない概念")
     preferred_direction: str = dspy.OutputField(desc="深堀り / 横展開 / 応用 / 基礎")
 
+
 # =============================================================
 # Translation (翻訳系) の DSPy Signatures
 # =============================================================
@@ -210,12 +211,15 @@ class ContextAwareTranslation(dspy.Signature):
     """
     You are an expert academic research assistant.
     Your goal is to help users understand complex academic papers, translate technical terms accurately within context.
-    
+
     1. Always output ONLY in the requested target language.
     2. When translating, prioritize accuracy and academic context. Output the translation and an intuitive explanation that fits the context.
     3. NEVER mix languages in your response.
     """
+
     paper_context: str = dspy.InputField(desc="Context from the paper")
     target_text: str = dspy.InputField(desc="Text to translate")
     lang_name: str = dspy.InputField(desc="Target language")
-    translation_and_explanation: str = dspy.OutputField(desc="Translation and context-aware explanation")
+    translation_and_explanation: str = dspy.OutputField(
+        desc="Translation and context-aware explanation"
+    )

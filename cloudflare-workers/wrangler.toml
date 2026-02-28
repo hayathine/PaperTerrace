@@ -9,13 +9,7 @@ workers_dev = true
 [vars]
 BACKEND_TUNNEL_URL = "https://tunnel.paperterrace.page" # トンネルの裏口
 ALLOWED_ORIGINS = "https://paperterrace.pages.dev,https://www.paperterrace.page,https://paperterrace.page,http://localhost:5173"
-RATE_LIMIT_REQUESTS = "100"
-RATE_LIMIT_WINDOW = "60"
 
-# KV Namespace for rate limiting
-[[kv_namespaces]]
-binding = "RATE_LIMIT"
-id = "e699d25a697542babdc2343bfc75866b"
 
 # Secrets (set via: wrangler secret put SECRET_NAME)
 # - FIREBASE_PROJECT_ID
@@ -41,5 +35,3 @@ name = "paperterrace-dev"
 [env.dev.vars]
 BACKEND_TUNNEL_URL = "https://dev-tunnel.paperterrace.page"
 ALLOWED_ORIGINS = "https://paperterrace-dev.pages.dev,http://localhost:5173"
-RATE_LIMIT_REQUESTS = "100"
-RATE_LIMIT_WINDOW = "60"

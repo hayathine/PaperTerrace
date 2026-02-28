@@ -65,6 +65,7 @@ class SummaryService:
         target_lang: str = "ja",
         paper_id: str | None = None,
         pdf_bytes: bytes | None = None,
+        key_word: str | None = None,
     ) -> str:
         """
         論文全体の包括的な要約を生成する。
@@ -115,7 +116,13 @@ class SummaryService:
                     # 失敗した場合はテキストベースにフォールバック... はここでは難しいのでエラー
                     raise SummaryError(f"PDFの解析（画像化）に失敗しました: {ex}")
 
-                prompt = PAPER_SUMMARY_FROM_PDF_PROMPT.format(lang_name=lang_name)
+                keyword_focus = ""
+                if key_word:
+                    keyword_focus = f"[Topic Focus]\nPlease provide more details and context regarding the keyword: '{key_word}' within the summary if applicable."
+
+                prompt = PAPER_SUMMARY_FROM_PDF_PROMPT.format(
+                    lang_name=lang_name, keyword_focus=keyword_focus
+                )
                 # 新しく追加した generate_with_images を使用
                 raw_response = await self.ai_provider.generate_with_images(
                     prompt, images, model=self.model
@@ -138,8 +145,15 @@ class SummaryService:
                     extra={"text_length": len(text)},
                 )
                 safe_text = await self._truncate_to_token_limit(text)
+
+                keyword_focus = ""
+                if key_word:
+                    keyword_focus = f"[Topic Focus]\nPlease provide more details and context regarding the keyword: '{key_word}' within the summary if applicable."
+
                 prompt = PAPER_SUMMARY_FULL_PROMPT.format(
-                    lang_name=lang_name, paper_text=safe_text
+                    lang_name=lang_name,
+                    paper_text=safe_text,
+                    keyword_focus=keyword_focus,
                 )
 
                 from pydantic import Field

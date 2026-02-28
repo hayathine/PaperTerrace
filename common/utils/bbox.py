@@ -1,6 +1,6 @@
 from typing import Any, Dict, List, Sequence, Union
 
-from ..schemas.bbox import BBoxModel
+from ..schemas.layout import BBoxModel
 
 
 def to_bbox(bbox: Union[Sequence[float], BBoxModel]) -> BBoxModel:

@@ -72,6 +72,7 @@ async def summarize(
     mode: str = Form("full"),
     lang: str = Form("ja"),
     paper_id: str | None = Form(None),
+    key_word: str | None = Form(None),
     force: bool = Form(False),
 ):
     context = _get_context(session_id)
@@ -96,7 +97,7 @@ async def summarize(
     )
 
     summary = await summary_service.summarize_full(
-        context, target_lang=lang, paper_id=paper_id
+        context, target_lang=lang, paper_id=paper_id, key_word=key_word
     )
     return JSONResponse({"summary": summary})
 

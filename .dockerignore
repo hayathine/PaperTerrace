@@ -1,51 +1,55 @@
-# Ignore patterns for Docker build
+# Git and development files
 .git
-.github
 .gitignore
-.venv
-__pycache__
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.db
-*.sqlite
-*.sqlite3
-
-# Development files
+.vscode
+.idea
+.agent
+.agents
 *.md
-!README.md
-tests/
+LICENSE
+
+# Python
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.Python
 .pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright_cache/
 .coverage
 htmlcov/
-.ruff_cache/
+.testmondata
 
-# Terraform
-terraform/
-*.tfstate*
-.terraform/
+# Virtual environments (Exclude all .venv folders)
+**/.venv/
+**/venv/
+**/env/
+**/bin/
 
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
+# Node.js
+**/node_modules/
+**/npm-debug.log*
 
-# Misc
+# Build artifacts
+# Note: frontend/dist is REQUIRED for the backend build, so we don't ignore all dist/
+# Only ignore dist in specific places if needed, but the Dockerfile handles what it copies.
+**/build/
+**/*.egg-info/
+
+# Local data and secrets (Important for size and security)
+**/.env
+local-files/
+models/
+storage/
+**/*.db
+**/*.sqlite3
+**/*.log
+
+# Infrastructure
+infrastructure/terraform.tfstate*
+infrastructure/.terraform/
+
+# macOS
 .DS_Store
-*.log
-.env
-.env.*
-
-# Project Specific
-.agent/
-plans/
-frontend/node_modules/
-# Models (ignore only weight files, keep code)
-*.onnx
-*.xml
-*.bin
-*.blob
-docs/
-backend/app/static/dist/

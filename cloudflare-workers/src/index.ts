@@ -11,19 +11,14 @@
 interface Env {
   // Environment variables
   BACKEND_TUNNEL_URL: string;
+  ALLOWED_ORIGINS: string;
   CLIENT_ID: string;
   CLIENT_SECRET: string;
-
-  RATE_LIMIT_REQUESTS: string;
-  RATE_LIMIT_WINDOW: string;
 
   // Secrets
   FIREBASE_PROJECT_ID: string;
   FIREBASE_CLIENT_EMAIL: string;
   FIREBASE_PRIVATE_KEY: string;
-
-  // KV Namespace
-  RATE_LIMIT: KVNamespace;
 }
 
 interface DecodedToken {
@@ -94,24 +89,6 @@ async function handleRequest(
     );
   }
 
-  // Check rate limit
-  const rateLimitCheck = await checkRateLimit(request, env);
-  if (!rateLimitCheck.allowed) {
-    return new Response(
-      JSON.stringify({
-        error: "Too Many Requests",
-        message: "Rate limit exceeded",
-      }),
-      {
-        status: 429,
-        headers: {
-          "Content-Type": "application/json",
-          "Retry-After": rateLimitCheck.retryAfter?.toString() || "60",
-        },
-      },
-    );
-  }
-
   // Verify Firebase Auth token or fallback to Guest
   const authHeader = request.headers.get("Authorization");
   let decodedToken: DecodedToken | null = null;
@@ -150,7 +127,9 @@ async function handleRequest(
  */
 function handleCORS(request: Request, env: Env): Response {
   const origin = request.headers.get("Origin") || "";
-  const allowedOrigins = env.ALLOWED_ORIGINS.split(",").map((o) => o.trim());
+  const allowedOrigins = env.ALLOWED_ORIGINS.split(",").map((o: string) =>
+    o.trim(),
+  );
 
   const headers: Record<string, string> = {
     "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
@@ -184,7 +163,9 @@ function validateOrigin(request: Request, env: Env): { valid: boolean } {
   const origin = request.headers.get("Origin");
   const referer = request.headers.get("Referer");
 
-  const allowedOrigins = env.ALLOWED_ORIGINS.split(",").map((o) => o.trim());
+  const allowedOrigins = env.ALLOWED_ORIGINS.split(",").map((o: string) =>
+    o.trim(),
+  );
 
   // Check origin header
   if (origin && isOriginAllowed(origin, allowedOrigins)) {
@@ -236,44 +217,6 @@ function isOriginAllowed(
   }
 
   return false;
-}
-
-/**
- * Check rate limit for the client
- */
-async function checkRateLimit(
-  request: Request,
-  env: Env,
-): Promise<{ allowed: boolean; retryAfter?: number }> {
-  const clientIP = request.headers.get("CF-Connecting-IP") || "unknown";
-  const key = `ratelimit:${clientIP}`;
-
-  const limit = parseInt(env.RATE_LIMIT_REQUESTS);
-  const window = parseInt(env.RATE_LIMIT_WINDOW);
-
-  // Get current count
-  const currentCount = await env.RATE_LIMIT.get(key);
-  const count = currentCount ? parseInt(currentCount) : 0;
-
-  if (count >= limit) {
-    // Get TTL to calculate retry-after
-    const metadata = await env.RATE_LIMIT.getWithMetadata<{
-      expiresAt: number;
-    }>(key);
-    const retryAfter = metadata.metadata?.expiresAt
-      ? Math.ceil((metadata.metadata.expiresAt - Date.now()) / 1000)
-      : window;
-
-    return { allowed: false, retryAfter };
-  }
-
-  // Increment count
-  await env.RATE_LIMIT.put(key, (count + 1).toString(), {
-    expirationTtl: window,
-    metadata: { expiresAt: Date.now() + window * 1000 },
-  });
-
-  return { allowed: true };
 }
 
 /**
@@ -366,7 +309,9 @@ function addCORSHeaders(
   env: Env,
 ): Response {
   const origin = request.headers.get("Origin");
-  const allowedOrigins = env.ALLOWED_ORIGINS.split(",").map((o) => o.trim());
+  const allowedOrigins = env.ALLOWED_ORIGINS.split(",").map((o: string) =>
+    o.trim(),
+  );
 
   // If no origin (direct hit) or origin not allowed, return original response
   if (!origin || !isOriginAllowed(origin, allowedOrigins)) {

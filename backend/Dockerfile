@@ -32,7 +32,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt gcsfuse-$(lsb_release -c -s) main" \
        | tee /etc/apt/sources.list.d/gcsfuse.list \
     && apt-get update && apt-get install -y gcsfuse \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=runtime-builder /app/.venv /app/.venv
 # Use pre-built frontend dist

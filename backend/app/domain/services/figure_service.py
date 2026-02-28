@@ -2,14 +2,13 @@ import base64
 import io
 from typing import Any
 
-from app.providers.image_storage import save_page_image
-
 # pdfplumber related imports for type hinting and functionality
 from pdfplumber.display import PageImage
 from pdfplumber.page import Page
 
+from app.providers.image_storage import save_page_image
 from common.logger import logger
-from common.schemas.bbox import BBoxModel
+from common.schemas.layout import BBoxModel
 from common.utils.bbox import get_bbox_from_items, is_contained, scale_bbox
 
 from .paddle_layout_service import get_layout_service
