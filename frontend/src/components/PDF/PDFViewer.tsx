@@ -64,7 +64,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	evidence,
 }) => {
 	const { t, i18n } = useTranslation();
-	const { token } = useAuth();
+	const { token, isGuest } = useAuth();
 	const { getCachedPaper, savePaperToCache, cachePaperImages } =
 		usePaperCache();
 	const syncStatus = useSyncStatus();
@@ -83,7 +83,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	// Stamp State
 	// Modes: 'plaintext' (default), 'text', 'stamp', 'area'
 	const [mode, setMode] = useState<"text" | "stamp" | "area" | "plaintext">(
-		"text",
+		"plaintext",
 	);
 	const [stamps, setStamps] = useState<Stamp[]>([]);
 	const [selectedStamp, setSelectedStamp] = useState<StampType>("👍");
@@ -578,48 +578,50 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						}
 
 						// Cache the final results
-						(async () => {
-							const imageUrls = finalPages.map((p) => p.image_url);
-							const ocrText = finalPages
-								.map((p) => p.content)
-								.join("\n\n---\n\n");
-							const layoutData = finalPages.map((p) => ({
-								width: p.width,
-								height: p.height,
-								words: p.words,
-								figures: p.figures,
-								links: p.links,
-							}));
+						if (!isGuest) {
+							(async () => {
+								const imageUrls = finalPages.map((p) => p.image_url);
+								const ocrText = finalPages
+									.map((p) => p.content)
+									.join("\n\n---\n\n");
+								const layoutData = finalPages.map((p) => ({
+									width: p.width,
+									height: p.height,
+									words: p.words,
+									figures: p.figures,
+									links: p.links,
+								}));
 
-							// Extract file_hash from image_url (e.g. /static/paper_images/{hash}/page_1.png)
-							let fileHash = "";
-							if (imageUrls.length > 0) {
-								const match = imageUrls[0].match(
-									/\/static\/paper_images\/([^/]+)\//,
-								);
-								if (match) fileHash = match[1];
-							}
+								// Extract file_hash from image_url (e.g. /static/paper_images/{hash}/page_1.png)
+								let fileHash = "";
+								if (imageUrls.length > 0) {
+									const match = imageUrls[0].match(
+										/\/static\/paper_images\/([^/]+)\//,
+									);
+									if (match) fileHash = match[1];
+								}
 
-							await savePaperToCache({
-								id: pId,
-								file_hash: fileHash,
-								title: processingFileRef.current?.name || "Untitled",
-								ocr_text: ocrText,
-								layout_json: JSON.stringify(layoutData),
-								last_accessed: Date.now(),
-							});
-							// We don't block on image caching
-							cachePaperImages(pId, imageUrls);
+								await savePaperToCache({
+									id: pId,
+									file_hash: fileHash,
+									title: processingFileRef.current?.name || "Untitled",
+									ocr_text: ocrText,
+									layout_json: JSON.stringify(layoutData),
+									last_accessed: Date.now(),
+								});
+								// We don't block on image caching
+								cachePaperImages(pId, imageUrls);
+							})();
+						}
 
-							// Trigger lazy layout analysis in background (non-blocking)
-							console.log(
-								"[PDFViewer] Triggering lazy layout analysis for paper:",
-								pId,
-							);
-							triggerLazyLayoutAnalysis(pId).catch((err) => {
-								console.warn("[PDFViewer] Lazy layout analysis failed:", err);
-							});
-						})();
+						// Trigger lazy layout analysis in background (non-blocking)
+						console.log(
+							"[PDFViewer] Triggering lazy layout analysis for paper:",
+							pId,
+						);
+						triggerLazyLayoutAnalysis(pId).catch((err) => {
+							console.warn("[PDFViewer] Lazy layout analysis failed:", err);
+						});
 					}
 					es.close();
 					processingFileRef.current = null;
@@ -840,52 +842,54 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 		try {
 			// 0. Check IndexedDB Cache First (Offline First / Fast Load)
-			const cached = await getCachedPaper(id);
-			if (cached?.layout_json && cached.file_hash) {
-				console.log("[PDFViewer] Fast Load from cache:", id);
-				try {
-					const layoutList = JSON.parse(cached.layout_json);
-					const ocrParts = (cached.ocr_text || "").split("\n\n---\n\n");
-					const fileHash = cached.file_hash;
+			if (!isGuest) {
+				const cached = await getCachedPaper(id);
+				if (cached?.layout_json && cached.file_hash) {
+					console.log("[PDFViewer] Fast Load from cache:", id);
+					try {
+						const layoutList = JSON.parse(cached.layout_json);
+						const ocrParts = (cached.ocr_text || "").split("\n\n---\n\n");
+						const fileHash = cached.file_hash;
 
-					const cachedPages: PageData[] = layoutList.map(
-						(layout: any, i: number) => ({
-							page_num: i + 1,
-							image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.png`,
-							width: layout?.width || 0,
-							height: layout?.height || 0,
-							words: layout?.words || [],
-							figures: layout?.figures || [],
-							links: layout?.links || [],
-							content: ocrParts[i] || "",
-						}),
-					);
-
-					if (cachedPages.length > 0) {
-						setPages(cachedPages);
-						setStatus("done");
-						setMode("text");
-						// Cached papers have coordinates ready
-						// If we have content, we could stop here.
-
-						// Trigger lazy layout analysis to fetch figures if not already present
-						const hasFigures = cachedPages.some(
-							(p) => p.figures && p.figures.length > 0,
+						const cachedPages: PageData[] = layoutList.map(
+							(layout: any, i: number) => ({
+								page_num: i + 1,
+								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.png`,
+								width: layout?.width || 0,
+								height: layout?.height || 0,
+								words: layout?.words || [],
+								figures: layout?.figures || [],
+								links: layout?.links || [],
+								content: ocrParts[i] || "",
+							}),
 						);
-						if (!hasFigures) {
-							console.log(
-								"[PDFViewer] No figures in cache, triggering lazy layout analysis",
-							);
-							triggerLazyLayoutAnalysis(id).catch((err) => {
-								console.warn("[PDFViewer] Lazy layout analysis failed:", err);
-							});
-						}
 
-						// Optional: Background check with server to ensure consistency.
-						return;
+						if (cachedPages.length > 0) {
+							setPages(cachedPages);
+							setStatus("done");
+							setMode("text");
+							// Cached papers have coordinates ready
+							// If we have content, we could stop here.
+
+							// Trigger lazy layout analysis to fetch figures if not already present
+							const hasFigures = cachedPages.some(
+								(p) => p.figures && p.figures.length > 0,
+							);
+							if (!hasFigures) {
+								console.log(
+									"[PDFViewer] No figures in cache, triggering lazy layout analysis",
+								);
+								triggerLazyLayoutAnalysis(id).catch((err) => {
+									console.warn("[PDFViewer] Lazy layout analysis failed:", err);
+								});
+							}
+
+							// Optional: Background check with server to ensure consistency.
+							return;
+						}
+					} catch (e) {
+						console.warn("[PDFViewer] Failed to parse cached data", e);
 					}
-				} catch (e) {
-					console.warn("[PDFViewer] Failed to parse cached data", e);
 				}
 			}
 
@@ -897,17 +901,19 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			if (paperRes.ok) {
 				const paperData = await paperRes.json();
 
-				// Save/Update cache with latest metadata
-				await savePaperToCache({
-					id: id,
-					file_hash: paperData.file_hash || "",
-					title: paperData.title || paperData.filename,
-					ocr_text: paperData.ocr_text,
-					layout_json: paperData.layout_json,
-					full_summary: paperData.full_summary,
-					section_summary_json: paperData.section_summary_json,
-					last_accessed: Date.now(),
-				});
+				// Save/Update cache with latest metadata if not guest
+				if (!isGuest) {
+					await savePaperToCache({
+						id: id,
+						file_hash: paperData.file_hash || "",
+						title: paperData.title || paperData.filename,
+						ocr_text: paperData.ocr_text,
+						layout_json: paperData.layout_json,
+						full_summary: paperData.full_summary,
+						section_summary_json: paperData.section_summary_json,
+						last_accessed: Date.now(),
+					});
+				}
 
 				if (paperData.layout_json && paperData.file_hash) {
 					try {
@@ -933,11 +939,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							setStatus("done");
 							// Full paper data has coordinates ready
 
-							// Cache images in background
-							cachePaperImages(
-								id,
-								fullPages.map((p) => p.image_url),
-							);
+							// Cache images in background if not guest
+							if (!isGuest) {
+								cachePaperImages(
+									id,
+									fullPages.map((p) => p.image_url),
+								);
+							}
 
 							// Trigger lazy layout analysis to fetch figures if not already present
 							const hasFigures = fullPages.some(
