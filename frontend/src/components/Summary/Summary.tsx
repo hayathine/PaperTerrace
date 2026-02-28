@@ -184,38 +184,40 @@ const Summary: React.FC<SummaryProps> = ({
 					</div>
 				)}
 
-				{loading && (
+				{loading && (mode !== "summary" || summaryData) && (
 					<div className="text-center py-10 text-slate-400 text-xs animate-pulse">
 						{t("summary.processing")}
 					</div>
 				)}
 
-				{!loading && mode === "summary" && (
+				{mode === "summary" && (
 					<div className="space-y-4">
 						{!summaryData && (
 							<div className="text-center py-8">
-								{isAnalyzing ? (
+								{isAnalyzing || loading || (!error && paperId) ? (
 									<div className="flex flex-col items-center gap-3">
-										<div className="w-8 h-8 border-2 border-slate-200 border-t-indigo-500 rounded-full animate-spin" />
-										<p className="text-xs text-slate-400 animate-pulse">
-											{t("summary.analyzing", "論文を解析中です...")}
+										<div className="w-8 h-8 border-2 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
+										<p className="text-sm font-bold text-indigo-600 animate-pulse tracking-widest">
+											{t("summary.generating", "生成中...")}
 										</p>
-										<p className="text-[10px] text-slate-300">
+										<p className="text-xs text-slate-400 font-medium">
 											{t(
-												"summary.analyzing_hint",
+												"summary.generating_hint",
 												"解析完了後に自動で要約を生成します",
 											)}
 										</p>
 									</div>
 								) : (
 									<>
-										<p className="text-xs text-slate-400 mb-4">
-											{t("summary.hints.summary")}
+										<p className="text-xs text-slate-400 mb-4 font-medium">
+											{error
+												? "要約の生成に失敗しました。再試行してください。"
+												: t("summary.hints.summary")}
 										</p>
 										<button
 											type="button"
 											onClick={() => handleSummarize(false)}
-											className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-indigo-700"
+											className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 transition-all active:scale-95"
 										>
 											{t("summary.generate")}
 										</button>
@@ -223,7 +225,7 @@ const Summary: React.FC<SummaryProps> = ({
 								)}
 							</div>
 						)}
-						{summaryData && (
+						{summaryData && !loading && (
 							<div>
 								<div className="flex justify-end mb-2">
 									<button

@@ -100,7 +100,9 @@ class PDFOCRService:
                         pdf_path=tmp_path,
                     ):
                         # result is (page_num+1, total_pages, page_text, is_last, file_hash, img_url, layout_data)
-                        if result[2] is not None:  # Final result per page
+                        if (
+                            result[5] is not None
+                        ):  # Final result per page (img_url valid)
                             page_text = result[2]
                             layout_data = result[6]
                             all_text_parts.append(page_text)

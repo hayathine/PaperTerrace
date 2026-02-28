@@ -156,6 +156,7 @@ async def explain(
     paper_id: str | None = None,
     element_id: str | None = None,
     conf: str | None = None,
+    context: str | None = None,
 ):
     """単語の解説 (Local: Cache -> local-MT)"""
     # Parse conf safely
@@ -237,6 +238,9 @@ async def explain(
                     summary = paper.get("abstract") or paper.get("summary")
                     if summary:
                         paper_context_str = f"\n[Paper Context / Summary]\n{summary}\n"
+
+            if context:
+                paper_context_str += f"\n[Surrounding Context]\n...{context}...\n"
 
             if not paper_context_str:
                 paper_context_str = (
@@ -359,6 +363,9 @@ async def explain(
                 if summary:
                     paper_context = f"\n[Paper Context / Summary]\n{summary}\n"
 
+        if context:
+            paper_context += f"\n[Surrounding Context]\n...{context}...\n"
+
         is_phrase = " " in lemma.strip()
         if is_phrase:
             prompt = DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT.format(
@@ -451,6 +458,7 @@ async def explain_deep(
     lang: str = "ja",
     paper_id: str | None = None,
     element_id: str | None = None,
+    context: str | None = None,
 ):
     """Geminiによる詳細翻訳（ユーザー押下により発動）"""
     # Robust element_id detection
@@ -481,6 +489,9 @@ async def explain_deep(
                 summary = paper.get("abstract") or paper.get("summary")
                 if summary:
                     paper_context = f"\n[Paper Context / Summary]\n{summary}\n"
+
+        if context:
+            paper_context += f"\n[Surrounding Context]\n...{context}...\n"
 
         log.info("explain_deep", "Gemini call", lemma=lemma)
 

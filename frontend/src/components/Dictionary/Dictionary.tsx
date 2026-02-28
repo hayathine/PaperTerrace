@@ -8,6 +8,7 @@ export type DictionaryEntryWithCoords = DictionaryEntry & {
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import { useAuth } from "../../contexts/AuthContext";
+import FeedbackSection from "../Common/FeedbackSection";
 
 interface DictionaryProps {
 	term?: string;
@@ -92,6 +93,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					lang: i18n.language,
 					paper_id: paperId || "",
 				});
+				if (context) {
+					queryParams.append("context", context);
+				}
 				if (conf !== undefined && conf !== null) {
 					queryParams.append("conf", conf.toString());
 				}
@@ -461,6 +465,14 @@ const Dictionary: React.FC<DictionaryProps> = ({
 									JUMP
 								</button>
 							) : null}
+						</div>
+
+						<div className="mt-2 pl-1 pr-1">
+							<FeedbackSection
+								sessionId={sessionId}
+								targetType="translation"
+								targetId={entry.word}
+							/>
 						</div>
 					</div>
 				))}

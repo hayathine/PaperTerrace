@@ -10,7 +10,8 @@ interface FeedbackSectionProps {
 		| "summary"
 		| "critique"
 		| "related_papers"
-		| "chat";
+		| "chat"
+		| "translation";
 	targetId?: string;
 }
 

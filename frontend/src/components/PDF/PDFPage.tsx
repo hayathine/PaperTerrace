@@ -536,8 +536,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
 											onWordClick
 										) {
 											if (selectionStart === selectionEnd && !selectionMenu) {
-												const start = Math.max(0, idx - 50);
-												const end = Math.min(words.length, idx + 50);
+												const start = Math.max(0, idx - 20);
+												const end = Math.min(words.length, idx + 20);
 												const context = words
 													.slice(start, end)
 													.map((w) => w.word)

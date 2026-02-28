@@ -7,7 +7,8 @@ export interface FeedbackPayload {
 		| "summary"
 		| "critique"
 		| "related_papers"
-		| "chat";
+		| "chat"
+		| "translation";
 	target_id?: string;
 	user_score: number; // 1 for Good, 0 for Bad
 	user_comment?: string;

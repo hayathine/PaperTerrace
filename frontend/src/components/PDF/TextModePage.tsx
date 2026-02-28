@@ -292,13 +292,29 @@ const TextModePage: React.FC<TextModePageProps> = ({
 													className={`${isJumpHighlight ? "bg-yellow-400/60 px-1 rounded" : ""} ${isSearchMatch ? "bg-amber-300/60 px-1 rounded" : ""} text-left`}
 													onClick={() => {
 														if (onWordClick) {
+															const startIdx = Math.max(0, wIdx - 20);
+															const endIdx = Math.min(
+																line.words.length,
+																wIdx + 20,
+															);
+															const context = line.words
+																.slice(startIdx, endIdx)
+																.map((wordObj) => wordObj.word)
+																.join(" ");
+
 															onWordClick(
 																w.word,
-																undefined,
+																context,
 																{
 																	page: page.page_num,
-																	x: 0.5,
-																	y: 0.5,
+																	x:
+																		(w.bbox[0] + w.bbox[2]) /
+																		2 /
+																		(page.width || 1),
+																	y:
+																		(w.bbox[1] + w.bbox[3]) /
+																		2 /
+																		(page.height || 1),
 																},
 																w.conf,
 															);
