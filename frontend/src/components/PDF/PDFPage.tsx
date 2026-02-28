@@ -340,7 +340,9 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								<div
 									key={`fig-img-${idx}`}
 									className={`absolute bg-white shadow-sm group ${
-										isClickMode ? "pointer-events-auto" : "pointer-events-none"
+										isClickMode
+											? "pointer-events-auto border-2 border-indigo-300/60 rounded-sm"
+											: "pointer-events-none"
 									}`}
 									style={style}
 								>

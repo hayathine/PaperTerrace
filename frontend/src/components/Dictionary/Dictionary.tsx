@@ -9,6 +9,7 @@ export type DictionaryEntryWithCoords = DictionaryEntry & {
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import { useAuth } from "../../contexts/AuthContext";
+import CopyButton from "../Common/CopyButton";
 import FeedbackSection from "../Common/FeedbackSection";
 
 interface DictionaryProps {
@@ -381,6 +382,10 @@ const Dictionary: React.FC<DictionaryProps> = ({
 						<div className="flex justify-between items-start mb-3">
 							<h2 className="text-lg font-bold text-slate-800">{entry.word}</h2>
 							<div className="flex items-center gap-2">
+								<CopyButton
+									text={`${entry.word}\n${entry.translation}`}
+									size={12}
+								/>
 								<span
 									className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide
                                     ${

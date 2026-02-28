@@ -1,5 +1,7 @@
 import { useEffect, useState } from "react";
 import { API_URL } from "@/config";
+import CopyButton from "../Common/CopyButton";
+import MarkdownContent from "../Common/MarkdownContent";
 
 interface FigureData {
 	id: string;
@@ -216,11 +218,16 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 							{/* Content */}
 							<div className="p-4">
 								{fig.explanation ? (
-									<div className="text-xs text-slate-600 leading-relaxed whitespace-pre-wrap">
-										<span className="font-bold text-indigo-600 block mb-1 text-[10px] uppercase tracking-wider">
-											Analysis
-										</span>
-										{fig.explanation}
+									<div className="text-xs text-slate-600 leading-relaxed relative">
+										<div className="flex justify-between items-center mb-1">
+											<span className="font-bold text-indigo-600 text-[10px] uppercase tracking-wider">
+												Analysis
+											</span>
+											<CopyButton text={fig.explanation} size={12} />
+										</div>
+										<MarkdownContent className="prose prose-xs max-w-none text-xs text-slate-600 leading-relaxed">
+											{fig.explanation}
+										</MarkdownContent>
 									</div>
 								) : (
 									<div className="flex flex-col items-center justify-center py-2">

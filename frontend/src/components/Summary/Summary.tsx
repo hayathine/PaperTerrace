@@ -2,7 +2,9 @@ import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import { useLoading } from "../../contexts/LoadingContext";
+import CopyButton from "../Common/CopyButton";
 import FeedbackSection from "../Common/FeedbackSection";
+import MarkdownContent from "../Common/MarkdownContent";
 import type { CritiqueResponse, RecommendResponse } from "./types";
 
 interface SummaryProps {
@@ -227,7 +229,8 @@ const Summary: React.FC<SummaryProps> = ({
 						)}
 						{summaryData && !loading && (
 							<div>
-								<div className="flex justify-end mb-2">
+								<div className="flex justify-end mb-2 gap-1">
+									<CopyButton text={summaryData} />
 									<button
 										type="button"
 										onClick={() => handleSummarize(true)}
@@ -250,9 +253,9 @@ const Summary: React.FC<SummaryProps> = ({
 										{t("summary.regenerate", "再生成")}
 									</button>
 								</div>
-								<div className="prose prose-sm max-w-none text-sm text-slate-600 leading-relaxed whitespace-pre-wrap bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+								<MarkdownContent className="prose prose-sm max-w-none text-sm text-slate-600 leading-relaxed bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
 									{summaryData}
-								</div>
+								</MarkdownContent>
 								<FeedbackSection
 									sessionId={sessionId}
 									targetType="summary"
@@ -281,7 +284,23 @@ const Summary: React.FC<SummaryProps> = ({
 						)}
 						{critiqueData && (
 							<div className="space-y-4">
-								<div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm space-y-4">
+								<div className="bg-white p-4 rounded-xl border border-red-100 shadow-sm space-y-4 relative">
+									<div className="absolute top-2 right-2">
+										<CopyButton
+											text={[
+												critiqueData.overall_assessment,
+												...(critiqueData.hidden_assumptions?.map(
+													(h) => `${h.assumption}: ${h.risk}`,
+												) || []),
+												...(critiqueData.unverified_conditions?.map(
+													(h) => `${h.condition}: ${h.impact}`,
+												) || []),
+												...(critiqueData.reproducibility_risks?.map(
+													(h) => `${h.risk}: ${h.detail}`,
+												) || []),
+											].join("\n\n")}
+										/>
+									</div>
 									<div className="text-sm text-slate-700 leading-relaxed font-medium mb-4">
 										{critiqueData.overall_assessment}
 									</div>

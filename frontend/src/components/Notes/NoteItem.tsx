@@ -1,5 +1,6 @@
 import type React from "react";
 import { useTranslation } from "react-i18next";
+import CopyButton from "../Common/CopyButton";
 import type { Note } from "./types";
 
 interface NoteItemProps {
@@ -16,14 +17,17 @@ const NoteItem: React.FC<NoteItemProps> = ({ note, onDelete, onJump }) => {
 				<span className="font-bold text-xs text-indigo-600 break-words">
 					{note.term}
 				</span>
-				<button
-					type="button"
-					onClick={() => onDelete(note.note_id)}
-					className="text-slate-300 hover:text-red-500 text-xs px-1 opacity-0 group-hover:opacity-100 transition-opacity"
-					title="Delete Note"
-				>
-					×
-				</button>
+				<div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+					<CopyButton text={`${note.term}\n${note.note}`} size={11} />
+					<button
+						type="button"
+						onClick={() => onDelete(note.note_id)}
+						className="text-slate-300 hover:text-red-500 text-xs px-1"
+						title="Delete Note"
+					>
+						×
+					</button>
+				</div>
 			</div>
 
 			{note.image_url && (
