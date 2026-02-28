@@ -164,6 +164,11 @@ class PDFOCRService:
         # Basic split by separator
         pages_text = ocr_text.split("\n\n---\n\n")
         cached_images = get_page_images(file_hash)
+        if not cached_images:
+            logger.info(
+                f"[OCR] Cache hit for text but images missing for {file_hash}. Recalculating."
+            )
+            return None
 
         pages = []
         for i, img_url in enumerate(cached_images):

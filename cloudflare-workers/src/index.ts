@@ -202,7 +202,19 @@ function validateOrigin(request: Request, env: Env): { valid: boolean } {
 /**
  * Check if origin is in allowed list
  */
-function isOriginAllowed(origin: string, allowedOrigins: string[]): boolean {
+function isOriginAllowed(
+  originOrUrl: string,
+  allowedOrigins: string[],
+): boolean {
+  let origin = originOrUrl;
+  try {
+    // If it's a full URL (like from a Referer header), extract just the origin part
+    const url = new URL(originOrUrl);
+    origin = url.origin;
+  } catch (e) {
+    // Ignore invalid URLs, origin remains unchanged
+  }
+
   // Exact match
   if (allowedOrigins.includes(origin)) {
     return true;

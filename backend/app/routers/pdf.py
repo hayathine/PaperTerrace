@@ -103,13 +103,14 @@ async def analyze_pdf(
         "file_hash": file_hash,
         "user_id": user_id,
         "is_registered": is_registered,
+        "paper_id": paper_id,
     }
 
     if raw_text is None:
         doc_path = img_storage.save_doc(file_hash, content)
         task_data.update({"pending_ocr": True, "pdf_path": doc_path})
     else:
-        task_data.update({"text": raw_text, "paper_id": paper_id})
+        task_data.update({"text": raw_text})
 
     redis_service.set(f"task:{task_id}", task_data, expire=3600)  # 1-hour session
 
@@ -243,6 +244,7 @@ async def analyze_pdf_json(
             "file_hash": file_hash,
             "user_id": user_id,  # Store user_id for stream processing
             "is_registered": is_registered,
+            "paper_id": paper_id,
         }
 
         if raw_text is None:
@@ -258,7 +260,6 @@ async def analyze_pdf_json(
             task_data.update(
                 {
                     "text": raw_text,
-                    "paper_id": paper_id,
                 }
             )
 
@@ -366,6 +367,8 @@ async def stream(task_id: str):
     lang = data.get("lang", "ja")
     session_id = data.get("session_id")
     user_id = data.get("user_id")  # Retrieve user_id
+    file_hash = data.get("file_hash", "")
+    filename = data.get("filename", "unknown.pdf")
 
     # --- JSON STREAMING HANDLER ---
     if is_json:
@@ -374,7 +377,6 @@ async def stream(task_id: str):
             if data.get("pending_ocr"):
                 pdf_path = data.get("pdf_path")
                 pdf_b64 = data.get("pdf_b64", "")
-                filename = data.get("filename", "unknown.pdf")
 
                 if pdf_path:
                     try:
@@ -674,9 +676,6 @@ async def stream(task_id: str):
     if data.get("pending_ocr"):
         pdf_path = data.get("pdf_path")
         pdf_b64 = data.get("pdf_b64", "")
-        file_hash = data.get("file_hash", "")
-        filename = data.get("filename", "unknown.pdf")
-        session_id = data.get("session_id")
 
         if pdf_path:
             try:
