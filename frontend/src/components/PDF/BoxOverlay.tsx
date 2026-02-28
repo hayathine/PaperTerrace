@@ -101,7 +101,7 @@ const BoxOverlay: React.FC<BoxOverlayProps> = ({ isActive, onSelect }) => {
 		>
 			{start && current && (
 				<div
-					className="absolute border-2 border-indigo-500 bg-indigo-200/30 backdrop-blur-sm pointer-events-none"
+					className="absolute border-2 border-orange-500 bg-orange-200/30 backdrop-blur-sm pointer-events-none"
 					style={boxStyle}
 				/>
 			)}

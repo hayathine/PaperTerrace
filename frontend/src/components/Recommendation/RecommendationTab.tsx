@@ -61,7 +61,7 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 		<div className="flex flex-col h-full bg-slate-50 overflow-hidden">
 			{!isOpen && !isLoading ? (
 				<div className="flex flex-col items-center justify-center p-6 h-full text-center">
-					<div className="w-16 h-16 bg-indigo-100 text-indigo-500 rounded-full flex items-center justify-center mb-4">
+					<div className="w-16 h-16 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center mb-4">
 						<svg
 							className="w-8 h-8"
 							fill="none"
@@ -88,7 +88,7 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 					<button
 						type="button"
 						onClick={handleGenerate}
-						className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-xl shadow-lg shadow-indigo-600/30 transition-transform active:scale-95 flex items-center gap-2"
+						className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-lg shadow-orange-600/30 transition-transform active:scale-95 flex items-center gap-2"
 					>
 						<svg
 							className="w-5 h-5 animate-pulse"
@@ -112,9 +112,9 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 					{isLoading ? (
 						<div className="h-full flex flex-col items-center justify-center gap-4">
 							<div className="flex space-x-2">
-								<div className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
-								<div className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
-								<div className="w-3 h-3 bg-indigo-500 rounded-full animate-bounce"></div>
+								<div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+								<div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+								<div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce"></div>
 							</div>
 							<p className="text-sm font-medium text-slate-500 animate-pulse">
 								{t(
@@ -125,24 +125,24 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 						</div>
 					) : response ? (
 						<div className="space-y-6">
-							<div className="bg-indigo-50 border border-indigo-100 rounded-xl p-4">
-								<h4 className="text-sm font-bold text-indigo-900 mb-2">
+							<div className="bg-orange-50 border border-orange-100 rounded-xl p-4">
+								<h4 className="text-sm font-bold text-orange-900 mb-2">
 									{t(
 										"recommendation.reasoning_title",
 										"Recommendation Reasoning",
 									)}
 								</h4>
-								<p className="text-xs text-indigo-700 leading-relaxed mb-3">
+								<p className="text-xs text-orange-700 leading-relaxed mb-3">
 									{response.reasoning}
 								</p>
 								<div className="flex flex-wrap gap-2">
-									<span className="px-2 py-1 bg-white shadow-sm border border-indigo-100 rounded-md text-[10px] font-bold text-indigo-600 uppercase tracking-wider">
+									<span className="px-2 py-1 bg-white shadow-sm border border-orange-100 rounded-md text-[10px] font-bold text-orange-600 uppercase tracking-wider">
 										Skill Level: {response.knowledge_level}
 									</span>
 									{response.search_queries.slice(0, 2).map((q, idx) => (
 										<span
 											key={idx}
-											className="px-2 py-1 bg-white shadow-sm border border-indigo-100 rounded-md text-[10px] font-bold text-slate-500"
+											className="px-2 py-1 bg-white shadow-sm border border-orange-100 rounded-md text-[10px] font-bold text-slate-500"
 										>
 											🔍 {q}
 										</span>
@@ -183,7 +183,7 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 														paper.openAccessPdf?.url || paper.url,
 													)
 												}
-												className={`text-xs font-bold px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors ${clickedPapers.has(paper.title) ? "bg-green-50 text-green-700 border-green-200" : "bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border-indigo-100"}`}
+												className={`text-xs font-bold px-3 py-1.5 rounded-lg border flex items-center gap-1.5 transition-colors ${clickedPapers.has(paper.title) ? "bg-green-50 text-green-700 border-green-200" : "bg-orange-50 hover:bg-orange-100 text-orange-700 border-orange-100"}`}
 											>
 												<svg
 													className="w-3.5 h-3.5"

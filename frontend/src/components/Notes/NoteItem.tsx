@@ -14,7 +14,7 @@ const NoteItem: React.FC<NoteItemProps> = ({ note, onDelete, onJump }) => {
 	return (
 		<div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm overflow-hidden group mb-3 hover:shadow-md transition-all">
 			<div className="flex justify-between items-start">
-				<span className="font-bold text-xs text-indigo-600 break-words">
+				<span className="font-bold text-xs text-orange-600 break-words">
 					{note.term}
 				</span>
 				<div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -54,7 +54,7 @@ const NoteItem: React.FC<NoteItemProps> = ({ note, onDelete, onJump }) => {
 							note.page_number !== undefined &&
 							onJump(note.page_number, note.x || 0.5, note.y || 0.5, note.term)
 						}
-						className="flex items-center gap-1.5 text-[10px] py-1 px-2 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors"
+						className="flex items-center gap-1.5 text-[10px] py-1 px-2 bg-orange-50 text-orange-600 rounded-md hover:bg-orange-100 transition-colors"
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"

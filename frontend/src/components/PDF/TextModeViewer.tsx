@@ -27,7 +27,7 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({
 	if (!pages || pages.length === 0) {
 		return (
 			<div className="flex flex-col items-center justify-center p-12 text-slate-400">
-				<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mb-4"></div>
+				<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mb-4"></div>
 				<p>読み込み中...</p>
 			</div>
 		);

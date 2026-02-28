@@ -297,7 +297,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 			</div>
 
 			{/* Markdown Content */}
-			<div className="px-6 py-5 md:px-10 md:py-8 selection:bg-indigo-600/30">
+			<div className="px-6 py-5 md:px-10 md:py-8 selection:bg-orange-600/30">
 				{markdownText ? (
 					<MarkdownContent
 						className="prose prose-slate max-w-none prose-headings:mt-6 prose-headings:mb-3 prose-p:my-2 prose-p:leading-7 prose-img:mx-auto"
@@ -317,7 +317,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				<div
 					role="toolbar"
 					aria-label="Selection menu"
-					className="selection-menu absolute z-50 flex gap-1 bg-gray-900 text-white p-1.5 rounded-lg shadow-xl overflow-hidden transform -translate-x-1/2"
+					className="selection-menu absolute z-50 flex gap-1 bg-white border border-slate-200 text-slate-900 p-1.5 rounded-lg shadow-xl overflow-hidden transform -translate-x-1/2"
 					style={{
 						left: `${selectionMenu.x}%`,
 						top: `${selectionMenu.y}%`,
@@ -337,7 +337,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 								);
 							setSelectionMenu(null);
 						}}
-						className="px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-700"
+						className="px-4 py-2 hover:bg-orange-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-100"
 					>
 						<span>文A</span> {t("menu.translate", "Translate")}
 					</button>
@@ -350,7 +350,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 								onTextSelect(selectionMenu.text, selectionMenu.coords);
 							setSelectionMenu(null);
 						}}
-						className={`px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors ${onAskAI ? "border-r border-slate-700" : ""}`}
+						className={`px-4 py-2 hover:bg-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors ${onAskAI ? "border-r border-slate-700" : ""}`}
 					>
 						<span>📝</span> {t("menu.note", "Note")}
 					</button>
@@ -364,14 +364,14 @@ const TextModePage: React.FC<TextModePageProps> = ({
 								onAskAI(prompt);
 								setSelectionMenu(null);
 							}}
-							className="px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors rounded-r-lg"
+							className="px-4 py-2 hover:bg-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors rounded-r-lg"
 						>
 							<span>💡</span> {t("menu.explain", "Explain")}
 						</button>
 					)}
 
 					{/* Triangle arrow */}
-					<div className="absolute left-1/2 top-0 w-2 h-2 bg-gray-900 transform -translate-x-1/2 -translate-y-1/2 rotate-45 pointer-events-none" />
+					<div className="absolute left-1/2 top-0 w-2 h-2 bg-white border-l border-t border-slate-200 transform -translate-x-1/2 -translate-y-1/2 rotate-45 pointer-events-none" />
 				</div>
 			)}
 		</div>

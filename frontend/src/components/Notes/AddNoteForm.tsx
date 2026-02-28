@@ -130,14 +130,14 @@ const AddNoteForm: React.FC<AddNoteFormProps> = ({
 				<input
 					type="text"
 					placeholder={t("notes.placeholder_term")}
-					className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5 mb-2 focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 outline-none pr-8"
+					className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5 mb-2 focus:ring-2 focus:ring-orange-100 focus:border-orange-300 outline-none pr-8"
 					value={term}
 					onChange={(e) => setTerm(e.target.value)}
 					disabled={isSubmitting}
 				/>
 				{coordinates && (
 					<div
-						className="absolute right-2 top-2 text-indigo-500"
+						className="absolute right-2 top-2 text-orange-500"
 						title="Link to current location"
 					>
 						<svg
@@ -165,7 +165,7 @@ const AddNoteForm: React.FC<AddNoteFormProps> = ({
 			</div>
 			<textarea
 				placeholder={t("notes.placeholder_content")}
-				className="w-full text-[10px] text-slate-600 bg-white border border-slate-200 rounded-lg px-2 py-2 mb-2 h-16 resize-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 outline-none"
+				className="w-full text-[10px] text-slate-600 bg-white border border-slate-200 rounded-lg px-2 py-2 mb-2 h-16 resize-none focus:ring-2 focus:ring-orange-100 focus:border-orange-300 outline-none"
 				value={note}
 				onChange={(e) => setNote(e.target.value)}
 				disabled={isSubmitting}
@@ -184,7 +184,7 @@ const AddNoteForm: React.FC<AddNoteFormProps> = ({
 				<button
 					type="submit"
 					disabled={isSubmitting || !term || (!note && !imageUrl)}
-					className="flex-1 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm"
+					className="flex-1 py-1.5 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm"
 				>
 					{isSubmitting
 						? editingNote

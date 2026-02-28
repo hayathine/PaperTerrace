@@ -1038,10 +1038,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		<div className="w-full max-w-5xl mx-auto p-2 md:p-4 relative min-h-full pb-20">
 			{/* Non-blocking status indicators */}
 			{(status === "uploading" || status === "processing") && (
-				<div className="fixed bottom-4 right-4 z-50 bg-white rounded-full shadow-lg p-3 border border-indigo-200">
+				<div className="fixed bottom-4 right-4 z-50 bg-white rounded-full shadow-lg p-3 border border-orange-200">
 					<div className="flex items-center gap-2">
-						<div className="animate-spin rounded-full h-4 w-4 border-2 border-indigo-200 border-t-indigo-600"></div>
-						<span className="text-xs text-indigo-600 font-medium">
+						<div className="animate-spin rounded-full h-4 w-4 border-2 border-orange-200 border-t-orange-600"></div>
+						<span className="text-xs text-orange-600 font-medium">
 							{status === "uploading"
 								? t("viewer.uploading_pdf")
 								: "読み込み中..."}
@@ -1107,7 +1107,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								onClick={() => setMode("plaintext")}
 								className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
 									mode === "plaintext"
-										? "bg-indigo-600 text-white shadow-none"
+										? "bg-orange-600 text-white shadow-none"
 										: "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
 								}`}
 							>
@@ -1122,7 +1122,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								onClick={() => setMode("text")}
 								className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
 									mode === "text"
-										? "bg-indigo-600 text-white shadow-none"
+										? "bg-orange-600 text-white shadow-none"
 										: "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
 								}`}
 							>
@@ -1138,7 +1138,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								onClick={() => setMode("area")}
 								className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
 									mode === "area"
-										? "bg-indigo-600 text-white shadow-none"
+										? "bg-orange-600 text-white shadow-none"
 										: "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
 								}`}
 							>
@@ -1153,7 +1153,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								onClick={() => setMode("stamp")}
 								className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
 									mode === "stamp"
-										? "bg-indigo-600 text-white shadow-none"
+										? "bg-orange-600 text-white shadow-none"
 										: "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
 								}`}
 							>

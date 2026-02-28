@@ -341,7 +341,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 									key={`fig-img-${idx}`}
 									className={`absolute bg-white shadow-sm group ${
 										isClickMode
-											? "pointer-events-auto border-2 border-indigo-300/60 rounded-sm"
+											? "pointer-events-auto border-2 border-orange-300/60 rounded-sm"
 											: "pointer-events-none"
 									}`}
 									style={style}
@@ -354,13 +354,13 @@ const PDFPage: React.FC<PDFPageProps> = ({
 									{isClickMode && (
 										<>
 											{/* Hover overlay for visual feedback */}
-											<div className="absolute inset-0 bg-indigo-500/0 hover:bg-indigo-500/10 transition-colors border-2 border-transparent hover:border-indigo-400 rounded-sm pointer-events-none" />
+											<div className="absolute inset-0 bg-orange-500/0 hover:bg-orange-500/10 transition-colors border-2 border-transparent hover:border-orange-400 rounded-sm pointer-events-none" />
 
 											{/* Ask AI button shown on hover */}
 											<div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-50">
 												<button
 													type="button"
-													className="bg-indigo-600 text-white text-xs px-3 py-1.5 rounded-md shadow shadow-indigo-500/30 hover:bg-indigo-700 hover:shadow-indigo-600/40 transition-all font-medium flex items-center gap-1.5 cursor-pointer transform hover:scale-105 active:scale-95"
+													className="bg-orange-600 text-white text-xs px-3 py-1.5 rounded-md shadow shadow-orange-500/30 hover:bg-orange-700 hover:shadow-orange-600/40 transition-all font-medium flex items-center gap-1.5 cursor-pointer transform hover:scale-105 active:scale-95"
 													onClick={(e) => {
 														e.stopPropagation();
 														if (onAskAI) {
@@ -502,7 +502,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 									id={isCurrentSearchMatch ? "current-search-match" : undefined}
 									className={`absolute rounded-sm group text-layer-word ${!isStampMode && isClickMode ? "cursor-pointer pointer-events-auto" : "pointer-events-none"} 
                                     ${!isStampMode && !isSelected && !isJumpHighlight && !isSearchMatch ? "hover:bg-yellow-300/30" : ""} 
-                                    ${isSelected ? "bg-indigo-500/30 border border-indigo-500/50" : ""}
+                                    ${isSelected ? "bg-orange-500/30 border border-orange-500/50" : ""}
                                     ${isJumpHighlight ? "bg-yellow-400/60 z-20" : ""}
                                     ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 border border-amber-400" : ""}
                                     ${isCurrentSearchMatch ? "bg-orange-500/60 border-2 border-orange-600 shadow-[0_0_15px_rgba(249,115,22,0.6)] z-30 ring-2 ring-orange-400" : ""}`}
@@ -625,7 +625,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 					<div
 						role="toolbar"
 						aria-label="Selection menu"
-						className="absolute z-60 flex gap-1 bg-gray-900 text-white p-1.5 rounded-lg shadow-xl transform -translate-x-1/2"
+						className="absolute z-60 flex gap-1 bg-white border border-slate-200 text-slate-900 p-1.5 rounded-lg shadow-xl transform -translate-x-1/2"
 						style={{
 							left: `${selectionMenu.x}%`,
 							top: `${selectionMenu.y}%`,
@@ -647,7 +647,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								setSelectionStart(null);
 								setSelectionEnd(null);
 							}}
-							className="px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-700"
+							className="px-4 py-2 hover:bg-orange-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-100"
 						>
 							<span>文A</span> {t("menu.translate")}
 						</button>
@@ -662,7 +662,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								setSelectionStart(null);
 								setSelectionEnd(null);
 							}}
-							className="px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors"
+							className="px-4 py-2 hover:bg-orange-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors"
 						>
 							<span>📝</span> {t("menu.note")}
 						</button>
@@ -678,14 +678,14 @@ const PDFPage: React.FC<PDFPageProps> = ({
 									setSelectionStart(null);
 									setSelectionEnd(null);
 								}}
-								className="px-4 py-2 hover:bg-indigo-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-l border-slate-700 rounded-r-lg"
+								className="px-4 py-2 hover:bg-orange-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-l border-slate-100 rounded-r-lg"
 							>
 								<span>💡</span> {t("menu.explain")}
 							</button>
 						)}
 
 						{/* Triangle arrow */}
-						<div className="absolute left-1/2 top-0 w-2 h-2 bg-gray-900 transform -translate-x-1/2 -translate-y-1/2 rotate-45"></div>
+						<div className="absolute left-1/2 top-0 w-2 h-2 bg-white border-l border-t border-slate-200 transform -translate-x-1/2 -translate-y-1/2 rotate-45"></div>
 					</div>
 				)}
 			</div>

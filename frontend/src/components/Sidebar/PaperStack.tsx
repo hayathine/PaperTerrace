@@ -13,7 +13,7 @@ const PaperStack: React.FC<PaperStackProps> = ({ papers, onRemove }) => {
 			<div className="p-4 border-b border-slate-100 bg-slate-50">
 				<h3 className="text-sm font-bold text-slate-700 flex items-center gap-2">
 					<svg
-						className="w-4 h-4 text-indigo-500"
+						className="w-4 h-4 text-orange-500"
 						fill="none"
 						viewBox="0 0 24 24"
 						stroke="currentColor"
@@ -64,7 +64,7 @@ const PaperStack: React.FC<PaperStackProps> = ({ papers, onRemove }) => {
 										href={paper.url}
 										target="_blank"
 										rel="noopener noreferrer"
-										className="text-sm font-medium text-indigo-600 hover:text-indigo-700 break-all line-clamp-2"
+										className="text-sm font-medium text-orange-600 hover:text-orange-700 break-all line-clamp-2"
 									>
 										{paper.title || paper.url}
 									</a>

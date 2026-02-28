@@ -159,7 +159,7 @@ const Summary: React.FC<SummaryProps> = ({
 				<button
 					type="button"
 					onClick={() => setMode("summary")}
-					className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "summary" ? "bg-indigo-50 text-indigo-600" : "text-slate-400"}`}
+					className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "summary" ? "bg-orange-50 text-orange-600" : "text-slate-400"}`}
 				>
 					{t("summary.modes.summary")}
 				</button>
@@ -198,8 +198,8 @@ const Summary: React.FC<SummaryProps> = ({
 							<div className="text-center py-8">
 								{isAnalyzing || loading || (!error && paperId) ? (
 									<div className="flex flex-col items-center gap-3">
-										<div className="w-8 h-8 border-2 border-indigo-100 border-t-indigo-600 rounded-full animate-spin" />
-										<p className="text-sm font-bold text-indigo-600 animate-pulse tracking-widest">
+										<div className="w-8 h-8 border-2 border-orange-100 border-t-orange-600 rounded-full animate-spin" />
+										<p className="text-sm font-bold text-orange-600 animate-pulse tracking-widest">
 											{t("summary.generating", "生成中...")}
 										</p>
 										<p className="text-xs text-slate-400 font-medium">
@@ -219,7 +219,7 @@ const Summary: React.FC<SummaryProps> = ({
 										<button
 											type="button"
 											onClick={() => handleSummarize(false)}
-											className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md shadow-indigo-200 transition-all active:scale-95"
+											className="px-5 py-2.5 bg-orange-600 hover:bg-orange-700 text-white rounded-xl text-xs font-bold shadow-md shadow-orange-200 transition-all active:scale-95"
 										>
 											{t("summary.generate")}
 										</button>
@@ -234,7 +234,7 @@ const Summary: React.FC<SummaryProps> = ({
 									<button
 										type="button"
 										onClick={() => handleSummarize(true)}
-										className="px-3 py-1 text-xs text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all flex items-center gap-1"
+										className="px-3 py-1 text-xs text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-all flex items-center gap-1"
 										title={t("summary.regenerate", "再生成")}
 									>
 										<svg
@@ -429,7 +429,7 @@ const Summary: React.FC<SummaryProps> = ({
 																href={p.url}
 																target="_blank"
 																rel="noopener noreferrer"
-																className="text-xs text-indigo-500 hover:text-indigo-600 hover:underline font-medium"
+																className="text-xs text-orange-500 hover:text-orange-600 hover:underline font-medium"
 															>
 																View Paper
 															</a>

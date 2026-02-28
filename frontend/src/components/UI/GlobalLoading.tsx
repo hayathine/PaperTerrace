@@ -13,11 +13,11 @@ const GlobalLoading: React.FC = () => {
 			<div className="flex items-center gap-4 p-4 pr-6 rounded-2xl bg-white shadow-2xl border border-slate-100 pointer-events-auto animate-in slide-in-from-bottom-8 fade-in zoom-in-95 duration-300">
 				{/* Modern Animated Icon */}
 				<div className="relative w-10 h-10 flex-shrink-0">
-					<div className="absolute inset-0 rounded-full border-[3px] border-indigo-100"></div>
-					<div className="absolute inset-0 rounded-full border-[3px] border-indigo-600 border-t-transparent animate-spin"></div>
-					<div className="absolute inset-2 rounded-full bg-indigo-50 animate-pulse flex items-center justify-center">
+					<div className="absolute inset-0 rounded-full border-[3px] border-orange-100"></div>
+					<div className="absolute inset-0 rounded-full border-[3px] border-orange-600 border-t-transparent animate-spin"></div>
+					<div className="absolute inset-2 rounded-full bg-orange-50 animate-pulse flex items-center justify-center">
 						<svg
-							className="w-3.5 h-3.5 text-indigo-600"
+							className="w-3.5 h-3.5 text-orange-600"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24"
@@ -40,9 +40,9 @@ const GlobalLoading: React.FC = () => {
 						</h3>
 						{/* Subtle decorative dots */}
 						<div className="mt-1 flex gap-1">
-							<div className="w-1 h-1 rounded-full bg-indigo-400 animate-bounce [animation-delay:-0.3s]"></div>
-							<div className="w-1 h-1 rounded-full bg-indigo-400 animate-bounce [animation-delay:-0.15s]"></div>
-							<div className="w-1 h-1 rounded-full bg-indigo-400 animate-bounce"></div>
+							<div className="w-1 h-1 rounded-full bg-orange-400 animate-bounce [animation-delay:-0.3s]"></div>
+							<div className="w-1 h-1 rounded-full bg-orange-400 animate-bounce [animation-delay:-0.15s]"></div>
+							<div className="w-1 h-1 rounded-full bg-orange-400 animate-bounce"></div>
 						</div>
 					</div>
 					<p className="text-[11px] text-slate-500 font-medium">
