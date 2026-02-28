@@ -65,7 +65,7 @@ class TestLayoutAnalysisService:
         ]
 
         ori_shape = (1000, 1000)
-        scale = 640 / 1000  # 0.64
+        scale = (640 / 1000, 640 / 1000)  # (0.64, 0.64)
         pad_info = np.array([0, 0])
 
         results = service._postprocess(
@@ -101,7 +101,7 @@ class TestLayoutAnalysisService:
 
         assert ori_shape == (100, 200)
         # scale = min(640/100, 640/200) = 3.2
-        assert scale == 3.2
+        assert scale == (3.2, 3.2)
         # For Center padding:
         # pad_h = (640 - 320) // 2 = 160
         # pad_w = (640 - 640) // 2 = 0
