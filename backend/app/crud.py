@@ -30,3 +30,10 @@ def save_figure_to_db(
     return get_storage_provider().save_figure(
         paper_id, page_number, bbox, image_url, caption, explanation, label, latex
     )
+
+
+def save_figures_to_db(
+    paper_id: str,
+    figures: list[dict],
+) -> list[str]:
+    return get_storage_provider().save_figures_batch(paper_id, figures)

@@ -1,3 +1,4 @@
+import asyncio
 import os
 import queue
 import time
@@ -144,8 +145,17 @@ class OpenVINOLayoutAnalysisService:
     def analyze_image(
         self, image_path: str | Path, target_classes: list[str] | None = None
     ) -> list[LayoutItem]:
+        results = self.analyze_images_batch([image_path], target_classes)
+        return results[0]
+
+    def analyze_images_batch(
+        self, image_paths: list[str | Path], target_classes: list[str] | None = None
+    ) -> list[list[LayoutItem]]:
         if self.compiled_model is None:
             raise RuntimeError("Model is not initialized")
+
+        if not image_paths:
+            return []
 
         target_class_ids = None
         if target_classes:
@@ -154,37 +164,69 @@ class OpenVINOLayoutAnalysisService:
                 name_to_id[name] for name in target_classes if name in name_to_id
             ]
 
+        logger.info(
+            f"Starting OpenVINO batch layout analysis for {len(image_paths)} images"
+        )
         start_time = time.time()
         try:
-            img, im_shape, scale_factor, real_pad_info, real_scale = self._preprocess(
-                image_path, target_size=self.target_size
-            )
-            outputs = self._inference(img, scale_factor, im_shape)
-            results = self._postprocess(
-                outputs,
-                real_scale=real_scale,
-                pad_info=real_pad_info,
-                threshold=self.threshold,
-                target_class_ids=target_class_ids,
-            )
+            # 1. Preprocess all
+            preprocessed_list = [
+                self._preprocess(path, target_size=self.target_size)
+                for path in image_paths
+            ]
+
+            # 2. Batch inference
+            # We need to reshape the model if the batch size is different?
+            # Static batching is faster so we'll just loop or use multiple requests if available
+            # However, for simplicity and since OpenVINO handles streams, we can use the request pool
+
+            async def _process_parallel():
+                tasks = []
+                for i, (img, im_shape, scale_factor, _, _) in enumerate(
+                    preprocessed_list
+                ):
+                    tasks.append(
+                        asyncio.to_thread(self._inference, img, scale_factor, im_shape)
+                    )
+                return await asyncio.gather(*tasks)
+
+            # Use simple loop with inference requests as it's already using OPTIMAL_NUMBER_OF_INFER_REQUESTS
+            all_outputs = []
+            for img, im_shape, scale_factor, _, _ in preprocessed_list:
+                all_outputs.append(self._inference(img, scale_factor, im_shape))
+
+            # 3. Postprocess
+            batch_results = []
+            for i, outputs in enumerate(all_outputs):
+                _, _, _, real_pad_info, real_scale = preprocessed_list[i]
+                results = self._postprocess(
+                    outputs,
+                    real_scale=real_scale,
+                    pad_info=real_pad_info,
+                    threshold=self.threshold,
+                    target_class_ids=target_class_ids,
+                )
+
+                layout_items = []
+                for result in results:
+                    bbox = BBoxModel.from_list(result["bbox"])
+                    class_id = int(result["class_id"])
+                    class_name = self.LABELS.get(class_id, f"Unknown({class_id})")
+                    layout_items.append(
+                        LayoutItem(
+                            bbox=bbox, class_name=class_name, score=result["score"]
+                        )
+                    )
+                batch_results.append(layout_items)
 
             total_time = time.time() - start_time
             logger.info(
-                f"Total analysis time: {total_time:.3f}s. Detected {len(results)} elements"
+                f"Batch analysis time: {total_time:.3f}s for {len(image_paths)} images."
             )
+            return batch_results
 
-            layout_items = []
-            for result in results:
-                bbox = BBoxModel.from_list(result["bbox"])
-                class_id = int(result["class_id"])
-                class_name = self.LABELS.get(class_id, f"Unknown({class_id})")
-                layout_items.append(
-                    LayoutItem(bbox=bbox, class_name=class_name, score=result["score"])
-                )
-
-            return layout_items
         except Exception as e:
-            logger.error(f"Analysis failed: {e}")
+            logger.error(f"Batch analysis failed: {e}")
             raise
 
     def _preprocess(

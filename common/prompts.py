@@ -26,7 +26,7 @@ Your goal is to help users understand complex academic papers, translate technic
 DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT = """{paper_context}
 Based on the context above, translate the following English text into {lang_name}.
 {original_word}
-Output the translation and intuitive explanation in short sentences(100-200 characters)."""
+Output the translation and intuitive explanation in short sentences(20-50 characters)."""
 
 DICT_TRANSLATE_WORD_SIMPLE_PROMPT = """{paper_context}
 In the context of the paper above, what does the word "{lemma}" mean?

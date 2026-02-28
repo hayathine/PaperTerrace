@@ -419,35 +419,63 @@ class CloudSQLStorage(StorageInterface):
         label: str = "figure",
         latex: str = "",
     ) -> str:
-        import uuid6
+        figures = [
+            {
+                "page_number": page_number,
+                "bbox": bbox,
+                "image_url": image_url,
+                "caption": caption,
+                "explanation": explanation,
+                "label": label,
+                "latex": latex,
+            }
+        ]
+        ids = self.save_figures_batch(paper_id, figures)
+        return ids[0]
 
-        figure_id = str(uuid6.uuid7())
+    def save_figures_batch(
+        self,
+        paper_id: str,
+        figures: list[dict],
+    ) -> list[str]:
         import json
 
-        bbox_json = json.dumps(bbox)
+        import uuid6
+
+        now = datetime.now()
+        ids = []
+        batch_data = []
+
+        for fig in figures:
+            fig_id = str(uuid6.uuid7())
+            ids.append(fig_id)
+            bbox_json = json.dumps(fig["bbox"])
+            batch_data.append(
+                (
+                    fig_id,
+                    paper_id,
+                    fig["page_number"],
+                    bbox_json,
+                    fig["image_url"],
+                    fig.get("caption", ""),
+                    fig.get("explanation", ""),
+                    fig.get("label", "figure"),
+                    fig.get("latex", ""),
+                    now,
+                )
+            )
 
         with self._get_connection() as conn:
             with conn.cursor() as cur:
-                cur.execute(
-                    """
+                from psycopg2.extras import execute_values
+
+                query = """
                     INSERT INTO paper_figures (id, paper_id, page_number, bbox_json, image_url, caption, explanation, label, latex, created_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-                    """,
-                    (
-                        figure_id,
-                        paper_id,
-                        page_number,
-                        bbox_json,
-                        image_url,
-                        caption,
-                        explanation,
-                        label,
-                        latex,
-                        datetime.now(),
-                    ),
-                )
+                    VALUES %s
+                """
+                execute_values(cur, query, batch_data)
             conn.commit()
-        return figure_id
+        return ids
 
     def get_paper_figures(self, paper_id: str) -> list[dict]:
         with self._get_connection() as conn:

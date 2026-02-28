@@ -229,49 +229,52 @@ async def analyze_images_batch(request: Request, files: list[UploadFile] = File(
             f"(CPU count: {cpu_count}, env: {os.getenv('BATCH_PARALLEL_WORKERS', 'not set')})"
         )
 
-        # 並列処理用のセマフォ
-        semaphore = asyncio.Semaphore(max_parallel)
+        # 全画像を並列処理（さらに一括推論を使用）
+        # 各画像を一時ファイルに保存
+        temp_paths = []
+        try:
+            for i, file in enumerate(files):
+                temp_path = Path(f"/tmp/{int(time.time() * 1000)}_{i}.jpg")
+                content = await file.read()
+                temp_path.write_bytes(content)
+                temp_paths.append(str(temp_path))
 
-        async def process_one(file: UploadFile, index: int):
-            async with semaphore:
-                temp_path = None
-                try:
-                    temp_path = Path(f"/tmp/{int(time.time() * 1000)}_{index}.jpg")
-                    content = await file.read()
-                    temp_path.write_bytes(content)
+            # 一括解析を実行
+            # layout_service は同期メソッドなので run_in_threadpool で実行
+            if hasattr(layout_service, "analyze_images_batch"):
+                batch_results = await run_in_threadpool(
+                    layout_service.analyze_images_batch, temp_paths
+                )
+            else:
+                # フォールバック: 逐次実行
+                batch_results = []
+                for path in temp_paths:
+                    res = await run_in_threadpool(layout_service.analyze_image, path)
+                    batch_results.append(res)
 
-                    results = await run_in_threadpool(
-                        layout_service.analyze_image, str(temp_path)
-                    )
+            # シリアライズ
+            results = []
+            for page_results in batch_results:
+                serializable = [
+                    {
+                        "bbox": {
+                            "x_min": r.bbox.x_min,
+                            "y_min": r.bbox.y_min,
+                            "x_max": r.bbox.x_max,
+                            "y_max": r.bbox.y_max,
+                        },
+                        "class_name": r.class_name,
+                        "score": r.score,
+                    }
+                    for r in page_results
+                ]
+                results.append(serializable)
 
-                    serializable = [
-                        {
-                            "bbox": {
-                                "x_min": r.bbox.x_min,
-                                "y_min": r.bbox.y_min,
-                                "x_max": r.bbox.x_max,
-                                "y_max": r.bbox.y_max,
-                            },
-                            "class_name": r.class_name,
-                            "score": r.score,
-                        }
-                        for r in results
-                    ]
-
-                    return serializable
-
-                except Exception as e:
-                    logger.error(f"Failed to process image {index}: {e}")
-                    return []
-
-                finally:
-                    if temp_path and temp_path.exists():
-                        temp_path.unlink(missing_ok=True)
-
-        # 全画像を並列処理
-        results = await asyncio.gather(
-            *[process_one(f, i) for i, f in enumerate(files)]
-        )
+        finally:
+            for path in temp_paths:
+                p = Path(path)
+                if p.exists():
+                    p.unlink(missing_ok=True)
 
         processing_time = time.time() - start_time
         avg_time = processing_time / len(files) if files else 0

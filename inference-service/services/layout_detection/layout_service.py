@@ -138,8 +138,7 @@ class LayoutAnalysisService:
             self.session = None
 
     async def analyze_async(self, pdf_path: str) -> list[dict]:
-        """PDF解析（スタブのまま維持、あるいは実装が必要なら実装するが今回は画像解析が主）"""
-        # 今回の要件は画像解析のエンドポイント追加なので、ここは一旦スタブのままか、既存のままにしておく
+        """PDF解析（スタブ）"""
         return []
 
     def analyze_image(self, image_path: str | Path) -> list[LayoutItem]:
@@ -156,54 +155,106 @@ class LayoutAnalysisService:
         list[LayoutItem]
             検出されたレイアウト要素のリスト
         """
+        results = self.analyze_images_batch([image_path])
+        return results[0]
+
+    def analyze_images_batch(
+        self, image_paths: list[str | Path]
+    ) -> list[list[LayoutItem]]:
+        """
+        複数画像からレイアウト要素を一括検出
+
+        Parameters
+        ----------
+        image_paths : list[str | Path]
+            解析対象の画像ファイルパスのリスト
+
+        Returns
+        -------
+        list[list[LayoutItem]]
+            画像ごまとの検出されたレイアウト要素のリスト
+        """
         if self.session is None:
             logger.error("Model is not initialized via session")
             raise RuntimeError("LayoutAnalysisService is not properly initialized")
 
-        logger.info(f"Starting layout analysis for: {image_path}")
+        if not image_paths:
+            return []
+
+        logger.info(f"Starting batch layout analysis for {len(image_paths)} images")
         start_time = time.time()
 
         try:
-            img, ori_shape, scale, pad_info = self._preprocess(image_path)
+            # 1. Preprocess all images
+            preprocessed_data = [self._preprocess(path) for path in image_paths]
 
-            # im_shape を準備（モデル入力サイズ）
-            im_shape = np.array([[img.shape[2], img.shape[3]]], dtype=np.float32)
+            # 2. Batch inference
+            # We assume all images are of the same target size (640, 640)
+            batch_img = np.concatenate([d[0] for d in preprocessed_data], axis=0)
 
-            # scale_factor を準備 (1.0, 1.0 にして後処理で自前で計算する方式に統一)
-            scale_factor = np.array([[1.0, 1.0]], dtype=np.float32)
-
-            outputs = self._inference(img, scale_factor, im_shape)
-            results = self._postprocess(
-                outputs,
-                ori_shape,
-                scale=scale,
-                pad_info=pad_info,
-                threshold=self.threshold,
+            # scale_factor and im_shape are (1.0, 1.0) and (640, 640) for each image
+            batch_scale_factor = np.tile(
+                np.array([[1.0, 1.0]], dtype=np.float32), (len(image_paths), 1)
             )
+            batch_im_shape = np.tile(
+                np.array([[640.0, 640.0]], dtype=np.float32), (len(image_paths), 1)
+            )
+
+            outputs = self._inference(batch_img, batch_scale_factor, batch_im_shape)
+
+            # ONNX outputs[0] for batch should have shape (Batch, NumPredictions, 6)
+            # but standard PP-DocLayout models might behave differently depending on the export.
+            # Usually it's (BatchSize, 100, 6) or (TotalPredictions, 6) where predictions[0] is batch index.
+            all_predictions = outputs[0]
+
+            batch_results = []
+            for i in range(len(image_paths)):
+                # Extract predictions for this image
+                if len(all_predictions.shape) == 3:
+                    predictions = all_predictions[i]
+                else:
+                    # Some models output [TotalN, 7] or [TotalN, 6] with batch index in first col
+                    predictions = (
+                        all_predictions[all_predictions[:, 0] == i][:, 1:]
+                        if all_predictions.shape[1] == 7
+                        else all_predictions
+                    )
+
+                _, ori_shape, scale, pad_info = preprocessed_data[i]
+
+                results = self._postprocess_core(
+                    predictions,
+                    ori_shape,
+                    scale=scale,
+                    pad_info=pad_info,
+                    threshold=self.threshold,
+                )
+
+                # LayoutItemオブジェクトに変換
+                layout_items = []
+                for result in results:
+                    bbox = BBoxModel.from_list(result["bbox"])
+                    class_id = result["class_id"]
+                    class_name = (
+                        self.LABELS[class_id]
+                        if class_id < len(self.LABELS)
+                        else f"Unknown({class_id})"
+                    )
+                    layout_items.append(
+                        LayoutItem(
+                            bbox=bbox, class_name=class_name, score=result["score"]
+                        )
+                    )
+                batch_results.append(layout_items)
 
             total_time = time.time() - start_time
             logger.info(
-                f"Total analysis time: {total_time:.3f}s. Detected {len(results)} elements"
+                f"Batch analysis time: {total_time:.3f}s for {len(image_paths)} images."
             )
-
-            # LayoutItemオブジェクトに変換
-            layout_items = []
-            for result in results:
-                bbox = BBoxModel.from_list(result["bbox"])
-                class_id = result["class_id"]
-                class_name = (
-                    self.LABELS[class_id]
-                    if class_id < len(self.LABELS)
-                    else f"Unknown({class_id})"
-                )
-                layout_items.append(
-                    LayoutItem(bbox=bbox, class_name=class_name, score=result["score"])
-                )
-
-            return layout_items
+            return batch_results
 
         except Exception as e:
-            logger.error(f"Analysis failed: {e}")
+            logger.error(f"Batch analysis failed: {e}")
             raise
 
     def _preprocess(
@@ -278,11 +329,26 @@ class LayoutAnalysisService:
         scale: tuple[float, float] = (1.0, 1.0),
         pad_info: np.ndarray | None = None,
     ) -> list[dict[str, Any]]:
-        """後処理：座標変換とフィルタリング
+        """後処理：座標変換とフィルタリング（単一画像互換用）"""
+        return self._postprocess_core(
+            outputs[0][0] if len(outputs[0].shape) == 3 else outputs[0],
+            ori_shape,
+            target_size,
+            threshold,
+            scale,
+            pad_info,
+        )
 
-        モデル出力の座標は640x640スケールで返されるため、
-        元画像のピクセル座標に変換する必要がある。
-        """
+    def _postprocess_core(
+        self,
+        predictions: np.ndarray,
+        ori_shape: tuple[int, int],
+        target_size: tuple[int, int] = (640, 640),
+        threshold: float = 0.5,
+        scale: tuple[float, float] = (1.0, 1.0),
+        pad_info: np.ndarray | None = None,
+    ) -> list[dict[str, Any]]:
+        """核心となる後処理ロジック"""
         # Ensure threshold is float
         if isinstance(threshold, str):
             try:
@@ -293,7 +359,6 @@ class LayoutAnalysisService:
                 )
                 threshold = 0.9
 
-        predictions = outputs[0]
         ori_h, ori_w = ori_shape
 
         # パディング情報を取得

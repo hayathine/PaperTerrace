@@ -198,6 +198,15 @@ class StorageInterface(ABC):
         ...
 
     @abstractmethod
+    def save_figures_batch(
+        self,
+        paper_id: str,
+        figures: list[dict],
+    ) -> list[str]:
+        """Save multiple figures. figures is a list of dicts with keys matching save_figure args."""
+        ...
+
+    @abstractmethod
     def get_paper_figures(self, paper_id: str) -> list[dict]:
         """Get figures for a paper."""
         ...
@@ -696,34 +705,63 @@ class SQLiteStorage(StorageInterface):
         latex: str = "",
     ) -> str:
         """Save a figure."""
+        figures = [
+            {
+                "page_number": page_number,
+                "bbox": bbox,
+                "image_url": image_url,
+                "caption": caption,
+                "explanation": explanation,
+                "label": label,
+                "latex": latex,
+            }
+        ]
+        ids = self.save_figures_batch(paper_id, figures)
+        return ids[0]
+
+    def save_figures_batch(
+        self,
+        paper_id: str,
+        figures: list[dict],
+    ) -> list[str]:
+        """Save multiple figures."""
         import json
 
         import uuid6
 
-        figure_id = str(uuid6.uuid7())
-        bbox_json = json.dumps(bbox)
+        now = datetime.now().isoformat()
+        ids = []
+        batch_data = []
+
+        for fig in figures:
+            fig_id = str(uuid6.uuid7())
+            ids.append(fig_id)
+            bbox_json = json.dumps(fig["bbox"])
+            batch_data.append(
+                (
+                    fig_id,
+                    paper_id,
+                    fig["page_number"],
+                    bbox_json,
+                    fig["image_url"],
+                    fig.get("caption", ""),
+                    fig.get("explanation", ""),
+                    fig.get("label", "figure"),
+                    fig.get("latex", ""),
+                    now,
+                )
+            )
 
         with self._get_connection() as conn:
-            conn.execute(
+            conn.executemany(
                 """
                 INSERT INTO paper_figures (id, paper_id, page_number, bbox_json, image_url, caption, explanation, label, latex, created_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
-                (
-                    figure_id,
-                    paper_id,
-                    page_number,
-                    bbox_json,
-                    image_url,
-                    caption,
-                    explanation,
-                    label,
-                    latex,
-                    datetime.now().isoformat(),
-                ),
+                batch_data,
             )
             conn.commit()
-        return figure_id
+        return ids
 
     def get_paper_figures(self, paper_id: str) -> list[dict]:
         """Get figures for a paper."""

@@ -9,7 +9,6 @@ from pathlib import Path
 import anyio
 from PIL import Image
 
-from app.crud import save_figure_to_db
 from app.domain.services.layout_service import get_layout_service
 from app.domain.services.paper_processing import process_figure_analysis_task
 from app.providers import get_storage_provider
@@ -151,6 +150,7 @@ class LayoutAnalysisService:
             raise Exception("No valid images to process")
 
         inference_client = await get_inference_client()
+        # Batch sizes are handled within the client as well, but we can send all to client.
         batch_results = await inference_client.analyze_images_batch(
             image_data_list, max_batch_size=10
         )
@@ -237,18 +237,30 @@ class LayoutAnalysisService:
 
         # Save to DB
         if all_figures:
-            for fig in all_figures:
-                fid = await anyio.to_thread.run_sync(
-                    save_figure_to_db,
-                    paper_id,
-                    fig["page_num"],
-                    fig["bbox"],
-                    fig.get("image_url", ""),
-                    "",
-                    "",
-                    fig.get("label", "figure"),
-                    "",
-                )
+            # Reformat figures for batch saving
+            batch_figures = [
+                {
+                    "page_number": fig["page_num"],
+                    "bbox": fig["bbox"],
+                    "image_url": fig.get("image_url", ""),
+                    "caption": "",
+                    "explanation": "",
+                    "label": fig.get("label", "figure"),
+                    "latex": "",
+                }
+                for fig in all_figures
+            ]
+
+            from app.crud import save_figures_to_db
+
+            fids = await anyio.to_thread.run_sync(
+                save_figures_to_db,
+                paper_id,
+                batch_figures,
+            )
+
+            # Start background analysis tasks
+            for fid, fig in zip(fids, all_figures):
                 if fig.get("image_url"):
                     asyncio.create_task(
                         process_figure_analysis_task(fid, fig["image_url"])
