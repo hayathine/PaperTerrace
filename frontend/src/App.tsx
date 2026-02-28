@@ -294,6 +294,7 @@ function App() {
 		setSelectedContext(context);
 		setSelectedCoordinates(coords);
 		setSelectedConf(conf);
+		setSelectedImage(undefined);
 		setActiveTab("dict");
 		setIsRightSidebarOpen(true);
 	};
@@ -345,10 +346,18 @@ function App() {
 		setIsAnalyzing(status === "uploading" || status === "processing");
 	}, []);
 
-	const handleAskAI = (prompt: string) => {
-		setPendingChatPrompt(prompt);
-		setActiveTab("chat");
-		setIsRightSidebarOpen(true);
+	const handleAskAI = (prompt: string, imageUrl?: string, coords?: any) => {
+		if (imageUrl) {
+			setSelectedWord(prompt);
+			setSelectedImage(imageUrl);
+			setSelectedCoordinates(coords);
+			setActiveTab("dict");
+			setIsRightSidebarOpen(true);
+		} else {
+			setPendingChatPrompt(prompt);
+			setActiveTab("chat");
+			setIsRightSidebarOpen(true);
+		}
 	};
 
 	const handleStackPaper = (url: string, title?: string) => {

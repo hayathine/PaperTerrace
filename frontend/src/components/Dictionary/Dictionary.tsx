@@ -3,6 +3,7 @@ import type { DictionaryEntry } from "./types";
 
 export type DictionaryEntryWithCoords = DictionaryEntry & {
 	coords?: { page: number; x: number; y: number };
+	image_url?: string;
 };
 
 import { useTranslation } from "react-i18next";
@@ -18,6 +19,7 @@ interface DictionaryProps {
 	coordinates?: { page: number; x: number; y: number };
 	conf?: number;
 	onJump?: (page: number, x: number, y: number, term?: string) => void;
+	imageUrl?: string;
 }
 
 const Dictionary: React.FC<DictionaryProps> = ({
@@ -28,6 +30,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	coordinates,
 	conf,
 	onJump,
+	imageUrl,
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token } = useAuth();
@@ -89,27 +92,43 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				const headers: HeadersInit = {};
 				if (token) headers.Authorization = `Bearer ${token}`;
 
-				const queryParams = new URLSearchParams({
-					lang: i18n.language,
-					paper_id: paperId || "",
-				});
-				if (context) {
-					queryParams.append("context", context);
-				}
-				if (conf !== undefined && conf !== null) {
-					queryParams.append("conf", conf.toString());
-				}
+				let res: Response;
+				if (imageUrl) {
+					res = await fetch(`${API_URL}/api/explain/image`, {
+						method: "POST",
+						headers: { ...headers, "Content-Type": "application/json" },
+						body: JSON.stringify({
+							image_url: imageUrl,
+							prompt: term || "この画像を解説してください",
+							session_id: sessionId,
+							paper_id: paperId || "",
+							lang: i18n.language,
+						}),
+					});
+				} else {
+					const queryParams = new URLSearchParams({
+						lang: i18n.language,
+						paper_id: paperId || "",
+					});
+					if (context) {
+						queryParams.append("context", context);
+					}
+					if (conf !== undefined && conf !== null) {
+						queryParams.append("conf", conf.toString());
+					}
 
-				const res = await fetch(
-					`${API_URL}/api/explain/${encodeURIComponent(term)}?${queryParams.toString()}`,
-					{ headers },
-				);
+					res = await fetch(
+						`${API_URL}/api/explain/${encodeURIComponent(term)}?${queryParams.toString()}`,
+						{ headers },
+					);
+				}
 
 				if (res.ok) {
 					const contentType = res.headers.get("content-type");
 					if (contentType?.includes("application/json")) {
 						const data: DictionaryEntryWithCoords = await res.json();
 						data.coords = coordinates; // Attach current coordinates
+						if (imageUrl) data.image_url = imageUrl;
 						setEntries((prev) => {
 							const filtered = prev.filter((e) => e.word !== data.word);
 							return [data, ...filtered];
@@ -135,7 +154,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 		};
 
 		fetchDefinition();
-	}, [term, token]); // Removed entries dependency to avoid loop, check inside setter or logic
+	}, [term, token, imageUrl, sessionId, paperId, context, conf, i18n.language]); // Removed entries dependency to avoid loop, check inside setter or logic
 
 	const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
 
@@ -378,6 +397,16 @@ const Dictionary: React.FC<DictionaryProps> = ({
 								</span>
 							</div>
 						</div>
+
+						{entry.image_url && (
+							<div className="mb-4 rounded-xl overflow-hidden border border-slate-200">
+								<img
+									src={entry.image_url}
+									alt="Figure"
+									className="w-full h-auto object-contain bg-slate-50"
+								/>
+							</div>
+						)}
 
 						<p className="text-sm text-slate-600 leading-relaxed font-medium mb-4">
 							{entry.translation}

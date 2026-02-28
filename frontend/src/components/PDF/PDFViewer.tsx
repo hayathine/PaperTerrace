@@ -36,7 +36,7 @@ interface PDFViewerProps {
 		status: "idle" | "uploading" | "processing" | "done" | "error",
 	) => void;
 	onPaperLoaded?: (paperId: string | null) => void;
-	onAskAI?: (prompt: string) => void;
+	onAskAI?: (prompt: string, imageUrl?: string, coords?: any) => void;
 	paperId?: string | null;
 	// 検索関連props
 	searchTerm?: string;

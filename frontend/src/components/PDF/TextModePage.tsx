@@ -14,7 +14,7 @@ interface TextModePageProps {
 		text: string,
 		coords: { page: number; x: number; y: number },
 	) => void;
-	onAskAI?: (prompt: string) => void;
+	onAskAI?: (prompt: string, imageUrl?: string, coords?: any) => void;
 	jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
 	searchTerm?: string;
 	currentSearchMatch?: { page: number; wordIndex: number } | null;

@@ -182,6 +182,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						coordinates={coordinates}
 						conf={conf}
 						onJump={onJump}
+						imageUrl={selectedImage}
 					/>
 				</div>
 

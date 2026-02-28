@@ -45,7 +45,7 @@ interface PDFPageProps {
 		width: number;
 		height: number;
 	}) => void;
-	onAskAI?: (prompt: string) => void;
+	onAskAI?: (prompt: string, imageUrl?: string, coords?: any) => void;
 	jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
 	// 検索関連props
 	searchTerm?: string;
@@ -369,6 +369,12 @@ const PDFPage: React.FC<PDFPageProps> = ({
 															// Jump directly to explanation
 															onAskAI(
 																t("chat.explain_fig", { type: typeName }),
+																fig.image_url,
+																{
+																	page: page_num,
+																	x: (x1 + x2) / 2 / pageWidth,
+																	y: (y1 + y2) / 2 / pageHeight,
+																},
 															);
 														}
 													}}

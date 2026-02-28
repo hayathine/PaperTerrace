@@ -643,3 +643,77 @@ async def explain_with_context(req: ExplainContextRequest):
                 "source": "Error",
             }
         )
+
+
+class ExplainImageRequest(BaseModel):
+    image_url: str
+    prompt: str
+    session_id: str | None = None
+    paper_id: str | None = None
+    lang: str = "ja"
+
+
+@router.post("/explain/image")
+async def explain_image(req: ExplainImageRequest):
+    """Explain image with context using Gemini"""
+    start_time = asyncio.get_event_loop().time()
+    lang_name = SUPPORTED_LANGUAGES.get(req.lang, req.lang)
+    provider = get_ai_provider()
+
+    from app.providers import get_image_bytes
+
+    try:
+        image_bytes = get_image_bytes(req.image_url)
+    except Exception as e:
+        log.error(
+            "explain_image", f"Failed to get image bytes for {req.image_url}: {e}"
+        )
+        return JSONResponse(
+            {
+                "word": req.prompt,
+                "lemma": req.prompt,
+                "translation": "画像の読み込みに失敗しました。",
+                "source": "Error",
+            },
+            status_code=500,
+        )
+
+    # Retrieve Paper Summary Context if paper_id is provided
+    # ... Optional but left for future structure
+
+    model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
+    prompt = f"[{lang_name}で回答してください]\n{req.prompt}"
+
+    try:
+        explanation = await provider.generate_with_image(
+            prompt=prompt,
+            image_bytes=image_bytes,
+            model=model,
+            system_instruction=CORE_SYSTEM_PROMPT,
+        )
+        elapsed = asyncio.get_event_loop().time() - start_time
+        log.info(
+            "explain_image",
+            f"Image explanation completed in {elapsed:.3f}s",
+            word=req.prompt,
+            paper_id=req.paper_id,
+        )
+        return JSONResponse(
+            {
+                "word": req.prompt,
+                "lemma": req.prompt,
+                "translation": explanation,
+                "source": "Gemini (Image)",
+            }
+        )
+    except Exception as e:
+        log.error("explain_image", "Gemini image explanation failed", error=str(e))
+        return JSONResponse(
+            {
+                "word": req.prompt,
+                "lemma": req.prompt,
+                "translation": "画像の解説に失敗しました。",
+                "source": "Error",
+            },
+            status_code=500,
+        )
