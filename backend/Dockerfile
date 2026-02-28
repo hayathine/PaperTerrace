@@ -22,16 +22,15 @@ RUN uv sync --no-dev
 FROM python:3.12-slim AS production
 WORKDIR /app
 
-# libxext6 libsm6 libxrender1 を追加 (OpenCV/Paddle用), gcsfuseを追加
+# Install runtime dependencies and gcsfuse
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq5 curl libgl1 libglib2.0-0 libxcb1 libx11-6 \
-    libxext6 libsm6 libxrender1 ghostscript gnupg lsb-release ca-certificates \
-    fonts-noto-cjk fonts-noto-color-emoji \
+    libxext6 libsm6 libxrender1 gnupg lsb-release ca-certificates \
     && curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
        | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt gcsfuse-$(lsb_release -c -s) main" \
        | tee /etc/apt/sources.list.d/gcsfuse.list \
-    && apt-get update && apt-get install -y gcsfuse \
+    && apt-get update && apt-get install -y --no-install-recommends gcsfuse \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 COPY --from=runtime-builder /app/.venv /app/.venv

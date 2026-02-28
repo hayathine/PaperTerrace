@@ -27,7 +27,7 @@ dependencies = [
     "spacy>=3.8.11",
     "en-core-web-sm",
     "tiktoken>=0.12.0",
-    "opencv-python>=4.8.0",
+    "opencv-python-headless>=4.8.0",
     "numpy>=1.26.4",
     "Pillow>=11.0.0",
     # PDF Processing
