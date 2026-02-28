@@ -1172,9 +1172,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							onWordClick={handleWordClick}
 							onTextSelect={handleTextSelect}
 							onAskAI={onAskAI}
-							jumpTarget={jumpTarget}
 							searchTerm={searchTerm}
-							currentSearchMatch={currentSearchMatch}
 						/>
 					</div>
 

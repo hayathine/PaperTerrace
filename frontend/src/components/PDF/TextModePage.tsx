@@ -1,6 +1,8 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import type { PageWithLines } from "./types";
+import type { Components } from "react-markdown";
+import MarkdownContent from "../Common/MarkdownContent";
+import type { Figure, PageWithLines } from "./types";
 
 interface TextModePageProps {
 	page: PageWithLines;
@@ -8,16 +10,108 @@ interface TextModePageProps {
 		word: string,
 		context?: string,
 		coords?: { page: number; x: number; y: number },
-		conf?: number,
 	) => void;
 	onTextSelect?: (
 		text: string,
 		coords: { page: number; x: number; y: number },
 	) => void;
 	onAskAI?: (prompt: string, imageUrl?: string, coords?: any) => void;
-	jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
 	searchTerm?: string;
-	currentSearchMatch?: { page: number; wordIndex: number } | null;
+}
+
+/**
+ * searchTerm にマッチする部分を <mark> で囲んだ React ノードを返す。
+ * children が文字列以外（React要素など）の場合は再帰的に処理する。
+ */
+function highlightText(
+	children: React.ReactNode,
+	searchTerm: string,
+): React.ReactNode {
+	if (!searchTerm || searchTerm.length < 2) return children;
+
+	if (typeof children === "string") {
+		const lowerText = children.toLowerCase();
+		const lowerTerm = searchTerm.toLowerCase();
+		const idx = lowerText.indexOf(lowerTerm);
+		if (idx === -1) return children;
+
+		const parts: React.ReactNode[] = [];
+		let lastIdx = 0;
+		let pos = idx;
+		let key = 0;
+		while (pos !== -1) {
+			if (pos > lastIdx) {
+				parts.push(children.slice(lastIdx, pos));
+			}
+			parts.push(
+				<mark key={key++} className="bg-amber-300/70 rounded px-0.5">
+					{children.slice(pos, pos + searchTerm.length)}
+				</mark>,
+			);
+			lastIdx = pos + searchTerm.length;
+			pos = lowerText.indexOf(lowerTerm, lastIdx);
+		}
+		if (lastIdx < children.length) {
+			parts.push(children.slice(lastIdx));
+		}
+		return <>{parts}</>;
+	}
+
+	if (Array.isArray(children)) {
+		return children.map((child, i) => (
+			<React.Fragment key={i}>
+				{highlightText(child, searchTerm)}
+			</React.Fragment>
+		));
+	}
+
+	if (React.isValidElement(children)) {
+		const element = children as React.ReactElement<{
+			children?: React.ReactNode;
+		}>;
+		if (element.props.children) {
+			return React.cloneElement(element, {
+				...element.props,
+				children: highlightText(element.props.children, searchTerm),
+			});
+		}
+	}
+
+	return children;
+}
+
+/**
+ * バックエンドが出力する `![Figure]([x1, y1, x2, y2])` 形式の alt/src から
+ * bbox を抽出し、page.figures の実画像 URL にマッピングする。
+ */
+function parseBboxFromSrc(src: string): number[] | null {
+	const match = src.match(
+		/\[?\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\]?/,
+	);
+	if (!match) return null;
+	return [
+		Number.parseFloat(match[1]),
+		Number.parseFloat(match[2]),
+		Number.parseFloat(match[3]),
+		Number.parseFloat(match[4]),
+	];
+}
+
+function findFigureByBbox(
+	figures: Figure[] | undefined,
+	bbox: number[],
+	tolerance = 20,
+): Figure | undefined {
+	if (!figures || figures.length === 0) return undefined;
+	return figures.find((fig) => {
+		const [fx1, fy1, fx2, fy2] = fig.bbox;
+		return (
+			Math.abs(fx1 - bbox[0]) < tolerance &&
+			Math.abs(fy1 - bbox[1]) < tolerance &&
+			Math.abs(fx2 - bbox[2]) < tolerance &&
+			Math.abs(fy2 - bbox[3]) < tolerance
+		);
+	});
 }
 
 const TextModePage: React.FC<TextModePageProps> = ({
@@ -25,21 +119,19 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	onWordClick,
 	onTextSelect,
 	onAskAI,
-	jumpTarget,
 	searchTerm,
-	currentSearchMatch,
 }) => {
 	const { t } = useTranslation();
-	const [imageError, setImageError] = React.useState(false);
 	const [selectionMenu, setSelectionMenu] = React.useState<{
 		x: number;
 		y: number;
 		text: string;
 		coords: any;
 	} | null>(null);
+
+	// --- テキスト選択メニュー ---
 	React.useEffect(() => {
 		const handleDocumentMouseUp = () => {
-			// Selection detection can be tricky, small delay ensures selection state is updated
 			setTimeout(() => {
 				const selection = window.getSelection();
 				const selectionText = selection?.toString().trim();
@@ -54,7 +146,6 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				) {
 					const range = selection.getRangeAt(0);
 
-					// Only show menu for the page where the selection starts
 					if (
 						!container.contains(range.startContainer) &&
 						range.startContainer !== container
@@ -65,7 +156,6 @@ const TextModePage: React.FC<TextModePageProps> = ({
 					const rect = container.getBoundingClientRect();
 					const rangeRect = range.getBoundingClientRect();
 
-					// Ensure we have a valid bounding box
 					if (rangeRect.width === 0) return;
 
 					const pageWidth = rect.width || 1;
@@ -88,8 +178,6 @@ const TextModePage: React.FC<TextModePageProps> = ({
 						coords: { page: page.page_num, x: centerX, y: centerY },
 					});
 				} else {
-					// If there is no selection, but we currently have a menu, we shouldn't necessarily clear it here
-					// because mousedown handles outside clicks. But if selection is empty natively, clear it.
 					setSelectionMenu(null);
 				}
 			}, 10);
@@ -109,14 +197,97 @@ const TextModePage: React.FC<TextModePageProps> = ({
 		return () => document.removeEventListener("mousedown", handleClickOutside);
 	}, [selectionMenu]);
 
+	// --- コンテンツ: content が空なら lines フォールバック ---
+	const markdownText = useMemo(() => {
+		if (page.content && page.content.trim().length > 0) {
+			return page.content;
+		}
+		// フォールバック: lines のワードを結合
+		if (page.lines && page.lines.length > 0) {
+			return page.lines
+				.map((line) => line.words.map((w) => w.word).join(" "))
+				.join("\n");
+		}
+		return "";
+	}, [page.content, page.lines]);
+
+	// --- react-markdown の components カスタマイズ ---
+	const mdComponents: Components = useMemo(() => {
+		const comps: Components = {};
+
+		// Figure画像: ![alt]([x1,y1,x2,y2]) → 実画像URLにマッピング
+		comps.img = ({ src, alt, ...rest }) => {
+			if (src) {
+				const bbox = parseBboxFromSrc(src);
+				if (bbox) {
+					const figure = findFigureByBbox(page.figures, bbox);
+					if (figure) {
+						return (
+							<img
+								src={figure.image_url}
+								alt={alt || figure.label || "Figure"}
+								className="max-w-full h-auto mx-auto my-4 rounded shadow-sm border border-slate-200"
+								loading="lazy"
+								{...rest}
+							/>
+						);
+					}
+					// マッチしない場合はプレースホルダー
+					return (
+						<div className="flex items-center justify-center bg-slate-100 border border-dashed border-slate-300 rounded p-6 my-4 text-slate-400 text-sm">
+							{alt || "Figure"} (image not available)
+						</div>
+					);
+				}
+			}
+			// 通常の画像
+			return (
+				<img
+					src={src}
+					alt={alt}
+					className="max-w-full h-auto mx-auto my-4 rounded shadow-sm"
+					loading="lazy"
+					{...rest}
+				/>
+			);
+		};
+
+		// 検索ハイライト: テキスト要素をラップ
+		if (searchTerm && searchTerm.length >= 2) {
+			comps.p = ({ children, ...rest }) => (
+				<p {...rest}>{highlightText(children, searchTerm)}</p>
+			);
+			comps.li = ({ children, ...rest }) => (
+				<li {...rest}>{highlightText(children, searchTerm)}</li>
+			);
+			comps.h1 = ({ children, ...rest }) => (
+				<h1 {...rest}>{highlightText(children, searchTerm)}</h1>
+			);
+			comps.h2 = ({ children, ...rest }) => (
+				<h2 {...rest}>{highlightText(children, searchTerm)}</h2>
+			);
+			comps.h3 = ({ children, ...rest }) => (
+				<h3 {...rest}>{highlightText(children, searchTerm)}</h3>
+			);
+			comps.h4 = ({ children, ...rest }) => (
+				<h4 {...rest}>{highlightText(children, searchTerm)}</h4>
+			);
+			comps.td = ({ children, ...rest }) => (
+				<td {...rest}>{highlightText(children, searchTerm)}</td>
+			);
+			comps.th = ({ children, ...rest }) => (
+				<th {...rest}>{highlightText(children, searchTerm)}</th>
+			);
+		}
+
+		return comps;
+	}, [page.figures, searchTerm]);
+
 	return (
 		<div
 			id={`text-page-${page.page_num}`}
 			className="relative shadow-sm bg-white border border-slate-200 group mx-auto"
-			style={{
-				maxWidth: "100%",
-				userSelect: "auto",
-			}}
+			style={{ userSelect: "auto" }}
 		>
 			{/* Header */}
 			<div className="bg-slate-50 border-b border-slate-200 px-4 py-1.5 flex justify-between items-center select-none">
@@ -125,219 +296,19 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				</span>
 			</div>
 
-			{/* Content Container */}
-			<div
-				className="relative w-full overflow-hidden min-h-[600px] bg-white pdf-page-viewport"
-				style={{
-					aspectRatio:
-						page.width && page.height ? `${page.width}/${page.height}` : "auto",
-				}}
-			>
-				{!imageError ? (
-					<>
-						{/* PDF Image (Base Layer) */}
-						<img
-							src={page.image_url}
-							alt={`Page ${page.page_num}`}
-							className="w-full h-auto block select-none pointer-events-none"
-							loading="lazy"
-							onError={() => {
-								console.warn("Image failed to load:", page.image_url);
-								setImageError(true);
-							}}
-							onLoad={() => {
-								setImageError(false);
-							}}
-						/>
-
-						{/* Transparent Text Layer (Overlay Layer) */}
-						<div
-							className="absolute inset-0 z-10 w-full h-full cursor-text selection:bg-indigo-600/30"
-							style={{ userSelect: "text" }}
-						>
-							{page.lines?.map((line, lIdx) => {
-								const [lx1, ly1, lx2, ly2] = line.bbox;
-								const pWidth = page.width || 1;
-								const pHeight = page.height || 1;
-								const styleH = ((ly2 - ly1) / pHeight) * 100;
-								const styleW = ((lx2 - lx1) / pWidth) * 100;
-								const top = (ly1 / pHeight) * 100;
-								const left = (lx1 / pWidth) * 100;
-
-								return (
-									<div
-										key={`line-${lIdx}`}
-										className="absolute text-transparent text-layer-line whitespace-pre"
-										style={{
-											top: `${top}%`,
-											left: `${left}%`,
-											width: `${styleW}%`,
-											height: `${styleH}%`,
-											fontSize: `${styleH * 0.85}cqh`,
-											lineHeight: 1,
-											pointerEvents: "auto",
-											display: "flex",
-											alignItems: "flex-end",
-											color: "transparent", // Ensure transparency even if Tailwind class is overridden
-											WebkitTextFillColor: "transparent",
-										}}
-									>
-										{line.words.map((w, wIdx) => {
-											const globalWordIndex = page.words?.indexOf(w) ?? -1;
-
-											const lineCenterY = (ly1 + ly2) / 2 / (page.height || 1);
-											const cleanWord = w.word.replace(
-												/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g,
-												"",
-											);
-
-											const isJumpHighlight =
-												jumpTarget &&
-												jumpTarget.page === page.page_num &&
-												((jumpTarget.term &&
-													(cleanWord
-														.toLowerCase()
-														.includes(jumpTarget.term.toLowerCase()) ||
-														jumpTarget.term
-															.toLowerCase()
-															.includes(cleanWord.toLowerCase())) &&
-													Math.abs(lineCenterY - jumpTarget.y) < 0.05) ||
-													(Math.abs(lineCenterY - jumpTarget.y) < 0.05 &&
-														Math.abs(
-															(lx1 + lx2) / 2 / (page.width || 1) -
-																jumpTarget.x,
-														) < 0.2));
-
-											const isSearchMatch =
-												searchTerm &&
-												searchTerm.length >= 2 &&
-												w.word.toLowerCase().includes(searchTerm.toLowerCase());
-
-											const isCurrentSearchMatch =
-												currentSearchMatch &&
-												currentSearchMatch.page === page.page_num &&
-												currentSearchMatch.wordIndex === globalWordIndex;
-
-											return (
-												<span
-													key={wIdx}
-													id={
-														isCurrentSearchMatch
-															? "current-search-match"
-															: undefined
-													}
-													className={`
-                            ${isJumpHighlight ? "bg-yellow-400/40 border-b border-yellow-600 z-20" : ""}
-                            ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 rounded" : ""}
-                            ${isCurrentSearchMatch ? "bg-orange-500/60 rounded ring-2 ring-orange-400 z-30" : ""}
-                          `}
-													style={{
-														marginRight:
-															wIdx < line.words.length - 1 ? "0.25em" : "0",
-													}}
-												>
-													{w.word}
-												</span>
-											);
-										})}
-									</div>
-								);
-							})}
-						</div>
-					</>
+			{/* Markdown Content */}
+			<div className="px-6 py-5 md:px-10 md:py-8 selection:bg-indigo-600/30">
+				{markdownText ? (
+					<MarkdownContent
+						className="prose prose-slate max-w-none prose-headings:mt-6 prose-headings:mb-3 prose-p:my-2 prose-p:leading-7 prose-img:mx-auto"
+						components={mdComponents}
+					>
+						{markdownText}
+					</MarkdownContent>
 				) : (
-					/* Fallback: Text-only display when image fails to load */
-					<div className="p-8 bg-gray-50 min-h-[600px]">
-						<div className="prose max-w-none">
-							<h3 className="text-lg font-semibold mb-4 text-gray-700">
-								Page {page.page_num} - Text Content
-							</h3>
-							<div className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap">
-								{page.lines.map((line, lIdx) => (
-									<div key={lIdx} className="mb-2">
-										{line.words.map((w, wIdx) => {
-											const [, ly1, , ly2] = line.bbox;
-											const lineCenterY = (ly1 + ly2) / 2 / (page.height || 1);
-											const cleanWord = w.word.replace(
-												/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g,
-												"",
-											);
-
-											const isJumpHighlight =
-												jumpTarget &&
-												jumpTarget.page === page.page_num &&
-												((jumpTarget.term &&
-													(cleanWord
-														.toLowerCase()
-														.includes(jumpTarget.term.toLowerCase()) ||
-														jumpTarget.term
-															.toLowerCase()
-															.includes(cleanWord.toLowerCase())) &&
-													Math.abs(lineCenterY - jumpTarget.y) < 0.05) ||
-													(Math.abs(lineCenterY - jumpTarget.y) < 0.05 &&
-														Math.abs(
-															(w.bbox[0] + w.bbox[2]) / 2 / (page.width || 1) -
-																jumpTarget.x,
-														) < 0.05));
-
-											const isSearchMatch =
-												searchTerm &&
-												searchTerm.length >= 2 &&
-												w.word.toLowerCase().includes(searchTerm.toLowerCase());
-
-											return (
-												<button
-													key={wIdx}
-													type="button"
-													className={`${isJumpHighlight ? "bg-yellow-400/60 px-1 rounded" : ""} ${isSearchMatch ? "bg-amber-300/60 px-1 rounded" : ""} text-left`}
-													onClick={() => {
-														if (onWordClick) {
-															const startIdx = Math.max(0, wIdx - 20);
-															const endIdx = Math.min(
-																line.words.length,
-																wIdx + 20,
-															);
-															const context = line.words
-																.slice(startIdx, endIdx)
-																.map((wordObj) => wordObj.word)
-																.join(" ");
-
-															onWordClick(
-																w.word,
-																context,
-																{
-																	page: page.page_num,
-																	x:
-																		(w.bbox[0] + w.bbox[2]) /
-																		2 /
-																		(page.width || 1),
-																	y:
-																		(w.bbox[1] + w.bbox[3]) /
-																		2 /
-																		(page.height || 1),
-																},
-																w.conf,
-															);
-														}
-													}}
-													style={{
-														cursor: "pointer",
-														background: "none",
-														border: "none",
-														padding: 0,
-														font: "inherit",
-														color: "inherit",
-													}}
-												>
-													{w.word}{" "}
-												</button>
-											);
-										})}
-									</div>
-								))}
-							</div>
-						</div>
-					</div>
+					<p className="text-slate-400 italic text-sm">
+						No content available for this page.
+					</p>
 				)}
 			</div>
 
@@ -400,7 +371,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 					)}
 
 					{/* Triangle arrow */}
-					<div className="absolute left-1/2 top-0 w-2 h-2 bg-gray-900 transform -translate-x-1/2 -translate-y-1/2 rotate-45 pointer-events-none"></div>
+					<div className="absolute left-1/2 top-0 w-2 h-2 bg-gray-900 transform -translate-x-1/2 -translate-y-1/2 rotate-45 pointer-events-none" />
 				</div>
 			)}
 		</div>
