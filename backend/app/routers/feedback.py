@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -9,11 +9,15 @@ from common.logger import logger
 router = APIRouter(prefix="/feedback", tags=["Feedback"])
 
 
+def get_current_user_id(request: Request) -> str:
+    return getattr(request.state, "user_id", "anonymous")
+
+
 @router.post("", summary="汎用的なフィードバックを記録する")
 async def submit_feedback(
     req: FeedbackRequest,
     db: Session = Depends(get_db),
-    current_user_id: str = Depends(lambda r: getattr(r.state, "user_id", "anonymous")),
+    current_user_id: str = Depends(get_current_user_id),
 ):
     """
     AI生成結果（推薦、要約、レビュー等）に対するユーザーの評価（Good/Bad）を記録する

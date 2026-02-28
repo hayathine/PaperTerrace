@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 
-from app.domain.dspy.trajectory import TrajectoryRecord
+from common.dspy.trajectory import TrajectoryRecord
 
 
 @dataclass

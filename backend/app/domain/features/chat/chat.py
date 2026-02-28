@@ -5,7 +5,9 @@ AIチャットアシスタント機能を提供するモジュール
 
 import os
 
-from app.domain.prompts import (
+from app.providers import get_ai_provider
+from common.logger import logger
+from common.prompts import (
     CHAT_AUTHOR_FROM_PDF_PROMPT,
     CHAT_AUTHOR_PERSONA_PROMPT,
     CHAT_GENERAL_FROM_PDF_PROMPT,
@@ -13,8 +15,6 @@ from app.domain.prompts import (
     CHAT_WITH_FIGURE_PROMPT,
     CORE_SYSTEM_PROMPT,
 )
-from app.providers import get_ai_provider
-from common.logger import logger
 from redis_provider.provider import (
     RedisService,
 )  # RedisService now uses in-memory cache

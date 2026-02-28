@@ -1,13 +1,13 @@
 import os
 from concurrent.futures import ThreadPoolExecutor
 
-from app.domain.prompts import (
-    ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT,
-    CORE_SYSTEM_PROMPT,
-)
 from app.providers import RedisService, get_ai_provider
 from app.providers.dictionary_provider import get_dictionary_provider
 from common.logger import logger
+from common.prompts import (
+    ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT,
+    CORE_SYSTEM_PROMPT,
+)
 from common.utils.text import truncate_context
 
 from .correspondence_lang_dict import SUPPORTED_LANGUAGES

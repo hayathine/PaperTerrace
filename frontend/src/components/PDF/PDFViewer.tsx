@@ -291,78 +291,77 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				paperId,
 			);
 
-			const headers: HeadersInit = {
-				"Content-Type": "application/x-www-form-urlencoded",
-			};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			const finalPages = pagesRef.current;
+			if (!finalPages || finalPages.length === 0) return;
 
-			const formData = new URLSearchParams();
-			formData.append("paper_id", paperId);
+			const BATCH_SIZE = 1;
+			const totalPages = finalPages.length;
 
-			const response = await fetch(`${API_URL}/api/analyze-layout-lazy`, {
-				method: "POST",
-				headers,
-				body: formData,
-			});
+			for (let startIdx = 0; startIdx < totalPages; startIdx += BATCH_SIZE) {
+				const endIdx = Math.min(startIdx + BATCH_SIZE, totalPages);
+				const batchPages = finalPages
+					.slice(startIdx, endIdx)
+					.map((p) => p.page_num);
 
-			console.log(
-				"[PDFViewer] Lazy layout analysis response status:",
-				response.status,
-			);
-
-			if (!response.ok) {
-				const errorText = await response.text();
-				console.error(
-					"[PDFViewer] Lazy layout analysis failed:",
-					response.status,
-					errorText,
-				);
-				throw new Error(`Layout analysis failed: ${response.statusText}`);
-			}
-
-			const result = await response.json();
-			console.log("[PDFViewer] Lazy layout analysis completed:", result);
-
-			// Merge detected figures into page state
-			if (result.figures && result.figures.length > 0) {
 				console.log(
-					`[PDFViewer] Merging ${result.figures.length} figures into pages`,
+					`[PDFViewer] Triggering lazy layout analysis for pages: ${batchPages.join(",")}`,
 				);
-				setPages((prevPages) =>
-					prevPages.map((page) => {
-						const pageFigures = result.figures.filter(
-							(f: any) => f.page_num === page.page_num,
-						);
-						if (pageFigures.length > 0) {
-							console.log(
-								`[PDFViewer] Adding ${pageFigures.length} figures to page ${page.page_num}`,
+
+				const headers: HeadersInit = {
+					"Content-Type": "application/x-www-form-urlencoded",
+				};
+				if (token) headers.Authorization = `Bearer ${token}`;
+
+				const formData = new URLSearchParams();
+				formData.append("paper_id", paperId);
+				formData.append("page_numbers", batchPages.join(","));
+
+				const response = await fetch(`${API_URL}/api/analyze-layout-lazy`, {
+					method: "POST",
+					headers,
+					body: formData,
+				});
+
+				if (!response.ok) {
+					const errorText = await response.text();
+					console.error(
+						`[PDFViewer] Lazy layout analysis failed for pages ${batchPages.join(",")}:`,
+						response.status,
+						errorText,
+					);
+					continue; // Try next batch even if this one failed
+				}
+
+				const result = await response.json();
+
+				// Merge detected figures into page state
+				if (result.figures && result.figures.length > 0) {
+					setPages((prevPages) =>
+						prevPages.map((page) => {
+							const pageFigures = result.figures.filter(
+								(f: any) => f.page_num === page.page_num,
 							);
-							// Prepend API_URL to figure image URLs if they are relative
-							const processedFigures = pageFigures.map((f: any) => ({
-								...f,
-								image_url:
-									f.image_url &&
-									!f.image_url.startsWith("http") &&
-									!f.image_url.startsWith("blob:")
-										? `${API_URL}${f.image_url}`
-										: f.image_url,
-							}));
-							return {
-								...page,
-								figures: [...(page.figures || []), ...processedFigures],
-							};
-						}
-						return page;
-					}),
-				);
-				console.log(
-					`[PDFViewer] Merged ${result.figures.length} figures into pages`,
-				);
-			} else {
-				console.log(
-					"[PDFViewer] No figures returned from lazy layout analysis",
-				);
+							if (pageFigures.length > 0) {
+								const processedFigures = pageFigures.map((f: any) => ({
+									...f,
+									image_url:
+										f.image_url &&
+										!f.image_url.startsWith("http") &&
+										!f.image_url.startsWith("blob:")
+											? `${API_URL}${f.image_url}`
+											: f.image_url,
+								}));
+								return {
+									...page,
+									figures: [...(page.figures || []), ...processedFigures],
+								};
+							}
+							return page;
+						}),
+					);
+				}
 			}
+			console.log("[PDFViewer] Completely finished lazy layout analysis.");
 		} catch (err) {
 			console.error("[PDFViewer] Lazy layout analysis error:", err);
 			// Don't re-throw - this is a background enhancement, not critical

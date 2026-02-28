@@ -2,16 +2,17 @@ import os
 from typing import Any
 
 import httpx
-from app.domain.prompts import (
-    RADAR_GENERATE_QUERY_ABSTRACT_PROMPT,
-    RADAR_GENERATE_QUERY_CONTEXT_PROMPT,
-    RADAR_SIMULATE_SEARCH_PROMPT,
-)
-from common.logger import logger
+
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import (
     SearchQueriesResponse,
     SimulatedSearchResponse,
+)
+from common.logger import logger
+from common.prompts import (
+    RADAR_GENERATE_QUERY_ABSTRACT_PROMPT,
+    RADAR_GENERATE_QUERY_CONTEXT_PROMPT,
+    RADAR_SIMULATE_SEARCH_PROMPT,
 )
 
 

@@ -365,14 +365,15 @@ IMPORTANT: You MUST respond ENTIRELY in {lang_name} language only. Do not use En
 - Write everything in {lang_name} language, including all section headers.
 
 # Output Format
-Provide 4 sections with ## markdown headers, ALL written in {lang_name}:
+Provide 5 sections with ## markdown headers, ALL written in {lang_name}:
 1. Overview section: 1-2 sentences summarizing the main theme
 2. Key Contributions section: 2-4 bullet points
 3. Methodology section: Concise explanation of methods used
 4. Conclusion section: Key findings and implications
+5. Key Words section: 5-10 keywords (in English)
 
 All section headers and content MUST be written in {lang_name}. Never use English headers like "Overview" or "Key Contributions".
-For example, if {lang_name} is Japanese, use headers like "## 概要", "## 主な貢献", "## 手法", "## 結論".
+For example, if {lang_name} is Japanese, use headers like "## 概要", "## 主な貢献", "## 手法", "## 結論", "## キーワード".
 """
 
 ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT = """You are a rigorous reviewer. Analyze the attached PDF paper from a critical perspective and identify potential issues.

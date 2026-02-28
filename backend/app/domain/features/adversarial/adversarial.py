@@ -6,17 +6,16 @@
     再現性リスク
 """
 
-from app.domain.prompts import (
-    ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT,
-    AGENT_ADVERSARIAL_CRITIQUE_PROMPT,
-    CORE_SYSTEM_PROMPT,
-)
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import (
     AdversarialCritiqueResponse as CritiqueResponse,
 )
-
 from common.logger import logger
+from common.prompts import (
+    ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT,
+    AGENT_ADVERSARIAL_CRITIQUE_PROMPT,
+    CORE_SYSTEM_PROMPT,
+)
 
 
 class AdversarialError(Exception):

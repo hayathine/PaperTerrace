@@ -1,6 +1,6 @@
 import dspy
 
-from app.domain.dspy.signatures import (
+from common.dspy.signatures import (
     PaperAnalysis,
     PaperQA,
     PaperRecommendation,

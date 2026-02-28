@@ -8,13 +8,13 @@ import os
 import httpx
 
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
-from app.domain.prompts import DICT_TRANSLATE_WORD_SIMPLE_PROMPT
 from app.providers.inference_client import (
     CircuitBreakerError,
     InferenceServiceError,
     get_inference_client,
 )
 from common.logger import get_service_logger
+from common.prompts import DICT_TRANSLATE_WORD_SIMPLE_PROMPT
 
 log = get_service_logger("LocalTranslator")
 
@@ -58,7 +58,9 @@ class LocalTranslator:
         except Exception as e:
             log.warning("prewarm", f"ServiceB warmup failed: {e}")
 
-    async def translate_async(self, text: str, tgt_lang: str = "ja") -> str | None:
+    async def translate_async(
+        self, text: str, tgt_lang: str = "ja", paper_context: str | None = None
+    ) -> str | None:
         """
         非同期翻訳
         - TRANSLATION_BACKEND="custom": Cloudflare Tunnel経由のカスタム翻訳
@@ -84,7 +86,7 @@ class LocalTranslator:
             log.debug(
                 "translate_async", "Using ServiceB (Inference Service) for translation"
             )
-            return await self._translate_via_service_b(text, tgt_lang)
+            return await self._translate_via_service_b(text, tgt_lang, paper_context)
 
     async def _translate_via_custom(self, text: str, tgt_lang: str, url: str) -> str:
         try:
@@ -152,12 +154,16 @@ class LocalTranslator:
             log.error("translate_async", f"Custom Translation error: {e}")
             return text
 
-    async def _translate_via_service_b(self, text: str, tgt_lang: str) -> str:
+    async def _translate_via_service_b(
+        self, text: str, tgt_lang: str, paper_context: str | None = None
+    ) -> str:
         try:
             log.debug("translate_async", f"Translating via ServiceB: {text[:50]}...")
 
             client = await get_inference_client()
-            translation = await client.translate_text(text, tgt_lang)
+            translation = await client.translate_text(
+                text, tgt_lang, paper_context=paper_context
+            )
 
             log.debug(
                 "translate_async", f"ServiceB Translation result: {translation[:50]}..."

@@ -11,12 +11,6 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
-from app.domain.prompts import (
-    CORE_SYSTEM_PROMPT,
-    DICT_EXPLAIN_WORD_CONTEXT_PROMPT,
-    DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT,
-    DICT_TRANSLATE_WORD_SIMPLE_PROMPT,
-)
 from app.domain.services import local_translator
 from app.domain.services.analysis_service import EnglishAnalysisService
 from app.logic import executor
@@ -27,6 +21,12 @@ from app.providers.inference_client import (
     InferenceServiceTimeoutError,
 )
 from common.logger import get_service_logger
+from common.prompts import (
+    CORE_SYSTEM_PROMPT,
+    DICT_EXPLAIN_WORD_CONTEXT_PROMPT,
+    DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT,
+    DICT_TRANSLATE_WORD_SIMPLE_PROMPT,
+)
 
 log = get_service_logger("Translation")
 
@@ -186,69 +186,72 @@ async def explain(
     lemma = await loop.run_in_executor(executor, service.lemmatize, clean_input)
     original_word = word
 
-    # 1. Cache Check
-    cached = await service.get_translation(lemma, lang=lang)
-    if cached:
-        source = cached.get("source", "Cache")
-        if not is_htmx:
-            return JSONResponse(
-                {
-                    "word": original_word,
-                    "lemma": lemma,
-                    "translation": cached["translation"],
-                    "source": source,
-                    "element_id": element_id,
-                }
+    # 1. Cache Check (Bypass if low confidence to enforce context-aware Qwen translation)
+    use_llamacpp = f_conf is not None and f_conf <= 0.5
+
+    if not use_llamacpp:
+        cached = await service.get_translation(lemma, lang=lang)
+        if cached:
+            source = cached.get("source", "Cache")
+            if not is_htmx:
+                return JSONResponse(
+                    {
+                        "word": original_word,
+                        "lemma": lemma,
+                        "translation": cached["translation"],
+                        "source": source,
+                        "element_id": element_id,
+                    }
+                )
+            elapsed = asyncio.get_event_loop().time() - start_time
+            log.info(
+                "explain",
+                f"Lookup completed (Cache) in {elapsed:.3f}s",
+                word=word,
+                paper_id=paper_id,
             )
-        elapsed = asyncio.get_event_loop().time() - start_time
-        log.info(
-            "explain",
-            f"Lookup completed (Cache) in {elapsed:.3f}s",
-            word=word,
-            paper_id=paper_id,
-        )
-        return HTMLResponse(
-            build_dict_card_html(
-                original_word,
-                lemma,
-                cached["translation"],
-                source,
-                lang,
-                paper_id,
-                element_id=element_id,
+            return HTMLResponse(
+                build_dict_card_html(
+                    original_word,
+                    lemma,
+                    cached["translation"],
+                    source,
+                    lang,
+                    paper_id,
+                    element_id=element_id,
+                )
             )
+
+    # Build Context
+    paper_context_str = ""
+    if paper_id:
+        paper = storage.get_paper(paper_id)
+        if paper:
+            summary = paper.get("abstract") or paper.get("summary")
+            if summary:
+                paper_context_str = f"\n[Paper Context / Summary]\n{summary}\n"
+
+    if context:
+        paper_context_str += f"\n[Surrounding Context]\n...{context}...\n"
+
+    if not paper_context_str:
+        paper_context_str = (
+            "No specific context available, but please translate carefully."
         )
 
     # Low confidence override -> Qwen3
-    use_llamacpp = f_conf is not None and f_conf <= 0.5
     if use_llamacpp:
         log.info(
-            "explain", f"Word confidence {f_conf} <= 0.5, using LlamaCpp for {lemma}"
+            "explain",
+            f"Word confidence {f_conf} <= 0.5, using LlamaCpp for {original_word}",
         )
         try:
             from app.providers.inference_client import get_inference_client
 
             client = await get_inference_client()
 
-            # Fetch paper_context
-            paper_context_str = ""
-            if paper_id:
-                paper = storage.get_paper(paper_id)
-                if paper:
-                    summary = paper.get("abstract") or paper.get("summary")
-                    if summary:
-                        paper_context_str = f"\n[Paper Context / Summary]\n{summary}\n"
-
-            if context:
-                paper_context_str += f"\n[Surrounding Context]\n...{context}...\n"
-
-            if not paper_context_str:
-                paper_context_str = (
-                    "No specific context available, but please translate carefully."
-                )
-
             local_translation = await client.translate_text(
-                lemma, lang, paper_context=paper_context_str
+                original_word, lang, paper_context=paper_context_str
             )
             source = "Qwen3"
 
@@ -287,7 +290,9 @@ async def explain(
     translator = local_translator.get_local_translator()
     if translator._initialized:
         try:
-            local_translation = await translator.translate_async(lemma, lang)
+            local_translation = await translator.translate_async(
+                lemma, lang, paper_context=paper_context_str
+            )
             log.debug(
                 "explain",
                 f"ServiceB translation result: {local_translation}",

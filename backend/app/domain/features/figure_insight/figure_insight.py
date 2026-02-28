@@ -1,10 +1,5 @@
 import os
 
-from app.domain.prompts import (
-    VISION_ANALYZE_FIGURE_PROMPT,
-    VISION_ANALYZE_TABLE_PROMPT,
-    VISION_COMPARE_FIGURES_PROMPT,
-)
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import (
     FigureAnalysisResponse,
@@ -12,6 +7,11 @@ from app.schemas.gemini_schema import (
     TableAnalysisResponse,
 )
 from common.logger import logger
+from common.prompts import (
+    VISION_ANALYZE_FIGURE_PROMPT,
+    VISION_ANALYZE_TABLE_PROMPT,
+    VISION_COMPARE_FIGURES_PROMPT,
+)
 
 
 class FigureInsightService:

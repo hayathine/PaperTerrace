@@ -115,6 +115,7 @@ class LlamaCppTranslationService:
     ) -> str:
         """
         論文の文脈を考慮した高度な翻訳を実行します。
+        DSPyを用いてプロンプト構築と実行を行います。
         """
         if self.llm is None:
             await self.initialize()
@@ -122,39 +123,50 @@ class LlamaCppTranslationService:
         if self.llm is None:
             return "Error: LLM service is not initialized."
 
-        system_prompt = """You are an expert academic research assistant.
-Your goal is to help users understand complex academic papers, translate technical terms accurately within context, and summarize research findings clearly.
+        import dspy
 
-# Global Rules
-1. CRITICAL: Always output in the requested language (e.g., if asked for Japanese, answer ONLY in Japanese, never in English).
-2. When translating, prioritize accuracy and academic context. For specific terms, provide both a translation and a brief context-aware explanation.
-3. For summaries, capture the core essence, methods, and contributions.
-4. If the user asks for JSON, output ONLY valid JSON without Markdown formatting.
-5. NEVER mix languages in your response. Use only the requested language throughout.
-"""
+        from common.dspy.signatures import ContextAwareTranslation
 
-        prompt = f"""{paper_context}
-Based on the context above, translate the following English text into {lang_name}.
-{original_word}
-Output the translation and intuitive explanation."""
+        class InMemoryLlama(dspy.LM):
+            def __init__(self, llm_instance):
+                super().__init__("local-llama")
+                self.llm_instance = llm_instance
+                self.kwargs = {"temperature": 0.3, "max_tokens": 1024}
+                self.history = []
+
+            def __call__(self, prompt: str, **kwargs) -> list[str]:
+                response = self.llm_instance.create_chat_completion(
+                    messages=[
+                        {
+                            "role": "system",
+                            "content": "You are an expert academic research assistant. Never output markdown formatting for JSON, act directly.",
+                        },
+                        {"role": "user", "content": prompt},
+                    ],
+                    temperature=kwargs.get("temperature", self.kwargs["temperature"]),
+                    max_tokens=kwargs.get("max_tokens", self.kwargs["max_tokens"]),
+                )
+                text = response["choices"][0]["message"]["content"]
+                self.history.append({"prompt": prompt, "response": text})
+                return [text]
 
         logger.info(f"LLM 翻訳実行中... (Word: {original_word[:20]}...)")
 
         try:
             loop = asyncio.get_event_loop()
-            response = await loop.run_in_executor(
-                None,
-                lambda: self.llm.create_chat_completion(
-                    messages=[
-                        {"role": "system", "content": system_prompt},
-                        {"role": "user", "content": prompt},
-                    ],
-                    temperature=0.3,
-                    max_tokens=1024,
-                ),
-            )
 
-            result = response["choices"][0]["message"]["content"]
+            # DSPy predict can be blocking, so we run it in executor.
+            def _run_dspy():
+                dspy.settings.configure(lm=InMemoryLlama(self.llm))
+                predictor = dspy.Predict(ContextAwareTranslation)
+                prediction = predictor(
+                    paper_context=paper_context,
+                    target_text=original_word,
+                    lang_name=lang_name,
+                )
+                return prediction.translation_and_explanation
+
+            result = await loop.run_in_executor(None, _run_dspy)
             logger.info("LLM 翻訳が完了しました。")
             return result.strip()
 

@@ -212,7 +212,9 @@ class GeminiProvider(AIProviderInterface):
                         # If it's a dict (common when using response_json_schema), validate it
                         if isinstance(response.parsed, dict):
                             return response_model.model_validate(response.parsed)
-                        return response.parsed
+                        raise ValueError(
+                            f"Unexpected parsed type: {type(response.parsed)}"
+                        )
                 except Exception as parse_err:
                     logger.error(f"Failed to parse structured output: {parse_err}")
                     # If it's wrapped in markdown, try to strip
@@ -354,7 +356,9 @@ class GeminiProvider(AIProviderInterface):
                             return response.parsed
                         if isinstance(response.parsed, dict):
                             return response_model.model_validate(response.parsed)
-                        return response.parsed
+                        raise ValueError(
+                            f"Unexpected parsed type: {type(response.parsed)}"
+                        )
 
                     # Method 2: Manual Parse
                     text_to_parse = response.text or ""
@@ -452,7 +456,9 @@ class GeminiProvider(AIProviderInterface):
                             return response.parsed
                         if isinstance(response.parsed, dict):
                             return response_model.model_validate(response.parsed)
-                        return response.parsed
+                        raise ValueError(
+                            f"Unexpected parsed type: {type(response.parsed)}"
+                        )
                     text_to_parse = response.text or ""
                     text_to_parse = text_to_parse.strip()
                     if text_to_parse.startswith("```json"):
@@ -704,7 +710,9 @@ class VertexAIProvider(AIProviderInterface):
                             return response.parsed
                         if isinstance(response.parsed, dict):
                             return response_model.model_validate(response.parsed)
-                        return response.parsed
+                        raise ValueError(
+                            f"Unexpected parsed type: {type(response.parsed)}"
+                        )
                     text_to_parse = response.text or ""
                     return response_model.model_validate_json(text_to_parse)
                 except Exception as parse_err:
@@ -773,7 +781,9 @@ class VertexAIProvider(AIProviderInterface):
                             return response.parsed
                         if isinstance(response.parsed, dict):
                             return response_model.model_validate(response.parsed)
-                        return response.parsed
+                        raise ValueError(
+                            f"Unexpected parsed type: {type(response.parsed)}"
+                        )
                     text_to_parse = response.text or ""
                     return response_model.model_validate_json(text_to_parse)
                 except Exception as parse_err:
@@ -844,7 +854,9 @@ class VertexAIProvider(AIProviderInterface):
                             return response.parsed
                         if isinstance(response.parsed, dict):
                             return response_model.model_validate(response.parsed)
-                        return response.parsed
+                        raise ValueError(
+                            f"Unexpected parsed type: {type(response.parsed)}"
+                        )
                     text_to_parse = (response.text or "").strip()
                     if text_to_parse.startswith("```json"):
                         text_to_parse = text_to_parse[7:].strip("` \n")

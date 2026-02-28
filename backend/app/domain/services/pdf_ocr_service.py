@@ -461,7 +461,7 @@ class PDFOCRService:
             f"[OCR] p.{page_num}: All native/Vision attempts failed. Falling back to Gemini"
         )
         try:
-            from app.domain.prompts import PDF_EXTRACT_TEXT_OCR_PROMPT
+            from common.prompts import PDF_EXTRACT_TEXT_OCR_PROMPT
 
             text = await self.ai_provider.generate_with_image(
                 PDF_EXTRACT_TEXT_OCR_PROMPT, img_bytes, "image/png", model=self.model

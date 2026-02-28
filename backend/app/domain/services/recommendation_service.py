@@ -4,8 +4,6 @@ import time
 from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
-from app.domain.dspy.config import load_dspy_module_from_gcs, setup_dspy
-from app.domain.dspy.modules import RecommendationModule, UserProfileModule
 from app.domain.services.paper_acquisition import PaperAcquisitionService
 from app.models.orm.recommendation import Feedback
 from app.models.repositories.feedback_repository import FeedbackRepository
@@ -16,6 +14,8 @@ from app.schemas.recommendation import (
     RecommendationGenerateResponse,
     RecommendationSyncRequest,
 )
+from common.dspy.config import load_dspy_module_from_gcs, setup_dspy
+from common.dspy.modules import RecommendationModule, UserProfileModule
 from redis_provider.provider import RedisService
 
 

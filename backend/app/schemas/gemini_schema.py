@@ -255,6 +255,10 @@ class FullSummaryResponse(BaseModel):
         ...,
         description="Key findings and implications in the requested target language",
     )
+    key_words: list[str] = Field(
+        default_factory=list,
+        description="5-10 keywords in English",
+    )
 
 
 # --- Integrated Analysis (Grounding) ---

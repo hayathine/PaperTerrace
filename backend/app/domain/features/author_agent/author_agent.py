@@ -5,9 +5,9 @@ allowing the user to 'chat' with the author.
 """
 
 from app.domain.features.research_radar import ResearchRadarService
-from app.domain.prompts import AGENT_AUTHOR_PERSONA_PROMPT, CORE_SYSTEM_PROMPT
-from common.logger import logger
 from app.providers import get_ai_provider
+from common.logger import logger
+from common.prompts import AGENT_AUTHOR_PERSONA_PROMPT, CORE_SYSTEM_PROMPT
 
 
 class AuthorAgentService:

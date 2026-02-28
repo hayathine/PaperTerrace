@@ -27,50 +27,43 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 	const [score, setScore] = useState<number | null>(null);
 	const [comment, setComment] = useState("");
 
-	const handleSubmit = async (e?: React.FormEvent) => {
-		if (e) e.preventDefault();
-		if (score === null) return;
-
+	const sendFeedback = async (
+		currentScore?: number,
+		currentComment?: string,
+	) => {
 		setStatus("submitting");
 		try {
 			await submitFeedback({
 				session_id: sessionId,
 				target_type: targetType,
 				target_id: targetId,
-				user_score: score,
-				user_comment: comment.trim() || undefined,
+				user_score: currentScore,
+				user_comment: currentComment?.trim() || undefined,
 			});
 			setStatus("submitted");
+			setTimeout(() => {
+				setStatus((prev) => (prev === "submitted" ? "idle" : prev));
+			}, 3000);
 		} catch (error) {
 			console.error("Feedback error:", error);
 			setStatus("error");
 		}
 	};
 
-	if (status === "submitted") {
-		return (
-			<div className="flex items-center gap-2 py-4 px-3 bg-emerald-50/50 border border-emerald-100/50 rounded-xl animate-in fade-in zoom-in-95 duration-300 mt-4">
-				<div className="w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center shadow-lg shadow-emerald-500/20">
-					<svg
-						className="w-3.5 h-3.5 text-white"
-						fill="none"
-						stroke="currentColor"
-						viewBox="0 0 24 24"
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth="3"
-							d="M5 13l4 4L19 7"
-						/>
-					</svg>
-				</div>
-				<span className="text-xs font-bold text-emerald-700">
-					{t("common.feedback.submitted")}
-				</span>
-			</div>
-		);
-	}
+	const handleScoreClick = (newScore: number) => {
+		setScore(newScore);
+		sendFeedback(newScore, undefined);
+	};
+
+	const handleCommentSubmit = (e?: React.FormEvent) => {
+		if (e) e.preventDefault();
+		if (!comment.trim()) return;
+		sendFeedback(undefined, comment);
+		setComment("");
+	};
+
+	// Removing early return for "submitted" so buttons and textarea stay visible.
+	// We'll show a small success message below instead.
 
 	return (
 		<div className="space-y-4 py-5 border-t border-slate-100 mt-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
@@ -82,7 +75,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 					<button
 						type="button"
 						disabled={status === "submitting"}
-						onClick={() => setScore(1)}
+						onClick={() => handleScoreClick(1)}
 						className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-300 ${
 							score === 1
 								? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 scale-105"
@@ -95,7 +88,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 					<button
 						type="button"
 						disabled={status === "submitting"}
-						onClick={() => setScore(0)}
+						onClick={() => handleScoreClick(0)}
 						className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all duration-300 ${
 							score === 0
 								? "bg-rose-500 text-white shadow-lg shadow-rose-500/30 scale-105"
@@ -108,13 +101,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 				</div>
 			</div>
 
-			<div
-				className={`space-y-3 transition-all duration-500 overflow-hidden ${
-					score !== null
-						? "max-h-[300px] opacity-100"
-						: "max-h-0 opacity-0 pointer-events-none"
-				}`}
-			>
+			<div className="space-y-3 pt-2">
 				<textarea
 					value={comment}
 					onChange={(e) => setComment(e.target.value)}
@@ -124,8 +111,8 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 				<div className="flex justify-end">
 					<button
 						type="button"
-						disabled={status === "submitting" || score === null}
-						onClick={() => handleSubmit()}
+						disabled={status === "submitting" || !comment.trim()}
+						onClick={handleCommentSubmit}
 						className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 text-white text-xs font-bold rounded-lg transition-all shadow-md active:scale-95 disabled:active:scale-100"
 					>
 						{status === "submitting" ? (
@@ -139,6 +126,12 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 					</button>
 				</div>
 			</div>
+
+			{status === "submitted" && (
+				<p className="text-[10px] text-emerald-600 font-bold animate-in fade-in">
+					{t("common.feedback.submitted")}
+				</p>
+			)}
 
 			{status === "error" && (
 				<p className="text-[10px] text-rose-500 animate-pulse">

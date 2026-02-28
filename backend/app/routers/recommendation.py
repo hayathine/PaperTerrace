@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
@@ -10,6 +10,11 @@ from app.schemas.recommendation import (
     RecommendationSyncRequest,
 )
 
+
+def get_current_user_id(request: Request) -> str:
+    return getattr(request.state, "user_id", "anonymous")
+
+
 router = APIRouter(prefix="/recommendation", tags=["Recommendation"])
 
 
@@ -17,7 +22,7 @@ router = APIRouter(prefix="/recommendation", tags=["Recommendation"])
 async def sync_trajectory(
     req: RecommendationSyncRequest,
     db: Session = Depends(get_db),
-    current_user_id: str = Depends(lambda r: getattr(r.state, "user_id", "anonymous")),
+    current_user_id: str = Depends(get_current_user_id),
 ):
     """
     時間経過やセッション終了時、対話中にフロントから定期送信して
@@ -30,7 +35,7 @@ async def sync_trajectory(
 async def submit_feedback(
     req: RecommendationFeedbackRequest,
     db: Session = Depends(get_db),
-    current_user_id: str = Depends(lambda r: getattr(r.state, "user_id", "anonymous")),
+    current_user_id: str = Depends(get_current_user_id),
 ):
     """
     提示された推薦に対するユーザーの10段階評価（GEPAオプティマイザのMetrics用）を受け取る

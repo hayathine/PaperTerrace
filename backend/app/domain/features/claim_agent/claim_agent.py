@@ -2,7 +2,6 @@ import os
 
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import ClaimVerificationResponse
-
 from common.logger import logger
 
 
@@ -24,13 +23,12 @@ class ClaimVerificationService:
             lang: 出力言語
             pdf_bytes: PDFバイナリデータ (PDF直接入力方式)
         """
-        from app.domain.prompts import (
+        from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
+        from common.prompts import (
             AGENT_CLAIM_VERIFY_PROMPT,
             CLAIM_VERIFY_FROM_PDF_PROMPT,
             CORE_SYSTEM_PROMPT,
         )
-
-        from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 

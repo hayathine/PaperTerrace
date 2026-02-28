@@ -1,19 +1,17 @@
 import os
 
-from app.domain.prompts import (
+from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
+from app.providers import get_ai_provider, get_storage_provider
+from app.schemas.gemini_schema import FullSummaryResponse
+from app.schemas.gemini_schema import SectionSummaryList as SectionSummariesResponse
+from common.logger import logger
+from common.prompts import (
     CORE_SYSTEM_PROMPT,
     PAPER_SUMMARY_AI_CONTEXT_PROMPT,
     PAPER_SUMMARY_FROM_PDF_PROMPT,
     PAPER_SUMMARY_FULL_PROMPT,
     PAPER_SUMMARY_SECTIONS_PROMPT,
 )
-from app.providers import get_ai_provider, get_storage_provider
-from app.schemas.gemini_schema import FullSummaryResponse
-from app.schemas.gemini_schema import SectionSummaryList as SectionSummariesResponse
-
-from common.logger import logger
-
-from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 
 
 class SummaryError(Exception):
@@ -163,6 +161,10 @@ class SummaryService:
                         ...,
                         description=f"Key findings and implications in {lang_name}",
                     )
+                    key_words: list[str] = Field(
+                        default_factory=list,
+                        description="5-10 keywords in English",
+                    )
 
                 analysis: FullSummaryResponse = await self.ai_provider.generate(
                     prompt,
@@ -182,6 +184,8 @@ class SummaryService:
                         *[f"- {item}" for item in analysis.key_contributions],
                         f"\n## Methodology\n{analysis.methodology}",
                         f"\n## Conclusion\n{analysis.conclusion}",
+                        "\n## Key Words",
+                        ", ".join(analysis.key_words) if analysis.key_words else "N/A",
                     ]
                 else:
                     result_lines = [
@@ -190,6 +194,8 @@ class SummaryService:
                         *[f"- {item}" for item in analysis.key_contributions],
                         f"\n## 手法\n{analysis.methodology}",
                         f"\n## 結論\n{analysis.conclusion}",
+                        "\n## キーワード",
+                        ", ".join(analysis.key_words) if analysis.key_words else "N/A",
                     ]
                 formatted_text = "\n".join(result_lines)
 
@@ -243,8 +249,9 @@ class SummaryService:
             lang_name=lang_name, paper_text=safe_text
         )
 
-        from app.schemas.gemini_schema import SectionSummary
         from pydantic import Field
+
+        from app.schemas.gemini_schema import SectionSummary
 
         class DynamicSectionSummary(SectionSummary):
             summary: str = Field(
