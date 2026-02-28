@@ -471,7 +471,7 @@ function App() {
 							<button
 								type="button"
 								onClick={() => setIsLeftSidebarOpen(false)}
-								className="p-1.5 rounded-md hover:bg-orange-50 text-slate-400 hover:text-orange-600 transition-colors"
+								className="p-1.5 rounded-md hover:bg-orange-50 text-slate-400 hover:text-orange-500 transition-colors"
 								title={t("nav.close_menu")}
 							>
 								<svg
@@ -508,8 +508,8 @@ function App() {
 											onClick={() => handlePaperSelect(paper)}
 											className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-200 group relative ${
 												currentPaperId === paper.paper_id
-													? "bg-orange-600 text-white shadow-lg shadow-orange-900/20"
-													: "text-slate-500 hover:bg-orange-50 hover:text-orange-600"
+													? "bg-orange-500 text-white shadow-lg shadow-orange-900/10"
+													: "text-slate-500 hover:bg-orange-50 hover:text-orange-500"
 											}`}
 										>
 											<div className="flex items-start gap-3">
@@ -556,7 +556,7 @@ function App() {
 													className="w-10 h-10 rounded-full border-2 border-orange-500/30 shadow-inner"
 												/>
 											) : (
-												<div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-sm font-black shadow-lg shadow-orange-500/20 text-white">
+												<div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center text-sm font-black shadow-lg shadow-orange-500/10 text-white">
 													{user.displayName?.[0] || user.email?.[0] || "U"}
 												</div>
 											)}
@@ -627,7 +627,7 @@ function App() {
 									<button
 										type="button"
 										onClick={() => setShowLoginModal(true)}
-										className="w-full py-3 px-4 bg-orange-600 hover:bg-orange-500 text-white rounded-xl text-xs font-black transition-all duration-300 shadow-lg shadow-orange-600/20 active:scale-[0.98] flex items-center justify-center gap-2"
+										className="w-full py-3 px-4 bg-orange-500 hover:bg-orange-400 text-white rounded-xl text-xs font-black transition-all duration-300 shadow-lg shadow-orange-500/10 active:scale-[0.98] flex items-center justify-center gap-2"
 									>
 										<svg
 											className="w-4 h-4"
@@ -709,7 +709,7 @@ function App() {
 							<button
 								type="button"
 								onClick={() => setIsLeftSidebarOpen(true)}
-								className="mr-4 p-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 hover:text-orange-600 hover:border-orange-200 transition-all duration-200 flex items-center justify-center shadow-sm"
+								className="mr-4 p-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 hover:text-orange-500 hover:border-orange-100 transition-all duration-200 flex items-center justify-center shadow-sm"
 								title={t("nav.open_menu")}
 							>
 								<svg

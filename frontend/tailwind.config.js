@@ -3,6 +3,14 @@ export default {
 	content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
 	theme: {
 		extend: {
+			colors: {
+				brand: {
+					DEFAULT: "#f97316", // orange-500
+					light: "#fb923c", // orange-400
+					lighter: "#fdba74", // orange-300
+					soft: "#fff7ed", // orange-50
+				},
+			},
 			animation: {
 				"fade-in-up": "fadeInUp 0.5s ease-out",
 			},

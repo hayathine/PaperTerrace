@@ -63,7 +63,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 					onClick={() => onTabChange("dict")}
 					className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${
 						activeTab === "dict"
-							? "bg-white text-orange-600 border-orange-600 shadow-none"
+							? "bg-white text-orange-500 border-orange-500 shadow-none"
 							: "text-slate-400 border-transparent hover:text-slate-600"
 					}`}
 				>
@@ -75,7 +75,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 					onClick={() => onTabChange("summary")}
 					className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${
 						activeTab === "summary"
-							? "bg-white text-orange-600 border-orange-600 shadow-none"
+							? "bg-white text-orange-500 border-orange-500 shadow-none"
 							: "text-slate-400 border-transparent hover:text-slate-600"
 					}`}
 				>
@@ -87,7 +87,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 					onClick={() => onTabChange("chat")}
 					className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${
 						activeTab === "chat"
-							? "bg-white text-orange-600 border-orange-600 shadow-none"
+							? "bg-white text-orange-500 border-orange-500 shadow-none"
 							: "text-slate-400 border-transparent hover:text-slate-600"
 					}`}
 				>
@@ -99,7 +99,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 					onClick={() => onTabChange("notes")}
 					className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${
 						activeTab === "notes"
-							? "bg-white text-orange-600 border-orange-600 shadow-none"
+							? "bg-white text-orange-500 border-orange-500 shadow-none"
 							: "text-slate-400 border-transparent hover:text-slate-600"
 					}`}
 				>
@@ -111,7 +111,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 					onClick={() => onTabChange("stack")}
 					className={`flex-1 min-w-[50px] py-3 text-[10px] font-bold uppercase tracking-[0.15em] transition-all border-b-2 ${
 						activeTab === "stack"
-							? "bg-white text-orange-600 border-orange-600 shadow-none"
+							? "bg-white text-orange-500 border-orange-500 shadow-none"
 							: "text-slate-400 border-transparent hover:text-slate-600"
 					}`}
 				>
