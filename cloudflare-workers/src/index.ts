@@ -245,9 +245,10 @@ async function verifyFirebaseToken(
 
 		const payload = JSON.parse(atob(parts[1]));
 
-		// Basic validation
+		// Firebase ID tokens use `sub` (Subject) as the user UID, not `uid`
+		const uid = payload.sub || payload.user_id;
 		if (
-			!payload.uid ||
+			!uid ||
 			!payload.aud ||
 			payload.aud !== env.FIREBASE_PROJECT_ID
 		) {
@@ -260,7 +261,7 @@ async function verifyFirebaseToken(
 		}
 
 		return {
-			uid: payload.uid,
+			uid,
 			email: payload.email,
 			...payload,
 		};

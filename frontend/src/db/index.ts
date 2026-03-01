@@ -49,3 +49,57 @@ export class PaperTerraceDB extends Dexie {
 }
 
 export const db = new PaperTerraceDB();
+
+/** Whether IndexedDB is available and initialized. */
+let dbAvailable = true;
+
+/**
+ * Open the database and verify IndexedDB works.
+ * Call this once at app startup; all db helpers should check `isDbAvailable()`
+ * before performing operations.
+ */
+export async function initDB(): Promise<boolean> {
+	try {
+		await db.open();
+		dbAvailable = true;
+	} catch (e) {
+		console.warn("IndexedDB unavailable — caching disabled:", e);
+		dbAvailable = false;
+	}
+	return dbAvailable;
+}
+
+export function isDbAvailable(): boolean {
+	return dbAvailable;
+}
+
+/**
+ * Maximum total cache size (bytes). When exceeded, oldest papers are evicted.
+ * 500 MB — generous for typical usage while preventing runaway growth.
+ */
+const MAX_CACHE_BYTES = 500 * 1024 * 1024;
+
+/**
+ * Evict the oldest cached papers until total storage is below the limit.
+ * Silently returns if IndexedDB or the Storage API is unavailable.
+ */
+export async function evictIfOverQuota(): Promise<void> {
+	if (!dbAvailable) return;
+	try {
+		const estimate =
+			navigator.storage?.estimate && (await navigator.storage.estimate());
+		if (!estimate?.usage || estimate.usage < MAX_CACHE_BYTES) return;
+
+		// Delete images then papers, oldest first
+		const oldest = await db.papers.orderBy("last_accessed").limit(5).toArray();
+		for (const p of oldest) {
+			await db.images.where("paper_id").equals(p.id).delete();
+			await db.papers.delete(p.id);
+		}
+		console.info(
+			`Evicted ${oldest.length} cached paper(s) to free storage space.`,
+		);
+	} catch (e) {
+		console.warn("Cache eviction failed:", e);
+	}
+}

@@ -11,10 +11,10 @@
 		"close": "Close",
 		"feedback": {
 			"title": "Was this helpful?",
-			"good": "Helpful",
-			"bad": "Not helpful",
+			"good": "",
+			"bad": "",
 			"submitted": "Thanks for your feedback!",
-			"placeholder": "Tell us more (optional)",
+			"placeholder": "Please feedback! (optional)",
 			"send": "Send Feedback"
 		}
 	},
@@ -52,7 +52,8 @@
 			"dict": "Dict",
 			"summary": "Summary",
 			"chat": "Chat",
-			"notes": "Notes"
+			"notes": "Notes",
+			"figures": "Figures"
 		}
 	},
 	"viewer": {

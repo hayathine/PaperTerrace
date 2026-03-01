@@ -14,7 +14,7 @@ import { useLoading } from "./contexts/LoadingContext";
 import { syncTrajectory } from "./lib/recommendation";
 
 function App() {
-	const { user, logout } = useAuth();
+	const { user, logout, token } = useAuth();
 	const { t } = useTranslation();
 	const { startLoading, stopLoading } = useLoading();
 	const [uploadFile, setUploadFile] = useState<File | null>(null);
@@ -227,6 +227,11 @@ function App() {
 		setActiveTab("chat");
 	};
 
+	const handleFigureExplain = (figureId: string) => {
+		setPendingFigureId(figureId);
+		setActiveTab("chat");
+	};
+
 	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		if (e.target.files?.[0]) {
 			handleDirectFileSelect(e.target.files[0]);
@@ -241,18 +246,21 @@ function App() {
 	) => {
 		// Fire telemetry for translation
 		if (currentPaperId) {
-			syncTrajectory({
-				session_id: sessionId,
-				paper_id: currentPaperId,
-				word_clicks: [
-					{
-						word,
-						context: context || "",
-						section: "Unknown", // Can be inferred if PDF structure allows, or left as Unknown
-						timestamp: Date.now() / 1000,
-					},
-				],
-			});
+			syncTrajectory(
+				{
+					session_id: sessionId,
+					paper_id: currentPaperId,
+					word_clicks: [
+						{
+							word,
+							context: context || "",
+							section: "Unknown", // Can be inferred if PDF structure allows, or left as Unknown
+							timestamp: Date.now() / 1000,
+						},
+					],
+				},
+				token,
+			);
 		}
 
 		setSelectedWord(word);
@@ -788,6 +796,7 @@ function App() {
 									// Optionally switch to PDF view if in plaintext mode?
 									// For now just set evidence.
 								}}
+								onFigureExplain={handleFigureExplain}
 							/>
 						</div>
 					</div>

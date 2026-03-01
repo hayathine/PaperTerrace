@@ -7,6 +7,7 @@ figure/table analysis, layout detection, and adversarial review.
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 
+from app.auth import OptionalUser
 from app.domain.features import (
     AdversarialReviewService,
     FigureInsightService,
@@ -133,6 +134,8 @@ async def critique(session_id: str = Form(...), lang: str = Form("ja")):
 async def analyze_layout_lazy(
     paper_id: str = Form(...),
     page_numbers: str | None = Form(None),
+    file_hash: str | None = Form(None),
+    user: OptionalUser = None,
 ):
     """
     画面表示後に遅延実行されるレイアウト解析エンドポイント（バッチ処理版）
@@ -148,8 +151,10 @@ async def analyze_layout_lazy(
                     status_code=400, detail="Invalid page_numbers format"
                 )
 
+        # Pass user_id and file_hash to handle transient papers
+        user_id = user.uid if user else None
         all_figures = await layout_analysis_service.analyze_layout_lazy(
-            paper_id, parsed_pages
+            paper_id, parsed_pages, user_id=user_id, file_hash=file_hash
         )
 
         return JSONResponse(
@@ -160,10 +165,6 @@ async def analyze_layout_lazy(
                 "figures": all_figures,
             }
         )
-
-    except Exception as e:
-        logger.error(f"[analyze-layout-lazy] Unexpected error: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Layout analysis failed: {str(e)}")
 
     except HTTPException:
         raise

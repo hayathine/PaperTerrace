@@ -8,6 +8,7 @@ import os
 from app.providers import get_ai_provider
 from common.dspy.config import setup_dspy
 from common.dspy.modules import ChatModule
+from common.dspy.trace import TraceContext, trace_dspy_call
 from common.logger import logger
 from common.prompts import (
     CHAT_GENERAL_FROM_PDF_PROMPT,
@@ -148,13 +149,19 @@ class ChatService:
                             )
 
                 # DSPy version
-                res = self.chat_mod(
-                    document_context=context[:20000]
-                    if not cache_name
-                    else "See Context Cache",
-                    history_text=history_text_for_prompt,
-                    user_message=user_message,
-                    lang_name=lang_name,
+                res = trace_dspy_call(
+                    "ChatModule",
+                    "ChatGeneral",
+                    self.chat_mod,
+                    {
+                        "document_context": context[:20000]
+                        if not cache_name
+                        else "See Context Cache",
+                        "history_text": history_text_for_prompt,
+                        "user_message": user_message,
+                        "lang_name": lang_name,
+                    },
+                    context=TraceContext(paper_id=paper_id),
                 )
                 response_data = res.answer
 

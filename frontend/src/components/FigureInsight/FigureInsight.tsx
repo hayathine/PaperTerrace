@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { API_URL } from "@/config";
+import { usePaperCache } from "../../db/hooks";
 import CopyButton from "../Common/CopyButton";
 import MarkdownContent from "../Common/MarkdownContent";
 
@@ -28,6 +29,8 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 	const [error, setError] = useState<string | null>(null);
 	const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
+	const { getCachedPaper } = usePaperCache();
+
 	useEffect(() => {
 		if (paperId && paperId !== "pending") {
 			fetchFigures(paperId);
@@ -40,6 +43,43 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 		setLoading(true);
 		setError(null);
 		try {
+			// 1. Try IndexedDB first (Fast & Support Transient papers)
+			const cached = await getCachedPaper(id);
+			if (cached?.layout_json) {
+				try {
+					const layout = JSON.parse(cached.layout_json);
+					const allFigures: FigureData[] = [];
+					if (Array.isArray(layout)) {
+						layout.forEach((page: any, idx: number) => {
+							if (page.figures && Array.isArray(page.figures)) {
+								page.figures.forEach((fig: any, fIdx: number) => {
+									allFigures.push({
+										id: fig.id || `cached-${idx + 1}-${fIdx}`,
+										image_url: fig.image_url,
+										explanation: fig.explanation || "",
+										caption: fig.caption || "",
+										page_number: idx + 1,
+										label: fig.label || "figure",
+									});
+								});
+							}
+						});
+					}
+					if (allFigures.length > 0) {
+						console.log("[FigureInsight] Loaded from cache");
+						setFigures(allFigures);
+						setLoading(false);
+						// We still want to background fetch to get explanations?
+						// For transient guest mode, there won't be anything on the server anyway.
+						// So we can return here.
+						return;
+					}
+				} catch (e) {
+					console.warn("[FigureInsight] Cache parse failed", e);
+				}
+			}
+
+			// 2. Fallback to API
 			const res = await fetch(`${API_URL}/api/papers/${id}/figures`);
 			if (res.ok) {
 				const data = await res.json();

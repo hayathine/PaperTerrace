@@ -8,6 +8,7 @@ from common.dspy.modules import (
     PaperSummaryModule,
     SectionSummaryModule,
 )
+from common.dspy.trace import TraceContext, trace_dspy_call
 from common.logger import logger
 from common.prompts import (
     PAPER_SUMMARY_FROM_PDF_PROMPT,
@@ -164,7 +165,13 @@ class SummaryService:
                 )
 
                 # DSPy version
-                res = self.summary_mod(paper_text=safe_text, lang_name=lang_name)
+                res = trace_dspy_call(
+                    "PaperSummaryModule",
+                    "PaperSummary",
+                    self.summary_mod,
+                    {"paper_text": safe_text, "lang_name": lang_name},
+                    context=TraceContext(paper_id=paper_id),
+                )
 
                 # DSPy may return key_words as None, [], or a raw string when
                 # list parsing fails. Normalize to a proper list before joining.
@@ -252,7 +259,13 @@ class SummaryService:
                 extra={"text_length": len(text)},
             )
             # DSPy version
-            res = self.section_mod(paper_text=safe_text, lang_name=lang_name)
+            res = trace_dspy_call(
+                "SectionSummaryModule",
+                "PaperSummarySections",
+                self.section_mod,
+                {"paper_text": safe_text, "lang_name": lang_name},
+                context=TraceContext(paper_id=paper_id),
+            )
 
             sections = []
             for item in res.sections:
@@ -332,7 +345,12 @@ class SummaryService:
         """
         try:
             # DSPy version
-            res = self.context_mod(paper_text=text[:20000], max_length=max_length)
+            res = trace_dspy_call(
+                "ContextSummaryModule",
+                "PaperSummaryContext",
+                self.context_mod,
+                {"paper_text": text[:20000], "max_length": max_length},
+            )
             summary = res.summary
             logger.info(f"Context summary generated (length: {len(summary)})")
             return summary[:max_length]

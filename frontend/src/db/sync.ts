@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { db } from "./index";
+import { db, isDbAvailable } from "./index";
 
 export function useSyncStatus() {
 	const [status, setStatus] = useState<"synced" | "pending" | "offline">(
@@ -26,13 +26,23 @@ export function useSyncStatus() {
 			return;
 		}
 
+		if (!isDbAvailable()) {
+			setStatus("synced");
+			return;
+		}
+
 		// Check for unsynced changes
 		const checkSync = async () => {
-			const unsyncedCount = await db.edit_history
-				.where("synced")
-				.equals(0)
-				.count();
-			setStatus(unsyncedCount > 0 ? "pending" : "synced");
+			try {
+				const unsyncedCount = await db.edit_history
+					.where("synced")
+					.equals(0)
+					.count();
+				setStatus(unsyncedCount > 0 ? "pending" : "synced");
+			} catch (e) {
+				console.warn("Failed to check sync status:", e);
+				setStatus("synced");
+			}
 		};
 
 		const interval = setInterval(checkSync, 5000);
@@ -49,11 +59,16 @@ export async function recordEdit(
 	type: "note" | "stamp",
 	data: any,
 ) {
-	await db.edit_history.add({
-		paper_id,
-		type,
-		data,
-		synced: false,
-		created_at: Date.now(),
-	});
+	if (!isDbAvailable()) return;
+	try {
+		await db.edit_history.add({
+			paper_id,
+			type,
+			data,
+			synced: false,
+			created_at: Date.now(),
+		});
+	} catch (e) {
+		console.error("Failed to record edit:", e);
+	}
 }

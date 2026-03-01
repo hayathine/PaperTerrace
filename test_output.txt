@@ -1,0 +1,130 @@
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-9.0.2, pluggy-1.6.0 -- /home/gwsgs/work_space/paperterrace/inference-service/.venv/bin/python
+cachedir: .pytest_cache
+testmon: changed files: 0, unchanged files: 7, environment: default
+rootdir: /home/gwsgs/work_space/paperterrace/inference-service
+configfile: pyproject.toml
+plugins: testmon-2.2.0, asyncio-1.3.0, xdist-3.8.0, anyio-4.12.1
+asyncio: mode=Mode.STRICT, debug=False, asyncio_default_fixture_loop_scope=None, asyncio_default_test_loop_scope=function
+collecting ... collected 1 item
+
+tests/test_batch_layout.py::TestBatchLayoutAnalysis::test_analyze_images_batch_logic FAILED [100%]
+
+=================================== FAILURES ===================================
+___________ TestBatchLayoutAnalysis.test_analyze_images_batch_logic ____________
+
+self = <test_batch_layout.TestBatchLayoutAnalysis object at 0x7a20b8543b90>
+mock_exists = <MagicMock name='exists' id='134280942663248'>
+mock_getsize = <MagicMock name='getsize' id='134280943912624'>
+mock_session = <MagicMock name='InferenceSession' id='134280941590128'>
+
+    @patch("services.layout_detection.layout_service.ort.InferenceSession")
+    @patch("services.layout_detection.layout_service.os.path.getsize")
+    @patch("services.layout_detection.layout_service.os.path.exists")
+    def test_analyze_images_batch_logic(self, mock_exists, mock_getsize, mock_session):
+        mock_exists.return_value = True
+        mock_getsize.return_value = 10 * 1024 * 1024
+    
+        # Configure the mock session
+        mock_session_instance = mock_session.return_value
+        mock_session_instance.get_inputs.return_value = [
+            MagicMock(name="image"),
+            MagicMock(name="scale_factor"),
+            MagicMock(name="im_shape"),
+        ]
+        # Explicitly set names for the mocks to match the service's expectations
+        mock_session_instance.get_inputs.return_value[0].name = "image"
+        mock_session_instance.get_inputs.return_value[1].name = "scale_factor"
+        mock_session_instance.get_inputs.return_value[2].name = "im_shape"
+    
+        service = LayoutAnalysisService(model_path="dummy.onnx")
+    
+        # Mock _preprocess to return consistent dummy data
+        # processed_img, (ori_h, ori_w), (scale_h, scale_w), pad_info
+        dummy_processed = np.zeros((1, 3, 640, 640), dtype=np.float32)
+        dummy_ori_shape = (1000, 1000)
+        dummy_scale = (0.64, 0.64)
+        dummy_pad = np.array([0, 0])
+    
+        with patch.object(service, "_preprocess") as mock_preprocess:
+            mock_preprocess.return_value = (
+                dummy_processed,
+                dummy_ori_shape,
+                dummy_scale,
+                dummy_pad,
+            )
+    
+            # Mock _inference to return dummy predictions
+            # Shape (Batch, NumPredictions, 6)
+            # Prediction: [class_id, score, x1, y1, x2, y2]
+            dummy_predictions = np.zeros((2, 1, 6), dtype=np.float32)
+            dummy_predictions[0, 0] = [1, 0.9, 100, 100, 200, 200]  # Picture
+            dummy_predictions[1, 0] = [8, 0.8, 300, 300, 400, 400]  # Table
+    
+            with patch.object(service, "_inference") as mock_inference:
+                mock_inference.return_value = [dummy_predictions]
+    
+                results = service.analyze_images_batch(["img1.jpg", "img2.jpg"])
+    
+                assert len(results) == 2
+                assert len(results[0]) == 1
+>               assert results[1][0].class_name == "Table"
+                       ^^^^^^^^^^^^^
+E               IndexError: list index out of range
+
+tests/test_batch_layout.py:58: IndexError
+----------------------------- Captured stdout call -----------------------------
+[2m2026-03-01T23:55:44.976214+09:00[0m [[32m[1minfo     [0m] [1mInitializing LayoutAnalysisService (Backend: ONNX)...[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:44.977327+09:00[0m [[32m[1minfo     [0m] [1mModel path: dummy.onnx        [0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:44.977694+09:00[0m [[32m[1minfo     [0m] [1mModel file size: 10.00 MB     [0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:44.978027+09:00[0m [[32m[1minfo     [0m] [1mAvailable CPU cores: 6        [0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:44.978214+09:00[0m [[32m[1minfo     [0m] [1mONNX session config - intra_op_threads: 6, inter_op_threads: 1[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:44.980104+09:00[0m [[32m[1minfo     [0m] [1mLayoutAnalysisService initialization completed[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:44.980848+09:00[0m [[32m[1minfo     [0m] [1mStarting batch layout analysis for 2 images[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:44.998072+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - predictions shape: (1, 6)[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:44.998827+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - max score in all predictions: 0.9000[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:44.999195+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - elements count above threshold 0.1: 1[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:44.999370+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - elements count above threshold 0.2: 1[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:44.999520+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - elements count above threshold 0.3: 1[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:44.999667+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - elements count above threshold 0.4: 1[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:44.999870+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - elements count above threshold 0.5: 1[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:45.001119+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - top 1 prediction: class_id=1, score=0.9000, raw_bbox=[100. 100. 200. 200.][0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:45.003135+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - predictions shape: (1, 6)[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:45.003371+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - max score in all predictions: 0.8000[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:45.003550+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - elements count above threshold 0.1: 1[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:45.003753+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - elements count above threshold 0.2: 1[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:45.004018+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - elements count above threshold 0.3: 1[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:45.004177+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - elements count above threshold 0.4: 1[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:45.004319+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - elements count above threshold 0.5: 1[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:45.004680+09:00[0m [[32m[1minfo     [0m] [1mPostprocess - top 1 prediction: class_id=8, score=0.8000, raw_bbox=[300. 300. 400. 400.][0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+[2m2026-03-01T23:55:45.005149+09:00[0m [[32m[1minfo     [0m] [1mBatch analysis time: 0.024s for 2 images.[0m [[0m[1m[34mapp_logger[0m][0m [36mseverity[0m=[35mINFO[0m
+------------------------------ Captured log call -------------------------------
+INFO     app_logger:layout_service.py:68 {'event': 'Initializing LayoutAnalysisService (Backend: ONNX)...', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.976214+09:00'}
+INFO     app_logger:layout_service.py:69 {'event': 'Model path: dummy.onnx', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.977327+09:00'}
+INFO     app_logger:layout_service.py:93 {'event': 'Model file size: 10.00 MB', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.977694+09:00'}
+INFO     app_logger:layout_service.py:97 {'event': 'Available CPU cores: 6', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.978027+09:00'}
+INFO     app_logger:layout_service.py:108 {'event': 'ONNX session config - intra_op_threads: 6, inter_op_threads: 1', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.978214+09:00'}
+INFO     app_logger:layout_service.py:135 {'event': 'LayoutAnalysisService initialization completed', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.980104+09:00'}
+INFO     app_logger:layout_service.py:184 {'event': 'Starting batch layout analysis for 2 images', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.980848+09:00'}
+INFO     app_logger:layout_service.py:376 {'event': 'Postprocess - predictions shape: (1, 6)', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.998072+09:00'}
+INFO     app_logger:layout_service.py:379 {'event': 'Postprocess - max score in all predictions: 0.9000', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.998827+09:00'}
+INFO     app_logger:layout_service.py:384 {'event': 'Postprocess - elements count above threshold 0.1: 1', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.999195+09:00'}
+INFO     app_logger:layout_service.py:384 {'event': 'Postprocess - elements count above threshold 0.2: 1', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.999370+09:00'}
+INFO     app_logger:layout_service.py:384 {'event': 'Postprocess - elements count above threshold 0.3: 1', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.999520+09:00'}
+INFO     app_logger:layout_service.py:384 {'event': 'Postprocess - elements count above threshold 0.4: 1', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.999667+09:00'}
+INFO     app_logger:layout_service.py:384 {'event': 'Postprocess - elements count above threshold 0.5: 1', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:44.999870+09:00'}
+INFO     app_logger:layout_service.py:392 {'event': 'Postprocess - top 1 prediction: class_id=1, score=0.9000, raw_bbox=[100. 100. 200. 200.]', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:45.001119+09:00'}
+INFO     app_logger:layout_service.py:376 {'event': 'Postprocess - predictions shape: (1, 6)', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:45.003135+09:00'}
+INFO     app_logger:layout_service.py:379 {'event': 'Postprocess - max score in all predictions: 0.8000', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:45.003371+09:00'}
+INFO     app_logger:layout_service.py:384 {'event': 'Postprocess - elements count above threshold 0.1: 1', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:45.003550+09:00'}
+INFO     app_logger:layout_service.py:384 {'event': 'Postprocess - elements count above threshold 0.2: 1', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:45.003753+09:00'}
+INFO     app_logger:layout_service.py:384 {'event': 'Postprocess - elements count above threshold 0.3: 1', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:45.004018+09:00'}
+INFO     app_logger:layout_service.py:384 {'event': 'Postprocess - elements count above threshold 0.4: 1', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:45.004177+09:00'}
+INFO     app_logger:layout_service.py:384 {'event': 'Postprocess - elements count above threshold 0.5: 1', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:45.004319+09:00'}
+INFO     app_logger:layout_service.py:392 {'event': 'Postprocess - top 1 prediction: class_id=8, score=0.8000, raw_bbox=[300. 300. 400. 400.]', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:45.004680+09:00'}
+INFO     app_logger:layout_service.py:251 {'event': 'Batch analysis time: 0.024s for 2 images.', 'level': 'info', 'severity': 'INFO', 'logger': 'app_logger', 'timestamp': '2026-03-01T23:55:45.005149+09:00'}
+=================== Testmon savings (deselected/no testmon) ====================
+this run: 11/12 (92%) tests, 0m 0s/0m 0s, all runs: 858/910 (94%) tests, 0m 7s/0m 9s
+=========================== short test summary info ============================
+FAILED tests/test_batch_layout.py::TestBatchLayoutAnalysis::test_analyze_images_batch_logic - IndexError: list index out of range
+============================== 1 failed in 0.58s ===============================

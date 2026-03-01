@@ -10,11 +10,11 @@ import {
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import { useAuth } from "../../contexts/AuthContext";
-import { db } from "../../db";
 import { usePaperCache } from "../../db/hooks";
+// TODO (suspended): db import used by handleAreaSelect - restore when area mode re-enabled.
+// import { db } from "../../db";
+import { isDbAvailable } from "../../db/index";
 import { useSyncStatus } from "../../db/sync";
-import StampPalette from "../Stamps/StampPalette";
-import type { Stamp, StampType } from "../Stamps/types";
 import PDFPage from "./PDFPage";
 import TextModeViewer from "./TextModeViewer";
 import type { PageData, PageWithLines } from "./types";
@@ -60,7 +60,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	paperId: propPaperId,
 	onWordClick,
 	onTextSelect,
-	onAreaSelect,
+	// TODO (suspended): onAreaSelect prop kept for interface compatibility, not forwarded.
+	// onAreaSelect,
 	sessionId,
 	jumpTarget,
 	onStatusChange,
@@ -73,8 +74,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token, isGuest } = useAuth();
-	const { getCachedPaper, savePaperToCache, cachePaperImages } =
-		usePaperCache();
+	const {
+		getCachedPaper,
+		savePaperToCache,
+		cachePaperImages,
+		deleteCorruptedCache,
+	} = usePaperCache();
 	const syncStatus = useSyncStatus();
 	const [pages, setPages] = useState<PageData[]>([]);
 	const [status, setStatus] = useState<
@@ -101,8 +106,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	// ツールバーボタンのアクティブ状態は即時反映し、重い再レンダリングは
 	// バックグラウンドで処理する。
 	const [isModeTransitionPending, startModeTransition] = useTransition();
-	const [stamps, setStamps] = useState<Stamp[]>([]);
-	const [selectedStamp, setSelectedStamp] = useState<StampType>("👍");
+	// TODO (suspended): stamp state removed. Restore for stamp mode.
 
 	const pagesRef = useRef<PageData[]>([]);
 	const [evidenceHighlights, setEvidenceHighlights] = useState<
@@ -299,9 +303,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 	// Fetch stamps when loadedPaperId is available
 	useEffect(() => {
-		if (loadedPaperId) {
-			fetchStamps(loadedPaperId);
-		}
+		// TODO (suspended): fetchStamps(loadedPaperId) removed - stamp mode suspended.
 		if (onPaperLoaded) {
 			onPaperLoaded(loadedPaperId);
 		}
@@ -339,6 +341,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				formData.append("paper_id", paperId);
 				formData.append("page_numbers", batchPages.join(","));
 
+				// Important for transient sessions: provide file_hash explicitly
+				const fileHash = finalPages[0]?.image_url?.split("/")[5]; // Extract from /static/paper_images/{hash}/...
+				if (fileHash) formData.append("file_hash", fileHash);
+
 				const response = await fetch(`${API_URL}/api/analyze-layout-lazy`, {
 					method: "POST",
 					headers,
@@ -357,10 +363,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 				const result = await response.json();
 
-				// Merge detected figures into page state
+				// 1. Merge detected figures into page state
 				if (result.figures && result.figures.length > 0) {
-					setPages((prevPages) =>
-						prevPages.map((page) => {
+					setPages((prevPages) => {
+						const nextPages = prevPages.map((page) => {
 							const pageFigures = result.figures.filter(
 								(f: any) => f.page_num === page.page_num,
 							);
@@ -374,14 +380,53 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 											? `${API_URL}${f.image_url}`
 											: f.image_url,
 								}));
+
+								// Deduplicate based on BBox or Image URL
+								const existingUrls = new Set(
+									(page.figures || []).map((ef) => ef.image_url),
+								);
+								const newUniqueFigures = processedFigures.filter(
+									(nf: any) => !existingUrls.has(nf.image_url),
+								);
+
+								if (newUniqueFigures.length === 0) return page;
+
 								return {
 									...page,
-									figures: [...(page.figures || []), ...processedFigures],
+									figures: [...(page.figures || []), ...newUniqueFigures],
 								};
 							}
 							return page;
-						}),
-					);
+						});
+
+						// 2. Persist to IndexedDB cache (Crucial for Transient sessions)
+						if (paperId && isDbAvailable()) {
+							const layoutJson = JSON.stringify(
+								nextPages.map((p) => ({
+									width: p.width,
+									height: p.height,
+									words: p.words,
+									figures: p.figures,
+									links: p.links,
+								})),
+							);
+
+							getCachedPaper(paperId).then((cached) => {
+								savePaperToCache({
+									...(cached || {
+										id: paperId,
+										file_hash: fileHash || "",
+										title: "Untitled",
+										last_accessed: Date.now(),
+									}),
+									layout_json: layoutJson,
+									last_accessed: Date.now(),
+								});
+							});
+						}
+
+						return nextPages;
+					});
 				}
 			}
 			console.log("[PDFViewer] Completely finished lazy layout analysis.");
@@ -391,6 +436,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		}
 	};
 
+	/* TODO (suspended): fetchStamps removed - stamp mode suspended.
 	const fetchStamps = async (id: string) => {
 		try {
 			const headers: HeadersInit = {};
@@ -405,6 +451,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			console.error("Failed to fetch stamps", e);
 		}
 	};
+	*/
 
 	// Scroll to jump target when it changes
 	useEffect(() => {
@@ -462,7 +509,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		setStatus("uploading");
 		setPages([]);
 		setLoadedPaperId(null);
-		setStamps([]);
+		// setStamps([]);
 
 		const formData = new FormData();
 		formData.append("file", file);
@@ -581,13 +628,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						setLoadedPaperId(pId);
 
 						// Use ref to get the latest pages collected during streaming
-						const finalPages = pagesRef.current;
+						const finalPages = pagesRef.current || [];
 
 						console.log(
 							"[PDFViewer] Final pages collected:",
 							finalPages.length,
 						);
-						if (finalPages.length > 0) {
+						if (finalPages && finalPages.length > 0) {
 							console.log("[PDFViewer] Sample page structure:", {
 								page_num: finalPages[0].page_num,
 								width: finalPages[0].width,
@@ -632,7 +679,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 									last_accessed: Date.now(),
 								});
 								// We don't block on image caching
-								cachePaperImages(pId, imageUrls);
+								cachePaperImages(pId, imageUrls).catch((err) =>
+									console.warn("[PDFViewer] Image caching failed:", err),
+								);
 							})();
 						}
 
@@ -728,6 +777,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		[onTextSelect],
 	);
 
+	/* TODO (suspended): handleAreaSelect removed - area/crop mode suspended.
 	const handleAreaSelect = useCallback(
 		async (coords: {
 			page: number;
@@ -812,7 +862,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		},
 		[pages, onAreaSelect, token],
 	);
+	*/
 
+	/* TODO (suspended): handleAddStamp removed - stamp mode suspended.
 	const handleAddStamp = useCallback(
 		async (page: number, x: number, y: number) => {
 			if (!loadedPaperId) {
@@ -870,7 +922,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		},
 		[loadedPaperId, selectedStamp, token],
 	);
+	*/
 
+	/* TODO (suspended): handleDeleteStamp removed - stamp mode suspended.
 	const handleDeleteStamp = useCallback(
 		async (stampId: string) => {
 			// Optimistic update
@@ -889,6 +943,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		},
 		[token],
 	);
+	*/
 
 	const pagesWithLines: PageWithLines[] = useMemo(
 		() => groupWordsIntoLines(pages),
@@ -898,7 +953,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	const loadExistingPaper = async (id: string) => {
 		setStatus("processing");
 		setLoadedPaperId(id);
-		setStamps([]);
+		// setStamps([]);
 
 		try {
 			// 0. Check IndexedDB Cache First (Offline First / Fast Load)
@@ -948,7 +1003,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							return;
 						}
 					} catch (e) {
-						console.warn("[PDFViewer] Failed to parse cached data", e);
+						console.warn("[PDFViewer] Corrupted cache detected, deleting:", e);
+						await deleteCorruptedCache(id);
 					}
 				}
 			}
@@ -1004,6 +1060,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								cachePaperImages(
 									id,
 									fullPages.map((p) => p.image_url),
+								).catch((err) =>
+									console.warn("[PDFViewer] Image caching failed:", err),
 								);
 							}
 
@@ -1193,36 +1251,24 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								</span>
 							</button>
 
-							<div className="w-[1px] h-4 bg-slate-200 mx-1 hidden sm:block" />
+							{/* TODO: Crop mode (area) and Stamp mode are temporarily suspended.
+							     Restore the buttons below and the StampPalette / PDFPage props when re-enabling. */}
+							{/* <div className="w-[1px] h-4 bg-slate-200 mx-1 hidden sm:block" />
 							<button
 								type="button"
 								onClick={() => startModeTransition(() => setMode("area"))}
-								className={`px-2 sm:px-3 py-1.5 rounded-md flex items-center gap-1 sm:gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
-									mode === "area"
-										? "bg-orange-600 text-white shadow-none"
-										: "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-								} ${isModeTransitionPending ? "opacity-60" : ""}`}
 							>
 								<span className="text-sm">✂️</span>
-								<span className="hidden sm:inline">
-									{t("viewer.toolbar.area_mode")}
-								</span>
+								<span className="hidden sm:inline">{t("viewer.toolbar.area_mode")}</span>
 							</button>
 
 							<button
 								type="button"
 								onClick={() => startModeTransition(() => setMode("stamp"))}
-								className={`px-2 sm:px-3 py-1.5 rounded-md flex items-center gap-1 sm:gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
-									mode === "stamp"
-										? "bg-orange-600 text-white shadow-none"
-										: "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-								} ${isModeTransitionPending ? "opacity-60" : ""}`}
 							>
 								<span className="text-sm">👍</span>
-								<span className="hidden sm:inline">
-									{t("viewer.toolbar.stamp_mode")}
-								</span>
-							</button>
+								<span className="hidden sm:inline">{t("viewer.toolbar.stamp_mode")}</span>
+							</button> */}
 						</div>
 					</div>
 
@@ -1242,21 +1288,16 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					     以降は CSS display トグルで再マウントコストなしに切り替え */}
 					{hasMountedPdfMode && (
 						<div className={mode !== "plaintext" ? "block" : "hidden"}>
-							<div
-								className={`space-y-6 ${mode === "stamp" || mode === "area" ? "cursor-crosshair" : ""}`}
-							>
+							<div className="space-y-6">
+								{/* TODO: Stamp/Area mode suspended. Restore PDFPage props to re-enable:
+								     stamps={stamps} isStampMode={mode === "stamp"} onAddStamp={handleAddStamp}
+								     onDeleteStamp={handleDeleteStamp} isAreaMode={mode === "area"} onAreaSelect={handleAreaSelect} */}
 								{pages.map((page) => (
 									<PDFPage
 										key={page.page_num}
 										page={page}
 										onWordClick={handleWordClick}
 										onTextSelect={handleTextSelect}
-										stamps={stamps}
-										isStampMode={mode === "stamp"}
-										onAddStamp={handleAddStamp}
-										onDeleteStamp={handleDeleteStamp}
-										isAreaMode={mode === "area"}
-										onAreaSelect={handleAreaSelect}
 										onAskAI={onAskAI}
 										jumpTarget={jumpTarget}
 										searchTerm={searchTerm}
@@ -1269,8 +1310,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						</div>
 					)}
 
-					{/* Stamp Palette (Only show if we have pages/loadedPaperId) */}
-					{loadedPaperId && mode === "stamp" && (
+					{/* TODO: Stamp Palette suspended along with stamp mode.
+					     Restore when stamp mode is re-enabled. */}
+					{/* {loadedPaperId && mode === "stamp" && (
 						<StampPalette
 							isStampMode={true}
 							onToggleMode={() => setMode("text")}
@@ -1278,7 +1320,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							onSelectStamp={setSelectedStamp}
 							token={token ?? undefined}
 						/>
-					)}
+					)} */}
 				</>
 			)}
 		</div>

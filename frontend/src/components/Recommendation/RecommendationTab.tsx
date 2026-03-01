@@ -1,6 +1,7 @@
 import type React from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useAuth } from "@/contexts/AuthContext";
 import {
 	generateRecommendations,
 	type RecommendationGenerateResponse,
@@ -14,6 +15,7 @@ interface RecommendationTabProps {
 
 const RecommendationTab: React.FC<RecommendationTabProps> = ({ sessionId }) => {
 	const { t } = useTranslation();
+	const { token } = useAuth();
 	const [isOpen, setIsOpen] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
@@ -26,7 +28,7 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({ sessionId }) => {
 		setError(null);
 		setClickedPapers(new Set());
 		try {
-			const res = await generateRecommendations(sessionId);
+			const res = await generateRecommendations(sessionId, token);
 			setResponse(res);
 			setIsOpen(true);
 		} catch (err) {

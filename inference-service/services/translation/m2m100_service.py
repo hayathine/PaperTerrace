@@ -107,15 +107,16 @@ class M2M100TranslationService:
 
     @staticmethod
     def _wrap_word_in_sentence(word: str) -> str:
-        """単語を<word>タグでマークした文章に埋め込む。
+        """単語を<t>タグでマークした文章に埋め込む。
         文脈を与えることでM2M100の翻訳精度を向上させる。
+        <t>は意味のない記号としてモデルに認識されるため、誤訳を防ぐ。
         """
-        return f"The term <word>{word}</word> is used here."
+        return f"The term <t>{word}</t> is used here."
 
     @staticmethod
     def _extract_bracketed(text: str) -> str | None:
-        """翻訳結果から<word>...</word>内のテキストを抽出して返す"""
-        match = re.search(r"<word>(.*?)</word>", text, re.DOTALL)
+        """翻訳結果から<t>...</t>内のテキストを抽出して返す"""
+        match = re.search(r"<t>(.*?)</t>", text, re.DOTALL)
         if match:
             return match.group(1).strip()
         return None
@@ -162,7 +163,7 @@ class M2M100TranslationService:
                 output_tokens = output_tokens[1:]
             translation = self.tokenizer.decode_pieces(output_tokens).strip()
 
-            # 単語翻訳の場合: <word>...</word>内のテキストだけを取り出す
+            # 単語翻訳の場合: <t>...</t>内のテキストだけを取り出す
             # モデルがタグを保持しなかった場合は全体をそのまま返す
             if is_word:
                 extracted = self._extract_bracketed(translation)

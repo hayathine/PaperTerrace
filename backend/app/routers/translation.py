@@ -22,6 +22,7 @@ from app.providers.inference_client import (
 )
 from common.dspy.config import setup_dspy
 from common.dspy.modules import TranslationModule
+from common.dspy.trace import TraceContext, trace_dspy_call
 from common.logger import get_service_logger
 from common.prompts import (
     CORE_SYSTEM_PROMPT,
@@ -503,8 +504,12 @@ async def explain_deep(
         # DSPy version
         setup_dspy()
         trans_mod = TranslationModule()
-        res = trans_mod(
-            paper_context=paper_context, target_text=lemma, lang_name=lang_name
+        res = trace_dspy_call(
+            "TranslationModule",
+            "ContextAwareTranslation",
+            trans_mod,
+            {"paper_context": paper_context, "target_text": lemma, "lang_name": lang_name},
+            context=TraceContext(paper_id=paper_id),
         )
         translation = res.translation_and_explanation.strip()
 
@@ -594,10 +599,16 @@ async def explain_with_context(req: ExplainContextRequest):
         # DSPy version
         setup_dspy()
         trans_mod = TranslationModule()
-        res = trans_mod(
-            paper_context=f"{summary_context}\n{req.context}",
-            target_text=req.word,
-            lang_name=lang_name,
+        res = trace_dspy_call(
+            "TranslationModule",
+            "ContextAwareTranslation",
+            trans_mod,
+            {
+                "paper_context": f"{summary_context}\n{req.context}",
+                "target_text": req.word,
+                "lang_name": lang_name,
+            },
+            context=TraceContext(paper_id=paper_id),
         )
         explanation = res.translation_and_explanation
 

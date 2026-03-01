@@ -2,6 +2,7 @@ import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import { useLoading } from "../../contexts/LoadingContext";
+import { usePaperCache } from "../../db/hooks";
 import CopyButton from "../Common/CopyButton";
 import FeedbackSection from "../Common/FeedbackSection";
 import MarkdownContent from "../Common/MarkdownContent";
@@ -22,11 +23,11 @@ const Summary: React.FC<SummaryProps> = ({
 }) => {
 	const { t, i18n } = useTranslation();
 	const { startLoading, stopLoading } = useLoading();
-	const [mode, setMode] = useState<Mode>("summary");
+	const { getCachedPaper, savePaperToCache } = usePaperCache();
 
+	const [mode, setMode] = useState<Mode>("summary");
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-
 	const [summaryData, setSummaryData] = useState<string | null>(null);
 	const [critiqueData, setCritiqueData] = useState<CritiqueResponse | null>(
 		null,
@@ -38,6 +39,18 @@ const Summary: React.FC<SummaryProps> = ({
 		setCritiqueData(null);
 		setError(null);
 	}, [paperId]);
+
+	// Load summary from cache on mount or when paperId changes
+	React.useEffect(() => {
+		if (paperId && !summaryData) {
+			getCachedPaper(paperId).then((cached) => {
+				if (cached?.full_summary) {
+					console.log("[Summary] Loading from IndexedDB cache");
+					setSummaryData(cached.full_summary);
+				}
+			});
+		}
+	}, [paperId, getCachedPaper, summaryData]);
 
 	const handleSummarize = useCallback(
 		async (force = false) => {
@@ -62,6 +75,21 @@ const Summary: React.FC<SummaryProps> = ({
 				const data = await res.json();
 				if (data.summary) {
 					setSummaryData(data.summary);
+					// Save to IndexedDB
+					if (paperId) {
+						getCachedPaper(paperId).then((cached) => {
+							savePaperToCache({
+								...(cached || {
+									id: paperId,
+									file_hash: "",
+									title: "Untitled",
+									last_accessed: Date.now(),
+								}),
+								full_summary: data.summary,
+								last_accessed: Date.now(),
+							});
+						});
+					}
 				} else if (data.abstract) {
 					setSummaryData(data.abstract);
 				} else {
@@ -75,7 +103,16 @@ const Summary: React.FC<SummaryProps> = ({
 				stopLoading();
 			}
 		},
-		[sessionId, paperId, i18n.language, t, startLoading, stopLoading],
+		[
+			sessionId,
+			paperId,
+			i18n.language,
+			t,
+			startLoading,
+			stopLoading,
+			getCachedPaper,
+			savePaperToCache,
+		],
 	);
 
 	const handleCritique = useCallback(async () => {
@@ -116,10 +153,12 @@ const Summary: React.FC<SummaryProps> = ({
 		if (isAnalyzing) return;
 
 		// Fetch when: analysis just finished, or initial load (not analyzing)
+		// Only fetch if not already in state. (Initial load will be handled by the direct useEffect above if cached)
 		if (sessionId && paperId && (wasAnalyzing || !summaryData)) {
+			// If we just finished analyzing, or we have no data and it's not and we are not analyzing
 			handleSummarize(false);
 		}
-	}, [sessionId, paperId, isAnalyzing]);
+	}, [sessionId, paperId, isAnalyzing, summaryData, handleSummarize]);
 
 	return (
 		<div className="flex flex-col h-full bg-slate-50">

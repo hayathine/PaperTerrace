@@ -143,6 +143,11 @@ def configure_logging(log_level: str = "INFO"):
     )
 
 
+def get_logger(name: str):
+    """標準的なロガー取得のための関数（後方互換性のため）"""
+    return structlog.get_logger(name)
+
+
 # 初期化実行
 configure_logging()
 

@@ -11,10 +11,10 @@
 		"close": "閉じる",
 		"feedback": {
 			"title": "この結果はいかがでしたか？",
-			"good": "役立った",
-			"bad": "期待外れ",
+			"good": "",
+			"bad": "",
 			"submitted": "評価ありがとうございます！",
-			"placeholder": "詳細を教えてください（任意）",
+			"placeholder": "フィードバックをお願いします！（任意）",
 			"send": "送信する"
 		}
 	},
@@ -52,7 +52,8 @@
 			"dict": "辞書",
 			"summary": "要約",
 			"chat": "チャット",
-			"notes": "ノート"
+			"notes": "ノート",
+			"figures": "図解"
 		}
 	},
 	"viewer": {

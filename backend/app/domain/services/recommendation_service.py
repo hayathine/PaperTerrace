@@ -16,6 +16,7 @@ from app.schemas.recommendation import (
 )
 from common.dspy.config import load_dspy_module_from_gcs, setup_dspy
 from common.dspy.modules import RecommendationModule, UserProfileModule
+from common.dspy.trace import TraceContext, trace_dspy_call
 from redis_provider.provider import RedisService
 
 
@@ -246,10 +247,20 @@ class RecommendationService:
             profile_mod = RecommendationService._get_profile_module()
 
             clicks_str = json.dumps(trajectory.word_clicks or [], ensure_ascii=False)
-            profile_res = profile_mod(
-                paper_summary=trajectory.paper_abstract or "",
-                conversation_history=trajectory.conversation_history or "",
-                word_clicks=clicks_str,
+            profile_res = trace_dspy_call(
+                "UserProfileModule",
+                "UserProfileEstimation",
+                profile_mod,
+                {
+                    "paper_summary": trajectory.paper_abstract or "",
+                    "conversation_history": trajectory.conversation_history or "",
+                    "word_clicks": clicks_str,
+                },
+                context=TraceContext(
+                    user_id=req.user_id,
+                    session_id=req.session_id,
+                    paper_id=trajectory.paper_id if trajectory else None,
+                ),
             )
             knowledge_level = profile_res.knowledge_level
             interests = profile_res.interests
@@ -276,12 +287,22 @@ class RecommendationService:
             else str(unknown_concepts)
         )
 
-        rec_res = rec_mod(
-            paper_analysis=paper_analysis,
-            knowledge_level=knowledge_level,
-            interests=interests_str,
-            unknown_concepts=unknowns_str,
-            preferred_direction=preferred_direction,
+        rec_res = trace_dspy_call(
+            "RecommendationModule",
+            "PaperRecommendation",
+            rec_mod,
+            {
+                "paper_analysis": paper_analysis,
+                "knowledge_level": knowledge_level,
+                "interests": interests_str,
+                "unknown_concepts": unknowns_str,
+                "preferred_direction": preferred_direction,
+            },
+            context=TraceContext(
+                user_id=req.user_id,
+                session_id=req.session_id,
+                paper_id=trajectory.paper_id if trajectory else None,
+            ),
         )
 
         # Semaphore Scholar API を使って検索を実行

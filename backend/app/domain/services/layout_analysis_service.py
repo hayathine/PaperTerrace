@@ -28,22 +28,37 @@ class LayoutAnalysisService:
         self.storage = get_storage_provider()
 
     async def analyze_layout_lazy(
-        self, paper_id: str, page_numbers: list[int] | None = None
+        self,
+        paper_id: str,
+        page_numbers: list[int] | None = None,
+        user_id: str | None = None,
+        file_hash: str | None = None,
     ):
+        # 1. Resolve paper and file_hash
         paper = await anyio.to_thread.run_sync(self.storage.get_paper, paper_id)
-        if not paper:
-            raise Exception("Paper not found")
 
-        file_hash = paper.get("file_hash")
+        if not paper:
+            # If not in DB, we must have been given the file_hash (Transient mode)
+            if not file_hash:
+                raise Exception(
+                    f"Paper {paper_id} not found in DB and no file_hash provided"
+                )
+            logger.info(
+                f"[analyze_layout_lazy] Paper {paper_id} not in DB, using transient hash {file_hash}"
+            )
+        else:
+            file_hash = paper.get("file_hash") or file_hash
+
         if not file_hash:
             raise Exception("Paper has no file_hash")
 
         from app.providers.image_storage import get_page_images
 
+        # 2. Get images from storage (Local or GCS)
         cached_images = get_page_images(file_hash)
 
         if not cached_images:
-            raise Exception("No cached images found for this paper")
+            raise Exception(f"No cached images found for file_hash {file_hash}")
 
         if page_numbers:
             pages_to_process = [
@@ -158,8 +173,11 @@ class LayoutAnalysisService:
                         )
                         continue
 
-        # Save to DB
-        if all_figures:
+        # 3. Save to DB ONLY for registered users
+        if all_figures and user_id:
+            logger.info(
+                f"[analyze_layout_lazy] Saving {len(all_figures)} figures to DB for {paper_id}"
+            )
             # Reformat figures for batch saving
             batch_figures = [
                 {
@@ -189,36 +207,41 @@ class LayoutAnalysisService:
                         process_figure_analysis_task(fid, fig["image_url"])
                     )
 
-            # Update layout_json
-            try:
-                existing_layout = paper.get("layout_json")
-                if existing_layout:
-                    layout_list = json.loads(existing_layout)
-                    page_figures = {}
-                    for fig in all_figures:
-                        pn = fig["page_num"]
-                        if pn not in page_figures:
-                            page_figures[pn] = []
-                        page_figures[pn].append(
-                            {
-                                "bbox": fig["bbox"],
-                                "image_url": fig["image_url"],
-                                "label": fig.get("label", "figure"),
-                                "page_num": fig["page_num"],
-                            }
+            # Update layout_json (if paper exists in DB)
+            if paper:
+                try:
+                    existing_layout = paper.get("layout_json")
+                    if existing_layout:
+                        layout_list = json.loads(existing_layout)
+                        page_figures = {}
+                        for fig in all_figures:
+                            pn = fig["page_num"]
+                            if pn not in page_figures:
+                                page_figures[pn] = []
+                            page_figures[pn].append(
+                                {
+                                    "bbox": fig["bbox"],
+                                    "image_url": fig["image_url"],
+                                    "label": fig.get("label", "figure"),
+                                    "page_num": fig["page_num"],
+                                }
+                            )
+
+                        for i, layout in enumerate(layout_list):
+                            page_num = i + 1
+                            if page_num in page_figures:
+                                layout["figures"] = page_figures[page_num]
+
+                        await anyio.to_thread.run_sync(
+                            self.storage.update_paper_layout,
+                            paper_id,
+                            json.dumps(layout_list),
                         )
-
-                    for i, layout in enumerate(layout_list):
-                        page_num = i + 1
-                        if page_num in page_figures:
-                            layout["figures"] = page_figures[page_num]
-
-                    await anyio.to_thread.run_sync(
-                        self.storage.update_paper_layout,
-                        paper_id,
-                        json.dumps(layout_list),
-                    )
-            except Exception as e:
-                logger.warning(f"Failed to update layout_json: {e}")
+                except Exception as e:
+                    logger.warning(f"Failed to update layout_json: {e}")
+        elif all_figures:
+            logger.info(
+                f"[analyze_layout_lazy] Skipping DB save for transient session {paper_id}"
+            )
 
         return all_figures

@@ -497,47 +497,70 @@ async def stream(task_id: str):
                 # paper_id is now pre-generated and passed in task data
                 new_paper_id = paper_id
 
-                # Save to permanent DB ALWAYS (Offload from Redis to prevent OOM)
-                try:
-                    from app.crud import save_figure_to_db
-                    from app.domain.services.paper_processing import (
-                        process_figure_analysis_task,
-                        process_paper_summary_task,
-                    )
+                # Save to permanent DB ONLY for registered users (prevent DB clutter for transient guest sessions)
+                # Transient sessions rely on Redis and Frontend IndexedDB.
+                if user_id:
+                    try:
+                        from app.crud import save_figure_to_db
+                        from app.domain.services.paper_processing import (
+                            process_figure_analysis_task,
+                            process_paper_summary_task,
+                        )
 
-                    storage.save_paper(
-                        paper_id=new_paper_id,
-                        file_hash=file_hash,
-                        filename=filename,
-                        ocr_text=full_text,
-                        html_content="",
-                        target_language="ja",
-                        layout_json=json.dumps(all_layout_data),
-                        owner_id=user_id,
-                    )
-                    # DBにもセッションマッピングを保存
-                    if session_id:
-                        storage.save_session_context(session_id, new_paper_id)
+                        storage.save_paper(
+                            paper_id=new_paper_id,
+                            file_hash=file_hash,
+                            filename=filename,
+                            ocr_text=full_text,
+                            html_content="",
+                            target_language="ja",
+                            layout_json=json.dumps(all_layout_data),
+                            owner_id=user_id,
+                        )
+                        # DBにもセッションマッピングを保存
+                        if session_id:
+                            storage.save_session_context(session_id, new_paper_id)
 
-                    # Trigger async tasks (Summarization / Figure analysis)
-                    asyncio.create_task(
-                        process_paper_summary_task(new_paper_id, lang=lang)
+                        logger.info(
+                            f"[stream] {task_id}: Paper saved to DB for user {user_id}"
+                        )
+
+                        # Trigger background tasks (require DB records)
+                        asyncio.create_task(
+                            process_paper_summary_task(new_paper_id, lang=lang)
+                        )
+
+                        # Save figure metadata for each page
+                        # The original code iterated collected_figures, which was a flat list.
+                        # The new code iterates all_layout_data and then figures within each page.
+                        # To maintain consistency with the original's collected_figures logic,
+                        # we'll use collected_figures here.
+                        if collected_figures:
+                            for fig in collected_figures:
+                                fid = save_figure_to_db(
+                                    paper_id=new_paper_id,
+                                    page_number=fig[
+                                        "page_num"
+                                    ],  # Use page_num from collected_figures
+                                    bbox=fig.get("bbox", []),
+                                    image_url=fig.get("image_url", ""),
+                                    label=fig.get("label", "figure"),
+                                    latex=fig.get("latex", ""),  # Keep latex if present
+                                )
+                                # Optional: Trigger detailed figure analysis in background
+                                asyncio.create_task(
+                                    process_figure_analysis_task(
+                                        fid, fig.get("image_url", "")
+                                    )
+                                )
+                    except Exception as db_err:
+                        logger.error(
+                            f"[stream] {task_id}: Failed to save to DB: {db_err}"
+                        )
+                else:
+                    logger.info(
+                        f"[stream] {task_id}: Skipping DB save for guest/transient session"
                     )
-                    if collected_figures:
-                        for fig in collected_figures:
-                            fid = save_figure_to_db(
-                                new_paper_id,
-                                fig["page_num"],
-                                fig["bbox"],
-                                fig["image_url"],
-                                label=fig.get("label", "figure"),
-                                latex=fig.get("latex", ""),
-                            )
-                            asyncio.create_task(
-                                process_figure_analysis_task(fid, fig["image_url"])
-                            )
-                except Exception as e:
-                    logger.error(f"Failed to save paper record: {e}")
 
                 # Redis session context (1-hour sliding limit, TRUNCATED to 20k chars to prevent OOM)
                 s_id = session_id or new_paper_id
