@@ -25,7 +25,7 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({
 		<div className={className}>
 			<ReactMarkdown
 				remarkPlugins={[remarkMath]}
-				rehypePlugins={[rehypeKatex]}
+				rehypePlugins={[[rehypeKatex, { strict: false }]]}
 				components={components}
 			>
 				{children}

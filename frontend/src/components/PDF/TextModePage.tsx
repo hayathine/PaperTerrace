@@ -4,6 +4,24 @@ import type { Components } from "react-markdown";
 import MarkdownContent from "../Common/MarkdownContent";
 import type { Figure, PageWithLines } from "./types";
 
+const KNOWN_SECTIONS = [
+	"abstract",
+	"introduction",
+	"conclusion",
+	"conclusions",
+	"related work",
+	"references",
+	"bibliography",
+	"acknowledgement",
+	"acknowledgements",
+	"methods",
+	"methodology",
+	"discussion",
+	"results",
+	"experiments",
+	"evaluation",
+];
+
 interface TextModePageProps {
 	page: PageWithLines;
 	onWordClick?: (
@@ -67,8 +85,17 @@ function highlightText(
 
 	if (React.isValidElement(children)) {
 		const element = children as React.ReactElement<{
+			className?: string;
 			children?: React.ReactNode;
 		}>;
+		// rehype-katex が生成する math/KaTeX 要素はスキップ（内部構造を破壊しないため）
+		const className = element.props.className ?? "";
+		if (
+			typeof className === "string" &&
+			(className.includes("math") || className.includes("katex"))
+		) {
+			return children;
+		}
 		if (element.props.children) {
 			return React.cloneElement(element, {
 				...element.props,
@@ -78,6 +105,17 @@ function highlightText(
 	}
 
 	return children;
+}
+
+function extractHeadingText(node: React.ReactNode): string {
+	if (typeof node === "string") return node;
+	if (Array.isArray(node)) return node.map(extractHeadingText).join("");
+	if (React.isValidElement(node)) {
+		return extractHeadingText(
+			(node.props as { children?: React.ReactNode }).children,
+		);
+	}
+	return "";
 }
 
 /**
@@ -260,18 +298,6 @@ const TextModePage: React.FC<TextModePageProps> = ({
 			comps.li = ({ children, ...rest }) => (
 				<li {...rest}>{highlightText(children, searchTerm)}</li>
 			);
-			comps.h1 = ({ children, ...rest }) => (
-				<h1 {...rest}>{highlightText(children, searchTerm)}</h1>
-			);
-			comps.h2 = ({ children, ...rest }) => (
-				<h2 {...rest}>{highlightText(children, searchTerm)}</h2>
-			);
-			comps.h3 = ({ children, ...rest }) => (
-				<h3 {...rest}>{highlightText(children, searchTerm)}</h3>
-			);
-			comps.h4 = ({ children, ...rest }) => (
-				<h4 {...rest}>{highlightText(children, searchTerm)}</h4>
-			);
 			comps.td = ({ children, ...rest }) => (
 				<td {...rest}>{highlightText(children, searchTerm)}</td>
 			);
@@ -279,6 +305,76 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				<th {...rest}>{highlightText(children, searchTerm)}</th>
 			);
 		}
+
+		// 見出し H1 — 論文タイトル（常時カスタムスタイル、検索ハイライトも内部で処理）
+		comps.h1 = ({ children, ...rest }) => {
+			const content =
+				searchTerm && searchTerm.length >= 2
+					? highlightText(children, searchTerm)
+					: children;
+			return (
+				<h1
+					className="text-2xl font-bold text-slate-800 leading-snug tracking-tight mt-2 mb-6 pb-4 border-b-2 border-slate-300"
+					{...rest}
+				>
+					{content}
+				</h1>
+			);
+		};
+
+		// 見出し H2 — セクション（Abstract, Introduction など）
+		comps.h2 = ({ children, ...rest }) => {
+			const headingText = extractHeadingText(children).toLowerCase();
+			const isKnown = KNOWN_SECTIONS.some((s) => headingText.includes(s));
+			const content =
+				searchTerm && searchTerm.length >= 2
+					? highlightText(children, searchTerm)
+					: children;
+			return (
+				<h2
+					className={`text-base font-bold mt-8 mb-3 pb-1 border-b ${
+						isKnown
+							? "text-orange-700 border-orange-200"
+							: "text-slate-700 border-slate-200"
+					}`}
+					{...rest}
+				>
+					{content}
+				</h2>
+			);
+		};
+
+		// 見出し H3 — サブセクション
+		comps.h3 = ({ children, ...rest }) => {
+			const content =
+				searchTerm && searchTerm.length >= 2
+					? highlightText(children, searchTerm)
+					: children;
+			return (
+				<h3
+					className="text-sm font-bold text-slate-700 mt-6 mb-2 pl-2 border-l-2 border-slate-300"
+					{...rest}
+				>
+					{content}
+				</h3>
+			);
+		};
+
+		// 見出し H4 — サブサブセクション
+		comps.h4 = ({ children, ...rest }) => {
+			const content =
+				searchTerm && searchTerm.length >= 2
+					? highlightText(children, searchTerm)
+					: children;
+			return (
+				<h4
+					className="text-sm font-semibold text-slate-600 mt-4 mb-1.5 italic"
+					{...rest}
+				>
+					{content}
+				</h4>
+			);
+		};
 
 		return comps;
 	}, [page.figures, searchTerm]);
@@ -300,7 +396,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 			<div className="px-6 py-5 md:px-10 md:py-8 selection:bg-orange-600/30">
 				{markdownText ? (
 					<MarkdownContent
-						className="prose prose-slate max-w-none prose-headings:mt-6 prose-headings:mb-3 prose-p:my-2 prose-p:leading-7 prose-img:mx-auto"
+						className="prose prose-slate max-w-none prose-p:my-3 prose-p:leading-7 prose-li:my-1 prose-li:leading-7 prose-img:mx-auto [&_.katex]:text-base [&_.katex]:font-normal [&_.katex-display]:my-4 [&_.math-display]:block"
 						components={mdComponents}
 					>
 						{markdownText}
