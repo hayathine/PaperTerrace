@@ -2,9 +2,18 @@
 
 "テラスで読むくらい気軽に"
 
-🌐 **App URL**: [https://paperterrace.page](https://paperterrace.page)
-
 PaperTerraceは、論文を読むことの心理的・認知的ハードルを下げ、効率的な論文探索をサポートするAI搭載のリーディングアシスタントです。お気に入りのカフェのテラスで読書を楽しむような、リラックスした知的体験を提供します。
+
+<div align="center">
+  <a href="https://paperterrace.page">
+    <img src="https://img.shields.io/website?url=https%3A%2F%2Fpaperterrace.page&label=PaperTerrace&style=for-the-badge&color=orange&logo=cloudflare&logoColor=white" alt="Website Status" />
+  </a>
+  <br />
+  <p>AIを活用した論文・記事の読解支援プラットフォーム</p>
+  
+  <img src="assets/qrcode.png" width="90" alt="PaperTerrace QR Code" />
+  <br />
+</div>
 
 ---
 
@@ -43,7 +52,7 @@ PaperTerraceは、論文を読むことの心理的・認知的ハードルを�
 
 本アプリは、最新のAI技術とクラウドインフラを融合させて構築されています。
 
-- **AI Engine**: Google Gemini 1.5 Pro / Flash (DSPyによる動的最適化)
+- **AI Engine**: Google Gemini / Flash (DSPyによる動的最適化)
 - **Frontend**: React + TypeScript (Vite)
 - **Backend API**: FastAPI (Python)
 - **Infrastructure**: Cloudflare + GCP + Home Server (k3s)
@@ -55,5 +64,3 @@ PaperTerraceは、論文を読むことの心理的・認知的ハードルを�
 Private Project. All rights reserved.
 
 ---
-
-Created with ❤️ by Antigravity (Advanced Agentic Coding AI)
