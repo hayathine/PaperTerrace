@@ -23,7 +23,7 @@ class RecommendationSyncRequest(BaseModel):
     is_final: bool = False
 
 
-class RecommendationFeedbackRequest(BaseModel):
+class RecommendationRolloutRequest(BaseModel):
     session_id: str
     user_score: int = Field(..., ge=1, le=10)
     user_comment: Optional[str] = None

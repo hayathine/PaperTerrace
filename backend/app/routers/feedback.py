@@ -31,6 +31,9 @@ async def submit_feedback(
         user_score=req.user_score,  # 1 for Good, 0 for Bad
         user_comment=req.user_comment,
     )
+    logger.debug(
+        f"[Feedback] New feedback: type={req.target_type}, score={req.user_score}, comment={req.user_comment}"
+    )
     db.add(feedback)
 
     try:

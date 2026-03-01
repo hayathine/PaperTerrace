@@ -309,14 +309,20 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		}
 	}, [loadedPaperId]);
 
-	const triggerLazyLayoutAnalysis = async (paperId: string) => {
+	const triggerLazyLayoutAnalysis = async (
+		paperId: string,
+		initialPages?: PageData[],
+	) => {
 		try {
 			console.log(
 				"[PDFViewer] Starting lazy layout analysis for paper:",
 				paperId,
 			);
 
-			const finalPages = pagesRef.current;
+			// Prefer explicitly passed pages so callers don't have to wait for
+			// pagesRef to sync (useEffect runs after render, so pagesRef.current
+			// may still be stale when called immediately after setPages()).
+			const finalPages = initialPages ?? pagesRef.current;
 			if (!finalPages || finalPages.length === 0) return;
 
 			const BATCH_SIZE = 5;
@@ -994,7 +1000,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								console.log(
 									"[PDFViewer] No figures in cache, triggering lazy layout analysis",
 								);
-								triggerLazyLayoutAnalysis(id).catch((err) => {
+								triggerLazyLayoutAnalysis(id, cachedPages).catch((err) => {
 									console.warn("[PDFViewer] Lazy layout analysis failed:", err);
 								});
 							}
@@ -1073,7 +1079,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								console.log(
 									"[PDFViewer] No figures found, triggering lazy layout analysis",
 								);
-								triggerLazyLayoutAnalysis(id).catch((err) => {
+								triggerLazyLayoutAnalysis(id, fullPages).catch((err) => {
 									console.warn("[PDFViewer] Lazy layout analysis failed:", err);
 								});
 							}
@@ -1288,7 +1294,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					     以降は CSS display トグルで再マウントコストなしに切り替え */}
 					{hasMountedPdfMode && (
 						<div className={mode !== "plaintext" ? "block" : "hidden"}>
-							<div className="space-y-6">
+							{/* group/viewer + data-click-mode で CSS バリアント (group-data-[click-mode]/viewer:*)
+							    を制御。isClickMode を prop として渡さないことで、モード切り替え時に
+							    全 PDFPage が再レンダーされるのを防ぐ。 */}
+							<div
+								className="space-y-6 group/viewer"
+								data-click-mode={mode === "text" ? "" : undefined}
+							>
 								{/* TODO: Stamp/Area mode suspended. Restore PDFPage props to re-enable:
 								     stamps={stamps} isStampMode={mode === "stamp"} onAddStamp={handleAddStamp}
 								     onDeleteStamp={handleDeleteStamp} isAreaMode={mode === "area"} onAreaSelect={handleAreaSelect} */}
@@ -1302,7 +1314,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 										jumpTarget={jumpTarget}
 										searchTerm={searchTerm}
 										currentSearchMatch={currentSearchMatch}
-										isClickMode={mode === "text"}
 										evidenceHighlights={evidenceHighlights[page.page_num]}
 									/>
 								))}

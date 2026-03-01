@@ -1,5 +1,7 @@
 from typing import Any, Dict, List
 
+from common.utils.math_latex import convert_superscript_brackets, unicode_math_to_latex
+
 
 def sort_blocks(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
@@ -162,7 +164,10 @@ def generate_markdown_from_layout(
             else:
                 md_lines.append(f"\n[Table Data: {text}]\n")
         elif "equation" in c_name or "formula" in c_name:
-            md_lines.append(f"\n\n$$ {text} $$\n\n")
+            # Unicode 数学記号を LaTeX コマンドに変換してから $$ でラップ
+            eq_latex = unicode_math_to_latex(text)
+            eq_latex = convert_superscript_brackets(eq_latex)
+            md_lines.append(f"\n\n$$\n{eq_latex}\n$$\n\n")
         elif c_name == "list":
             md_lines.append(f"- {text}")
         elif c_name in ["header", "footer"]:

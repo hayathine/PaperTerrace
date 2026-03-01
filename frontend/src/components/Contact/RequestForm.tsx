@@ -1,5 +1,6 @@
 import type React from "react";
 import { useState } from "react";
+import { API_URL } from "@/config";
 
 type SubmitStatus = "idle" | "submitting" | "submitted" | "error";
 
@@ -13,7 +14,7 @@ const RequestForm: React.FC = () => {
 
 		setStatus("submitting");
 		try {
-			const res = await fetch("/api/contact", {
+			const res = await fetch(`${API_URL}/api/contact`, {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
 				body: JSON.stringify({ message }),

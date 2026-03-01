@@ -15,6 +15,7 @@ from app.routers.pdf import router as pdf_router
 from app.routers.stamps import router as stamps_router
 from app.routers.translation import router as translation_router
 from app.routers.upload import router as upload_router
+from app.routers.recommendation import router as recommendation_router
 from app.routers.users import router as users_router
 
 __all__ = [
@@ -31,4 +32,5 @@ __all__ = [
     "upload_router",
     "feedback_router",
     "contact_router",
+    "recommendation_router",
 ]

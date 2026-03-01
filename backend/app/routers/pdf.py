@@ -4,6 +4,7 @@ Handles PDF upload, OCR processing, and streaming text analysis.
 """
 
 import asyncio
+import os
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
@@ -192,7 +193,10 @@ async def analyze_pdf_json(
                 )
                 raw_text = None
             else:
-                logger.info(f"[analyze-pdf-json] Cache HIT: paper_id={paper_id}")
+                storage_type = os.getenv("STORAGE_TYPE", "local").upper()
+                logger.info(
+                    f"[analyze-pdf-json] Cache HIT ({storage_type}): paper_id={paper_id}"
+                )
                 if cached_paper.get("html_content"):
                     raw_text = "CACHED_HTML:" + cached_paper["html_content"]
                 else:

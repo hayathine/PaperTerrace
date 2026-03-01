@@ -345,20 +345,12 @@ async def translate_text(request: Request, req: TranslationRequest):
     start_time = time.time()
 
     try:
-        # paper_context がある場合は llama-cpp (LLM) による高度な翻訳を実行
-        if req.paper_context:
-            logger.info("Using Llama-cpp for context-aware translation")
-            translation = await llamacpp_service.translate_with_llamacpp(
-                original_word=req.text,
-                paper_context=req.paper_context,
-                lang_name="Japanese" if req.target_lang == "ja" else "English",
-            )
-            model = "Qwen"
-        else:
-            # それ以外は通常の M2M100 翻訳を実行 (内部で確信度により LLM へフォールバック)
-            translation, model = await translation_service.translate(
-                req.text, req.target_lang, paper_context=req.paper_context or ""
-            )
+        # Always run M2M100 first. TranslationService internally falls back to
+        # Qwen3 (LlamaCpp) when M2M100 confidence is <= 0.5, passing paper_context
+        # to the LLM only at that point.
+        translation, model = await translation_service.translate(
+            req.text, req.target_lang, paper_context=req.paper_context or ""
+        )
 
         return TranslationResponse(
             success=True,

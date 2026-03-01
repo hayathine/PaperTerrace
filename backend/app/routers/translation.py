@@ -292,7 +292,7 @@ async def explain(
     translator = local_translator.get_local_translator()
     if translator._initialized:
         try:
-            local_translation = await translator.translate_async(
+            local_translation, _model = await translator.translate_async(
                 lemma, lang, paper_context=paper_context_str
             )
             log.debug(

@@ -1,0 +1,9 @@
+# PaperTerrace Agent Instructions
+
+## Post-Work Documentation
+
+After completing any implementation or analysis task, always update the following files in `local-files/docs/`:
+
+1. **Relevant topic `.md` files**: Record or update notes related to the work done (e.g., `frontend-layout-spec.md`, `modifydocument.md`, etc.).
+2. **`tasks.md`**: Log any remaining issues, known bugs, or follow-up tasks that were discovered but not resolved.
+3. **`completed.md`**: Record completed work with a brief summary of what was done and why.

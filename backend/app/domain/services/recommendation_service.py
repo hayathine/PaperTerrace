@@ -9,14 +9,15 @@ from app.models.orm.recommendation import Feedback
 from app.models.repositories.feedback_repository import FeedbackRepository
 from app.models.repositories.trajectory_repository import TrajectoryRepository
 from app.schemas.recommendation import (
-    RecommendationFeedbackRequest,
     RecommendationGenerateRequest,
     RecommendationGenerateResponse,
+    RecommendationRolloutRequest,
     RecommendationSyncRequest,
 )
 from common.dspy.config import load_dspy_module_from_gcs, setup_dspy
 from common.dspy.modules import RecommendationModule, UserProfileModule
 from common.dspy.trace import TraceContext, trace_dspy_call
+from common.logger import logger
 from redis_provider.provider import RedisService
 
 
@@ -177,8 +178,8 @@ class RecommendationService:
         }
 
     @staticmethod
-    def submit_feedback(
-        req: RecommendationFeedbackRequest, current_user_id: str, db: Session
+    def submit_rollout(
+        req: RecommendationRolloutRequest, current_user_id: str, db: Session
     ) -> dict:
         """
         提示された推薦に対するユーザーの10段階評価（GEPAオプティマイザのMetrics用）を受け取る
@@ -199,6 +200,9 @@ class RecommendationService:
             user_score=req.user_score,
             user_comment=req.user_comment,
             target_type="recommendation",  # Default
+        )
+        logger.debug(
+            f"[Recommendation] New Rollout: score={req.user_score}, comment={req.user_comment}, session={req.session_id}"
         )
         fb_repo.create(feedback)
 

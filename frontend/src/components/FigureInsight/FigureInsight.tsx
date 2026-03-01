@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import { usePaperCache } from "../../db/hooks";
 import CopyButton from "../Common/CopyButton";
@@ -18,17 +19,20 @@ interface FigureData {
 interface FigureInsightProps {
 	paperId?: string | null;
 	onExplain?: (figureId: string) => void;
+	onTabChange?: (tab: string) => void;
 }
 
 const FigureInsight: React.FC<FigureInsightProps> = ({
 	paperId,
 	onExplain,
+	onTabChange,
 }) => {
 	const [figures, setFigures] = useState<FigureData[]>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
+	const { t } = useTranslation();
 	const { getCachedPaper } = usePaperCache();
 
 	useEffect(() => {
@@ -105,17 +109,31 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 	};
 
 	return (
-		<div className="flex flex-col h-full bg-slate-50 relative">
-			<div className="p-4 border-b border-slate-200 bg-white shadow-sm flex justify-between items-center sticky top-0 z-10">
-				<h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider">
-					Figures & Charts
-				</h3>
+		<div className="flex flex-col h-full bg-slate-50 relative overflow-hidden">
+			{/* Sub-tab Navigation */}
+			<div className="flex px-4 pt-2 border-b border-slate-200 bg-white sticky top-0 z-20 shrink-0 items-center">
+				<button
+					type="button"
+					onClick={() => onTabChange?.("dict")}
+					className="pb-2 px-1 text-xs font-bold text-slate-400 hover:text-slate-600 border-b-2 border-transparent uppercase tracking-wider transition-all"
+				>
+					{t("sidebar.tabs.dict")}
+				</button>
+				<button
+					type="button"
+					className="ml-6 pb-2 px-1 text-xs font-bold text-orange-600 border-b-2 border-orange-600 uppercase tracking-wider transition-all"
+				>
+					{t("sidebar.tabs.figures")}
+				</button>
+
+				<div className="flex-1" />
+
 				<button
 					type="button"
 					onClick={() => {
 						if (paperId && paperId !== "pending") fetchFigures(paperId);
 					}}
-					className="p-1 hover:bg-slate-100 rounded text-slate-400 hover:text-orange-600 transition-colors disabled:opacity-30"
+					className="pb-2 p-1 text-slate-400 hover:text-orange-600 transition-colors disabled:opacity-30"
 					title="Reload"
 					disabled={!paperId || paperId === "pending" || loading}
 				>

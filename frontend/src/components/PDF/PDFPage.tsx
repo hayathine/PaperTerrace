@@ -1,5 +1,5 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { db } from "../../db";
 import StampOverlay from "../Stamps/StampOverlay";
@@ -51,8 +51,6 @@ interface PDFPageProps {
 	// 検索関連props
 	searchTerm?: string;
 	currentSearchMatch?: { page: number; wordIndex: number } | null;
-	// Click mode (text mode) flag
-	isClickMode?: boolean;
 	evidenceHighlights?: Array<{
 		x: number;
 		y: number;
@@ -75,7 +73,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
 	jumpTarget,
 	searchTerm,
 	currentSearchMatch,
-	isClickMode = false,
 	evidenceHighlights = [],
 }) => {
 	const { t } = useTranslation();
@@ -103,20 +100,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
 		}
 	}, [cachedImage, image_url]);
 
-	// Debug: Log page data when component mounts or updates
-	useEffect(() => {
-		console.debug(`[PDFPage ${page_num}] Rendering with data:`, {
-			width,
-			height,
-			words_count: words?.length || 0,
-			figures_count: figures?.length || 0,
-			image_url,
-			sample_word: words?.[0],
-			sample_figure: figures?.[0],
-			isClickMode,
-		});
-	}, [page_num, width, height, words, figures, image_url, isClickMode]);
-
 	// Text Selection State
 	const [isDragging, setIsDragging] = React.useState(false);
 	const [selectionStart, setSelectionStart] = React.useState<number | null>(
@@ -131,8 +114,14 @@ const PDFPage: React.FC<PDFPageProps> = ({
 		coords: any;
 	} | null>(null);
 
-	const handleMouseUp = () => {
-		if (isStampMode || isAreaMode || !isClickMode) return;
+	// useCallback でラップして参照を安定化。isDragging 変化時のみ再生成される。
+	// isClickMode は親コンテナの data 属性で判断し、prop 依存を排除（再レンダー抑制）。
+	const handleMouseUp = useCallback(() => {
+		if (isStampMode || isAreaMode) return;
+		// クリックモードかどうかを DOM の data 属性から判断する。
+		// これにより isClickMode prop が不要になり、モード切り替え時の全ページ再レンダーを防ぐ。
+		const pageEl = document.getElementById(`page-${page_num}`);
+		if (!pageEl?.closest("[data-click-mode]")) return;
 
 		if (isDragging && selectionStart !== null && selectionEnd !== null) {
 			setIsDragging(false);
@@ -143,7 +132,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
 				const max = Math.max(selectionStart, selectionEnd);
 				const selectedWords = words.slice(min, max + 1);
 				const text = selectedWords.map((w) => w.word).join(" ");
-				// Context: grab a bit more surrounding text? For now just the selected text as context + some padding
 				const startCtx = Math.max(0, min - 10);
 				const endCtx = Math.min(words.length, max + 10);
 				const context = words
@@ -151,17 +139,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
 					.map((w) => w.word)
 					.join(" ");
 
-				// Calculate bounding box of selection for anchor
-
-				// Position menu near the end of selection or center? Center is better.
-				// We need pixel coordinates for the menu relative to the page container
-				// bbox is [x1, y1, x2, y2] in PDF coordinates (unscaled if width/height match PDF)
-				// BUT the words bbox in PageData are likely consistent with width/height.
-				// In the render, we use percentages.
-				// We want the menu to be absolute positioned in the div.
-				// x1, y1 etc are relative to page 'width' and 'height'.
-
-				// Let's use % for position
 				const validWords = (selectedWords || []).filter(
 					(w) => w?.bbox && w.bbox.length >= 4,
 				);
@@ -198,14 +175,27 @@ const PDFPage: React.FC<PDFPageProps> = ({
 				setSelectionEnd(null);
 			}
 		}
-	};
+	}, [
+		isStampMode,
+		isAreaMode,
+		isDragging,
+		selectionStart,
+		selectionEnd,
+		words,
+		width,
+		height,
+		page_num,
+		onWordClick,
+		onTextSelect,
+	]);
 
+	// isDragging が true の間だけ window に mouseup を登録する。
+	// 依存配列を正しく設定することで毎レンダーのリスナー登録/解除を防止。
 	React.useEffect(() => {
-		if (isDragging) {
-			window.addEventListener("mouseup", handleMouseUp);
-			return () => window.removeEventListener("mouseup", handleMouseUp);
-		}
-	});
+		if (!isDragging) return;
+		window.addEventListener("mouseup", handleMouseUp);
+		return () => window.removeEventListener("mouseup", handleMouseUp);
+	}, [isDragging, handleMouseUp]);
 
 	// Additional helper to clear selection on outside click
 	React.useEffect(() => {
@@ -336,14 +326,12 @@ const PDFPage: React.FC<PDFPageProps> = ({
 							});
 							*/
 
+							// group-data-[click-mode]/viewer バリアントで親コンテナの data 属性に連動。
+							// isClickMode prop なしでモード変化を CSS で表現し、再レンダーを防止。
 							return (
 								<div
 									key={`fig-img-${idx}`}
-									className={`absolute bg-white shadow-sm group ${
-										isClickMode
-											? "pointer-events-auto border-2 border-orange-300/60 rounded-sm"
-											: "pointer-events-none"
-									}`}
+									className="absolute bg-white shadow-sm group pointer-events-none group-data-[click-mode]/viewer:pointer-events-auto group-data-[click-mode]/viewer:border-2 group-data-[click-mode]/viewer:border-orange-300/60 group-data-[click-mode]/viewer:rounded-sm"
 									style={style}
 								>
 									<img
@@ -351,51 +339,51 @@ const PDFPage: React.FC<PDFPageProps> = ({
 										className="w-full h-full object-fill"
 										alt={fig.label}
 									/>
-									{isClickMode && isInteractiveType && (
-										<>
-											{/* Hover overlay for visual feedback */}
-											<div className="absolute inset-0 bg-orange-500/0 hover:bg-orange-500/10 transition-colors border-2 border-transparent hover:border-orange-400 rounded-sm pointer-events-none" />
+									{/* クリックモード時のみ表示するインタラクティブ要素。
+									    子要素はすべて absolute なのでラッパー div はレイアウトに影響しない。 */}
+									<div className="hidden group-data-[click-mode]/viewer:block">
+										{/* Hover overlay for visual feedback */}
+										<div className="absolute inset-0 bg-orange-500/0 hover:bg-orange-500/10 transition-colors border-2 border-transparent hover:border-orange-400 rounded-sm pointer-events-none" />
 
-											{/* Ask AI button shown on hover */}
-											<div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-50">
-												<button
-													type="button"
-													className="bg-orange-600 text-white text-xs px-3 py-1.5 rounded-md shadow shadow-orange-500/30 hover:bg-orange-700 hover:shadow-orange-600/40 transition-all font-medium flex items-center gap-1.5 cursor-pointer transform hover:scale-105 active:scale-95"
-													onClick={(e) => {
-														e.stopPropagation();
-														if (onAskAI) {
-															const typeName = getFigTypeLabel(
-																t,
-																fig.label || "figure",
-															);
-															// Jump directly to explanation
-															onAskAI(
-																t("chat.explain_fig", { type: typeName }),
-																fig.image_url,
-																{
-																	page: page_num,
-																	x: (x1 + x2) / 2 / pageWidth,
-																	y: (y1 + y2) / 2 / pageHeight,
-																},
-															);
-														}
-													}}
-													title={t("menu.ask_ai")}
-												>
-													<span className="text-xs">✨</span>
-													{t("menu.ask_ai")}
-												</button>
-											</div>
-
-											{/* Transparent overlay to grab clicks on the rest of the image to prevent text selection underneath */}
+										{/* Ask AI button shown on hover */}
+										<div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-50">
 											<button
 												type="button"
-												aria-label="Selection overlay"
-												className="absolute inset-0 w-full h-full z-40 bg-transparent"
-												onClick={(e) => e.stopPropagation()}
-											/>
-										</>
-									)}
+												className="bg-orange-600 text-white text-xs px-3 py-1.5 rounded-md shadow shadow-orange-500/30 hover:bg-orange-700 hover:shadow-orange-600/40 transition-all font-medium flex items-center gap-1.5 cursor-pointer transform hover:scale-105 active:scale-95"
+												onClick={(e) => {
+													e.stopPropagation();
+													if (onAskAI) {
+														const typeName = getFigTypeLabel(
+															t,
+															fig.label || "figure",
+														);
+														// Jump directly to explanation
+														onAskAI(
+															t("chat.explain_fig", { type: typeName }),
+															fig.image_url,
+															{
+																page: page_num,
+																x: (x1 + x2) / 2 / pageWidth,
+																y: (y1 + y2) / 2 / pageHeight,
+															},
+														);
+													}
+												}}
+												title={t("menu.ask_ai")}
+											>
+												<span className="text-xs">✨</span>
+												{t("menu.ask_ai")}
+											</button>
+										</div>
+
+										{/* Transparent overlay to grab clicks on the rest of the image to prevent text selection underneath */}
+										<button
+											type="button"
+											aria-label="Selection overlay"
+											className="absolute inset-0 w-full h-full z-40 bg-transparent"
+											onClick={(e) => e.stopPropagation()}
+										/>
+									</div>
 								</div>
 							);
 						})}
@@ -501,12 +489,12 @@ const PDFPage: React.FC<PDFPageProps> = ({
 									key={`${idx}`}
 									type="button"
 									id={isCurrentSearchMatch ? "current-search-match" : undefined}
-									className={`absolute rounded-sm group text-layer-word ${!isStampMode && isClickMode ? "cursor-pointer pointer-events-auto" : "pointer-events-none"} 
-                                    ${!isStampMode && !isSelected && !isJumpHighlight && !isSearchMatch ? "hover:bg-yellow-300/30" : ""} 
-                                    ${isSelected ? "bg-orange-500/30 border border-orange-500/50" : ""}
-                                    ${isJumpHighlight ? "bg-yellow-400/60 z-20" : ""}
-                                    ${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 border border-amber-400" : ""}
-                                    ${isCurrentSearchMatch ? "bg-orange-500/60 border-2 border-orange-600 shadow-[0_0_15px_rgba(249,115,22,0.6)] z-30 ring-2 ring-orange-400" : ""}`}
+									className={`absolute rounded-sm group text-layer-word pointer-events-none group-data-[click-mode]/viewer:cursor-pointer group-data-[click-mode]/viewer:pointer-events-auto
+										${!isStampMode && !isSelected && !isJumpHighlight && !isSearchMatch ? "group-data-[click-mode]/viewer:hover:bg-yellow-300/30" : ""}
+										${isSelected ? "bg-orange-500/30 border border-orange-500/50" : ""}
+										${isJumpHighlight ? "bg-yellow-400/60 z-20" : ""}
+										${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 border border-amber-400" : ""}
+										${isCurrentSearchMatch ? "bg-orange-500/60 border-2 border-orange-600 shadow-[0_0_15px_rgba(249,115,22,0.6)] z-30 ring-2 ring-orange-400" : ""}`}
 									style={{
 										left: `${left}%`,
 										top: `${top}%`,
@@ -531,7 +519,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
 										userSelect: "none", // Prevent accidental browser text selection interaction with overlay text content itself
 									}}
 									onMouseDown={(e) => {
-										if (isStampMode || isAreaMode || !isClickMode) return;
+										if (isStampMode || isAreaMode) return;
+										if (!e.currentTarget.closest("[data-click-mode]")) return;
 										e.preventDefault();
 										e.stopPropagation();
 										setIsDragging(true);
@@ -540,18 +529,14 @@ const PDFPage: React.FC<PDFPageProps> = ({
 										setSelectionMenu(null); // Hide menu on new select start
 									}}
 									onMouseEnter={() => {
-										if (isClickMode && isDragging && selectionStart !== null) {
+										if (isDragging && selectionStart !== null) {
 											setSelectionEnd(idx);
 										}
 									}}
 									onClick={(e) => {
 										e.stopPropagation(); // Stop propagation to document
-										if (
-											!isStampMode &&
-											!isAreaMode &&
-											isClickMode &&
-											onWordClick
-										) {
+										if (!isStampMode && !isAreaMode && onWordClick) {
+											if (!e.currentTarget.closest("[data-click-mode]")) return;
 											if (selectionStart === selectionEnd && !selectionMenu) {
 												const start = Math.max(0, idx - 20);
 												const end = Math.min(words.length, idx + 20);

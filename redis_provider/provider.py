@@ -59,7 +59,10 @@ class RedisService:
             if self.client:
                 log.info("init", f"RedisService initialized with host: {REDIS_URL}")
             else:
-                log.info("init", "RedisService initialized with in-memory fallback")
+                log.warning(
+                    "init",
+                    "RedisService initialized with in-memory fallback (Redis unavailable)",
+                )
             RedisService._initialized = True
 
     def set(self, key: str, value: Any, expire: int | None = None) -> bool:
@@ -73,13 +76,20 @@ class RedisService:
             try:
                 if expire:
                     self.client.setex(key, expire, value_str)
+                    log.info(
+                        "set_ex", f"Value set in Redis: {key} (expires: {expire}s)"
+                    )
                 else:
                     self.client.set(key, value_str)
+                    log.info("set", f"Value set in Redis: {key}")
                 return True
             except Exception as e:
-                log.warning("set", f"Redis error: {e}. Falling back to memory.")
+                log.warning(
+                    "set", f"Redis error: {e}. Falling back to memory for key: {key}"
+                )
 
         self.memory_cache[key] = value_str
+        log.info("set_memory", f"Value set in Memory Cache: {key}")
         return True
 
     def get(self, key: str) -> Any | None:
@@ -88,11 +98,21 @@ class RedisService:
         if self.client:
             try:
                 value_str = self.client.get(key)
+                if value_str is not None:
+                    log.info("get_hit", f"Cache HIT (Redis): {key}")
+                else:
+                    log.debug("get_miss", f"Cache MISS (Redis): {key}")
             except Exception as e:
-                log.warning("get", f"Redis error: {e}. Falling back to memory.")
+                log.warning(
+                    "get", f"Redis error for {key}: {e}. Falling back to memory."
+                )
 
         if value_str is None:
             value_str = self.memory_cache.get(key)
+            if value_str is not None:
+                log.info("get_hit_memory", f"Cache HIT (Memory): {key}")
+            else:
+                log.debug("get_miss", f"Cache MISS (Overall): {key}")
 
         if value_str is None:
             return None
@@ -108,12 +128,17 @@ class RedisService:
         if self.client:
             try:
                 deleted_count = self.client.delete(key)
+                if deleted_count > 0:
+                    log.info("delete_success", f"Key deleted from Redis: {key}")
             except Exception as e:
-                log.warning("delete", f"Redis error: {e}. Falling back to memory.")
+                log.warning(
+                    "delete", f"Redis error for {key}: {e}. Falling back to memory."
+                )
 
         # Always check memory cache just in case
         if key in self.memory_cache:
             del self.memory_cache[key]
+            log.info("delete_memory", f"Key deleted from Memory Cache: {key}")
             deleted_count = 1
 
         return deleted_count
@@ -132,8 +157,19 @@ class RedisService:
         """Set a timeout on key."""
         if self.client:
             try:
-                return bool(self.client.expire(key, time))
+                success = bool(self.client.expire(key, time))
+                if success:
+                    log.info("expire_success", f"TTL set for {key}: {time}s")
+                return success
             except Exception as e:
-                log.warning("expire", f"Redis error: {e}. Falling back to memory.")
+                log.warning(
+                    "expire", f"Redis error for {key}: {e}. Falling back to memory."
+                )
 
-        return key in self.memory_cache
+        exists_in_mem = key in self.memory_cache
+        if exists_in_mem:
+            log.debug(
+                "expire_memory",
+                f"Expire called for memory key {key} (not supported, but key exists)",
+            )
+        return exists_in_mem

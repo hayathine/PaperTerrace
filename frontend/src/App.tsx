@@ -143,12 +143,23 @@ function App() {
 		return () => window.removeEventListener("beforeunload", handleBeforeUnload);
 	}, [currentPaperId, sessionId]);
 
-	const [isMobile, setIsMobile] = useState(false);
-	const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
+	// ブレークポイント: 768px未満をモバイル扱い (Tailwind md と一致)
+	const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
+	// デスクトップ(>=768px)ではデフォルト表示。モバイルでは初期非表示。
+	// lazy initializer で初回レンダリング前に正しい値を設定しフラッシュを防ぐ。
+	const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(
+		() => window.innerWidth >= 768,
+	);
 
 	useEffect(() => {
-		const checkMobile = () => setIsMobile(window.innerWidth < 768);
-		checkMobile();
+		const checkMobile = () => {
+			const mobile = window.innerWidth < 768;
+			setIsMobile(mobile);
+			// デスクトップに拡大したときはサイドバーを自動で開く
+			if (!mobile) setIsRightSidebarOpen(true);
+			// モバイルに縮小したときはサイドバーを閉じて画面領域を確保する
+			else setIsRightSidebarOpen(false);
+		};
 		window.addEventListener("resize", checkMobile);
 		return () => window.removeEventListener("resize", checkMobile);
 	}, []);
@@ -187,6 +198,8 @@ function App() {
 		if (paperId) {
 			setCurrentPaperId(paperId);
 			setUploadFile(null); // Clear the raw file after it's processed
+			// 論文が読み込まれたらサイドバーを開く（モバイルを含む）
+			setIsRightSidebarOpen(true);
 		}
 		// Refresh paper list if a new paper was loaded
 		if (
@@ -212,6 +225,7 @@ function App() {
 	const handlePaperSelect = (paper: any) => {
 		setUploadFile(null);
 		setCurrentPaperId(paper.paper_id);
+		setIsRightSidebarOpen(true);
 	};
 
 	const handleDirectFileSelect = (file: File) => {

@@ -23,6 +23,7 @@ interface DictionaryProps {
 	onJump?: (page: number, x: number, y: number, term?: string) => void;
 	imageUrl?: string;
 	onAskInChat?: () => void;
+	onTabChange?: (tab: string) => void;
 }
 
 const Dictionary: React.FC<DictionaryProps> = ({
@@ -35,6 +36,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	onJump,
 	imageUrl,
 	onAskInChat,
+	onTabChange,
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token } = useAuth();
@@ -278,13 +280,14 @@ const Dictionary: React.FC<DictionaryProps> = ({
 		}
 	};
 
-	if (entries.length === 0 && !loading && !error) {
-		const isUrl =
-			term &&
-			(/^(https?:\/\/|\/\/|www\.)/i.test(term) || term.includes("doi.org/"));
+	const isUrl =
+		term &&
+		(/^(https?:\/\/|\/\/|www\.)/i.test(term) || term.includes("doi.org/"));
 
+	let content: React.ReactNode;
+	if (entries.length === 0 && !loading && !error) {
 		if (isUrl) {
-			return (
+			content = (
 				<div className="flex flex-col items-center justify-center h-full p-8 text-slate-300">
 					<div className="bg-orange-50 p-4 rounded-xl mb-4 text-orange-400">
 						<svg
@@ -328,69 +331,66 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					</div>
 				</div>
 			);
+		} else {
+			content = (
+				<div className="flex flex-col items-center justify-center h-full p-8 text-slate-300">
+					<div className="bg-slate-50 p-4 rounded-xl mb-4">
+						<svg
+							className="w-8 h-8 opacity-50"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+							/>
+						</svg>
+					</div>
+					<p className="text-xs font-bold uppercase tracking-wider">
+						{t("viewer.dictionary.ready")}
+					</p>
+					<p className="text-[10px] mt-2 text-center">
+						{t("viewer.dictionary.click_hint")}
+					</p>
+				</div>
+			);
 		}
+	} else {
+		content = (
+			<div className="p-4 flex-1 overflow-y-auto">
+				{loading && (
+					<div className="animate-pulse space-y-3 mb-4">
+						<div className="h-4 bg-slate-100 rounded w-1/3"></div>
+						<div className="h-20 bg-slate-100 rounded w-full"></div>
+					</div>
+				)}
 
-		return (
-			<div className="flex flex-col items-center justify-center h-full p-8 text-slate-300">
-				<div className="bg-slate-50 p-4 rounded-xl mb-4">
-					<svg
-						className="w-8 h-8 opacity-50"
-						fill="none"
-						viewBox="0 0 24 24"
-						stroke="currentColor"
-					>
-						<path
-							strokeLinecap="round"
-							strokeLinejoin="round"
-							strokeWidth={2}
-							d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-						/>
-					</svg>
-				</div>
-				<p className="text-xs font-bold uppercase tracking-wider">
-					{t("viewer.dictionary.ready")}
-				</p>
-				<p className="text-[10px] mt-2 text-center">
-					{t("viewer.dictionary.click_hint")}
-				</p>
-			</div>
-		);
-	}
+				{error && (
+					<div className="text-xs text-red-400 bg-red-50 p-3 rounded-lg border border-red-100 mb-4">
+						{error}
+					</div>
+				)}
 
-	return (
-		<div className="p-4 h-full overflow-y-auto">
-			<h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">
-				{t("sidebar.tabs.dict")} {entries.length > 0 && `(${entries.length})`}
-			</h3>
-
-			{loading && (
-				<div className="animate-pulse space-y-3 mb-4">
-					<div className="h-4 bg-slate-100 rounded w-1/3"></div>
-					<div className="h-20 bg-slate-100 rounded w-full"></div>
-				</div>
-			)}
-
-			{error && (
-				<div className="text-xs text-red-400 bg-red-50 p-3 rounded-lg border border-red-100 mb-4">
-					{error}
-				</div>
-			)}
-
-			<div className="space-y-4">
-				{entries.map((entry, index) => (
-					<div
-						key={`${entry.word}-${index}`}
-						className="bg-white p-3 sm:p-4 rounded-xl border border-slate-100 shadow-sm animate-fade-in group transition-all hover:shadow-md"
-					>
-						<div className="flex justify-between items-start mb-3">
-							<h2 className="text-lg font-bold text-slate-800">{entry.word}</h2>
-							<div className="flex items-center gap-2">
-								<CopyButton
-									text={`${entry.word}\n${entry.translation}`}
-									size={12}
-								/>
-								<span
-									className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide
+				<div className="space-y-4">
+					{entries.map((entry, index) => (
+						<div
+							key={`${entry.word}-${index}`}
+							className="bg-white p-3 sm:p-4 rounded-xl border border-slate-100 shadow-sm animate-fade-in group transition-all hover:shadow-md"
+						>
+							<div className="flex justify-between items-start mb-3">
+								<h2 className="text-lg font-bold text-slate-800">
+									{entry.word}
+								</h2>
+								<div className="flex items-center gap-2">
+									<CopyButton
+										text={`${entry.word}\n${entry.translation}`}
+										size={12}
+									/>
+									<span
+										className={`text-[9px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wide
                                     ${
 																			entry.source === "Cache"
 																				? "bg-amber-100 text-amber-600"
@@ -400,143 +400,167 @@ const Dictionary: React.FC<DictionaryProps> = ({
 																						? "bg-amber-100 text-amber-600"
 																						: "bg-gray-100"
 																		}`}
-								>
-									{entry.source}
-								</span>
-							</div>
-						</div>
-
-						{entry.image_url && (
-							<div className="mb-4 rounded-xl overflow-hidden border border-slate-200">
-								<img
-									src={entry.image_url}
-									alt="Figure"
-									className="w-full h-auto object-contain bg-slate-50"
-								/>
-							</div>
-						)}
-
-						<MarkdownContent className="prose prose-sm max-w-none text-sm text-slate-600 leading-relaxed font-medium mb-4">
-							{entry.translation}
-						</MarkdownContent>
-
-						<div className="flex gap-2">
-							<button
-								type="button"
-								onClick={() => handleSaveToNote(entry)}
-								disabled={savedItems.has(entry.word)}
-								className={`flex-1 py-2.5 sm:py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 border ${
-									savedItems.has(entry.word)
-										? "bg-green-50 text-green-600 border-green-200 cursor-default"
-										: "bg-slate-50 hover:bg-orange-50 text-slate-500 hover:text-orange-600 border-transparent group-hover:border-orange-100"
-								}`}
-							>
-								{savedItems.has(entry.word) ? (
-									<>
-										<svg
-											className="w-3 h-3"
-											fill="none"
-											viewBox="0 0 24 24"
-											stroke="currentColor"
-										>
-											<path
-												strokeLinecap="round"
-												strokeLinejoin="round"
-												strokeWidth={2}
-												d="M5 13l4 4L19 7"
-											/>
-										</svg>
-										{t("viewer.dictionary.saved")}
-									</>
-								) : (
-									<>
-										<svg
-											className="w-3 h-3"
-											fill="none"
-											viewBox="0 0 24 24"
-											stroke="currentColor"
-										>
-											<path
-												strokeLinecap="round"
-												strokeLinejoin="round"
-												strokeWidth={2}
-												d="M12 4v16m8-8H4"
-											/>
-										</svg>
-										{t("viewer.dictionary.save_note")}
-									</>
-								)}
-							</button>
-
-							{entry.image_url ? (
-								<button
-									type="button"
-									onClick={() => onAskInChat?.()}
-									className="flex-1 py-2.5 sm:py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
-								>
-									<svg
-										className="w-3.5 h-3.5"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke="currentColor"
 									>
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={2}
-											d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-										/>
-									</svg>
-									<span>{t("viewer.dictionary.ask_in_chat")}</span>
-								</button>
-							) : (
-								<button
-									type="button"
-									onClick={() => handleDeepTranslate(entry)}
-									className="flex-1 py-2.5 sm:py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
-								>
-									<svg
-										className="w-3.5 h-3.5"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke="currentColor"
-									>
-										<path
-											strokeLinecap="round"
-											strokeLinejoin="round"
-											strokeWidth={2}
-											d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-										/>
-									</svg>
-									<span>{t("viewer.dictionary.ask_ai")}</span>
-								</button>
+										{entry.source}
+									</span>
+								</div>
+							</div>
+
+							{entry.image_url && (
+								<div className="mb-4 rounded-xl overflow-hidden border border-slate-200">
+									<img
+										src={entry.image_url}
+										alt="Figure"
+										className="w-full h-auto object-contain bg-slate-50"
+									/>
+								</div>
 							)}
 
-							{(onJump && entry.coords) || (onJump && coordinates) ? (
+							<MarkdownContent className="prose prose-sm max-w-none text-sm text-slate-600 leading-relaxed font-medium mb-4">
+								{entry.translation}
+							</MarkdownContent>
+
+							<div className="flex gap-2">
 								<button
 									type="button"
-									onClick={() => {
-										const c = entry.coords || coordinates;
-										if (c) onJump(c.page, c.x, c.y, entry.word);
-									}}
-									className="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg text-xs font-bold transition-all flex items-center justify-center"
-									title="Jump to Location"
+									onClick={() => handleSaveToNote(entry)}
+									disabled={savedItems.has(entry.word)}
+									className={`flex-1 py-2.5 sm:py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 border ${
+										savedItems.has(entry.word)
+											? "bg-green-50 text-green-600 border-green-200 cursor-default"
+											: "bg-slate-50 hover:bg-orange-50 text-slate-500 hover:text-orange-600 border-transparent group-hover:border-orange-100"
+									}`}
 								>
-									JUMP
+									{savedItems.has(entry.word) ? (
+										<>
+											<svg
+												className="w-3 h-3"
+												fill="none"
+												viewBox="0 0 24 24"
+												stroke="currentColor"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+													d="M5 13l4 4L19 7"
+												/>
+											</svg>
+											{t("viewer.dictionary.saved")}
+										</>
+									) : (
+										<>
+											<svg
+												className="w-3 h-3"
+												fill="none"
+												viewBox="0 0 24 24"
+												stroke="currentColor"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth={2}
+													d="M12 4v16m8-8H4"
+												/>
+											</svg>
+											{t("viewer.dictionary.save_note")}
+										</>
+									)}
 								</button>
-							) : null}
-						</div>
 
-						<div className="mt-2 pl-1 pr-1">
-							<FeedbackSection
-								sessionId={sessionId}
-								targetType="translation"
-								targetId={entry.word}
-							/>
+								{entry.image_url ? (
+									<button
+										type="button"
+										onClick={() => onAskInChat?.()}
+										className="flex-1 py-2.5 sm:py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
+									>
+										<svg
+											className="w-3.5 h-3.5"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth={2}
+												d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+											/>
+										</svg>
+										<span>{t("viewer.dictionary.ask_in_chat")}</span>
+									</button>
+								) : (
+									<button
+										type="button"
+										onClick={() => handleDeepTranslate(entry)}
+										className="flex-1 py-2.5 sm:py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
+									>
+										<svg
+											className="w-3.5 h-3.5"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth={2}
+												d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+											/>
+										</svg>
+										<span>{t("viewer.dictionary.ask_ai")}</span>
+									</button>
+								)}
+
+								{(onJump && entry.coords) || (onJump && coordinates) ? (
+									<button
+										type="button"
+										onClick={() => {
+											const c = entry.coords || coordinates;
+											if (c) onJump(c.page, c.x, c.y, entry.word);
+										}}
+										className="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-500 rounded-lg text-xs font-bold transition-all flex items-center justify-center"
+										title="Jump to Location"
+									>
+										JUMP
+									</button>
+								) : null}
+							</div>
+
+							<div className="mt-2 pl-1 pr-1">
+								<FeedbackSection
+									sessionId={sessionId}
+									targetType="translation"
+									targetId={entry.word}
+								/>
+							</div>
 						</div>
-					</div>
-				))}
+					))}
+				</div>
 			</div>
+		);
+	}
+
+	return (
+		<div className="flex flex-col h-full overflow-hidden bg-white">
+			{/* Sub-tab Navigation */}
+			<div className="flex px-4 pt-2 border-b border-slate-100 bg-white sticky top-0 z-20 shrink-0">
+				<button
+					type="button"
+					className="pb-2 px-1 text-xs font-bold text-orange-600 border-b-2 border-orange-600 uppercase tracking-wider transition-all"
+				>
+					{t("sidebar.tabs.dict")} {entries.length > 0 && `(${entries.length})`}
+				</button>
+				<button
+					type="button"
+					onClick={() => onTabChange?.("figures")}
+					className="ml-6 pb-2 px-1 text-xs font-bold text-slate-400 hover:text-slate-600 border-b-2 border-transparent uppercase tracking-wider transition-all"
+				>
+					{t("sidebar.tabs.figures")}
+				</button>
+			</div>
+
+			<div className="flex-1 overflow-hidden">{content}</div>
 		</div>
 	);
 };

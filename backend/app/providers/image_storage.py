@@ -200,6 +200,13 @@ class GCSImageStorage(ImageStorageStrategy):
                 relative_url = f"/static/paper_images/{file_hash}/{filename}"
                 urls.append(relative_url)
 
+            if urls:
+                logger.info(
+                    f"Retrieved {len(urls)} images for {file_hash} from GCS cache"
+                )
+            else:
+                logger.debug(f"No images found in GCS cache for {file_hash}")
+
             return urls
         except Exception as e:
             logger.error(

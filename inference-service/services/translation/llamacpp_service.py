@@ -33,13 +33,16 @@ class LlamaCppTranslationService:
         # 安全性のため、物理コア数(6)より少ないスレッド数(4)をデフォルトに設定します。
         # これにより並列処理による不可解なクラッシュのリスクを軽減します。
         self.n_threads = int(os.getenv("LLAMACPP_THREADS", "4"))
-        self.n_batch = int(os.getenv("LLAMACPP_BATCH_SIZE", "512"))
+        # Batch size controls peak memory during prompt evaluation.
+        # Default reduced from 512 to 64 to prevent OOM on ~10GB Qwen3-30B model.
+        self.n_batch = int(os.getenv("LLAMACPP_BATCH_SIZE", "64"))
         self.n_gpu_layers = int(
             os.getenv("LLAMACPP_GPU_LAYERS", "0")
         )  # CPU実行をデフォルトに
-        # モデルが1GB程度と軽量なため、メモリにロック (mlock) してスワップを防ぎ
-        # 常に高速なレスポンスが維持されるようにします。
-        self.use_mlock = os.getenv("LLAMACPP_USE_MLOCK", "true").lower() == "true"
+        # mlock pins the entire model in RAM, preventing swapping.
+        # Disabled by default for 30B models to avoid OOM at load time.
+        # Enable only if the host has sufficient free RAM (>14GB).
+        self.use_mlock = os.getenv("LLAMACPP_USE_MLOCK", "false").lower() == "true"
 
     async def initialize(self):
         """モデルの初期化。初回呼び出し時に実行されます。"""

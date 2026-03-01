@@ -4,9 +4,9 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.domain.services.recommendation_service import RecommendationService
 from app.schemas.recommendation import (
-    RecommendationFeedbackRequest,
     RecommendationGenerateRequest,
     RecommendationGenerateResponse,
+    RecommendationRolloutRequest,
     RecommendationSyncRequest,
 )
 
@@ -31,16 +31,16 @@ async def sync_trajectory(
     return RecommendationService.sync_trajectory(req, current_user_id, db)
 
 
-@router.post("/feedback", summary="ユーザー評価を記録する")
-async def submit_feedback(
-    req: RecommendationFeedbackRequest,
+@router.post("/rollout", summary="推薦結果の評価（Rollout）を記録する")
+async def submit_rollout(
+    req: RecommendationRolloutRequest,
     db: Session = Depends(get_db),
     current_user_id: str = Depends(get_current_user_id),
 ):
     """
-    提示された推薦に対するユーザーの10段階評価（GEPAオプティマイザのMetrics用）を受け取る
+    提示された推薦に対するユーザーの評価をRollout（報酬データ）として記録する
     """
-    return RecommendationService.submit_feedback(req, current_user_id, db)
+    return RecommendationService.submit_rollout(req, current_user_id, db)
 
 
 @router.post(

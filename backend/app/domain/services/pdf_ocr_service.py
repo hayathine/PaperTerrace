@@ -17,6 +17,11 @@ from app.providers.image_storage import get_page_images, save_page_image
 from app.utils import _get_file_hash
 from common.logger import get_service_logger, logger
 from common.utils.bbox import scale_bbox
+from common.utils.math_latex import (
+    convert_superscript_brackets,
+    replace_equation_paragraph,
+    wrap_equation_block,
+)
 
 from .figure_service import FigureService
 from .language_service import LanguageService
@@ -53,8 +58,11 @@ class PDFOCRService:
         # 1. Cache handling
         cached_result = await self._handle_cache(file_hash)
         if cached_result:
+            storage_type = os.getenv("STORAGE_TYPE", "local").upper()
             log.info(
-                "cache_hit", f"Using cached OCR for {filename}", file_hash=file_hash
+                "cache_hit",
+                f"Using cached OCR ({storage_type}) for {filename}",
+                file_hash=file_hash,
             )
             for page in cached_result:
                 yield page
@@ -153,7 +161,8 @@ class PDFOCRService:
             logger.info(f"[OCR] Cache miss for hash: {file_hash}")
             return None
 
-        logger.info(f"[OCR] Cache hit for hash: {file_hash}")
+        storage_type = os.getenv("STORAGE_TYPE", "local").upper()
+        logger.info(f"[OCR] Cache hit ({storage_type}) for hash: {file_hash}")
         ocr_text = cache_data["ocr_text"]
         layout_json = cache_data.get("layout_json")
         layout_data_list = []
@@ -313,11 +322,60 @@ class PDFOCRService:
                 # pymupdf4llm が挿入した画像参照（![...](...)）を除去
                 page_text = re.sub(r"!\[.*?\]\(.*?\)", "", raw_md).strip()
 
+                # --- 数式後処理 -----------------------------------------------
+                # 1. pymupdf4llm の [char] 上付き記法を ^{char} に変換
+                #    例: Π[∗] → Π^{∗}, [x,m] → ^{x,m}
+                #    純粋な数字列 [1],[12] は引用文献の可能性が高いため変換しない
+                page_text = convert_superscript_brackets(page_text)
+
+                # 2. レイアウト解析で equation と判定されたブロックを $$...$$ に置換
+                #    layout_data["words"] からブロック内の単語を取得し、
+                #    pymupdf4llm の対応段落を LaTeX ブロックで置換する
+                for block in layout_blocks:
+                    class_name = block.get("class_name", "").lower()
+                    if not ("equation" in class_name or "formula" in class_name):
+                        continue
+                    bbox = block.get("bbox", {})
+                    if isinstance(bbox, dict):
+                        bx1 = bbox.get("x_min", 0)
+                        by1 = bbox.get("y_min", 0)
+                        bx2 = bbox.get("x_max", 0)
+                        by2 = bbox.get("y_max", 0)
+                    else:
+                        bx1, by1, bx2, by2 = bbox
+                    margin = 5
+                    # ブロック内の OCR 単語を収集
+                    eq_words = [
+                        w["word"]
+                        for w in layout_data["words"]
+                        if (bx1 - margin)
+                        <= (w["bbox"][0] + w["bbox"][2]) / 2
+                        <= (bx2 + margin)
+                        and (by1 - margin)
+                        <= (w["bbox"][1] + w["bbox"][3]) / 2
+                        <= (by2 + margin)
+                    ]
+                    if not eq_words:
+                        continue
+                    eq_raw = " ".join(eq_words)
+                    latex_block = wrap_equation_block(eq_raw)
+                    page_text, replaced = replace_equation_paragraph(
+                        page_text, eq_words, latex_block
+                    )
+                    if not replaced:
+                        # 対応段落が見つからない場合はページ末尾に追記
+                        page_text += f"\n\n{latex_block}\n\n"
+                # --------------------------------------------------------------
+
                 # レイアウト解析で検出した Figure/Table の BBox プレースホルダーをページ末尾に追記
                 # フロントエンドの TextModePage で遅延ローディング図画像として利用される
                 figure_refs = []
+                eq_count = 0
                 for block in layout_blocks:
                     class_name = block.get("class_name", "").lower()
+                    if "equation" in class_name or "formula" in class_name:
+                        eq_count += 1
+                        continue
                     is_figure = any(
                         kw in class_name for kw in ["figure", "picture", "chart"]
                     )
@@ -337,7 +395,7 @@ class PDFOCRService:
 
                 logger.info(
                     f"[OCR] Page {page_num}: pymupdf4llm markdown generated "
-                    f"(length={len(page_text)}, figures={len(figure_refs)})"
+                    f"(length={len(page_text)}, figures={len(figure_refs)}, equations={eq_count})"
                 )
             else:
                 # pdf_path が取得できない場合は既存方式にフォールバック

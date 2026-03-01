@@ -29,6 +29,8 @@ class M2M100TranslationService:
         # CTranslate2設定
         self.ct2_inter_threads = int(os.getenv("CT2_INTER_THREADS", "1"))
         self.ct2_intra_threads = int(os.getenv("CT2_INTRA_THREADS", "4"))
+        # int8 reduces working memory during inference without changing stored weights.
+        self.ct2_compute_type = os.getenv("CT2_COMPUTE_TYPE", "int8")
 
         # 翻訳パラメータ (単語翻訳用に最適化)
         self.beam_size = int(os.getenv("TRANSLATION_BEAM_SIZE", "2"))
@@ -72,6 +74,7 @@ class M2M100TranslationService:
                 device="cpu",
                 inter_threads=self.ct2_inter_threads,
                 intra_threads=self.ct2_intra_threads,
+                compute_type=self.ct2_compute_type,
             )
 
             logger.info(f"M2M100翻訳モデルを読み込みました: {self.model_path}")
@@ -100,25 +103,49 @@ class M2M100TranslationService:
         src_token = get_m2m100_lang_code(self.src_lang)
         return [src_token] + pieces + ["</s>"]
 
+    def _prepare_input_word(self, word: str) -> list[str]:
+        """単語翻訳用: ラッパー文にして文脈を与えたトークン列を構築する。
+
+        単語単体より文脈文の方が M2M100 の翻訳精度が高い（特に専門用語のカタカナ転写）。
+        出力は _extract_word_from_sentence() で日本語パターンマッチして抽出する。
+        """
+        src_token = get_m2m100_lang_code(self.src_lang)
+        pieces = self.tokenizer.encode_as_pieces(f"The term {word} is used here.")
+        return [src_token] + pieces + ["</s>"]
+
     @staticmethod
     def _is_single_word(text: str) -> bool:
         """テキストが単一単語かどうかを判定"""
         return len(text.strip().split()) == 1
 
     @staticmethod
-    def _wrap_word_in_sentence(word: str) -> str:
-        """単語を<t>タグでマークした文章に埋め込む。
-        文脈を与えることでM2M100の翻訳精度を向上させる。
-        <t>は意味のない記号としてモデルに認識されるため、誤訳を防ぐ。
-        """
-        return f"The term <t>{word}</t> is used here."
+    def _extract_word_from_sentence(sentence: str) -> str | None:
+        """ラッパー文を翻訳した日本語出力から核となる単語部分を抽出する。
 
-    @staticmethod
-    def _extract_bracketed(text: str) -> str | None:
-        """翻訳結果から<t>...</t>内のテキストを抽出して返す"""
-        match = re.search(r"<t>(.*?)</t>", text, re.DOTALL)
-        if match:
-            return match.group(1).strip()
+        M2M100 の典型的な出力パターン:
+          - 「トランスフォーマー」という用語が… → 「」内を抽出
+          - 注目という言葉はここで…            → という の直前を抽出
+          - ここでグラディエントという…         → ここで〜という の間を抽出
+        """
+        # パターン1: 「term」 形式
+        m = re.search(r"「(.+?)」", sentence)
+        if m:
+            return m.group(1).strip()
+
+        # パターン2: ここで[は][、] term という 形式
+        # 「ここでは、〜という」のように は や読点が続くケースを除外する
+        m = re.search(r"ここでは?[、,]?\s*(.+?)(?:という|の)", sentence)
+        if m:
+            return m.group(1).strip()
+
+        # パターン3: 文頭 term という 形式
+        m = re.match(r"^(.+?)という", sentence)
+        if m:
+            candidate = m.group(1).strip()
+            # 「その用語」「この用語」のような代名詞は除外
+            if candidate not in ("その用語", "この用語", "その言葉", "この言葉"):
+                return candidate
+
         return None
 
     async def translate(self, text: str, target_lang: str = "ja") -> dict:
@@ -133,9 +160,9 @@ class M2M100TranslationService:
             raise RuntimeError("M2M100モデル未初期化")
 
         is_word = self._is_single_word(text)
-        input_text = self._wrap_word_in_sentence(text) if is_word else text
-
-        input_tokens = self._prepare_input(input_text)
+        input_tokens = (
+            self._prepare_input_word(text) if is_word else self._prepare_input(text)
+        )
         tgt_code = get_m2m100_lang_code(target_lang)
 
         loop = asyncio.get_event_loop()
@@ -158,20 +185,24 @@ class M2M100TranslationService:
             score = result.scores[0] if result.scores else 0.0
             conf = math.exp(score)
 
-            # Postprocess
+            # Postprocess: strip leading language token
             if output_tokens and output_tokens[0] == tgt_code:
                 output_tokens = output_tokens[1:]
-            translation = self.tokenizer.decode_pieces(output_tokens).strip()
 
-            # 単語翻訳の場合: <t>...</t>内のテキストだけを取り出す
-            # モデルがタグを保持しなかった場合は全体をそのまま返す
+            full_text = self.tokenizer.decode_pieces(output_tokens).strip()
+
+            # 単語翻訳の場合: 日本語文パターンから核となる単語を抽出する。
+            # 抽出できない場合は全文をそのまま返す。
             if is_word:
-                extracted = self._extract_bracketed(translation)
+                extracted = self._extract_word_from_sentence(full_text)
                 if extracted:
                     translation = extracted
-                    logger.debug(
-                        f"単語翻訳抽出: {text!r} -> {translation!r} (全文: {self.tokenizer.decode_pieces(output_tokens).strip()!r})"
-                    )
+                    logger.debug(f"単語抽出: {text!r} -> {translation!r} (全文: {full_text!r})")
+                else:
+                    translation = full_text
+                    logger.debug(f"抽出失敗、全文返却: {text!r} -> {translation!r}")
+            else:
+                translation = full_text
 
             return {"translation": translation, "conf": conf, "model": "M2M100"}
 

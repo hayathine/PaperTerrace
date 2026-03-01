@@ -19,7 +19,7 @@ export interface RecommendationSyncPayload {
 	session_duration?: number;
 }
 
-export interface RecommendationFeedbackPayload {
+export interface RecommendationRolloutPayload {
 	session_id: string;
 	user_score: number;
 	user_comment?: string;
@@ -78,20 +78,20 @@ export async function syncTrajectory(
 }
 
 /**
- * Submit feedback for recommendations.
+ * Submit rollout (feedback) for recommendations.
  */
-export async function submitRecommendationFeedback(
-	payload: RecommendationFeedbackPayload,
+export async function submitRecommendationRollout(
+	payload: RecommendationRolloutPayload,
 	token: string | null,
 ) {
-	const res = await fetch(`${API_URL}/api/recommendation/feedback`, {
+	const res = await fetch(`${API_URL}/api/recommendation/rollout`, {
 		method: "POST",
 		headers: buildHeaders(token),
 		body: JSON.stringify(payload),
 	});
 	if (!res.ok) {
 		const detail = await res.text().catch(() => "");
-		throw new Error(`Failed to submit feedback (${res.status}): ${detail}`);
+		throw new Error(`Failed to submit rollout (${res.status}): ${detail}`);
 	}
 	return res.json();
 }
