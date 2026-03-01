@@ -27,7 +27,7 @@ class SummaryService:
     def __init__(self, storage=None):
         self.ai_provider = get_ai_provider()
         self.storage = storage or get_storage_provider()  # Inject storage
-        self.model = os.getenv("MODEL_SUMMARY", "gemini-2.0-flash-lite")
+        self.model = os.getenv("MODEL_SUMMARY", "gemini-2.5-flash-lite")
         # デフォルト: 90万トークン（Gemini 1.5 Flashは100万上限だがマージン確保）
         self.token_limit = int(os.getenv("MAX_INPUT_TOKENS", "900000"))
 
@@ -166,6 +166,17 @@ class SummaryService:
                 # DSPy version
                 res = self.summary_mod(paper_text=safe_text, lang_name=lang_name)
 
+                # DSPy may return key_words as None, [], or a raw string when
+                # list parsing fails. Normalize to a proper list before joining.
+                raw_kw = res.key_words
+                if isinstance(raw_kw, str):
+                    key_words = [k.strip() for k in raw_kw.split(",") if k.strip()]
+                elif isinstance(raw_kw, list):
+                    key_words = [str(k).strip() for k in raw_kw if k]
+                else:
+                    key_words = []
+                keywords_str = ", ".join(key_words) if key_words else "N/A"
+
                 # Check if target is English, otherwise default to Japanese headers
                 if target_lang == "en":
                     result_lines = [
@@ -175,7 +186,7 @@ class SummaryService:
                         f"\n## Methodology\n{res.methodology}",
                         f"\n## Conclusion\n{res.conclusion}",
                         "\n## Key Words",
-                        ", ".join(res.key_words) if res.key_words else "N/A",
+                        keywords_str,
                     ]
                 else:
                     result_lines = [
@@ -185,7 +196,7 @@ class SummaryService:
                         f"\n## 手法\n{res.methodology}",
                         f"\n## 結論\n{res.conclusion}",
                         "\n## キーワード",
-                        ", ".join(res.key_words) if res.key_words else "N/A",
+                        keywords_str,
                     ]
                 formatted_text = "\n".join(result_lines)
 

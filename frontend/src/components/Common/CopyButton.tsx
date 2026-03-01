@@ -16,7 +16,7 @@ interface CopyButtonProps {
  */
 const CopyButton: React.FC<CopyButtonProps> = ({
 	text,
-	size = 14,
+	size = 15,
 	className = "",
 }) => {
 	const [copied, setCopied] = useState(false);
@@ -48,7 +48,7 @@ const CopyButton: React.FC<CopyButtonProps> = ({
 			className={`p-1 rounded transition-all ${
 				copied
 					? "text-green-500"
-					: "text-slate-300 hover:text-slate-500 hover:bg-slate-100"
+					: "text-slate-500 hover:text-slate-700 hover:bg-slate-100"
 			} ${className}`}
 			title={copied ? "Copied!" : "Copy"}
 		>
@@ -59,7 +59,7 @@ const CopyButton: React.FC<CopyButtonProps> = ({
 					viewBox="0 0 24 24"
 					fill="none"
 					stroke="currentColor"
-					strokeWidth={2}
+					strokeWidth={2.5}
 					strokeLinecap="round"
 					strokeLinejoin="round"
 				>
@@ -72,7 +72,7 @@ const CopyButton: React.FC<CopyButtonProps> = ({
 					viewBox="0 0 24 24"
 					fill="none"
 					stroke="currentColor"
-					strokeWidth={2}
+					strokeWidth={2.5}
 					strokeLinecap="round"
 					strokeLinejoin="round"
 				>

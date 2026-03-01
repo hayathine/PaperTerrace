@@ -115,7 +115,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 					session_id: sessionId,
 					paper_id: paperId,
 					figure_id: figureId,
-					author_mode: false,
 					lang: i18n.language,
 				}),
 			});

@@ -25,7 +25,6 @@ from app.routers import (
     note_router,
     papers_router,
     pdf_router,
-    recommendation_router,
     stamps_router,
     translation_router,
     upload_router,
@@ -252,7 +251,6 @@ app.include_router(pdf_router, prefix="/api")
 # Analysis Features
 app.include_router(analysis_router, prefix="/api")
 app.include_router(figures_router, prefix="/api")
-app.include_router(recommendation_router, prefix="/api")
 app.include_router(feedback_router, prefix="/api")
 app.include_router(contact_router, prefix="/api")
 

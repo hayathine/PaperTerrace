@@ -14,7 +14,7 @@ class FigureInsightService:
 
     def __init__(self):
         self.ai_provider = get_ai_provider()
-        self.model = os.getenv("FIGURE_EXPLAIN_MODEL", "gemini-2.0-flash-lite")
+        self.model = os.getenv("FIGURE_EXPLAIN_MODEL", "gemini-2.5-flash-lite")
         setup_dspy()
         self.figure_mod = VisionFigureModule()
 
@@ -85,5 +85,3 @@ class FigureInsightService:
                 extra={"error": str(e), "mime_type": mime_type},
             )
             return f"図の分析に失敗しました: {e}"
-
-

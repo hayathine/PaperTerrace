@@ -12,7 +12,6 @@ from app.routers.figures import router as figures_router
 from app.routers.note import router as note_router
 from app.routers.papers import router as papers_router
 from app.routers.pdf import router as pdf_router
-from app.routers.recommendation import router as recommendation_router
 from app.routers.stamps import router as stamps_router
 from app.routers.translation import router as translation_router
 from app.routers.upload import router as upload_router
@@ -30,7 +29,6 @@ __all__ = [
     "papers_router",
     "stamps_router",
     "upload_router",
-    "recommendation_router",
     "feedback_router",
     "contact_router",
 ]

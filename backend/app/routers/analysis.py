@@ -1,6 +1,6 @@
 """
 Analysis Router
-Handles paper analysis features: summary, research radar,
+Handles paper analysis features: summary,
 figure/table analysis, layout detection, and adversarial review.
 """
 
@@ -10,7 +10,6 @@ from fastapi.responses import JSONResponse
 from app.domain.features import (
     AdversarialReviewService,
     FigureInsightService,
-    ResearchRadarService,
     SummaryService,
 )
 from app.domain.services.layout_analysis_service import LayoutAnalysisService
@@ -24,7 +23,6 @@ router = APIRouter(tags=["Analysis"])
 
 # Services
 summary_service = SummaryService()
-research_radar_service = ResearchRadarService()
 figure_insight_service = FigureInsightService()
 adversarial_service = AdversarialReviewService()
 redis_service = RedisService()
@@ -96,27 +94,6 @@ async def summarize(
         context, target_lang=lang, paper_id=paper_id, key_word=key_word
     )
     return JSONResponse({"summary": summary})
-
-
-# ============================================================================
-# Research Radar (Deprecated) / Recommended Papers
-# ============================================================================
-
-
-@router.post("/recommend")
-async def recommend_papers(session_id: str = Form(...), lang: str = Form("ja")):
-    """
-    Generate recommended papers based on the current paper's context.
-    This replaces the deprecated research-radar feature.
-    """
-    context = _get_context(session_id)
-    if not context:
-        return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
-
-    # Use ResearchRadarService but for "recommendation" purposes
-    papers = await research_radar_service.find_related_papers(context[:3000])
-    queries = await research_radar_service.generate_search_queries(context[:3000])
-    return JSONResponse({"related_papers": papers, "search_queries": queries})
 
 
 # ============================================================================

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models.orm.recommendation import Feedback, Trajectory
+from app.models.orm.recommendation import Feedback
 from app.schemas.feedback import FeedbackRequest
 from common.logger import logger
 
@@ -32,17 +32,6 @@ async def submit_feedback(
         user_comment=req.user_comment,
     )
     db.add(feedback)
-
-    # If it's a recommendation and we have a specific paper clicked, update trajectory
-    if req.target_type == "recommendation" and req.target_id:
-        trajectory = (
-            db.query(Trajectory).filter(Trajectory.session_id == req.session_id).first()
-        )
-        if trajectory:
-            clicked_list = trajectory.clicked_papers or []
-            if req.target_id not in clicked_list:
-                clicked_list.append(req.target_id)
-                trajectory.clicked_papers = clicked_list
 
     try:
         db.commit()

@@ -602,7 +602,7 @@ class VertexAIProvider(AIProviderInterface):
     def __init__(self):
         self.project_id = os.getenv("GCP_PROJECT_ID")
         self.location = os.getenv("GCP_LOCATION", "us-central1")
-        self.model = os.getenv("VERTEX_MODEL", "gemini-2.0-flash-lite")
+        self.model = os.getenv("VERTEX_MODEL", "gemini-2.5-flash-lite")
 
         if not self.project_id:
             logger.warning(

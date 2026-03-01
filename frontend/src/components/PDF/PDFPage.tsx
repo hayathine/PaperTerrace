@@ -299,23 +299,21 @@ const PDFPage: React.FC<PDFPageProps> = ({
 							)
 								return null;
 
-							// Filter out non-visual elements that shouldn't block text interaction
 							const label = (fig.label || "").toLowerCase();
-							if (
-								[
-									"text",
-									"title",
-									"list",
-									"header",
-									"footer",
-									"reference",
-									"caption",
-									"section-header",
-									"footnote",
-								].includes(label)
-							) {
-								return null;
-							}
+
+							// Interactive targets in click mode (matches inference-service TARGET_CLASSES)
+							const isInteractiveType = [
+								"table",
+								"figure",
+								"picture",
+								"formula",
+								"chart",
+								"algorithm",
+								"equation",
+							].includes(label);
+
+							// Skip non-interactive text elements that block text interaction
+							if (!isInteractiveType) return null;
 
 							const pageWidth = width || 1;
 							const pageHeight = height || 1;
@@ -351,7 +349,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 										className="w-full h-full object-fill"
 										alt={fig.label}
 									/>
-									{isClickMode && (
+									{isClickMode && isInteractiveType && (
 										<>
 											{/* Hover overlay for visual feedback */}
 											<div className="absolute inset-0 bg-orange-500/0 hover:bg-orange-500/10 transition-colors border-2 border-transparent hover:border-orange-400 rounded-sm pointer-events-none" />
@@ -512,7 +510,13 @@ const PDFPage: React.FC<PDFPageProps> = ({
 										width: `${styleW}%`,
 										height: `${styleH}%`,
 										fontSize: `${styleH}cqh`,
-										background: "none",
+										background:
+											isSelected ||
+											isJumpHighlight ||
+											isSearchMatch ||
+											isCurrentSearchMatch
+												? undefined
+												: "none",
 										border:
 											isSelected || isSearchMatch || isCurrentSearchMatch
 												? undefined

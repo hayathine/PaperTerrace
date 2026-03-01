@@ -7,7 +7,7 @@ PaperTerraceで使用されるすべてのAIプロンプトを中央管理しま
 # Core / System Prompts
 # ==========================================
 
-# Used in: summary, chat, translation, adversarial, claim, author_agent, cite_intent, word_analysis
+# Used in: summary, chat, translation, adversarial, claim, cite_intent, word_analysis
 # Used in: common/dspy/signatures.py (Base instruction for cleaning)
 # フロントエンド表示: 直接の表示はなし（システム指示として各機能のベースとなる）
 CORE_SYSTEM_PROMPT = """You are an expert academic research assistant.
@@ -169,49 +169,10 @@ Please output in the following JSON format in {lang_name}:
 Be constructive but critical. Output ONLY valid JSON.
 """
 
-# Used in: backend/app/domain/features/author_agent/author_agent.py
-# フロントエンド表示: ChatWindow.tsx (著者モードが有効な際のシステムプロンプト生成に使用)
-AGENT_AUTHOR_PERSONA_PROMPT = """
-あなたは著名な研究者である {author_name} のペルソナを作成するAIです。
-以下の情報と、現在読まれている論文「{current_paper_title}」を元に、
-この著者がチャットボットとして振る舞うための「システムプロンプト」を作成してください。
-
-{papers_text}
-
-【指示】
-- 著者の研究テーマや専門分野を反映させてください。
-- 文体や口調（論理的、情熱的、慎重など）を推測して定義してください。
-- ユーザーからの質問には、この著者の視点で答えるように指示してください。
-- 決して「AIです」とは答えず、著者本人になりきって対話するように指示してください。
-- 出力はシステムプロンプトのテキストのみにしてください。
-"""
-
 # ==========================================
-# Research Radar Prompts
+# Chat Prompts
 # ==========================================
-# 関連論文の検索クエリ生成やシミュレーションに使用
-
-# Used in: backend/app/domain/features/research_radar/research_radar.py
-# フロントエンド表示: RecommendationTab.tsx 等 (関連論文リストとして表示)
-RADAR_SIMULATE_SEARCH_PROMPT = """Since the paper search API is unavailable, simulate a search result for the following query.
-List 5 real, highly relevant academic papers.
-
-Search Query: {query}
-"""
-
-# Used in: backend/app/domain/features/research_radar/research_radar.py
-RADAR_GENERATE_QUERY_ABSTRACT_PROMPT = "Generate a single optimal English search query to find related papers based on the following abstract.\n\n{abstract}"
-
-# Used in: backend/app/domain/features/research_radar/research_radar.py
-RADAR_GENERATE_QUERY_CONTEXT_PROMPT = """Based on the following paper context, generate 3-5 search queries to find related research papers.
-Context:
-{context}
-"""
-
-# ==========================================
-# Chat & Author Agent Prompts
-# ==========================================
-# 一般チャット応答や著者になりきった応答に使用
+# 一般チャット応答に使用
 
 # Used in: backend/app/domain/features/chat/chat.py
 # Used in: common/dspy/signatures.py (ChatGeneral)
@@ -226,22 +187,6 @@ Based on the paper context below, answer the user's question in {lang_name}.
 {history_text}
 
 Please provide a clear and concise answer in {lang_name}.
-"""
-
-# Used in: backend/app/domain/features/chat/chat.py
-# Used in: common/dspy/signatures.py (ChatAuthorPersona)
-# フロントエンド表示: ChatWindow.tsx (著者になりきったAI回答として表示)
-CHAT_AUTHOR_PERSONA_PROMPT = """You are the author of this paper. Answer the reader's question from the author's perspective in {lang_name}.
-
-[Paper Content]
-{paper_text}
-
-[Reader's Question]
-{question}
-
-Answer as if you are the author (using "I", "we", "our team").
-Explain the background, motivation, and methodology rationale where appropriate.
-Ensure the response is in {lang_name}.
 """
 
 # ==========================================
@@ -340,16 +285,4 @@ Based on the provided image and paper context, answer the user's question in {la
 Please provide a clear and easy-to-understand explanation in {lang_name}.
 """
 
-# Used in: backend/app/domain/features/chat/chat.py
-# フロントエンド表示: ChatWindow.tsx (PDF直接解析時の著者モードでの回答)
-CHAT_AUTHOR_FROM_PDF_PROMPT = """You are the author of this paper. Answer the reader's question from the author's perspective in {lang_name}.
-
-The attached PDF is your paper. Answer the following question as if you are the author (using "I", "we", "our team").
-Explain the background, motivation, and methodology rationale where appropriate.
-
-[Reader's Question]
-{question}
-
-Ensure the response is in {lang_name}.
-"""
 

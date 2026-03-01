@@ -2,7 +2,6 @@ import dspy
 
 from common.prompts import (
     AGENT_ADVERSARIAL_CRITIQUE_PROMPT,
-    CHAT_AUTHOR_PERSONA_PROMPT,
     CHAT_GENERAL_RESPONSE_PROMPT,
     CORE_SYSTEM_PROMPT,
     PAPER_SUMMARY_AI_CONTEXT_PROMPT,
@@ -89,14 +88,6 @@ class ChatGeneral(dspy.Signature):
     answer: str = dspy.OutputField(desc="質問への回答テキスト")
 
 
-class ChatAuthorPersona(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(CHAT_AUTHOR_PERSONA_PROMPT)
-    paper_text: str = dspy.InputField(desc="論文テキスト")
-    question: str = dspy.InputField(desc="読者（ユーザー）の質問")
-    lang_name: str = dspy.InputField(desc="出力する言語")
-    author_answer: str = dspy.OutputField(desc="著者視点での回答テキスト")
-
-
 # =============================================================
 # Agent (分析・レビュー系) の DSPy Signatures
 # =============================================================
@@ -135,42 +126,6 @@ class VisionAnalyzeFigure(dspy.Signature):
     interpretation: str = dspy.OutputField(desc="数値や傾向の解釈")
     implications: str = dspy.OutputField(desc="論文の主張に対する裏付け")
     highlights: list[str] = dspy.OutputField(desc="特筆すべき点や異常値")
-
-
-# =============================================================
-# 推薦機能 (Recommendation) の DSPy Signatures
-# =============================================================
-
-
-class PaperRecommendation(dspy.Signature):
-    """
-    ユーザーの知識レベルや興味、苦手な概念に基づいて、次に読むべき論文を推薦する。
-    推薦論文は3件以上とし、Semantic Scholarでの検索用クエリを2件以上生成すること。
-    初級ユーザーにはsurvey論文を含めることが望ましい。
-    """
-
-    paper_analysis: str = dspy.InputField(desc="現在の論文の解析結果")
-    knowledge_level: str = dspy.InputField(desc="ユーザーの知識レベル")
-    interests: str = dspy.InputField(desc="ユーザーの興味トピック")
-    unknown_concepts: str = dspy.InputField(desc="ユーザーの苦手概念")
-    preferred_direction: str = dspy.InputField(desc="推薦の方向性")
-    recommendations: list[str] = dspy.OutputField(
-        desc="推薦論文リスト（タイトル・理由含む）"
-    )
-    search_queries: list[str] = dspy.OutputField(desc="Semantic Scholar検索クエリ")
-    reasoning: str = dspy.OutputField(desc="推薦理由の説明")
-
-
-class UserProfileEstimation(dspy.Signature):
-    """ユーザーの行動データから理解度・興味・苦手な概念を推定する。"""
-
-    paper_summary: str = dspy.InputField(desc="論文要約")
-    conversation_history: str = dspy.InputField(desc="対話履歴")
-    word_clicks: str = dspy.InputField(desc="クリックされた単語一覧")
-    knowledge_level: str = dspy.OutputField(desc="初級 / 中級 / 上級")
-    interests: list[str] = dspy.OutputField(desc="興味トピック")
-    unknown_concepts: list[str] = dspy.OutputField(desc="理解できていない概念")
-    preferred_direction: str = dspy.OutputField(desc="深堀り / 横展開 / 応用 / 基礎")
 
 
 # =============================================================

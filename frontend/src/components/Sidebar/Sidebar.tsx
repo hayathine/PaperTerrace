@@ -3,7 +3,6 @@ import { useTranslation } from "react-i18next";
 import ChatWindow from "../Chat/ChatWindow";
 import Dictionary from "../Dictionary/Dictionary";
 import NoteList from "../Notes/NoteList";
-import RecommendationTab from "../Recommendation/RecommendationTab";
 import Summary from "../Summary/Summary";
 
 interface SidebarProps {
@@ -124,25 +123,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 				</svg>
 			),
 		},
-		{
-			id: "explore",
-			label: t("nav.explore"),
-			icon: (
-				<svg
-					className="w-3.5 h-3.5"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						strokeWidth="2"
-						d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
-					/>
-				</svg>
-			),
-		},
 	];
 
 	return (
@@ -244,12 +224,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 						selectedTerm={selectedWord}
 						selectedImage={selectedImage}
 					/>
-				</div>
-
-				<div
-					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "explore" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
-				>
-					<RecommendationTab sessionId={sessionId} />
 				</div>
 			</div>
 		</div>

@@ -37,7 +37,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 						size={12}
 						className={
 							isUser
-								? "text-orange-200 hover:text-white hover:bg-orange-500"
+								? "text-orange-50 hover:text-white hover:bg-orange-500"
 								: ""
 						}
 					/>
