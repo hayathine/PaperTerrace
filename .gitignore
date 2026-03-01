@@ -32,7 +32,6 @@ infrastructure/
 !wrangler.toml
 local-files/logs/
 *tests/
-assets/
 migrations/
 *.db
 plans/
