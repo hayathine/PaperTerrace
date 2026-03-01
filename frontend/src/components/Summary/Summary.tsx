@@ -301,9 +301,9 @@ const Summary: React.FC<SummaryProps> = ({
 											].join("\n\n")}
 										/>
 									</div>
-									<div className="text-sm text-slate-700 leading-relaxed font-medium mb-4">
+									<MarkdownContent className="prose prose-sm max-w-none text-sm text-slate-700 leading-relaxed font-medium mb-4">
 										{critiqueData.overall_assessment}
-									</div>
+									</MarkdownContent>
 
 									{critiqueData.hidden_assumptions &&
 										critiqueData.hidden_assumptions.length > 0 && (
@@ -318,9 +318,9 @@ const Summary: React.FC<SummaryProps> = ({
 															<span className="font-bold">
 																● {h.assumption}
 															</span>
-															<p className="ml-4 mt-1 opacity-80 text-xs">
+															<MarkdownContent className="prose prose-xs max-w-none ml-4 mt-1 opacity-80 text-xs">
 																{h.risk}
-															</p>
+															</MarkdownContent>
 														</div>
 													))}
 												</div>
@@ -338,9 +338,9 @@ const Summary: React.FC<SummaryProps> = ({
 													{critiqueData.unverified_conditions.map((h, i) => (
 														<div key={i} className="text-sm text-orange-700">
 															<span className="font-bold">● {h.condition}</span>
-															<p className="ml-4 mt-1 opacity-80 text-xs">
+															<MarkdownContent className="prose prose-xs max-w-none ml-4 mt-1 opacity-80 text-xs">
 																{h.impact}
-															</p>
+															</MarkdownContent>
 														</div>
 													))}
 												</div>
@@ -358,9 +358,9 @@ const Summary: React.FC<SummaryProps> = ({
 													{critiqueData.reproducibility_risks.map((h, i) => (
 														<div key={i} className="text-sm text-slate-700">
 															<span className="font-bold">● {h.risk}</span>
-															<p className="ml-4 mt-1 opacity-80 text-xs">
+															<MarkdownContent className="prose prose-xs max-w-none ml-4 mt-1 opacity-80 text-xs">
 																{h.detail}
-															</p>
+															</MarkdownContent>
 														</div>
 													))}
 												</div>

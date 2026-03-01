@@ -6,6 +6,7 @@ import {
 	type RecommendationGenerateResponse,
 } from "@/lib/recommendation";
 import FeedbackSection from "../Common/FeedbackSection";
+import MarkdownContent from "../Common/MarkdownContent";
 
 interface RecommendationTabProps {
 	sessionId: string;
@@ -132,9 +133,9 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 										"Recommendation Reasoning",
 									)}
 								</h4>
-								<p className="text-xs text-orange-700 leading-relaxed mb-3">
+								<MarkdownContent className="prose prose-xs max-w-none text-xs text-orange-700 leading-relaxed mb-3">
 									{response.reasoning}
-								</p>
+								</MarkdownContent>
 								<div className="flex flex-wrap gap-2">
 									<span className="px-2 py-1 bg-white shadow-sm border border-orange-100 rounded-md text-[10px] font-bold text-orange-600 uppercase tracking-wider">
 										Skill Level: {response.knowledge_level}

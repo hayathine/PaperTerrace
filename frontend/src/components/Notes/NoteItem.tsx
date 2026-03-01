@@ -1,6 +1,7 @@
 import type React from "react";
 import { useTranslation } from "react-i18next";
 import CopyButton from "../Common/CopyButton";
+import MarkdownContent from "../Common/MarkdownContent";
 import type { Note } from "./types";
 
 interface NoteItemProps {
@@ -41,9 +42,9 @@ const NoteItem: React.FC<NoteItemProps> = ({ note, onDelete, onJump }) => {
 				</div>
 			)}
 
-			<p className="text-[10px] text-slate-500 mt-1 whitespace-pre-wrap leading-relaxed">
+			<MarkdownContent className="prose prose-xs max-w-none text-[10px] text-slate-500 mt-1 leading-relaxed">
 				{note.note}
-			</p>
+			</MarkdownContent>
 
 			{note.page_number !== undefined && note.page_number !== null && (
 				<div className="mt-2 flex justify-start">

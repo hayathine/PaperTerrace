@@ -11,6 +11,7 @@ import { API_URL } from "@/config";
 import { useAuth } from "../../contexts/AuthContext";
 import CopyButton from "../Common/CopyButton";
 import FeedbackSection from "../Common/FeedbackSection";
+import MarkdownContent from "../Common/MarkdownContent";
 
 interface DictionaryProps {
 	term?: string;
@@ -413,9 +414,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 							</div>
 						)}
 
-						<p className="text-sm text-slate-600 leading-relaxed font-medium mb-4">
+						<MarkdownContent className="prose prose-sm max-w-none text-sm text-slate-600 leading-relaxed font-medium mb-4">
 							{entry.translation}
-						</p>
+						</MarkdownContent>
 
 						<div className="flex gap-2">
 							<button

@@ -233,12 +233,20 @@ class GCSImageStorage(ImageStorageStrategy):
             if image_url.startswith("/static/"):
                 blob_name = image_url.replace("/static/", "", 1)
             elif image_url.startswith("http"):
-                # Legacy: direct GCS URL fallback
-                import requests
+                from urllib.parse import urlparse
 
-                response = requests.get(image_url)
-                response.raise_for_status()
-                return response.content
+                parsed_path = urlparse(image_url).path
+                if parsed_path.startswith("/static/"):
+                    # フロントエンドから渡されるフルURL（例: https://worker.paperterrace.page/static/...）
+                    # Cloudflare経由の迂回を避け、GCSから直接取得する
+                    blob_name = parsed_path.replace("/static/", "", 1)
+                else:
+                    # 純粋なGCS URLなど: 最終手段としてHTTPフェッチ
+                    import requests
+
+                    response = requests.get(image_url, timeout=30)
+                    response.raise_for_status()
+                    return response.content
             else:
                 blob_name = image_url
 

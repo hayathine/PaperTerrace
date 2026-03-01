@@ -41,13 +41,6 @@ Context:
 {context}
 """
 
-ANALYSIS_BATCH_TRANSLATE_PROMPT = """Provide concise translations for the following English words in {lang_name}.
-Output format per line: "Word: Translation"
-Keep it very brief (1-2 words).
-
-Words:
-{words_list}"""
-
 ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT = """Evaluate the meaning of the word "{word}" within the academic context below, and provide the most appropriate translation in {lang_name}.
 Keep it concise (1-3 words). Output ONLY the translation.
 
@@ -61,28 +54,14 @@ Keep it concise (1-3 words). Output ONLY the translation.
 Translation only in {lang_name}.
 """
 
-# ==========================================
-# Chat Specialized Prompts
-# ==========================================
-
-DICT_AI_CHAT_TRANSLATE_PROMPT = """You are an academic translation expert.
-The user wants to understand a specific term/phrase in the context of this research paper.
-Please provide:
-1. An accurate Japanese translation that fits the academic context.
-2. A very brief (1-2 sentences) explanation of why this term is used or what it implies in this specific context.
-
-[Term/Phrase]
-{word}
-
-[Paper Context]
-{document_context}
-"""
 # 論文全体の要約、セクション別要約、アブストラクト生成に使用
 
 PAPER_SUMMARY_FULL_PROMPT = """TASK: Summarize the following paper in {lang_name}
 PAPER_TEXT: {paper_text}
 
-IMPORTANT: You MUST respond ENTIRELY in {lang_name} language only. However, for the Key Words section, output technical keywords in English. 
+{keyword_focus}
+
+IMPORTANT: You MUST respond ENTIRELY in {lang_name} language only. However, for the Key Words section, output technical keywords in English.
 
 Output Format (use 5 sections with ## markdown headers, all in {lang_name}):
 1. Overview section: 1-2 sentences summarizing the main theme
@@ -130,23 +109,6 @@ Focus on key terminology and the main research topic to serve as context for tec
 # ==========================================
 # 図表の検出、分析、比較に使用
 
-VISION_DETECT_ITEMS_PROMPT = """Analyze the following image of a document page and identify all figures, tables, and independent mathematical equations.
-
-Return a JSON list of bounding boxes for each detected item:
-[
-  {"label": "figure" | "table" | "equation", "box_2d": [ymin, xmin, ymax, xmax]}
-]
-
-[Instructions]
-- Coordinates must be normalized (0.0 to 1.0).
-- "figure": Graphs, charts, diagrams, photos.
-- "table": Tabular data structures.
-- "equation": Significant mathematical formulas/equations displayed independently (not inline).
-- Ignore small icons, headers, footers, or page numbers.
-- Combine the figure image and its caption into one box if possible, or just the figure.
-- If no items are found, return an empty list [].
-"""
-
 VISION_ANALYZE_FIGURE_PROMPT = """Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.
 {caption_hint}
 
@@ -190,24 +152,6 @@ Comparison Points:
 4. Contradictions (if any)
 
 Output in {lang_name}.
-"""
-
-VISION_ANALYZE_EQUATION_PROMPT = """Analyze this area of the research paper and determine if it contains a mathematical equation.
-If it is an equation, convert it to valid LaTeX format.
-
-Input: Image or crop from a PDF page.
-
-Output only valid JSON in the following format:
-{{
-    "is_equation": boolean,
-    "confidence": float (0-1),
-    "latex": "The LaTeX representation of the equation",
-    "explanation": "Brief explanation of what the equation represents in {lang_name}"
-}}
-
-Notes:
-- If multiple equations are present, include them in a single block or multiple lines in the 'latex' field.
-- If it is not an equation (e.g., just random text or an image), set "is_equation" to false.
 """
 
 # ==========================================
@@ -340,11 +284,6 @@ Ensure the response is in {lang_name}.
 # PDF Processing & OCR Prompts
 # ==========================================
 # PDFの言語判定やテキスト抽出の補助に使用
-
-PDF_DETECT_LANGUAGE_PROMPT = """Identify the primary language of the following text and return ONLY the ISO 639-1 code (e.g., 'en', 'ja', 'fr').
-Text Sample:
-{text}
-"""
 
 PDF_EXTRACT_TEXT_OCR_PROMPT = "Transcribe the text from this PDF page preserving the structure as much as possible."
 

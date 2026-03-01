@@ -1,11 +1,15 @@
+import asyncio
 import base64
 import io
 import json
 import os
+import re
 import tempfile
 from collections.abc import AsyncGenerator
 
+import fitz  # PyMuPDF
 import pdfplumber
+import pymupdf4llm
 
 from app.crud import get_ocr_from_db, save_ocr_to_db
 from app.providers import get_ai_provider
@@ -278,10 +282,6 @@ class PDFOCRService:
 
         # Phase 3: Layout analysis and Markdown generation
         try:
-            # We delay import to avoid circular dependency
-            from app.domain.services.markdown_builder import (
-                generate_markdown_from_layout,
-            )
             from app.domain.services.paddle_layout_service import get_layout_service
 
             layout_svc = get_layout_service()
@@ -290,10 +290,67 @@ class PDFOCRService:
                 f"[OCR] Page {page_num}: Layout blocks detected: {len(layout_blocks)}"
             )
 
-            # Update page_text to be Markdown using layout blocks
-            page_text = generate_markdown_from_layout(
-                layout_data["words"], layout_blocks
-            )
+            if pdf_path:
+                # pymupdf4llm による高精度 Markdown 生成
+                # fitz.Document はスレッドアンセーフなためページごとに開いて閉じる
+                def _extract_md(path: str, idx: int) -> str:
+                    doc = fitz.open(path)
+                    try:
+                        return pymupdf4llm.to_markdown(
+                            doc,
+                            pages=[idx],
+                            show_progress=False,
+                            write_images=False,
+                        )
+                    finally:
+                        doc.close()
+
+                loop = asyncio.get_running_loop()
+                raw_md = await loop.run_in_executor(
+                    None, _extract_md, pdf_path, page_idx
+                )
+
+                # pymupdf4llm が挿入した画像参照（![...](...)）を除去
+                page_text = re.sub(r"!\[.*?\]\(.*?\)", "", raw_md).strip()
+
+                # レイアウト解析で検出した Figure/Table の BBox プレースホルダーをページ末尾に追記
+                # フロントエンドの TextModePage で遅延ローディング図画像として利用される
+                figure_refs = []
+                for block in layout_blocks:
+                    class_name = block.get("class_name", "").lower()
+                    is_figure = any(
+                        kw in class_name for kw in ["figure", "picture", "chart"]
+                    )
+                    is_caption = "caption" in class_name
+                    if is_figure and not is_caption:
+                        bbox = block.get("bbox", {})
+                        bbox_list = [
+                            bbox.get("x_min", 0),
+                            bbox.get("y_min", 0),
+                            bbox.get("x_max", 0),
+                            bbox.get("y_max", 0),
+                        ]
+                        figure_refs.append(f"\n\n![Figure]({bbox_list})\n")
+
+                if figure_refs:
+                    page_text += "".join(figure_refs)
+
+                logger.info(
+                    f"[OCR] Page {page_num}: pymupdf4llm markdown generated "
+                    f"(length={len(page_text)}, figures={len(figure_refs)})"
+                )
+            else:
+                # pdf_path が取得できない場合は既存方式にフォールバック
+                from app.domain.services.markdown_builder import (
+                    generate_markdown_from_layout,
+                )
+
+                page_text = generate_markdown_from_layout(
+                    layout_data["words"], layout_blocks
+                )
+                logger.info(
+                    f"[OCR] Page {page_num}: Fallback markdown (generate_markdown_from_layout)"
+                )
         except Exception as e:
             logger.error(f"[OCR] Page {page_num}: Markdown generation failed: {e}")
             # Fallback to plain text if layout service fails

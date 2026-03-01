@@ -128,26 +128,45 @@ class LlamaCppTranslationService:
         from common.dspy.signatures import ContextAwareTranslation
 
         class InMemoryLlama(dspy.LM):
+            """DSPy 3.x 互換のインメモリLlamaラッパー"""
+
             def __init__(self, llm_instance):
                 super().__init__("local-llama")
                 self.llm_instance = llm_instance
                 self.kwargs = {"temperature": 0.3, "max_tokens": 1024}
                 self.history = []
 
-            def __call__(self, prompt: str, **kwargs) -> list[str]:
-                response = self.llm_instance.create_chat_completion(
-                    messages=[
+            def __call__(
+                self,
+                prompt: str | None = None,
+                messages: list[dict] | None = None,
+                **kwargs,
+            ) -> list[str]:
+                # DSPy 3.x は messages= キーワード引数でLMを呼び出す
+                if messages:
+                    chat_messages = [
                         {
                             "role": "system",
                             "content": "You are an expert academic research assistant. Never output markdown formatting for JSON, act directly.",
                         },
-                        {"role": "user", "content": prompt},
-                    ],
+                        *messages,
+                    ]
+                else:
+                    chat_messages = [
+                        {
+                            "role": "system",
+                            "content": "You are an expert academic research assistant. Never output markdown formatting for JSON, act directly.",
+                        },
+                        {"role": "user", "content": prompt or ""},
+                    ]
+
+                response = self.llm_instance.create_chat_completion(
+                    messages=chat_messages,
                     temperature=kwargs.get("temperature", self.kwargs["temperature"]),
                     max_tokens=kwargs.get("max_tokens", self.kwargs["max_tokens"]),
                 )
                 text = response["choices"][0]["message"]["content"]
-                self.history.append({"prompt": prompt, "response": text})
+                self.history.append({"messages": chat_messages, "response": text})
                 return [text]
 
         logger.info(f"LLM 翻訳実行中... (Word: {original_word[:20]}...)")

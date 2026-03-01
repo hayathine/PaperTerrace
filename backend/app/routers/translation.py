@@ -663,7 +663,9 @@ async def explain_image(req: ExplainImageRequest):
     from app.providers import get_image_bytes
 
     try:
-        image_bytes = get_image_bytes(req.image_url)
+        # GCSダウンロードは同期ブロッキングI/Oのため、イベントループをブロックしないようexecutorで実行
+        loop = asyncio.get_event_loop()
+        image_bytes = await loop.run_in_executor(None, lambda: get_image_bytes(req.image_url))
     except Exception as e:
         log.error(
             "explain_image", f"Failed to get image bytes for {req.image_url}: {e}"
