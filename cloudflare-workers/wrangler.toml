@@ -35,3 +35,6 @@ name = "paperterrace-dev"
 [env.dev.vars]
 BACKEND_TUNNEL_URL = "https://dev-tunnel.paperterrace.page"
 ALLOWED_ORIGINS = "https://paperterrace-dev.pages.dev,http://localhost:5173"
+
+[env.main]
+name = "paperterrace"

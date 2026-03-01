@@ -254,7 +254,7 @@ const Summary: React.FC<SummaryProps> = ({
 									</button>
 								</div>
 								<MarkdownContent className="prose prose-sm max-w-none text-sm text-slate-600 leading-relaxed bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
-									{summaryData}
+									{summaryData || ""}
 								</MarkdownContent>
 								<FeedbackSection
 									sessionId={sessionId}
@@ -302,7 +302,7 @@ const Summary: React.FC<SummaryProps> = ({
 										/>
 									</div>
 									<MarkdownContent className="prose prose-sm max-w-none text-sm text-slate-700 leading-relaxed font-medium mb-4">
-										{critiqueData.overall_assessment}
+										{critiqueData.overall_assessment || ""}
 									</MarkdownContent>
 
 									{critiqueData.hidden_assumptions &&
