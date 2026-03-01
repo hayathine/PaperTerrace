@@ -1276,7 +1276,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							onToggleMode={() => setMode("text")}
 							selectedStamp={selectedStamp}
 							onSelectStamp={setSelectedStamp}
-							token={token}
+							token={token ?? undefined}
 						/>
 					)}
 				</>
