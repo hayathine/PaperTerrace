@@ -24,15 +24,6 @@ class TableAnalysisResponse(BaseModel):
     conclusions: str = Field(..., description="表から導かれる結論")
 
 
-class FigureComparisonResponse(BaseModel):
-    """図表比較結果の構造化モデル"""
-
-    similarities: list[str] = Field(..., description="2つの図の類似点")
-    differences: list[str] = Field(..., description="2つの図の相違点")
-    relationship: str = Field(..., description="補完関係などの関連性")
-    contradictions: list[str] | None = Field(None, description="矛盾点（ある場合）")
-
-
 class FigureBox(BaseModel):
     """Represents a bounding box for a detected figure, table, or equation."""
 
@@ -104,46 +95,6 @@ class SearchQueriesResponse(BaseModel):
     """検索クエリ生成モデル"""
 
     queries: list[str] = Field(..., description="検索クエリリスト（3-5件）")
-
-
-# --- Citations & Claims ---
-
-
-class CitationIntent(BaseModel):
-    """段落内の個別の引用の分析結果"""
-
-    citation: str = Field(
-        ..., description="The citation string as it appears in the text"
-    )
-    intent: str = Field(
-        ...,
-        description="Support | Use | Contrast | Criticize | Neutral",
-    )
-    reason: str = Field(
-        ..., description="1-sentence reason for classification in target language"
-    )
-
-
-class CitationAnalysisResponse(BaseModel):
-    """引用意図分析の全体レスポンス"""
-
-    citations: list[CitationIntent]
-
-
-class ClaimVerificationResponse(BaseModel):
-    """結果報告のための構造化データモデル"""
-
-    status: str = Field(..., description="warning | verified | neutral")
-    summary: str = Field(
-        ..., description="Short summary of the verification result (max 100 chars)."
-    )
-    details: str = Field(
-        ...,
-        description="Detailed report citing sources found during search. Mention if reproducible or accepted, or highlight doubts.",
-    )
-    sources: list[str] = Field(
-        default_factory=list, description="List of URL or source names found"
-    )
 
 
 # --- Critical Thinking & Adversarial ---

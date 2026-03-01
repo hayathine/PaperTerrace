@@ -15,7 +15,6 @@ interface ChatWindowProps {
 	onInitialChatSent?: () => void;
 	initialPrompt?: string | null;
 	onInitialPromptSent?: () => void;
-	onStackPaper?: (url: string, title?: string) => void;
 	onEvidenceClick?: (grounding: any) => void;
 }
 
@@ -27,7 +26,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 	onInitialChatSent,
 	initialPrompt,
 	onInitialPromptSent,
-	onStackPaper,
 	onEvidenceClick,
 }) => {
 	const { t, i18n } = useTranslation();
@@ -177,7 +175,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 			<MessageList
 				messages={messages}
 				isLoading={isLoading}
-				onStackPaper={onStackPaper}
 				onEvidenceClick={onEvidenceClick}
 			/>
 			<InputArea onSendMessage={handleSendMessage} isLoading={isLoading} />

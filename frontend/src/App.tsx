@@ -71,29 +71,12 @@ function App() {
 	const [isResizing, setIsResizing] = useState(false);
 	const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
 	const [activeEvidence, setActiveEvidence] = useState<any>(null);
-	const [stackedPapers, setStackedPapers] = useState<
-		{ url: string; title?: string; addedAt: number }[]
-	>(() => {
-		try {
-			const saved = localStorage.getItem("paper_terrace_stack");
-			if (!saved) return [];
-			const parsed = JSON.parse(saved);
-			return Array.isArray(parsed) ? parsed : [];
-		} catch (e) {
-			console.error("Failed to parse stacked papers:", e);
-			return [];
-		}
-	});
 	const [uploadedPapers, setUploadedPapers] = useState<any[]>([]);
 
 	const prevPaperIdRef = useRef<string | null>(null);
 
 	// Developer settings
 	const SHOW_DEV_TOOLS = true;
-
-	useEffect(() => {
-		localStorage.setItem("paper_terrace_stack", JSON.stringify(stackedPapers));
-	}, [stackedPapers]);
 
 	useEffect(() => {
 		const fetchPapers = async () => {
@@ -250,30 +233,12 @@ function App() {
 		}
 	};
 
-	const isLink = (text: string) => {
-		const clean = text.trim();
-		return (
-			clean.match(/^(https?:\/\/|\/\/)/i) ||
-			clean.startsWith("www.") ||
-			clean.includes("doi.org/") ||
-			clean.match(
-				/[a-zA-Z0-9.-]+\.(com|org|net|io|edu|gov|io|github\.io)\//i,
-			) ||
-			clean.match(/^10\.\d{4,9}\/[-._;()/:A-Z0-9]+$/i)
-		); // DOI pattern
-	};
-
 	const handleWordClick = (
 		word: string,
 		context?: string,
 		coords?: { page: number; x: number; y: number },
 		conf?: number,
 	) => {
-		if (isLink(word)) {
-			handleStackPaper(word);
-			return;
-		}
-
 		// Fire telemetry for translation
 		if (currentPaperId) {
 			syncTrajectory({
@@ -303,11 +268,6 @@ function App() {
 		text: string,
 		coords: { page: number; x: number; y: number },
 	) => {
-		if (isLink(text)) {
-			handleStackPaper(text);
-			return;
-		}
-
 		// When text is selected, we want to maybe open notes?
 		// Let's set selected context as the text
 		setSelectedWord(undefined);
@@ -358,27 +318,6 @@ function App() {
 			setActiveTab("chat");
 			setIsRightSidebarOpen(true);
 		}
-	};
-
-	const handleStackPaper = (url: string, title?: string) => {
-		// Heal URL if it looks like one (remove internal spaces/newlines from OCR/layout split)
-		let cleanedUrl = url.trim().replace(/\s+/g, "");
-
-		// Handle raw DOI
-		if (cleanedUrl.match(/^10\.\d{4,9}\//) && !cleanedUrl.startsWith("http")) {
-			cleanedUrl = `https://doi.org/${cleanedUrl}`;
-		}
-
-		setStackedPapers((prev) => {
-			if (prev.some((p) => p.url === cleanedUrl)) return prev;
-			return [...prev, { url: cleanedUrl, title, addedAt: Date.now() }];
-		});
-		setActiveTab("stack");
-		setIsRightSidebarOpen(true);
-	};
-
-	const handleRemoveFromStack = (url: string) => {
-		setStackedPapers((prev) => prev.filter((p) => p.url !== url));
 	};
 
 	// Ctrl+F イベントをインターセプトしてカスタム検索を開く
@@ -844,9 +783,6 @@ function App() {
 								onPendingFigureConsumed={() => setPendingFigureId(null)}
 								pendingChatPrompt={pendingChatPrompt}
 								onPendingChatConsumed={() => setPendingChatPrompt(null)}
-								stackedPapers={stackedPapers}
-								onStackPaper={handleStackPaper}
-								onRemoveFromStack={handleRemoveFromStack}
 								onEvidenceClick={(g: any) => {
 									setActiveEvidence(g);
 									// Optionally switch to PDF view if in plaintext mode?

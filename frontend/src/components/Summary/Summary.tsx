@@ -5,7 +5,7 @@ import { useLoading } from "../../contexts/LoadingContext";
 import CopyButton from "../Common/CopyButton";
 import FeedbackSection from "../Common/FeedbackSection";
 import MarkdownContent from "../Common/MarkdownContent";
-import type { CritiqueResponse, RecommendResponse } from "./types";
+import type { CritiqueResponse } from "./types";
 
 interface SummaryProps {
 	sessionId: string;
@@ -13,7 +13,7 @@ interface SummaryProps {
 	isAnalyzing?: boolean;
 }
 
-type Mode = "summary" | "critique" | "recommend";
+type Mode = "summary" | "critique";
 
 const Summary: React.FC<SummaryProps> = ({
 	sessionId,
@@ -31,15 +31,11 @@ const Summary: React.FC<SummaryProps> = ({
 	const [critiqueData, setCritiqueData] = useState<CritiqueResponse | null>(
 		null,
 	);
-	const [recommendData, setRecommendData] = useState<RecommendResponse | null>(
-		null,
-	);
 
 	// Reset data when paperId changes
 	React.useEffect(() => {
 		setSummaryData(null);
 		setCritiqueData(null);
-		setRecommendData(null);
 		setError(null);
 	}, [paperId]);
 
@@ -110,34 +106,6 @@ const Summary: React.FC<SummaryProps> = ({
 		}
 	}, [sessionId, i18n.language, t, startLoading, stopLoading]);
 
-	const handleRecommend = useCallback(async () => {
-		setLoading(true);
-		startLoading(t("summary.processing"));
-		setError(null);
-		try {
-			const formData = new FormData();
-			formData.append("session_id", sessionId);
-			formData.append("lang", i18n.language);
-			const res = await fetch(`${API_URL}/api/recommend`, {
-				method: "POST",
-				body: formData,
-			});
-
-			if (!res.ok) {
-				const errorText = await res.text();
-				throw new Error(errorText || `Status ${res.status}`);
-			}
-			const data = await res.json();
-			setRecommendData(data);
-		} catch (e: any) {
-			setError(`Error: ${e.message}`);
-			console.error(e);
-		} finally {
-			setLoading(false);
-			stopLoading();
-		}
-	}, [sessionId, i18n.language, t, startLoading, stopLoading]);
-
 	// Auto-fetch summary when analysis completes (not during analysis)
 	const prevAnalyzingRef = React.useRef(isAnalyzing);
 	React.useEffect(() => {
@@ -169,13 +137,6 @@ const Summary: React.FC<SummaryProps> = ({
 					className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "critique" ? "bg-red-50 text-red-600" : "text-slate-400"}`}
 				>
 					{t("summary.modes.critique")}
-				</button>
-				<button
-					type="button"
-					onClick={() => setMode("recommend")}
-					className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "recommend" ? "bg-emerald-50 text-emerald-600" : "text-slate-400"}`}
-				>
-					{t("summary.modes.recommend")}
 				</button>
 			</div>
 
@@ -370,83 +331,6 @@ const Summary: React.FC<SummaryProps> = ({
 								<FeedbackSection
 									sessionId={sessionId}
 									targetType="critique"
-									targetId={paperId || undefined}
-								/>
-							</div>
-						)}
-					</div>
-				)}
-
-				{!loading && mode === "recommend" && (
-					<div className="space-y-4">
-						{!recommendData && (
-							<div className="text-center py-8">
-								<p className="text-xs text-slate-400 mb-4">
-									{t("summary.hints.recommend")}
-								</p>
-								<button
-									type="button"
-									onClick={handleRecommend}
-									className="px-4 py-2 bg-emerald-600 text-white rounded-lg text-xs font-bold shadow-sm hover:bg-emerald-700"
-								>
-									{t("summary.generate_recommend")}
-								</button>
-							</div>
-						)}
-						{recommendData && (
-							<div className="space-y-4">
-								{recommendData.search_queries && (
-									<div className="flex flex-wrap gap-2">
-										{recommendData.search_queries.map(
-											(q: string, i: number) => (
-												<span
-													key={i}
-													className="bg-emerald-50 text-emerald-700 text-xs px-2.5 py-1 rounded-full border border-emerald-100 italic"
-												>
-													"{q}"
-												</span>
-											),
-										)}
-									</div>
-								)}
-								{recommendData.related_papers &&
-									recommendData.related_papers.length > 0 && (
-										<div className="space-y-3">
-											{recommendData.related_papers.map((p: any, i: number) => (
-												<div
-													key={i}
-													className="bg-white p-4 rounded-lg border border-emerald-100 shadow-sm hover:shadow-md transition-shadow"
-												>
-													<p className="text-sm font-bold text-slate-700">
-														{p.title}
-													</p>
-													<div className="flex items-center gap-2 mt-1.5">
-														<span className="text-xs font-medium text-slate-400">
-															{p.year || "n/a"}
-														</span>
-														{p.url && (
-															<a
-																href={p.url}
-																target="_blank"
-																rel="noopener noreferrer"
-																className="text-xs text-orange-500 hover:text-orange-600 hover:underline font-medium"
-															>
-																View Paper
-															</a>
-														)}
-													</div>
-													{p.abstract && (
-														<p className="text-xs text-slate-500 mt-2.5 line-clamp-3 italic leading-relaxed">
-															{p.abstract}
-														</p>
-													)}
-												</div>
-											))}
-										</div>
-									)}
-								<FeedbackSection
-									sessionId={sessionId}
-									targetType="related_papers"
 									targetId={paperId || undefined}
 								/>
 							</div>

@@ -20,10 +20,11 @@ from app.providers.inference_client import (
     InferenceServiceDownError,
     InferenceServiceTimeoutError,
 )
+from common.dspy.config import setup_dspy
+from common.dspy.modules import TranslationModule
 from common.logger import get_service_logger
 from common.prompts import (
     CORE_SYSTEM_PROMPT,
-    DICT_EXPLAIN_WORD_CONTEXT_PROMPT,
     DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT,
     DICT_TRANSLATE_WORD_SIMPLE_PROMPT,
 )
@@ -484,7 +485,6 @@ async def explain_deep(
     # Stage 3: Gemini translation
     try:
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
-        provider = get_ai_provider()
 
         # Fetch paper summary context
         paper_context = ""
@@ -500,28 +500,13 @@ async def explain_deep(
 
         log.info("explain_deep", "Gemini call", lemma=lemma)
 
-        is_phrase = " " in lemma.strip()
-        if is_phrase:
-            prompt = DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT.format(
-                paper_context=paper_context,
-                lang_name=lang_name,
-                original_word=original_word,
-            )
-        else:
-            prompt = DICT_TRANSLATE_WORD_SIMPLE_PROMPT.format(
-                paper_context=paper_context, lemma=lemma, lang_name=lang_name
-            )
-
-        translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
-        translation = (
-            (
-                await provider.generate(
-                    prompt, model=translate_model, system_instruction=CORE_SYSTEM_PROMPT
-                )
-            )
-            .strip()
-            .strip("'\"")
+        # DSPy version
+        setup_dspy()
+        trans_mod = TranslationModule()
+        res = trans_mod(
+            paper_context=paper_context, target_text=lemma, lang_name=lang_name
         )
+        translation = res.translation_and_explanation.strip()
 
         service.translation_cache[lemma] = translation
         service.word_cache[lemma] = False
@@ -594,7 +579,6 @@ async def explain_with_context(req: ExplainContextRequest):
     """Explain word with context using Gemini"""
     start_time = asyncio.get_event_loop().time()
     lang_name = SUPPORTED_LANGUAGES.get(req.lang, req.lang)
-    provider = get_ai_provider()
 
     # Retrieve Paper Summary Context if session_id is provided
     summary_context = ""
@@ -606,18 +590,17 @@ async def explain_with_context(req: ExplainContextRequest):
             if paper and paper.get("abstract"):
                 summary_context = f"\n[Document Summary]\n{paper['abstract']}\n"
 
-    prompt = DICT_EXPLAIN_WORD_CONTEXT_PROMPT.format(
-        word=req.word,
-        lang_name=lang_name,
-        summary_context=summary_context,
-        context=req.context,
-    )
-    translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
-
     try:
-        explanation = await provider.generate(
-            prompt, model=translate_model, system_instruction=CORE_SYSTEM_PROMPT
+        # DSPy version
+        setup_dspy()
+        trans_mod = TranslationModule()
+        res = trans_mod(
+            paper_context=f"{summary_context}\n{req.context}",
+            target_text=req.word,
+            lang_name=lang_name,
         )
+        explanation = res.translation_and_explanation
+
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(
             "explain_context",
@@ -665,7 +648,9 @@ async def explain_image(req: ExplainImageRequest):
     try:
         # GCSダウンロードは同期ブロッキングI/Oのため、イベントループをブロックしないようexecutorで実行
         loop = asyncio.get_event_loop()
-        image_bytes = await loop.run_in_executor(None, lambda: get_image_bytes(req.image_url))
+        image_bytes = await loop.run_in_executor(
+            None, lambda: get_image_bytes(req.image_url)
+        )
     except Exception as e:
         log.error(
             "explain_image", f"Failed to get image bytes for {req.image_url}: {e}"

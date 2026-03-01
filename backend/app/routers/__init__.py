@@ -7,7 +7,6 @@ from app.routers.analysis import router as analysis_router
 from app.routers.auth import router as auth_router
 from app.routers.chat import router as chat_router
 from app.routers.contact import router as contact_router
-from app.routers.explore import router as explore_router
 from app.routers.feedback import router as feedback_router
 from app.routers.figures import router as figures_router
 from app.routers.note import router as note_router
@@ -22,7 +21,6 @@ from app.routers.users import router as users_router
 __all__ = [
     "auth_router",
     "users_router",
-    "explore_router",
     "pdf_router",
     "translation_router",
     "chat_router",

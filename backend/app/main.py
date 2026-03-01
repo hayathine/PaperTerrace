@@ -20,7 +20,6 @@ from app.routers import (
     auth_router,
     chat_router,
     contact_router,
-    explore_router,
     feedback_router,
     figures_router,
     note_router,
@@ -242,7 +241,6 @@ app.include_router(users_router, prefix="/api")
 # Grouped routers
 app.include_router(stamps_router, prefix="/api")
 app.include_router(translation_router, prefix="/api")
-app.include_router(explore_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(note_router, prefix="/api")
 app.include_router(papers_router, prefix="/api")

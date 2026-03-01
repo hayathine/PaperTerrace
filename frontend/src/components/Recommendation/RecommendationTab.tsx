@@ -10,13 +10,9 @@ import MarkdownContent from "../Common/MarkdownContent";
 
 interface RecommendationTabProps {
 	sessionId: string;
-	onStackPaper: (url: string, title?: string) => void;
 }
 
-const RecommendationTab: React.FC<RecommendationTabProps> = ({
-	sessionId,
-	onStackPaper,
-}) => {
+const RecommendationTab: React.FC<RecommendationTabProps> = ({ sessionId }) => {
 	const { t } = useTranslation();
 	const [isOpen, setIsOpen] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
@@ -49,13 +45,10 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({
 	const handlePaperClick = (paperTitle: string, url: string | undefined) => {
 		setClickedPapers((prev) => new Set(prev).add(paperTitle));
 
-		if (url) {
-			onStackPaper(url, paperTitle);
-		} else {
-			// fallback generic search link
-			const searchUrl = `https://scholar.google.com/scholar?q=${encodeURIComponent(paperTitle)}`;
-			window.open(searchUrl, "_blank");
-		}
+		const target =
+			url ||
+			`https://scholar.google.com/scholar?q=${encodeURIComponent(paperTitle)}`;
+		window.open(target, "_blank", "noopener,noreferrer");
 	};
 
 	return (

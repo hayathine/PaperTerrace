@@ -7,15 +7,10 @@
 """
 
 from app.providers import get_ai_provider
-from app.schemas.gemini_schema import (
-    AdversarialCritiqueResponse as CritiqueResponse,
-)
+from common.dspy.config import setup_dspy
+from common.dspy.modules import AdversarialModule
 from common.logger import logger
-from common.prompts import (
-    ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT,
-    AGENT_ADVERSARIAL_CRITIQUE_PROMPT,
-    CORE_SYSTEM_PROMPT,
-)
+from common.prompts import ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT
 
 
 class AdversarialError(Exception):
@@ -29,6 +24,8 @@ class AdversarialReviewService:
 
     def __init__(self):
         self.ai_provider = get_ai_provider()
+        setup_dspy()
+        self.adversarial_mod = AdversarialModule()
 
     async def critique(
         self, text: str = "", target_lang: str = "ja", pdf_bytes: bytes | None = None
@@ -98,28 +95,29 @@ class AdversarialReviewService:
                     "Generating adversarial critique from text",
                     extra={"text_length": len(text)},
                 )
-                prompt = AGENT_ADVERSARIAL_CRITIQUE_PROMPT.format(
-                    text=text[:12000], lang_name=lang_name
-                )
+                # DSPy version
+                res = self.adversarial_mod(paper_text=text[:12000], lang_name=lang_name)
 
-                critique = await self.ai_provider.generate(
-                    prompt,
-                    response_model=CritiqueResponse,
-                    system_instruction=CORE_SYSTEM_PROMPT,
-                )
+                critique_dict = {
+                    "hidden_assumptions": res.hidden_assumptions,
+                    "unverified_conditions": res.unverified_conditions,
+                    "reproducibility_risks": res.reproducibility_risks,
+                    "methodology_concerns": res.methodology_concerns,
+                    "overall_assessment": res.overall_assessment,
+                }
 
                 issue_count = (
-                    len(critique.hidden_assumptions)
-                    + len(critique.unverified_conditions)
-                    + len(critique.reproducibility_risks)
-                    + len(critique.methodology_concerns)
+                    len(res.hidden_assumptions)
+                    + len(res.unverified_conditions)
+                    + len(res.reproducibility_risks)
+                    + len(res.methodology_concerns)
                 )
 
                 logger.info(
                     "Adversarial review generated from text",
                     extra={"issue_count": issue_count},
                 )
-                return critique.model_dump()
+                return critique_dict
         except Exception as e:
             logger.exception(
                 "Adversarial review failed",

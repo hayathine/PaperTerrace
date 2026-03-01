@@ -32,26 +32,26 @@ const RequestForm: React.FC = () => {
 	};
 
 	return (
-		<div className="w-full max-w-2xl mt-12 animate-fade-in-up">
-			<div className="relative bg-white/70 backdrop-blur-sm border border-slate-200 rounded-3xl p-8 shadow-lg shadow-slate-100/50">
+		<div className="w-full max-w-lg mt-8 animate-fade-in-up">
+			<div className="relative bg-white/70 backdrop-blur-sm border border-slate-200 rounded-2xl p-5 shadow-lg shadow-slate-100/50">
 				{/* ヘッダー */}
-				<div className="mb-6">
-					<span className="inline-block px-3 py-1 bg-orange-50 text-orange-500 text-xs font-bold uppercase tracking-widest rounded-full border border-orange-100 mb-3">
+				<div className="mb-4">
+					<span className="inline-block px-2 py-0.5 bg-orange-50 text-orange-500 text-xs font-bold uppercase tracking-widest rounded-full border border-orange-100 mb-2">
 						Feature Request
 					</span>
-					<h2 className="text-xl font-bold text-slate-800">
+					<h2 className="text-base font-bold text-slate-800">
 						要望・ご意見を送る
 					</h2>
-					<p className="mt-1 text-sm text-slate-500">
+					<p className="mt-0.5 text-xs text-slate-500">
 						機能への要望やフィードバックをお気軽にどうぞ。
 					</p>
 				</div>
 
 				{status === "submitted" ? (
-					<div className="flex flex-col items-center justify-center py-8 space-y-3">
-						<div className="w-12 h-12 rounded-full bg-emerald-50 flex items-center justify-center">
+					<div className="flex flex-col items-center justify-center py-6 space-y-2">
+						<div className="w-10 h-10 rounded-full bg-emerald-50 flex items-center justify-center">
 							<svg
-								className="w-6 h-6 text-emerald-500"
+								className="w-5 h-5 text-emerald-500"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -64,21 +64,21 @@ const RequestForm: React.FC = () => {
 								/>
 							</svg>
 						</div>
-						<p className="text-sm font-bold text-slate-700">
+						<p className="text-xs font-bold text-slate-700">
 							ありがとうございます！
 						</p>
 						<p className="text-xs text-slate-500">要望を受け付けました。</p>
 						<button
 							type="button"
 							onClick={() => setStatus("idle")}
-							className="mt-2 text-xs text-orange-500 hover:underline"
+							className="mt-1 text-xs text-orange-500 hover:underline"
 						>
 							もう一件送る
 						</button>
 					</div>
 				) : (
-					<form onSubmit={handleSubmit} className="space-y-4">
-						<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+					<form onSubmit={handleSubmit} className="space-y-3">
+						<div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
 							<div>
 								<label
 									htmlFor="req-name"
@@ -93,7 +93,7 @@ const RequestForm: React.FC = () => {
 									value={name}
 									onChange={(e) => setName(e.target.value)}
 									placeholder="Terrace Taro"
-									className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
+									className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
 								/>
 							</div>
 							<div>
@@ -110,7 +110,7 @@ const RequestForm: React.FC = () => {
 									value={email}
 									onChange={(e) => setEmail(e.target.value)}
 									placeholder="you@example.com"
-									className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
+									className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all"
 								/>
 							</div>
 						</div>
@@ -127,9 +127,9 @@ const RequestForm: React.FC = () => {
 								required
 								value={message}
 								onChange={(e) => setMessage(e.target.value)}
-								rows={4}
+								rows={3}
 								placeholder="こんな機能があると嬉しい、など何でも..."
-								className="w-full px-4 py-2.5 text-sm bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all resize-none"
+								className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all resize-none"
 							/>
 						</div>
 
@@ -148,7 +148,7 @@ const RequestForm: React.FC = () => {
 									!email.trim() ||
 									!message.trim()
 								}
-								className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 disabled:from-slate-300 disabled:to-slate-300 text-white text-sm font-bold rounded-xl shadow-md shadow-orange-200/50 transition-all duration-200 active:scale-95 disabled:active:scale-100"
+								className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-orange-500 to-amber-500 hover:from-orange-400 hover:to-amber-400 disabled:from-slate-300 disabled:to-slate-300 text-white text-xs font-bold rounded-lg shadow-md shadow-orange-200/50 transition-all duration-200 active:scale-95 disabled:active:scale-100"
 							>
 								{status === "submitting" ? (
 									<>

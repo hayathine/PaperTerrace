@@ -6,12 +6,12 @@ AIチャットアシスタント機能を提供するモジュール
 import os
 
 from app.providers import get_ai_provider
+from common.dspy.config import setup_dspy
+from common.dspy.modules import AuthorModule, ChatModule
 from common.logger import logger
 from common.prompts import (
     CHAT_AUTHOR_FROM_PDF_PROMPT,
-    CHAT_AUTHOR_PERSONA_PROMPT,
     CHAT_GENERAL_FROM_PDF_PROMPT,
-    CHAT_GENERAL_RESPONSE_PROMPT,
     CHAT_WITH_FIGURE_PROMPT,
     CORE_SYSTEM_PROMPT,
 )
@@ -34,7 +34,9 @@ class ChatService:
         self.redis = RedisService()
         self.model = os.getenv("MODEL_CHAT", "gemini-2.0-flash")
         self.cache_ttl_minutes = 60
-        # History is now managed by the router/caller via Redis
+        setup_dspy()
+        self.chat_mod = ChatModule()
+        self.author_mod = AuthorModule()
 
     async def chat(
         self,
@@ -147,21 +149,16 @@ class ChatService:
                                 f"Failed to create context cache for {paper_id}: {e}"
                             )
 
-                prompt = CHAT_GENERAL_RESPONSE_PROMPT.format(
-                    lang_name=lang_name,
+                # DSPy version
+                res = self.chat_mod(
                     document_context=context[:20000]
                     if not cache_name
                     else "See Context Cache",
                     history_text=history_text_for_prompt,
-                    user_message=user_message,  # Added
+                    user_message=user_message,
+                    lang_name=lang_name,
                 )
-
-                response_data = await self.ai_provider.generate(
-                    prompt,
-                    model=self.model,
-                    system_instruction=CORE_SYSTEM_PROMPT,
-                    cached_content_name=cache_name,
-                )
+                response_data = res.answer
 
             # Handle response with grounding metadata
             if isinstance(response_data, dict):
@@ -235,22 +232,13 @@ class ChatService:
                     prompt, pdf_bytes, model=self.model
                 )
             else:
-                # 従来のテキストベース方式
-                logger.debug(
-                    "Generating author agent response from text",
-                    extra={
-                        "question_length": len(question),
-                        "paper_length": len(paper_text),
-                    },
-                )
-                prompt = CHAT_AUTHOR_PERSONA_PROMPT.format(
-                    lang_name=lang_name,
+                # DSPy version
+                res = self.author_mod(
                     paper_text=paper_text[:20000],
                     question=question,
+                    lang_name=lang_name,
                 )
-                response_data = await self.ai_provider.generate(
-                    prompt, model=self.model
-                )
+                response_data = res.author_answer
 
             # Handle response with grounding metadata
             if isinstance(response_data, dict):

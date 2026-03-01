@@ -160,9 +160,3 @@ class ResearchRadarService:
             logger.error(f"Query generation failed: {e}")
             return []
 
-    async def analyze_citations(self, context: str) -> dict[str, Any]:
-        """引用ネットワークの分析（未実装）"""
-        return {
-            "status": "not_implemented_yet",
-            "message": "Citation analysis logic pending.",
-        }

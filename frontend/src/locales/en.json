@@ -52,8 +52,7 @@
 			"dict": "Dict",
 			"summary": "Summary",
 			"chat": "Chat",
-			"notes": "Notes",
-			"stack": "Stack"
+			"notes": "Notes"
 		}
 	},
 	"viewer": {

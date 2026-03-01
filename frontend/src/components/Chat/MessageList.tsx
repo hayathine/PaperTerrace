@@ -6,14 +6,12 @@ import type { Message } from "./types";
 interface MessageListProps {
 	messages: Message[];
 	isLoading: boolean;
-	onStackPaper?: (url: string, title?: string) => void;
 	onEvidenceClick?: (grounding: any) => void;
 }
 
 const MessageList: React.FC<MessageListProps> = ({
 	messages,
 	isLoading,
-	onStackPaper,
 	onEvidenceClick,
 }) => {
 	const bottomRef = useRef<HTMLDivElement>(null);
@@ -34,7 +32,6 @@ const MessageList: React.FC<MessageListProps> = ({
 				<MessageBubble
 					key={msg.id}
 					message={msg}
-					onStackPaper={onStackPaper}
 					onEvidenceClick={onEvidenceClick}
 				/>
 			))}

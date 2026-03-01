@@ -6,13 +6,11 @@ import type { Message } from "./types";
 
 interface MessageBubbleProps {
 	message: Message;
-	onStackPaper?: (url: string, title?: string) => void;
 	onEvidenceClick?: (grounding: any) => void;
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
 	message,
-	onStackPaper,
 	onEvidenceClick,
 }) => {
 	const { t } = useTranslation();
@@ -53,12 +51,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 								onClick={(e) => {
 									e.preventDefault();
 									if (href) {
-										if (onStackPaper) onStackPaper(href);
 										window.open(href, "_blank", "noopener,noreferrer");
 									}
 								}}
 								className="text-blue-600 hover:text-blue-800 underline break-all inline-flex items-center gap-0.5 group/link text-left font-semibold"
-								title={href ? `Stack this paper: ${href}` : undefined}
+								title={href ? `Open: ${href}` : undefined}
 							>
 								{linkChildren}
 							</button>

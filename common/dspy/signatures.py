@@ -2,15 +2,13 @@ import dspy
 
 from common.prompts import (
     AGENT_ADVERSARIAL_CRITIQUE_PROMPT,
-    AGENT_CITE_INTENT_PROMPT,
     CHAT_AUTHOR_PERSONA_PROMPT,
     CHAT_GENERAL_RESPONSE_PROMPT,
     CORE_SYSTEM_PROMPT,
-    PAPER_SUMMARY_ABSTRACT_PROMPT,
+    PAPER_SUMMARY_AI_CONTEXT_PROMPT,
     PAPER_SUMMARY_FULL_PROMPT,
     PAPER_SUMMARY_SECTIONS_PROMPT,
     VISION_ANALYZE_FIGURE_PROMPT,
-    VISION_ANALYZE_TABLE_PROMPT,
 )
 
 
@@ -45,18 +43,6 @@ def clean_prompt_for_dspy(prompt_str: str) -> str:
 # =============================================================
 
 
-class PaperAnalysis(dspy.Signature):
-    """論文を構造化して解析する"""
-
-    paper_text: str = dspy.InputField(desc="論文全文テキスト")
-    title: str = dspy.OutputField(desc="論文タイトル")
-    summary: str = dspy.OutputField(desc="要約（300字程度）")
-    keywords: list[str] = dspy.OutputField(desc="キーワード一覧")
-    difficulty: str = dspy.OutputField(desc="初級 / 中級 / 上級")
-    contributions: str = dspy.OutputField(desc="主な貢献・新規性")
-    related_fields: list[str] = dspy.OutputField(desc="関連する研究分野")
-
-
 # =============================================================
 # Summary (要約系) の DSPy Signatures
 # =============================================================
@@ -66,21 +52,27 @@ class PaperSummary(dspy.Signature):
     __doc__ = clean_prompt_for_dspy(PAPER_SUMMARY_FULL_PROMPT)
     paper_text: str = dspy.InputField(desc="論文の全文テキスト")
     lang_name: str = dspy.InputField(desc="出力する言語（例: Japanese）")
-    summary: str = dspy.OutputField(desc="5つのセクションに分かれた指定言語での要約")
+    overview: str = dspy.OutputField(desc="概要・全体像 (1-2 sentences)")
+    key_contributions: list[str] = dspy.OutputField(desc="主な貢献・新規点 (3-5 items)")
+    methodology: str = dspy.OutputField(desc="研究手法の簡潔な説明")
+    conclusion: str = dspy.OutputField(desc="結論と主要な発見")
+    key_words: list[str] = dspy.OutputField(desc="キーワード (5-10 terms in English)")
 
 
 class PaperSummarySections(dspy.Signature):
     __doc__ = clean_prompt_for_dspy(PAPER_SUMMARY_SECTIONS_PROMPT)
     paper_text: str = dspy.InputField(desc="論文の全文テキスト")
     lang_name: str = dspy.InputField(desc="出力する言語")
-    sections_json: str = dspy.OutputField(desc="セクションごとの要約を格納したJSON")
+    sections: list[dict] = dspy.OutputField(
+        desc="セクションごとの要約リスト [{'section': '...', 'summary': '...'}]"
+    )
 
 
-class PaperSummaryAbstract(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(PAPER_SUMMARY_ABSTRACT_PROMPT)
-    paper_text: str = dspy.InputField(desc="論文の全文テキスト")
-    lang_name: str = dspy.InputField(desc="出力する言語")
-    abstract: str = dspy.OutputField(desc="100-200語程度のアブストラクト要約")
+class PaperSummaryContext(dspy.Signature):
+    __doc__ = clean_prompt_for_dspy(PAPER_SUMMARY_AI_CONTEXT_PROMPT)
+    paper_text: str = dspy.InputField(desc="論文のテキスト")
+    max_length: int = dspy.InputField(desc="最大文字数")
+    summary: str = dspy.OutputField(desc="AIコンテキスト用の簡潔な要約")
 
 
 # =============================================================
@@ -95,16 +87,6 @@ class ChatGeneral(dspy.Signature):
     user_message: str = dspy.InputField(desc="ユーザーの質問")
     lang_name: str = dspy.InputField(desc="出力する言語")
     answer: str = dspy.OutputField(desc="質問への回答テキスト")
-
-
-class PaperQA(dspy.Signature):
-    """論文の内容に基づいて質問に回答する"""
-
-    paper_summary: str = dspy.InputField(desc="論文要約")
-    question: str = dspy.InputField(desc="ユーザーの質問")
-    conversation_history: str = dspy.InputField(desc="対話履歴")
-    answer: str = dspy.OutputField(desc="回答テキスト")
-    follow_up: str = dspy.OutputField(desc="次におすすめの質問")
 
 
 class ChatAuthorPersona(dspy.Signature):
@@ -124,14 +106,19 @@ class AdversarialCritique(dspy.Signature):
     __doc__ = clean_prompt_for_dspy(AGENT_ADVERSARIAL_CRITIQUE_PROMPT)
     paper_text: str = dspy.InputField(desc="論文テキスト")
     lang_name: str = dspy.InputField(desc="出力言語")
-    critique_json: str = dspy.OutputField(desc="JSONフォーマットの批判的レビュー結果")
-
-
-class CiteIntentAnalysis(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(AGENT_CITE_INTENT_PROMPT)
-    paragraph: str = dspy.InputField(desc="引用を含むパラグラフ")
-    lang_name: str = dspy.InputField(desc="出力言語")
-    intent_analysis: str = dspy.OutputField(desc="引用意図の分類と理由")
+    hidden_assumptions: list[dict] = dspy.OutputField(
+        desc="隠れた前提とそのリスク [{'assumption': '...', 'risk': '...', 'severity': '...'}]"
+    )
+    unverified_conditions: list[dict] = dspy.OutputField(
+        desc="未検証の条件とその影響 [{'condition': '...', 'impact': '...', 'severity': '...'}]"
+    )
+    reproducibility_risks: list[dict] = dspy.OutputField(
+        desc="再現性に関するリスク [{'risk': '...', 'detail': '...', 'severity': '...'}]"
+    )
+    methodology_concerns: list[dict] = dspy.OutputField(
+        desc="手法上の懸念と提案 [{'concern': '...', 'suggestion': '...', 'severity': '...'}]"
+    )
+    overall_assessment: str = dspy.OutputField(desc="全体的な批判的評価の要約")
 
 
 # =============================================================
@@ -142,17 +129,12 @@ class CiteIntentAnalysis(dspy.Signature):
 class VisionAnalyzeFigure(dspy.Signature):
     __doc__ = clean_prompt_for_dspy(VISION_ANALYZE_FIGURE_PROMPT)
     caption_hint: str = dspy.InputField(desc="図表のキャプション")
-    # 画像等の入力を dspy で扱う場合、マルチモーダルサポートか、文字起こしをベースにする
     lang_name: str = dspy.InputField(desc="出力言語")
-    figure_analysis: str = dspy.OutputField(desc="図表の詳細分析")
-
-
-class VisionAnalyzeTable(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(VISION_ANALYZE_TABLE_PROMPT)
-    context_hint: str = dspy.InputField(desc="周辺文脈")
-    table_text: str = dspy.InputField(desc="抽出された表のテキスト情報")
-    lang_name: str = dspy.InputField(desc="出力言語")
-    table_analysis: str = dspy.OutputField(desc="表の詳細分析")
+    type_overview: str = dspy.OutputField(desc="図の概要と種類")
+    key_findings: list[str] = dspy.OutputField(desc="主な傾向やパターン")
+    interpretation: str = dspy.OutputField(desc="数値や傾向の解釈")
+    implications: str = dspy.OutputField(desc="論文の主張に対する裏付け")
+    highlights: list[str] = dspy.OutputField(desc="特筆すべき点や異常値")
 
 
 # =============================================================
@@ -177,17 +159,6 @@ class PaperRecommendation(dspy.Signature):
     )
     search_queries: list[str] = dspy.OutputField(desc="Semantic Scholar検索クエリ")
     reasoning: str = dspy.OutputField(desc="推薦理由の説明")
-
-
-class RecommendationCritique(dspy.Signature):
-    """推薦結果を批判的に吟味し、改善案を提示する"""
-
-    user_profile: str = dspy.InputField(desc="ユーザープロファイル情報")
-    recommendations: str = dspy.InputField(desc="現在の推薦論文リスト")
-    critique: str = dspy.OutputField(desc="批判的な分析結果")
-    improved_recommendations: list[str] = dspy.OutputField(
-        desc="改善された推薦論文リスト"
-    )
 
 
 class UserProfileEstimation(dspy.Signature):

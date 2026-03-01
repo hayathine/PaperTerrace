@@ -1,15 +1,11 @@
 import asyncio
 import base64
-import hashlib
 import io
 import json
-import tempfile
-from pathlib import Path
 
 import anyio
 from PIL import Image
 
-from app.domain.services.layout_service import get_layout_service
 from app.domain.services.paper_processing import process_figure_analysis_task
 from app.providers import get_storage_provider
 from app.providers.image_storage import save_page_image
@@ -29,76 +25,7 @@ class LayoutAnalysisService:
     ]
 
     def __init__(self):
-        self.layout_service = get_layout_service()
         self.storage = get_storage_provider()
-
-    async def detect_layout(self, content: bytes, filename: str, page_number: int):
-        # 一時ファイルに保存
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
-            temp_file.write(content)
-            temp_file_path = temp_file.name
-
-        try:
-            # レイアウト解析実行
-            layout_items = await self.layout_service.analyze_image(temp_file_path)
-
-            file_hash = hashlib.sha256(content).hexdigest()
-            img_pil = Image.open(io.BytesIO(content))
-            img_w, img_h = img_pil.size
-
-            results = []
-            for i, item in enumerate(layout_items):
-                class_name = item.class_name.lower()
-
-                # TARGET_CLASSES 以外は返却対象外
-                if not any(c in class_name for c in self.TARGET_CLASSES):
-                    continue
-
-                res_dict = {
-                    "class_name": item.class_name,
-                    "confidence": item.score,
-                    "bbox": {
-                        "x_min": item.bbox.x_min,
-                        "y_min": item.bbox.y_min,
-                        "x_max": item.bbox.x_max,
-                        "y_max": item.bbox.y_max,
-                    },
-                }
-
-                # 対象クラスの領域をクロップして画像を保存
-                try:
-                    margin = 5
-                    x1 = max(0, item.bbox.x_min - margin)
-                    y1 = max(0, item.bbox.y_min - margin)
-                    x2 = min(img_w, item.bbox.x_max + margin)
-                    y2 = min(img_h, item.bbox.y_max + margin)
-
-                    if x2 > x1 and y2 > y1:
-                        crop = img_pil.crop((x1, y1, x2, y2)).convert("RGB")
-                        buf = io.BytesIO()
-                        crop.save(buf, format="JPEG", quality=85, optimize=True)
-                        img_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
-
-                        img_name = f"detect_pg{page_number}_{class_name}_{i}"
-                        image_url = await anyio.to_thread.run_sync(
-                            save_page_image, file_hash, img_name, img_b64
-                        )
-                        res_dict["image_url"] = image_url
-                        # BBoxをクロップ範囲に更新
-                        res_dict["bbox"] = {
-                            "x_min": x1,
-                            "y_min": y1,
-                            "x_max": x2,
-                            "y_max": y2,
-                        }
-                except Exception as crop_err:
-                    logger.warning(f"Failed to crop {class_name}: {crop_err}")
-
-                results.append(res_dict)
-
-            return results
-        finally:
-            Path(temp_file_path).unlink(missing_ok=True)
 
     async def analyze_layout_lazy(
         self, paper_id: str, page_numbers: list[int] | None = None
