@@ -31,7 +31,7 @@ export interface RecommendedPaper {
 	title: string;
 	abstract: string;
 	url?: string;
-	authors?: any[];
+	authors?: { name: string }[];
 	year?: number;
 	openAccessPdf?: { url: string };
 	citationCount?: number;

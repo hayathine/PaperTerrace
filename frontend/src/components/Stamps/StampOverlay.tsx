@@ -5,12 +5,14 @@ interface StampOverlayProps {
 	stamps: Stamp[];
 	isStampMode: boolean;
 	onAddStamp: (x: number, y: number) => void;
+	onDeleteStamp?: (stampId: string) => void;
 }
 
 const StampOverlay: React.FC<StampOverlayProps> = ({
 	stamps,
 	isStampMode,
 	onAddStamp,
+	onDeleteStamp,
 }) => {
 	const handleClick = (e: React.MouseEvent<HTMLElement>) => {
 		if (!isStampMode || !e.currentTarget) return;
@@ -38,6 +40,7 @@ const StampOverlay: React.FC<StampOverlayProps> = ({
 			}}
 		>
 			{stamps.map((stamp) => (
+				// biome-ignore lint/a11y/noStaticElementInteractions: stamp div is inside a button; role="button" nesting is invalid HTML, so we use div with keyboard handler
 				<div
 					key={stamp.id}
 					className="absolute text-2xl animate-stamp-pop select-none transform -translate-x-1/2 -translate-y-1/2 drop-shadow-md hover:scale-125 transition-transform cursor-pointer pointer-events-auto"
@@ -45,7 +48,19 @@ const StampOverlay: React.FC<StampOverlayProps> = ({
 						left: `${stamp.x}%`,
 						top: `${stamp.y}%`,
 					}}
-					title={`Stamp: ${stamp.type}`}
+					title={`Stamp: ${stamp.type} (Right-click to delete)`}
+					onClick={(e) => e.stopPropagation()}
+					onKeyDown={(e) => {
+						if (e.key === "Delete" || e.key === "Backspace") {
+							e.stopPropagation();
+							if (onDeleteStamp) onDeleteStamp(stamp.id);
+						}
+					}}
+					onContextMenu={(e) => {
+						e.preventDefault();
+						e.stopPropagation();
+						if (onDeleteStamp) onDeleteStamp(stamp.id);
+					}}
 				>
 					{stamp.type.startsWith("/") ||
 					stamp.type.startsWith("http") ||

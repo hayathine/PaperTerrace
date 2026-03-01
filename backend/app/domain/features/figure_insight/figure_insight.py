@@ -3,15 +3,10 @@ import os
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import (
     FigureAnalysisResponse,
-    FigureComparisonResponse,
-    TableAnalysisResponse,
 )
+from common.dspy.config import setup_dspy
+from common.dspy.modules import VisionFigureModule
 from common.logger import logger
-from common.prompts import (
-    VISION_ANALYZE_FIGURE_PROMPT,
-    VISION_ANALYZE_TABLE_PROMPT,
-    VISION_COMPARE_FIGURES_PROMPT,
-)
 
 
 class FigureInsightService:
@@ -19,7 +14,9 @@ class FigureInsightService:
 
     def __init__(self):
         self.ai_provider = get_ai_provider()
-        self.model = os.getenv("FIGURE_EXPLAIN_MODEL", "gemini-2.0-flash-lite")
+        self.model = os.getenv("FIGURE_EXPLAIN_MODEL", "gemini-2.5-flash-lite")
+        setup_dspy()
+        self.figure_mod = VisionFigureModule()
 
     async def analyze_figure(
         self,
@@ -42,8 +39,10 @@ class FigureInsightService:
         """
         from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 
-        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
         caption_hint = f"\n[Caption]\n{caption}" if caption else ""
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
+        from common.prompts import VISION_ANALYZE_FIGURE_PROMPT
 
         prompt = VISION_ANALYZE_FIGURE_PROMPT.format(
             lang_name=lang_name, caption_hint=caption_hint
@@ -64,7 +63,6 @@ class FigureInsightService:
                 )
             )
 
-            # NOTE: フロントエンド表示用に整形したテキストを返す
             result_lines = [
                 f"### Type & Overview\n{analysis.type_overview}",
                 "\n### Key Findings",
@@ -87,93 +85,3 @@ class FigureInsightService:
                 extra={"error": str(e), "mime_type": mime_type},
             )
             return f"図の分析に失敗しました: {e}"
-
-    async def analyze_table_text(
-        self, table_text: str, context: str = "", target_lang: str = "ja"
-    ) -> str:
-        """
-        テキスト形式の表を分析する。
-
-        Args:
-            table_text: 表のテキスト内容
-            context: 周辺コンテキスト
-            target_lang: 出力言語
-
-        Returns:
-            ターゲット言語での分析結果
-        """
-        from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
-
-        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
-        context_hint = f"\n[Context]\n{context[:1000]}" if context else ""
-
-        prompt = VISION_ANALYZE_TABLE_PROMPT.format(
-            context_hint=context_hint, table_text=table_text, lang_name=lang_name
-        )
-
-        try:
-            analysis: TableAnalysisResponse = await self.ai_provider.generate(
-                prompt, model=self.model, response_model=TableAnalysisResponse
-            )
-
-            result_lines = [
-                f"### Overview\n{analysis.overview}",
-                "\n### Key Numbers & Trends",
-                *[f"- {item}" for item in analysis.key_numbers],
-                "\n### Comparisons",
-                *[f"- {item}" for item in analysis.comparisons],
-                f"\n### Conclusions\n{analysis.conclusions}",
-            ]
-            formatted_text = "\n".join(result_lines)
-
-            logger.info("Table analysis generated")
-            return formatted_text
-        except Exception as e:
-            logger.error(f"Table analysis failed: {e}")
-            return f"表の分析に失敗しました: {str(e)}"
-
-    async def compare_figures(
-        self, description1: str, description2: str, target_lang: str = "ja"
-    ) -> str:
-        """
-        記述に基づいて2つの図を比較する。
-
-        Args:
-            description1: 図1の記述
-            description2: 図2の記述
-            target_lang: 出力言語
-
-        Returns:
-            比較分析結果
-        """
-        from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
-
-        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
-
-        prompt = VISION_COMPARE_FIGURES_PROMPT.format(
-            description1=description1, description2=description2, lang_name=lang_name
-        )
-
-        try:
-            comparison: FigureComparisonResponse = await self.ai_provider.generate(
-                prompt, model=self.model, response_model=FigureComparisonResponse
-            )
-
-            result_lines = [
-                "### Similarities",
-                *[f"- {item}" for item in comparison.similarities],
-                "\n### Differences",
-                *[f"- {item}" for item in comparison.differences],
-                f"\n### Relationship\n{comparison.relationship}",
-            ]
-            if comparison.contradictions:
-                result_lines.append("\n### Contradictions")
-                result_lines.extend([f"- {item}" for item in comparison.contradictions])
-
-            formatted_text = "\n".join(result_lines)
-
-            logger.info("Figure comparison generated")
-            return formatted_text
-        except Exception as e:
-            logger.error(f"Figure comparison failed: {e}")
-            return f"図の比較に失敗しました: {str(e)}"

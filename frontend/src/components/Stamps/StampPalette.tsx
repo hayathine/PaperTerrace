@@ -8,6 +8,7 @@ interface StampPaletteProps {
 	onToggleMode: () => void;
 	selectedStamp: StampType;
 	onSelectStamp: (stamp: StampType) => void;
+	token?: string;
 }
 
 const StampPalette: React.FC<StampPaletteProps> = ({
@@ -15,6 +16,7 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 	onToggleMode,
 	selectedStamp,
 	onSelectStamp,
+	token,
 }) => {
 	const [activeCategory, setActiveCategory] = useState(STAMP_CATEGORIES[0].id);
 	const [customStamps, setCustomStamps] = useState<StampType[]>([]);
@@ -47,6 +49,7 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 		try {
 			const response = await fetch(`${API_URL}/api/stamps/upload_custom`, {
 				method: "POST",
+				headers: token ? { Authorization: `Bearer ${token}` } : {},
 				body: formData,
 			});
 
@@ -84,8 +87,8 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 				className={`group px-8 py-4 rounded-full shadow-2xl font-bold transition-all transform hover:scale-105 flex items-center gap-3
                     ${
 											isStampMode
-												? "bg-indigo-600 text-white ring-4 ring-indigo-200 ring-offset-2"
-												: "bg-white text-slate-700 hover:bg-indigo-50 border border-slate-200"
+												? "bg-orange-600 text-white ring-4 ring-orange-200 ring-offset-2"
+												: "bg-white text-slate-700 hover:bg-orange-50 border border-slate-200"
 										}
                 `}
 			>
@@ -112,7 +115,7 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 							className={`px-3 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all
                                 ${
 																	activeCategory === cat.id
-																		? "bg-indigo-100 text-indigo-700"
+																		? "bg-orange-100 text-orange-700"
 																		: "text-slate-500 hover:bg-slate-100"
 																}
                             `}
@@ -135,8 +138,8 @@ const StampPalette: React.FC<StampPaletteProps> = ({
                                 aspect-square rounded-2xl flex items-center justify-center text-2xl transition-all duration-200 transform hover:scale-125
                                 ${
 																	s === selectedStamp
-																		? "bg-indigo-600 shadow-lg shadow-indigo-200 text-white scale-110"
-																		: "bg-slate-50 text-slate-700 hover:bg-indigo-50 hover:shadow-md"
+																		? "bg-orange-600 shadow-lg shadow-orange-200 text-white scale-110"
+																		: "bg-slate-50 text-slate-700 hover:bg-orange-50 hover:shadow-md"
 																}
                             `}
 							>
@@ -161,7 +164,7 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 						<button
 							type="button"
 							onClick={() => fileInputRef.current?.click()}
-							className="aspect-square rounded-2xl flex items-center justify-center text-xl bg-indigo-50 text-indigo-500 hover:bg-indigo-100 transition-all border-2 border-dashed border-indigo-300 transform hover:scale-110"
+							className="aspect-square rounded-2xl flex items-center justify-center text-xl bg-orange-50 text-orange-500 hover:bg-orange-100 transition-all border-2 border-dashed border-orange-300 transform hover:scale-110"
 							title="Upload Custom Stamp"
 						>
 							➕

@@ -1,5 +1,6 @@
 import type React from "react";
 import { useCallback, useRef, useState } from "react";
+import RequestForm from "@/components/Contact/RequestForm";
 
 interface UploadScreenProps {
 	onFileSelect: (file: File) => void;
@@ -53,9 +54,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 		<div className="flex flex-col items-center justify-center w-full h-full p-6 select-none animate-fade-in-up">
 			{/* Brand Section */}
 			<div className="mb-10 text-center relative group">
-				<div className="absolute -inset-1 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 rounded-lg blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
+				<div className="absolute -inset-1 bg-gradient-to-r from-orange-500 via-amber-500 to-pink-500 rounded-lg blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
 				<div className="relative">
-					<h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-indigo-600 to-purple-600 mb-2 tracking-tight">
+					<h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-500 mb-2 tracking-tight">
 						PaperTerrace
 					</h1>
 					<p className="text-gray-500 text-lg font-light tracking-widest uppercase">
@@ -85,8 +86,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
           group text-left
           ${
 						isDragging
-							? "border-indigo-500 bg-indigo-50/80 scale-[1.02] shadow-xl shadow-indigo-200/50"
-							: "border-slate-300 bg-white/60 hover:border-indigo-400 hover:bg-white hover:shadow-2xl hover:shadow-indigo-100/50"
+							? "border-orange-400 bg-orange-50/80 scale-[1.02] shadow-xl shadow-orange-200/50"
+							: "border-slate-300 bg-white/60 hover:border-orange-300 hover:bg-white hover:shadow-2xl hover:shadow-orange-100/50"
 					}
         `}
 			>
@@ -134,8 +135,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
             transition-all duration-300 
             ${
 							isDragging
-								? "bg-indigo-100 text-indigo-600 scale-110 rotate-12"
-								: "bg-slate-100 text-slate-400 group-hover:bg-indigo-50 group-hover:text-indigo-500 group-hover:-translate-y-1"
+								? "bg-orange-100 text-orange-500 scale-110 rotate-12"
+								: "bg-slate-100 text-slate-400 group-hover:bg-orange-50 group-hover:text-orange-400 group-hover:-translate-y-1"
 						}
           `}
 					>
@@ -158,7 +159,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 						<h3
 							className={`text-2xl font-bold transition-colors duration-300 ${
 								isDragging
-									? "text-indigo-700"
+									? "text-orange-600"
 									: "text-slate-700 group-hover:text-slate-900"
 							}`}
 						>
@@ -185,6 +186,8 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 				<br />
 				アップロードされたファイルは安全に処理され、解析後に破棄されます。
 			</p>
+
+			<RequestForm />
 		</div>
 	);
 };

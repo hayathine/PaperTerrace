@@ -185,8 +185,8 @@ const SearchBar: React.FC<SearchBarProps> = ({
 
 				{/* ヒント */}
 				{searchTerm && matches.length > 0 && (
-					<div className="px-3 py-1.5 bg-indigo-50 border-t border-indigo-100">
-						<p className="text-[10px] text-indigo-600 font-medium">
+					<div className="px-3 py-1.5 bg-orange-50 border-t border-orange-100">
+						<p className="text-[10px] text-orange-600 font-medium">
 							💡 Enter: {t("search.hint_next", "次へ")} / Shift+Enter:{" "}
 							{t("search.hint_prev", "前へ")}
 						</p>

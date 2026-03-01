@@ -1,5 +1,7 @@
 import type React from "react";
 import { useTranslation } from "react-i18next";
+import CopyButton from "../Common/CopyButton";
+import MarkdownContent from "../Common/MarkdownContent";
 import type { Note } from "./types";
 
 interface NoteItemProps {
@@ -13,17 +15,20 @@ const NoteItem: React.FC<NoteItemProps> = ({ note, onDelete, onJump }) => {
 	return (
 		<div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm overflow-hidden group mb-3 hover:shadow-md transition-all">
 			<div className="flex justify-between items-start">
-				<span className="font-bold text-xs text-indigo-600 break-words">
+				<span className="font-bold text-xs text-orange-600 break-words">
 					{note.term}
 				</span>
-				<button
-					type="button"
-					onClick={() => onDelete(note.note_id)}
-					className="text-slate-300 hover:text-red-500 text-xs px-1 opacity-0 group-hover:opacity-100 transition-opacity"
-					title="Delete Note"
-				>
-					×
-				</button>
+				<div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+					<CopyButton text={`${note.term}\n${note.note}`} size={11} />
+					<button
+						type="button"
+						onClick={() => onDelete(note.note_id)}
+						className="text-slate-300 hover:text-red-500 text-xs px-1"
+						title="Delete Note"
+					>
+						×
+					</button>
+				</div>
 			</div>
 
 			{note.image_url && (
@@ -37,9 +42,9 @@ const NoteItem: React.FC<NoteItemProps> = ({ note, onDelete, onJump }) => {
 				</div>
 			)}
 
-			<p className="text-[10px] text-slate-500 mt-1 whitespace-pre-wrap leading-relaxed">
+			<MarkdownContent className="prose prose-xs max-w-none text-[10px] text-slate-500 mt-1 leading-relaxed">
 				{note.note}
-			</p>
+			</MarkdownContent>
 
 			{note.page_number !== undefined && note.page_number !== null && (
 				<div className="mt-2 flex justify-start">
@@ -50,7 +55,7 @@ const NoteItem: React.FC<NoteItemProps> = ({ note, onDelete, onJump }) => {
 							note.page_number !== undefined &&
 							onJump(note.page_number, note.x || 0.5, note.y || 0.5, note.term)
 						}
-						className="flex items-center gap-1.5 text-[10px] py-1 px-2 bg-indigo-50 text-indigo-600 rounded-md hover:bg-indigo-100 transition-colors"
+						className="flex items-center gap-1.5 text-[10px] py-1 px-2 bg-orange-50 text-orange-600 rounded-md hover:bg-orange-100 transition-colors"
 					>
 						<svg
 							xmlns="http://www.w3.org/2000/svg"

@@ -52,8 +52,7 @@
 			"dict": "Dict",
 			"summary": "Summary",
 			"chat": "Chat",
-			"notes": "Notes",
-			"stack": "Stack"
+			"notes": "Notes"
 		}
 	},
 	"viewer": {
@@ -77,6 +76,7 @@
 			"external_link": "External Link",
 			"open_link": "Open Link",
 			"ask_ai": "Advanced Translation",
+			"ask_in_chat": "Ask in Chat",
 			"save_note": "Save Note",
 			"saved": "Saved",
 			"jump": "Jump to Location"

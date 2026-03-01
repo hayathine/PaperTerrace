@@ -6,14 +6,14 @@ import type { Message } from "./types";
 interface MessageListProps {
 	messages: Message[];
 	isLoading: boolean;
-	onStackPaper?: (url: string, title?: string) => void;
+	sessionId: string;
 	onEvidenceClick?: (grounding: any) => void;
 }
 
 const MessageList: React.FC<MessageListProps> = ({
 	messages,
 	isLoading,
-	onStackPaper,
+	sessionId,
 	onEvidenceClick,
 }) => {
 	const bottomRef = useRef<HTMLDivElement>(null);
@@ -23,7 +23,7 @@ const MessageList: React.FC<MessageListProps> = ({
 	}, [messages, isLoading]);
 
 	return (
-		<div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+		<div className="flex-1 overflow-y-auto p-3 sm:p-4 bg-gray-50">
 			{messages.length === 0 && (
 				<div className="flex flex-col items-center justify-center h-full text-gray-400">
 					<p>No messages yet. Start a conversation!</p>
@@ -34,7 +34,7 @@ const MessageList: React.FC<MessageListProps> = ({
 				<MessageBubble
 					key={msg.id}
 					message={msg}
-					onStackPaper={onStackPaper}
+					sessionId={sessionId}
 					onEvidenceClick={onEvidenceClick}
 				/>
 			))}

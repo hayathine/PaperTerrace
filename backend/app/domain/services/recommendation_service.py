@@ -20,6 +20,29 @@ from redis_provider.provider import RedisService
 
 
 class RecommendationService:
+    _rec_mod = None
+    _profile_mod = None
+
+    @classmethod
+    def _get_profile_module(cls):
+        """Get or initialize the singleton UserProfileModule"""
+        if cls._profile_mod is None:
+            setup_dspy()
+            cls._profile_mod = UserProfileModule()
+            # To optionally load an optimized version if it exists:
+            # load_dspy_module_from_gcs(cls._profile_mod, "optimized_user_profile.json")
+        return cls._profile_mod
+
+    @classmethod
+    def _get_recommendation_module(cls):
+        """Get or initialize the singleton RecommendationModule"""
+        if cls._rec_mod is None:
+            setup_dspy()
+            cls._rec_mod = RecommendationModule()
+            # 保管された最適化済みプロンプトをGCSからロードする（フォールバックあり）
+            load_dspy_module_from_gcs(cls._rec_mod, "optimized_recommendation.json")
+        return cls._rec_mod
+
     @staticmethod
     def sync_trajectory(
         req: RecommendationSyncRequest, current_user_id: str, db: Session
@@ -199,7 +222,6 @@ class RecommendationService:
         Trajectory履歴とDSPyのRecommendationModuleを用いて推薦論文リストと検索クエリを作成し、
         Semantic Scholarで最新の論文を取得して応答する
         """
-        setup_dspy()
         repo = TrajectoryRepository(db)
 
         trajectory = repo.get_by_session_id(req.session_id)
@@ -221,9 +243,7 @@ class RecommendationService:
             )
         else:
             # プロファイル推定
-            profile_mod = UserProfileModule()
-            # To optionally load an optimized version if it exists:
-            # load_dspy_module_from_gcs(profile_mod, "optimized_user_profile.json")
+            profile_mod = RecommendationService._get_profile_module()
 
             clicks_str = json.dumps(trajectory.word_clicks or [], ensure_ascii=False)
             profile_res = profile_mod(
@@ -245,10 +265,7 @@ class RecommendationService:
             repo.save(trajectory)
 
         # 論文推薦クエリ生成
-        rec_mod = RecommendationModule()
-
-        # 5. 保管された最適化済みプロンプトをGCSからロードする（フォールバックあり）
-        load_dspy_module_from_gcs(rec_mod, "optimized_recommendation.json")
+        rec_mod = RecommendationService._get_recommendation_module()
 
         interests_str = (
             ", ".join(interests) if isinstance(interests, list) else str(interests)

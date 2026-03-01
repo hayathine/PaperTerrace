@@ -1,42 +1,16 @@
 import dspy
 
 from common.dspy.signatures import (
-    PaperAnalysis,
-    PaperQA,
+    AdversarialCritique,
+    ChatGeneral,
+    ContextAwareTranslation,
     PaperRecommendation,
-    RecommendationCritique,
+    PaperSummary,
+    PaperSummaryContext,
+    PaperSummarySections,
     UserProfileEstimation,
+    VisionAnalyzeFigure,
 )
-
-
-class PaperAnalysisModule(dspy.Module):
-    def __init__(self):
-        super().__init__()
-        self.analyze = dspy.ChainOfThought(PaperAnalysis)
-
-    def forward(self, paper_text: str):
-        result = self.analyze(paper_text=paper_text)
-        dspy.Assert(len(result.keywords) >= 3, "Keywords must be at least 3")
-        dspy.Assert(
-            result.difficulty in ["初級", "中級", "上級"],
-            "Difficulty must be 初級/中級/上級",
-        )
-        return result
-
-
-class ConversationModule(dspy.Module):
-    def __init__(self):
-        super().__init__()
-        self.qa = dspy.ChainOfThought(PaperQA)
-
-    def forward(self, paper_summary: str, question: str, conversation_history: str):
-        result = self.qa(
-            paper_summary=paper_summary,
-            question=question,
-            conversation_history=conversation_history,
-        )
-        dspy.Assert(len(result.answer) > 20, "Answer length must be > 20 chars")
-        return result
 
 
 class UserProfileModule(dspy.Module):
@@ -92,20 +66,78 @@ class RecommendationModule(dspy.Module):
         return result
 
 
-# Using dspy.Refine for improving recommendations instead of just ChainOfThought of Critique
-class RefinementModule(dspy.Module):
+class PaperSummaryModule(dspy.Module):
     def __init__(self):
         super().__init__()
-        # In DSPy, usually Refine isn't a standalone class but a pattern. But following spec's "N=2" refine approach:
-        # For simplicity, we can do 1 retry with CoT critique
-        self.critique = dspy.ChainOfThought(RecommendationCritique)
-        # Ideally, we plug metrics into DSPy MIPRO/GEPA, but for normal forward we do basic critique if we want
-        # Actually the specification says "RefinementModule: Refine(N=2)". DSPy has an iterative `Refine` class in future or manually handled.
-        # So we'll mock a 2-step iteration here since "RefinementModule" is specifically listed.
+        self.summarize = dspy.Predict(PaperSummary)
 
-    def forward(self, user_profile: str, recommendations_str: str):
-        result = self.critique(
-            user_profile=user_profile, recommendations=recommendations_str
+    def forward(self, paper_text: str, lang_name: str):
+        return self.summarize(paper_text=paper_text, lang_name=lang_name)
+
+
+class SectionSummaryModule(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.summarize = dspy.Predict(PaperSummarySections)
+
+    def forward(self, paper_text: str, lang_name: str):
+        return self.summarize(paper_text=paper_text, lang_name=lang_name)
+
+
+class AdversarialModule(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.critique = dspy.Predict(AdversarialCritique)
+
+    def forward(self, paper_text: str, lang_name: str):
+        return self.critique(paper_text=paper_text, lang_name=lang_name)
+
+
+class TranslationModule(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.translate = dspy.Predict(ContextAwareTranslation)
+
+    def forward(self, paper_context: str, target_text: str, lang_name: str):
+        return self.translate(
+            paper_context=paper_context, target_text=target_text, lang_name=lang_name
         )
-        # 1st iteration
-        return result
+
+
+class VisionFigureModule(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.analyze = dspy.Predict(VisionAnalyzeFigure)
+
+    def forward(self, caption_hint: str, lang_name: str):
+        # Note: Image bytes handling is done at the LM level or prior to DSPy
+        return self.analyze(caption_hint=caption_hint, lang_name=lang_name)
+
+
+class ChatModule(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.chat = dspy.ChainOfThought(ChatGeneral)
+
+    def forward(
+        self,
+        document_context: str,
+        history_text: str,
+        user_message: str,
+        lang_name: str,
+    ):
+        return self.chat(
+            document_context=document_context,
+            history_text=history_text,
+            user_message=user_message,
+            lang_name=lang_name,
+        )
+
+
+class ContextSummaryModule(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.summarize = dspy.Predict(PaperSummaryContext)
+
+    def forward(self, paper_text: str, max_length: int):
+        return self.summarize(paper_text=paper_text, max_length=max_length)

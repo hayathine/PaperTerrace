@@ -52,8 +52,7 @@
 			"dict": "辞書",
 			"summary": "要約",
 			"chat": "チャット",
-			"notes": "ノート",
-			"stack": "スタック"
+			"notes": "ノート"
 		}
 	},
 	"viewer": {
@@ -77,6 +76,7 @@
 			"external_link": "外部リンク",
 			"open_link": "リンクを開く",
 			"ask_ai": "Advanced Translation",
+			"ask_in_chat": "チャットで質問",
 			"save_note": "ノートに保存",
 			"saved": "保存済み",
 			"jump": "場所へ移動"

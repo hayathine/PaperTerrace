@@ -21,7 +21,7 @@ class WordAnalysisService:
         self.dict_provider = get_dictionary_provider()
         self.local_translator = get_local_translator()
         self.redis = RedisService()
-        self.translate_model = os.getenv("MODEL_TRANSLATE", "gemini-1.5-flash")
+        self.translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
         self.executor = ThreadPoolExecutor(max_workers=4)
 
         self.word_cache = {}  # lemma -> bool (exists in dictionary)

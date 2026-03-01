@@ -31,7 +31,7 @@ class TranslationService:
 
     async def translate(
         self, text: str, target_lang: str = "ja", paper_context: str = ""
-    ) -> str:
+    ) -> tuple[str, str]:
         """M2M100を実行し、確信度が低い場合は LlamaCpp (Qwen3) にフォールバック"""
 
         # 1. M2M100翻訳
@@ -49,26 +49,29 @@ class TranslationService:
             logger.info(
                 f"確信度が低いため LlamaCpp (Qwen3) に切り替えます (conf={conf:.3f})"
             )
-            return await self.llamacpp.translate_with_llamacpp(
+            llm_result = await self.llamacpp.translate_with_llamacpp(
                 original_word=text,
                 paper_context=paper_context or "No specific context available.",
                 lang_name=target_lang,
             )
+            return llm_result, "Qwen"
 
-        return translation
+        return translation, model
 
     async def translate_batch(
         self, texts: list[str], target_lang: str = "ja", paper_context: str = ""
-    ) -> list[str]:
+    ) -> tuple[list[str], list[str]]:
         """バッチ翻訳の統合実行"""
 
         # 1. M2M100バッチ翻訳
         results = await self.m2m100.translate_batch(texts, target_lang)
         final_translations = []
+        final_models = []
 
         for i, res in enumerate(results):
             translation = res["translation"]
             conf = res["conf"]
+            model = res.get("model", "m2m100")
 
             logger.info(
                 f"M2M100バッチ翻訳[{i}]: {texts[i]} -> {translation} (conf={conf:.3f})"
@@ -83,10 +86,12 @@ class TranslationService:
                     paper_context=paper_context or "No specific context available.",
                     lang_name=target_lang,
                 )
+                model = "Qwen"
 
             final_translations.append(translation)
+            final_models.append(model)
 
-        return final_translations
+        return final_translations, final_models
 
     async def cleanup(self):
         await self.m2m100.cleanup()

@@ -14,9 +14,7 @@ interface TextModeViewerProps {
 		coords: { page: number; x: number; y: number },
 	) => void;
 	onAskAI?: (prompt: string, imageUrl?: string, coords?: any) => void;
-	jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
 	searchTerm?: string;
-	currentSearchMatch?: { page: number; wordIndex: number } | null;
 }
 
 const TextModeViewer: React.FC<TextModeViewerProps> = ({
@@ -24,14 +22,12 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({
 	onWordClick,
 	onTextSelect,
 	onAskAI,
-	jumpTarget,
 	searchTerm,
-	currentSearchMatch,
 }) => {
 	if (!pages || pages.length === 0) {
 		return (
 			<div className="flex flex-col items-center justify-center p-12 text-slate-400">
-				<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-500 mb-4"></div>
+				<div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-500 mb-4"></div>
 				<p>読み込み中...</p>
 			</div>
 		);
@@ -46,9 +42,7 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({
 					onWordClick={onWordClick}
 					onTextSelect={onTextSelect}
 					onAskAI={onAskAI}
-					jumpTarget={jumpTarget}
 					searchTerm={searchTerm}
-					currentSearchMatch={currentSearchMatch}
 				/>
 			))}
 		</div>

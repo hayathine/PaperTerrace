@@ -2,15 +2,16 @@ import os
 
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.providers import get_ai_provider, get_storage_provider
-from app.schemas.gemini_schema import FullSummaryResponse
-from app.schemas.gemini_schema import SectionSummaryList as SectionSummariesResponse
+from common.dspy.config import setup_dspy
+from common.dspy.modules import (
+    ContextSummaryModule,
+    PaperSummaryModule,
+    SectionSummaryModule,
+)
 from common.logger import logger
 from common.prompts import (
-    CORE_SYSTEM_PROMPT,
-    PAPER_SUMMARY_AI_CONTEXT_PROMPT,
     PAPER_SUMMARY_FROM_PDF_PROMPT,
     PAPER_SUMMARY_FULL_PROMPT,
-    PAPER_SUMMARY_SECTIONS_PROMPT,
 )
 
 
@@ -26,9 +27,15 @@ class SummaryService:
     def __init__(self, storage=None):
         self.ai_provider = get_ai_provider()
         self.storage = storage or get_storage_provider()  # Inject storage
-        self.model = os.getenv("MODEL_SUMMARY", "gemini-2.0-flash-lite")
+        self.model = os.getenv("MODEL_SUMMARY", "gemini-2.5-flash-lite")
         # デフォルト: 90万トークン（Gemini 1.5 Flashは100万上限だがマージン確保）
         self.token_limit = int(os.getenv("MAX_INPUT_TOKENS", "900000"))
+
+        # Initialize DSPy
+        setup_dspy()
+        self.summary_mod = PaperSummaryModule()
+        self.section_mod = SectionSummaryModule()
+        self.context_mod = ContextSummaryModule()
 
     async def _truncate_to_token_limit(self, text: str) -> str:
         """
@@ -156,60 +163,40 @@ class SummaryService:
                     keyword_focus=keyword_focus,
                 )
 
-                from pydantic import Field
+                # DSPy version
+                res = self.summary_mod(paper_text=safe_text, lang_name=lang_name)
 
-                class DynamicFullSummaryResponse(FullSummaryResponse):
-                    overview: str = Field(
-                        ...,
-                        description=f"Abstract or overview of the main theme in {lang_name} (1-2 sentences)",
-                    )
-                    key_contributions: list[str] = Field(
-                        ...,
-                        description=f"List of 3-5 key contributions in {lang_name}",
-                    )
-                    methodology: str = Field(
-                        ...,
-                        description=f"Concise explanation of the methodology in {lang_name}",
-                    )
-                    conclusion: str = Field(
-                        ...,
-                        description=f"Key findings and implications in {lang_name}",
-                    )
-                    key_words: list[str] = Field(
-                        default_factory=list,
-                        description="5-10 keywords in English",
-                    )
-
-                analysis: FullSummaryResponse = await self.ai_provider.generate(
-                    prompt,
-                    model=self.model,
-                    response_model=DynamicFullSummaryResponse,
-                    system_instruction=CORE_SYSTEM_PROMPT,
-                )
-
-                # 後方互換性のため整形済みテキストを返す
-                # Headings are localized to Japanese by default as per user requirement
+                # DSPy may return key_words as None, [], or a raw string when
+                # list parsing fails. Normalize to a proper list before joining.
+                raw_kw = res.key_words
+                if isinstance(raw_kw, str):
+                    key_words = [k.strip() for k in raw_kw.split(",") if k.strip()]
+                elif isinstance(raw_kw, list):
+                    key_words = [str(k).strip() for k in raw_kw if k]
+                else:
+                    key_words = []
+                keywords_str = ", ".join(key_words) if key_words else "N/A"
 
                 # Check if target is English, otherwise default to Japanese headers
                 if target_lang == "en":
                     result_lines = [
-                        f"## Overview\n{analysis.overview}",
+                        f"## Overview\n{res.overview}",
                         "\n## Key Contributions",
-                        *[f"- {item}" for item in analysis.key_contributions],
-                        f"\n## Methodology\n{analysis.methodology}",
-                        f"\n## Conclusion\n{analysis.conclusion}",
+                        *[f"- {item}" for item in res.key_contributions],
+                        f"\n## Methodology\n{res.methodology}",
+                        f"\n## Conclusion\n{res.conclusion}",
                         "\n## Key Words",
-                        ", ".join(analysis.key_words) if analysis.key_words else "N/A",
+                        keywords_str,
                     ]
                 else:
                     result_lines = [
-                        f"## 概要\n{analysis.overview}",
+                        f"## 概要\n{res.overview}",
                         "\n## 主な貢献",
-                        *[f"- {item}" for item in analysis.key_contributions],
-                        f"\n## 手法\n{analysis.methodology}",
-                        f"\n## 結論\n{analysis.conclusion}",
+                        *[f"- {item}" for item in res.key_contributions],
+                        f"\n## 手法\n{res.methodology}",
+                        f"\n## 結論\n{res.conclusion}",
                         "\n## キーワード",
-                        ", ".join(analysis.key_words) if analysis.key_words else "N/A",
+                        keywords_str,
                     ]
                 formatted_text = "\n".join(result_lines)
 
@@ -259,41 +246,26 @@ class SummaryService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         safe_text = await self._truncate_to_token_limit(text)
-        prompt = PAPER_SUMMARY_SECTIONS_PROMPT.format(
-            lang_name=lang_name, paper_text=safe_text
-        )
-
-        from pydantic import Field
-
-        from app.schemas.gemini_schema import SectionSummary
-
-        class DynamicSectionSummary(SectionSummary):
-            summary: str = Field(
-                description=f"Summary of the section content (must be in {lang_name})"
-            )
-
-        class DynamicSectionSummariesResponse(SectionSummariesResponse):
-            sections: list[DynamicSectionSummary] = Field(
-                description=f"List of section summaries (must be in {lang_name})"
-            )
-
         try:
             logger.debug(
                 "Generating section summary",
                 extra={"text_length": len(text)},
             )
-            response: SectionSummariesResponse = await self.ai_provider.generate(
-                prompt,
-                model=self.model,
-                response_model=DynamicSectionSummariesResponse,
-                system_instruction=CORE_SYSTEM_PROMPT,
-            )
+            # DSPy version
+            res = self.section_mod(paper_text=safe_text, lang_name=lang_name)
+
+            sections = []
+            for item in res.sections:
+                if isinstance(item, dict):
+                    sections.append(item)
+                else:
+                    # In case DSPy returns a string or something else
+                    sections.append({"section": "Chapter", "summary": str(item)})
 
             logger.info(
                 "Section summary generated",
-                extra={"section_count": len(response.sections)},
+                extra={"section_count": len(sections)},
             )
-            sections = [s.model_dump() for s in response.sections]
 
             # Save to cache
             if paper_id:
@@ -359,13 +331,9 @@ class SummaryService:
         AIコンテキスト用の短い要約を生成する（最大max_length文字）。
         """
         try:
-            # コンテキスト生成には冒頭部分のみ使用
-            prompt = PAPER_SUMMARY_AI_CONTEXT_PROMPT.format(
-                max_length=max_length, paper_text=text[:20000]
-            )
-            summary = await self.ai_provider.generate(
-                prompt, model=self.model, system_instruction=CORE_SYSTEM_PROMPT
-            )
+            # DSPy version
+            res = self.context_mod(paper_text=text[:20000], max_length=max_length)
+            summary = res.summary
             logger.info(f"Context summary generated (length: {len(summary)})")
             return summary[:max_length]
         except Exception as e:

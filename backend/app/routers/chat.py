@@ -31,7 +31,6 @@ storage = get_storage_provider()
 class ChatRequest(BaseModel):
     message: str
     session_id: str
-    author_mode: bool = False
     lang: str = "ja"
     paper_id: str | None = None
     figure_id: str | None = None
@@ -67,99 +66,85 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
 
     history = redis_service.get(history_key) or []
 
-    if request.author_mode:
-        response_data = await chat_service.author_agent_response(
-            request.message, context, target_lang=request.lang
+    # Check chat limit (max 10 turns)
+    user_msg_count = sum(1 for m in history if m.get("role") == "user")
+    if user_msg_count >= 10:
+        return JSONResponse(
+            {
+                "response": "チャットの最大回数（10回）に達しました。新しいセッションを開始するか、履歴をクリアしてください。"
+            }
         )
-        if isinstance(response_data, dict):
-            response_text = response_data["text"]
-            grounding = response_data.get("grounding")
-        else:
-            response_text = response_data
-            grounding = None
-    else:
-        # Check chat limit (max 10 turns)
-        user_msg_count = sum(1 for m in history if m.get("role") == "user")
-        if user_msg_count >= 10:
-            return JSONResponse(
-                {
-                    "response": "チャットの最大回数（10回）に達しました。新しいセッションを開始するか、履歴をクリアしてください。"
-                }
-            )
 
-        # Fetch image if figure_id provided
-        image_bytes = None
-        if request.figure_id:
-            figure = storage.get_figure(request.figure_id)
-            if figure and figure.get("image_url"):
-                try:
-                    image_bytes = get_image_bytes(figure["image_url"])
-                    log.debug("chat", "Image loaded", figure_id=request.figure_id)
-                except Exception as e:
-                    log.error(
-                        "chat",
-                        "Failed to load image",
-                        figure_id=request.figure_id,
-                        error=str(e),
-                    )
-
-        # Fetch PDF bytes for grounding if paper_id exists
-        pdf_bytes = None
-        if paper_id:
+    # Fetch image if figure_id provided
+    image_bytes = None
+    if request.figure_id:
+        figure = storage.get_figure(request.figure_id)
+        if figure and figure.get("image_url"):
             try:
-                paper_info = storage.get_paper(paper_id)
-                if paper_info and paper_info.get("file_hash"):
-                    from app.providers import get_image_storage
-
-                    img_storage = get_image_storage()
-                    pdf_bytes = img_storage.get_doc_bytes(
-                        img_storage.get_doc_path(paper_info["file_hash"])
-                    )
-                    log.debug(
-                        "chat", "PDF bytes loaded for grounding", paper_id=paper_id
-                    )
+                image_bytes = get_image_bytes(figure["image_url"])
+                log.debug("chat", "Image loaded", figure_id=request.figure_id)
             except Exception as e:
-                log.warning("chat", f"Failed to load PDF bytes for grounding: {e}")
+                log.error(
+                    "chat",
+                    "Failed to load image",
+                    figure_id=request.figure_id,
+                    error=str(e),
+                )
 
-        response_data = await chat_service.chat(
-            request.message,
-            history=history,
-            document_context=context,
-            target_lang=request.lang,
-            paper_id=paper_id,
-            image_bytes=image_bytes,
-            pdf_bytes=pdf_bytes,
-        )
+    # Fetch PDF bytes for grounding if paper_id exists
+    pdf_bytes = None
+    if paper_id:
+        try:
+            paper_info = storage.get_paper(paper_id)
+            if paper_info and paper_info.get("file_hash"):
+                from app.providers import get_image_storage
 
-        # Handle grounding if available
-        if isinstance(response_data, dict):
-            response_text = response_data["text"]
-            grounding = response_data.get("grounding")
-        else:
-            response_text = response_data
-            grounding = None
+                img_storage = get_image_storage()
+                pdf_bytes = img_storage.get_doc_bytes(
+                    img_storage.get_doc_path(paper_info["file_hash"])
+                )
+                log.debug(
+                    "chat", "PDF bytes loaded for grounding", paper_id=paper_id
+                )
+        except Exception as e:
+            log.warning("chat", f"Failed to load PDF bytes for grounding: {e}")
 
-        # Update history
-        history.append({"role": "user", "content": request.message})
-        history.append(
-            {"role": "assistant", "content": response_text, "grounding": grounding}
-        )
+    response_data = await chat_service.chat(
+        request.message,
+        history=history,
+        document_context=context,
+        target_lang=request.lang,
+        paper_id=paper_id,
+        image_bytes=image_bytes,
+        pdf_bytes=pdf_bytes,
+    )
 
-        # Trim history (keep last 40)
-        if len(history) > 40:
-            history = history[-40:]
+    # Handle grounding if available
+    if isinstance(response_data, dict):
+        response_text = response_data["text"]
+        grounding = response_data.get("grounding")
+    else:
+        response_text = response_data
+        grounding = None
 
-        # Save to cache & Refresh context TTL
-        redis_service.set(history_key, json.dumps(history), expire=expire)
-        if context:
-            redis_service.expire(f"session:{request.session_id}", 3600)
+    # Update history
+    history.append({"role": "user", "content": request.message})
+    history.append(
+        {"role": "assistant", "content": response_text, "grounding": grounding}
+    )
 
-    # Return response with text and grounding
+    # Trim history (keep last 40)
+    if len(history) > 40:
+        history = history[-40:]
+
+    # Save to cache & Refresh context TTL
+    redis_service.set(history_key, json.dumps(history), expire=expire)
+    if context:
+        redis_service.expire(f"session:{request.session_id}", 3600)
+
     return JSONResponse(
         {
-            "response": response_text
-            if not isinstance(response_data, dict)
-            else response_data["text"],
+            "response": response_text,
             "grounding": grounding,
         }
     )

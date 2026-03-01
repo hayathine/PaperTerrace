@@ -1,0 +1,16 @@
+name: Trigger Cloudflare Pages Deploy
+
+on:
+  push:
+    branches:
+      - dev  # devブランチにプッシュされた時に発火
+    paths:
+      - 'frontend/**'  # frontendフォルダ内の変更時のみ発火させたい場合に指定
+
+jobs:
+  trigger-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call Deploy Hook
+        # 先ほどCloudflare Pagesで取得したWebhook URLにPOSTリクエストを送る
+        run: curl -X POST "${{ secrets.CLOUDFLARE_DEPLOY_HOOK_URL }}"

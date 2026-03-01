@@ -6,7 +6,7 @@ import dspy
 def setup_dspy():
     """Configure DSPy with Gemini."""
     # Use gemini/ prefix for litellm
-    model_name = os.environ.get("DSPY_GEMINI_MODEL", "gemini/gemini-1.5-flash")
+    model_name = os.environ.get("DSPY_GEMINI_MODEL", "gemini/gemini-2.5-flash-lite")
     api_key = os.environ.get("GEMINI_API_KEY")
     if api_key:
         lm = dspy.LM(model_name, api_key=api_key)

@@ -192,7 +192,6 @@
     const message = input.value.trim();
     if (!message) return;
 
-    const authorMode = document.getElementById("author-mode").checked;
     const messagesDiv = document.getElementById("chat-messages");
 
     // Add user message
@@ -210,7 +209,6 @@
         body: JSON.stringify({
           message: message,
           session_id: sessionId,
-          author_mode: authorMode,
           lang: currentLanguage,
         }),
       });

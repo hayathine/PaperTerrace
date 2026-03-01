@@ -44,11 +44,11 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 	return (
 		<div className="flex flex-col w-full relative">
 			{/* Decorative background element */}
-			<div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-br from-indigo-600 to-purple-700 opacity-[0.03]" />
+			<div className="absolute top-0 left-0 w-full h-32 bg-gradient-to-br from-orange-600 to-amber-700 opacity-[0.03]" />
 
 			<div className="px-8 pt-10 pb-12 relative z-10">
 				<div className="text-center mb-10">
-					<div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-tr from-indigo-600 to-purple-500 rounded-2xl shadow-lg shadow-indigo-200 mb-4 animate-in zoom-in duration-500">
+					<div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-tr from-orange-600 to-amber-500 rounded-2xl shadow-lg shadow-orange-200 mb-4 animate-in zoom-in duration-500">
 						<svg
 							className="w-8 h-8 text-white"
 							fill="none"
@@ -64,7 +64,7 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 						</svg>
 					</div>
 					<h2 className="text-4xl font-black text-slate-800 tracking-tight mb-2">
-						Paper<span className="text-indigo-600">Terrace</span>
+						Paper<span className="text-orange-600">Terrace</span>
 					</h2>
 					<p className="text-slate-500 font-medium">{t("auth.tagline")}</p>
 				</div>
@@ -98,7 +98,7 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 							type="button"
 							onClick={() => handleSignIn("google", "popup")}
 							disabled={!!loading}
-							className="group relative w-full flex items-center justify-center py-3.5 px-4 border border-transparent text-sm font-bold rounded-xl text-white bg-indigo-600 hover:bg-indigo-700 active:scale-[0.98] focus:outline-none transition-all shadow-md shadow-indigo-100 disabled:opacity-70"
+							className="group relative w-full flex items-center justify-center py-3.5 px-4 border border-transparent text-sm font-bold rounded-xl text-white bg-orange-600 hover:bg-orange-700 active:scale-[0.98] focus:outline-none transition-all shadow-md shadow-orange-100 disabled:opacity-70"
 						>
 							<div className="flex items-center gap-2">
 								{loading === "google" ? (
@@ -148,7 +148,7 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 							<div className="flex items-center gap-2">
 								{loading === "github" ? (
 									<svg
-										className="animate-spin h-5 w-5 text-indigo-600"
+										className="animate-spin h-5 w-5 text-orange-600"
 										xmlns="http://www.w3.org/2000/svg"
 										fill="none"
 										viewBox="0 0 24 24"
@@ -230,7 +230,7 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 					<button
 						type="button"
 						onClick={onGuestAccess}
-						className="group relative w-full flex items-center justify-center py-4 px-4 border-2 border-dashed border-slate-200 text-sm font-bold rounded-2xl text-slate-500 bg-slate-50/30 hover:bg-indigo-50 hover:text-indigo-600 hover:border-indigo-100 transition-all duration-300"
+						className="group relative w-full flex items-center justify-center py-4 px-4 border-2 border-dashed border-slate-200 text-sm font-bold rounded-2xl text-slate-500 bg-slate-50/30 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-100 transition-all duration-300"
 					>
 						<span className="flex items-center gap-2">
 							<svg

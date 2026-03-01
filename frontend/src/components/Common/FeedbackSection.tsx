@@ -113,7 +113,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 						type="button"
 						disabled={status === "submitting" || !comment.trim()}
 						onClick={handleCommentSubmit}
-						className="px-4 py-2 bg-slate-900 hover:bg-slate-800 disabled:bg-slate-200 text-white text-xs font-bold rounded-lg transition-all shadow-md active:scale-95 disabled:active:scale-100"
+						className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-200 text-white text-xs font-bold rounded-lg transition-all shadow-md active:scale-95 disabled:active:scale-100"
 					>
 						{status === "submitting" ? (
 							<div className="flex items-center gap-2">

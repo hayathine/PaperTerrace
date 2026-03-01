@@ -8,7 +8,14 @@ vars:
   PROJECT_ID: '{{.PROJECT_ID | default "gen-lang-client-0800253336"}}'
   REGION: '{{.REGION | default "asia-northeast1"}}'
   REGISTRY: '{{.REGISTRY | default "192.168.10.123:5000"}}'
-  ENV: '{{.ENV | default "main"}}'
+
+  # Gitブランチ名を取得し、Kubernetesセーフな形式(小文字、記号置換)に変換
+  GIT_BRANCH:
+    sh: git rev-parse --abbrev-ref HEAD | tr '[:upper:]' '[:lower:]' | sed 's/[^a-z0-9]/-/g'
+
+  # 環境変数 ENV が未設定の場合はブランチ名をデフォルトとする
+  ENV: '{{.ENV | default .GIT_BRANCH | default "main"}}'
+
   NAMESPACE: '{{if eq .ENV "main"}}paperterrace{{else}}paperterrace-{{.ENV}}{{end}}'
   RELEASE_NAME: '{{if eq .ENV "main"}}paperterrace{{else}}paperterrace-{{.ENV}}{{end}}'
 
@@ -123,6 +130,11 @@ tasks:
     cmds:
       - npm run build
     dir: frontend
+
+  test:backend:v:
+    desc: "Run backend tests with verbose output"
+    cmds:
+      - uv run --directory backend env PYTHONPATH=.:.. pytest -o "addopts=" -v
 
   test:backend:
     desc: "Run backend tests"
@@ -293,13 +305,18 @@ tasks:
     desc: "Deploy PaperTerrace using Helm"
     cmds:
       - echo "🚀 Deploying with Helm..."
-      - helm upgrade --install paperterrace ./local-files/infrastructure/helm/paperterrace --namespace paperterrace --create-namespace
+      - |
+        HELM_OPTS=""
+        if [ "{{.ENV}}" = "dev" ]; then
+          HELM_OPTS="-f ./local-files/infrastructure/helm/paperterrace/values-dev.yaml"
+        fi
+        helm upgrade --install {{.RELEASE_NAME}} ./local-files/infrastructure/helm/paperterrace --namespace {{.NAMESPACE}} --create-namespace $HELM_OPTS
 
   helm:undeploy:
     desc: "Undeploy PaperTerrace using Helm"
     cmds:
       - echo "🔥 Removing Helm release..."
-      - helm uninstall paperterrace --namespace paperterrace
+      - helm uninstall {{.RELEASE_NAME}} --namespace {{.NAMESPACE}}
 
   helm:lint:
     desc: "Lint Helm chart"

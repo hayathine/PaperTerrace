@@ -60,14 +60,12 @@ class LocalTranslator:
 
     async def translate_async(
         self, text: str, tgt_lang: str = "ja", paper_context: str | None = None
-    ) -> str | None:
+    ) -> tuple[str, str | None]:
         """
-        非同期翻訳
-        - TRANSLATION_BACKEND="custom": Cloudflare Tunnel経由のカスタム翻訳
-        - TRANSLATION_BACKEND="service_b" (default): ServiceB (Inference Service) 経由
+        非同期翻訳。Returns (translated_text, model_name) tuple.
         """
         if not text.strip():
-            return ""
+            return "", None
 
         custom_url = os.getenv(
             "CUSTOM_TRANSLATION_URL",
@@ -81,7 +79,8 @@ class LocalTranslator:
             log.info(
                 "translate_async", f"Using Custom Translation Backend: {custom_url}"
             )
-            return await self._translate_via_custom(text, tgt_lang, custom_url)
+            translation = await self._translate_via_custom(text, tgt_lang, custom_url)
+            return translation, "custom"
         else:
             log.debug(
                 "translate_async", "Using ServiceB (Inference Service) for translation"
@@ -156,19 +155,26 @@ class LocalTranslator:
 
     async def _translate_via_service_b(
         self, text: str, tgt_lang: str, paper_context: str | None = None
-    ) -> str:
+    ) -> tuple[str, str | None]:
         try:
             log.debug("translate_async", f"Translating via ServiceB: {text[:50]}...")
 
             client = await get_inference_client()
-            translation = await client.translate_text(
+            # translate_text returns (translation, model) tuple
+            result = await client.translate_text(
                 text, tgt_lang, paper_context=paper_context
             )
 
+            if isinstance(result, tuple):
+                translation, model = result
+            else:
+                translation, model = result, None
+
             log.debug(
-                "translate_async", f"ServiceB Translation result: {translation[:50]}..."
+                "translate_async",
+                f"ServiceB Translation result: {str(translation)[:50]}...",
             )
-            return translation
+            return translation, model
 
         except CircuitBreakerError as e:
             log.error("translate_async", f"Circuit breaker error: {e}")
@@ -180,7 +186,7 @@ class LocalTranslator:
 
         except Exception as e:
             log.error("translate_async", f"Unexpected error: {e}")
-            return text
+            return text, None
 
     def translate(
         self, text: str, src_lang: str = "en", tgt_lang: str = "ja"

@@ -1,6 +1,6 @@
 """
 Analysis Router
-Handles paper analysis features: summary, research radar,
+Handles paper analysis features: summary,
 figure/table analysis, layout detection, and adversarial review.
 """
 
@@ -9,10 +9,7 @@ from fastapi.responses import JSONResponse
 
 from app.domain.features import (
     AdversarialReviewService,
-    CiteIntentService,
-    ClaimVerificationService,
     FigureInsightService,
-    ResearchRadarService,
     SummaryService,
 )
 from app.domain.services.layout_analysis_service import LayoutAnalysisService
@@ -26,11 +23,8 @@ router = APIRouter(tags=["Analysis"])
 
 # Services
 summary_service = SummaryService()
-research_radar_service = ResearchRadarService()
 figure_insight_service = FigureInsightService()
 adversarial_service = AdversarialReviewService()
-cite_intent_service = CiteIntentService()
-claim_service = ClaimVerificationService()
 redis_service = RedisService()
 storage = get_storage_provider()
 layout_analysis_service = LayoutAnalysisService()
@@ -103,48 +97,6 @@ async def summarize(
 
 
 # ============================================================================
-# Research Radar (Deprecated) / Recommended Papers
-# ============================================================================
-
-
-@router.post("/recommend")
-async def recommend_papers(session_id: str = Form(...), lang: str = Form("ja")):
-    """
-    Generate recommended papers based on the current paper's context.
-    This replaces the deprecated research-radar feature.
-    """
-    context = _get_context(session_id)
-    if not context:
-        return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
-
-    # Use ResearchRadarService but for "recommendation" purposes
-    papers = await research_radar_service.find_related_papers(context[:3000])
-    queries = await research_radar_service.generate_search_queries(context[:3000])
-    return JSONResponse({"related_papers": papers, "search_queries": queries})
-
-
-@router.post("/research-radar")
-async def research_radar(session_id: str = Form(...), lang: str = Form("ja")):
-    """
-    Deprecated: Use /recommend instead.
-    """
-    logger.warning(
-        f"Deprecated endpoint /research-radar called by session {session_id}"
-    )
-    return await recommend_papers(session_id, lang)
-
-
-@router.post("/analyze-citations")
-async def analyze_citations(session_id: str = Form(...)):
-    context = _get_context(session_id)
-    if not context:
-        return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
-
-    citations = await research_radar_service.analyze_citations(context)
-    return JSONResponse({"citations": citations})
-
-
-# ============================================================================
 # Figure Insight
 # ============================================================================
 
@@ -154,13 +106,6 @@ async def analyze_figure(file: UploadFile = File(...), caption: str = Form("")):
     content = await file.read()
     mime_type = file.content_type or "image/png"
     analysis = await figure_insight_service.analyze_figure(content, caption, mime_type)
-    return JSONResponse({"analysis": analysis})
-
-
-@router.post("/analyze-table")
-async def analyze_table(table_text: str = Form(...), session_id: str = Form("")):
-    context = _get_context(session_id) or ""
-    analysis = await figure_insight_service.analyze_table_text(table_text, context)
     return JSONResponse({"analysis": analysis})
 
 
@@ -180,56 +125,8 @@ async def critique(session_id: str = Form(...), lang: str = Form("ja")):
 
 
 # ============================================================================
-# Claim Verification
-# ============================================================================
-
-
-@router.post("/verify-claims")
-async def verify_claims(paragraph: str = Form(...), lang: str = Form("ja")):
-    report = await claim_service.verify_paragraph(paragraph, lang=lang)
-    return JSONResponse({"report": report})
-
-
-# ============================================================================
 # Layout Detection
 # ============================================================================
-
-
-@router.post("/detect-layout")
-async def detect_layout(
-    file: UploadFile = File(..., description="PDF page image file"),
-    page_number: int = Form(1, description="Page number for reference"),
-):
-    """
-    画像からレイアウト要素（図、表、数式など）を検出
-    """
-    # ファイル形式チェック
-    if not file.content_type or not file.content_type.startswith("image/"):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Invalid file type: {file.content_type}. Only image files are supported.",
-        )
-
-    try:
-        content = await file.read()
-        results = await layout_analysis_service.detect_layout(
-            content, file.filename, page_number
-        )
-
-        return JSONResponse(
-            {
-                "success": True,
-                "page_number": page_number,
-                "total_elements": len(results),
-                "elements": results,
-            }
-        )
-
-    except Exception as e:
-        logger.error(f"Layout detection failed: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Layout detection failed: {str(e)}"
-        )
 
 
 @router.post("/analyze-layout-lazy")
@@ -273,16 +170,3 @@ async def analyze_layout_lazy(
     except Exception as e:
         logger.error(f"[analyze-layout-lazy] Unexpected error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Layout analysis failed: {str(e)}")
-
-
-# ============================================================================
-# Cite Intent
-# ============================================================================
-
-
-@router.post("/cite-intent")
-async def analyze_cite_intent(paragraph: str = Form(...), lang: str = Form("ja")):
-    intents = await cite_intent_service.analyze_paragraph_citations(
-        paragraph, lang=lang
-    )
-    return JSONResponse({"citations": intents})

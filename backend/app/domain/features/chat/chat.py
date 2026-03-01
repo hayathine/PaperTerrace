@@ -6,12 +6,11 @@ AIチャットアシスタント機能を提供するモジュール
 import os
 
 from app.providers import get_ai_provider
+from common.dspy.config import setup_dspy
+from common.dspy.modules import ChatModule
 from common.logger import logger
 from common.prompts import (
-    CHAT_AUTHOR_FROM_PDF_PROMPT,
-    CHAT_AUTHOR_PERSONA_PROMPT,
     CHAT_GENERAL_FROM_PDF_PROMPT,
-    CHAT_GENERAL_RESPONSE_PROMPT,
     CHAT_WITH_FIGURE_PROMPT,
     CORE_SYSTEM_PROMPT,
 )
@@ -27,14 +26,15 @@ class ChatError(Exception):
 
 
 class ChatService:
-    """AI Chat service for paper Q&A and author agent simulation."""
+    """AI Chat service for paper Q&A."""
 
     def __init__(self):
         self.ai_provider = get_ai_provider()
         self.redis = RedisService()
         self.model = os.getenv("MODEL_CHAT", "gemini-2.0-flash")
         self.cache_ttl_minutes = 60
-        # History is now managed by the router/caller via Redis
+        setup_dspy()
+        self.chat_mod = ChatModule()
 
     async def chat(
         self,
@@ -147,21 +147,16 @@ class ChatService:
                                 f"Failed to create context cache for {paper_id}: {e}"
                             )
 
-                prompt = CHAT_GENERAL_RESPONSE_PROMPT.format(
-                    lang_name=lang_name,
+                # DSPy version
+                res = self.chat_mod(
                     document_context=context[:20000]
                     if not cache_name
                     else "See Context Cache",
                     history_text=history_text_for_prompt,
-                    user_message=user_message,  # Added
+                    user_message=user_message,
+                    lang_name=lang_name,
                 )
-
-                response_data = await self.ai_provider.generate(
-                    prompt,
-                    model=self.model,
-                    system_instruction=CORE_SYSTEM_PROMPT,
-                    cached_content_name=cache_name,
-                )
+                response_data = res.answer
 
             # Handle response with grounding metadata
             if isinstance(response_data, dict):
@@ -194,95 +189,6 @@ class ChatService:
                 extra={"error": str(e), "message_preview": user_message[:50]},
             )
             return f"エラーが発生しました: {str(e)}"
-
-    async def author_agent_response(
-        self,
-        question: str,
-        paper_text: str = "",
-        target_lang: str = "ja",
-        pdf_bytes: bytes | None = None,
-    ) -> str:
-        """
-        Simulate the author's perspective to answer questions.
-
-        Args:
-            question: The user's question
-            paper_text: The full paper text (従来のテキストベース)
-            target_lang: Output language
-            pdf_bytes: PDFバイナリデータ (PDF直接入力方式)
-
-        Returns:
-            Response simulating the author's viewpoint
-        """
-        from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
-
-        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
-
-        try:
-            # PDF直接入力方式
-            if pdf_bytes:
-                logger.debug(
-                    "Generating author agent response from PDF",
-                    extra={
-                        "question_length": len(question),
-                        "pdf_size": len(pdf_bytes),
-                    },
-                )
-                prompt = CHAT_AUTHOR_FROM_PDF_PROMPT.format(
-                    lang_name=lang_name, question=question
-                )
-                response_data = await self.ai_provider.generate_with_pdf(
-                    prompt, pdf_bytes, model=self.model
-                )
-            else:
-                # 従来のテキストベース方式
-                logger.debug(
-                    "Generating author agent response from text",
-                    extra={
-                        "question_length": len(question),
-                        "paper_length": len(paper_text),
-                    },
-                )
-                prompt = CHAT_AUTHOR_PERSONA_PROMPT.format(
-                    lang_name=lang_name,
-                    paper_text=paper_text[:20000],
-                    question=question,
-                )
-                response_data = await self.ai_provider.generate(
-                    prompt, model=self.model
-                )
-
-            # Handle response with grounding metadata
-            if isinstance(response_data, dict):
-                response_text = response_data.get("text", "").strip()
-                grounding = response_data.get("grounding")
-            else:
-                response_text = str(response_data or "").strip()
-                grounding = None
-
-            if not response_text:
-                logger.warning("Empty author agent response")
-                raise ChatError("Empty response from author agent")
-
-            logger.info(
-                "Author agent response generated",
-                extra={
-                    "response_length": len(response_text),
-                    "has_grounding": grounding is not None,
-                },
-            )
-
-            if grounding:
-                return {"text": response_text, "grounding": grounding}
-            return response_text
-        except ChatError:
-            raise
-        except Exception as e:
-            logger.exception(
-                "Author agent response failed",
-                extra={"error": str(e)},
-            )
-            return f"著者としての回答生成に失敗しました: {str(e)}"
 
     async def delete_paper_cache(self, paper_id: str):
         """Delete the context cache for a specific paper."""

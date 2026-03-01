@@ -25,6 +25,7 @@ class TranslationResponse(BaseModel):
     success: bool
     translation: str
     processing_time: float
+    model: Optional[str] = None
     message: Optional[str] = None
 
 
@@ -37,4 +38,5 @@ class TranslationBatchResponse(BaseModel):
     success: bool
     translations: List[str]
     processing_time: float
+    models: Optional[List[str]] = None
     message: Optional[str] = None

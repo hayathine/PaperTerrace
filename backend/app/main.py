@@ -19,13 +19,12 @@ from app.routers import (
     analysis_router,
     auth_router,
     chat_router,
-    explore_router,
+    contact_router,
     feedback_router,
     figures_router,
     note_router,
     papers_router,
     pdf_router,
-    recommendation_router,
     stamps_router,
     translation_router,
     upload_router,
@@ -241,7 +240,6 @@ app.include_router(users_router, prefix="/api")
 # Grouped routers
 app.include_router(stamps_router, prefix="/api")
 app.include_router(translation_router, prefix="/api")
-app.include_router(explore_router, prefix="/api")
 app.include_router(chat_router, prefix="/api")
 app.include_router(note_router, prefix="/api")
 app.include_router(papers_router, prefix="/api")
@@ -253,8 +251,8 @@ app.include_router(pdf_router, prefix="/api")
 # Analysis Features
 app.include_router(analysis_router, prefix="/api")
 app.include_router(figures_router, prefix="/api")
-app.include_router(recommendation_router, prefix="/api")
 app.include_router(feedback_router, prefix="/api")
+app.include_router(contact_router, prefix="/api")
 
 
 # ============================================================================
@@ -356,7 +354,8 @@ async def health_check():
         # redis_host = os.getenv("REDIS_HOST", "redis")
         # redis_port = int(os.getenv("REDIS_PORT", "6379"))
         redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
-        r = Redis.from_url(redis_url, socket_connect_timeout=2)
+        # socket_connect_timeout must be shorter than the liveness probe timeoutSeconds (10s)
+        r = Redis.from_url(redis_url, socket_connect_timeout=1)
         r.ping()
         dependencies["redis"] = "connected"
     except Exception as e:

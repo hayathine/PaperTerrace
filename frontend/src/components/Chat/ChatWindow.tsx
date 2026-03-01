@@ -15,7 +15,6 @@ interface ChatWindowProps {
 	onInitialChatSent?: () => void;
 	initialPrompt?: string | null;
 	onInitialPromptSent?: () => void;
-	onStackPaper?: (url: string, title?: string) => void;
 	onEvidenceClick?: (grounding: any) => void;
 }
 
@@ -27,7 +26,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 	onInitialChatSent,
 	initialPrompt,
 	onInitialPromptSent,
-	onStackPaper,
 	onEvidenceClick,
 }) => {
 	const { t, i18n } = useTranslation();
@@ -117,7 +115,6 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 					session_id: sessionId,
 					paper_id: paperId,
 					figure_id: figureId,
-					author_mode: false,
 					lang: i18n.language,
 				}),
 			});
@@ -153,8 +150,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 	};
 
 	return (
-		<div className="flex flex-col h-full w-full bg-white border-l border-gray-200">
-			<div className="bg-white p-4 border-b border-gray-200 shadow-sm z-10">
+		<div className="flex flex-col h-full w-full bg-white md:border-l border-gray-200">
+			<div className="bg-white p-3 sm:p-4 border-b border-gray-200 shadow-sm z-10">
 				<h2 className="font-semibold text-gray-800 flex items-center">
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -177,7 +174,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 			<MessageList
 				messages={messages}
 				isLoading={isLoading}
-				onStackPaper={onStackPaper}
+				sessionId={sessionId}
 				onEvidenceClick={onEvidenceClick}
 			/>
 			<InputArea onSendMessage={handleSendMessage} isLoading={isLoading} />
