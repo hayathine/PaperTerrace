@@ -46,15 +46,19 @@ def _send_email(record_id: str, req: ContactRequest) -> None:
         _update_mail_status(record_id, "skipped")
         return
 
+    name = req.name or "(anonymous)"
+    email = req.email or "noreply@paperterrace.page"
+    message = req.message
+
     msg = MIMEMultipart("alternative")
-    msg["Subject"] = f"[PaperTerrace] 要望・お問い合わせ from {req.name}"
+    msg["Subject"] = f"[PaperTerrace] 要望・お問い合わせ from {name}"
     msg["From"] = smtp_user
     msg["To"] = DESTINATION_EMAIL
-    msg["Reply-To"] = req.email
+    msg["Reply-To"] = email
 
     body = (
-        f"差出人: {req.name} <{req.email}>\n\n"
-        f"--- メッセージ ---\n{req.message}\n\n"
+        f"差出人: {name} <{email}>\n\n"
+        f"--- メッセージ ---\n{message}\n\n"
         f"record_id: {record_id}"
     )
     msg.attach(MIMEText(body, "plain", "utf-8"))
@@ -68,7 +72,9 @@ def _send_email(record_id: str, req: ContactRequest) -> None:
         logger.info("Contact email sent successfully", record_id=record_id)
         _update_mail_status(record_id, "sent")
     except smtplib.SMTPException as exc:
-        logger.error("Failed to send contact email", record_id=record_id, error=str(exc))
+        logger.error(
+            "Failed to send contact email", record_id=record_id, error=str(exc)
+        )
         _update_mail_status(record_id, "failed")
 
 
@@ -83,7 +89,9 @@ def _update_mail_status(record_id: str, status: str) -> None:
                 record.mail_status = status
                 db.commit()
     except Exception as exc:
-        logger.error("Failed to update mail_status", record_id=record_id, error=str(exc))
+        logger.error(
+            "Failed to update mail_status", record_id=record_id, error=str(exc)
+        )
 
 
 @router.post("", summary="要望・お問い合わせを受け付ける")
@@ -100,8 +108,8 @@ async def submit_contact(
     record_id = str(uuid.uuid4())
     record = ContactRequestORM(
         id=record_id,
-        name=req.name,
-        email=req.email,
+        name=req.name or "(anonymous)",
+        email=req.email or "noreply@paperterrace.page",
         message=req.message,
         mail_status="pending",
     )
@@ -113,7 +121,9 @@ async def submit_contact(
     except Exception as exc:
         db.rollback()
         logger.error("Failed to save contact request", error=str(exc))
-        raise HTTPException(status_code=500, detail="要望の保存に失敗しました。") from exc
+        raise HTTPException(
+            status_code=500, detail="要望の保存に失敗しました。"
+        ) from exc
 
     # DB 保存成功をトリガーにメール送信をキュー
     background_tasks.add_task(_send_email, record_id, req)
