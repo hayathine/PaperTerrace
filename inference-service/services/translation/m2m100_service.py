@@ -6,6 +6,7 @@ import asyncio
 import logging
 import math
 import os
+import re
 
 import ctranslate2
 import sentencepiece as spm
@@ -99,14 +100,41 @@ class M2M100TranslationService:
         src_token = get_m2m100_lang_code(self.src_lang)
         return [src_token] + pieces + ["</s>"]
 
+    @staticmethod
+    def _is_single_word(text: str) -> bool:
+        """テキストが単一単語かどうかを判定"""
+        return len(text.strip().split()) == 1
+
+    @staticmethod
+    def _wrap_word_in_sentence(word: str) -> str:
+        """単語を<word>タグでマークした文章に埋め込む。
+        文脈を与えることでM2M100の翻訳精度を向上させる。
+        """
+        return f"The term <word>{word}</word> is used here."
+
+    @staticmethod
+    def _extract_bracketed(text: str) -> str | None:
+        """翻訳結果から<word>...</word>内のテキストを抽出して返す"""
+        match = re.search(r"<word>(.*?)</word>", text, re.DOTALL)
+        if match:
+            return match.group(1).strip()
+        return None
+
     async def translate(self, text: str, target_lang: str = "ja") -> dict:
-        """単一テキストの翻訳実行と確信度の返却"""
+        """単一テキストの翻訳実行と確信度の返却。
+
+        単語単体では翻訳精度が低いため、単語の場合は文章に埋め込んで翻訳し、
+        []内の翻訳結果だけを抽出して返す。
+        """
         if not self.translator or not self.tokenizer:
             if os.getenv("DEV_MODE", "false").lower() == "true":
                 return {"translation": f"[Dummy] {text}", "conf": 1.0}
             raise RuntimeError("M2M100モデル未初期化")
 
-        input_tokens = self._prepare_input(text)
+        is_word = self._is_single_word(text)
+        input_text = self._wrap_word_in_sentence(text) if is_word else text
+
+        input_tokens = self._prepare_input(input_text)
         tgt_code = get_m2m100_lang_code(target_lang)
 
         loop = asyncio.get_event_loop()
@@ -134,7 +162,17 @@ class M2M100TranslationService:
                 output_tokens = output_tokens[1:]
             translation = self.tokenizer.decode_pieces(output_tokens).strip()
 
-            return {"translation": translation, "conf": conf, "model": "m2m100_ct2"}
+            # 単語翻訳の場合: <word>...</word>内のテキストだけを取り出す
+            # モデルがタグを保持しなかった場合は全体をそのまま返す
+            if is_word:
+                extracted = self._extract_bracketed(translation)
+                if extracted:
+                    translation = extracted
+                    logger.debug(
+                        f"単語翻訳抽出: {text!r} -> {translation!r} (全文: {self.tokenizer.decode_pieces(output_tokens).strip()!r})"
+                    )
+
+            return {"translation": translation, "conf": conf, "model": "M2M100"}
 
         return {"translation": "", "conf": 0.0}
 
@@ -173,7 +211,7 @@ class M2M100TranslationService:
                     output_tokens = output_tokens[1:]
                 translation = self.tokenizer.decode_pieces(output_tokens).strip()
                 outputs.append(
-                    {"translation": translation, "conf": conf, "model": "m2m100_ct2"}
+                    {"translation": translation, "conf": conf, "model": "M2M100"}
                 )
             else:
                 outputs.append({"translation": "", "conf": 0.0})

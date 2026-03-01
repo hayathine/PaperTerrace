@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import ChatWindow from "../Chat/ChatWindow";
 import Dictionary from "../Dictionary/Dictionary";
 import NoteList from "../Notes/NoteList";
+import RecommendationTab from "../Recommendation/RecommendationTab";
 import Summary from "../Summary/Summary";
 
 interface SidebarProps {
@@ -123,6 +124,25 @@ const Sidebar: React.FC<SidebarProps> = ({
 				</svg>
 			),
 		},
+		{
+			id: "explore",
+			label: t("nav.explore"),
+			icon: (
+				<svg
+					className="w-3.5 h-3.5"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth="2"
+						d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+					/>
+				</svg>
+			),
+		},
 	];
 
 	return (
@@ -134,14 +154,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 						key={tab.id}
 						type="button"
 						onClick={() => onTabChange(tab.id)}
-						className={`flex-1 min-w-[52px] py-2.5 flex flex-col items-center gap-1 transition-all border-b-2 ${
+						className={`flex-1 min-w-[46px] sm:min-w-[52px] py-2 sm:py-2.5 flex flex-col items-center gap-1 transition-all border-b-2 ${
 							activeTab === tab.id
 								? "bg-white text-orange-500 border-orange-500"
 								: "text-slate-400 border-transparent hover:text-slate-600"
 						}`}
 					>
 						{tab.icon}
-						<span className="text-[11px] font-semibold leading-none">
+						<span className="text-[10px] sm:text-[11px] font-semibold leading-none">
 							{tab.label}
 						</span>
 					</button>
@@ -185,6 +205,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						conf={conf}
 						onJump={onJump}
 						imageUrl={selectedImage}
+						onAskInChat={() => onTabChange("chat")}
 					/>
 				</div>
 
@@ -225,6 +246,12 @@ const Sidebar: React.FC<SidebarProps> = ({
 						selectedImage={selectedImage}
 					/>
 				</div>
+			</div>
+
+			<div
+				className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "explore" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
+			>
+				<RecommendationTab sessionId={sessionId} />
 			</div>
 		</div>
 	);

@@ -19,6 +19,7 @@
 		}
 	},
 	"nav": {
+		"explore": "Explore",
 		"library": "Library",
 		"settings": "Settings",
 		"login": "Login",
@@ -75,6 +76,7 @@
 			"external_link": "External Link",
 			"open_link": "Open Link",
 			"ask_ai": "Advanced Translation",
+			"ask_in_chat": "Ask in Chat",
 			"save_note": "Save Note",
 			"saved": "Saved",
 			"jump": "Jump to Location"

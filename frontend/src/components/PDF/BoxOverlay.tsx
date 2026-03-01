@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 interface BoxOverlayProps {
 	isActive: boolean;
@@ -23,48 +23,91 @@ const BoxOverlay: React.FC<BoxOverlayProps> = ({ isActive, onSelect }) => {
 		}
 	}, [isActive]);
 
-	if (!isActive) return null;
+	// Shared coordinate calculator: converts client position to container-relative [0-1] coords
+	const getRelativeCoordsFromClient = useCallback(
+		(clientX: number, clientY: number) => {
+			if (!containerRef.current) return { x: 0, y: 0 };
+			const rect = containerRef.current.getBoundingClientRect();
+			return {
+				x: Math.max(0, Math.min(1, (clientX - rect.left) / rect.width)),
+				y: Math.max(0, Math.min(1, (clientY - rect.top) / rect.height)),
+			};
+		},
+		[],
+	);
 
-	const getRelativeCoords = (e: React.MouseEvent) => {
-		if (!containerRef.current) return { x: 0, y: 0 };
-		const rect = containerRef.current.getBoundingClientRect();
-		return {
-			x: (e.clientX - rect.left) / rect.width,
-			y: (e.clientY - rect.top) / rect.height,
+	// Track mouse/touch events globally so drags outside the overlay are handled correctly
+	useEffect(() => {
+		if (!start) return;
+
+		const finishSelection = (end: { x: number; y: number }) => {
+			const x = Math.min(start.x, end.x);
+			const y = Math.min(start.y, end.y);
+			const w = Math.abs(end.x - start.x);
+			const h = Math.abs(end.y - start.y);
+
+			// Only trigger if size is significant (> 1% of dimension)
+			if (w > 0.01 && h > 0.01) {
+				onSelect({ x, y, width: w, height: h });
+			}
+
+			setStart(null);
+			setCurrent(null);
 		};
-	};
+
+		const handleWindowMouseMove = (e: MouseEvent) => {
+			setCurrent(getRelativeCoordsFromClient(e.clientX, e.clientY));
+		};
+
+		const handleWindowMouseUp = (e: MouseEvent) => {
+			finishSelection(getRelativeCoordsFromClient(e.clientX, e.clientY));
+		};
+
+		const handleWindowTouchMove = (e: TouchEvent) => {
+			// Prevent scroll while drawing a crop selection
+			e.preventDefault();
+			const touch = e.touches[0];
+			setCurrent(getRelativeCoordsFromClient(touch.clientX, touch.clientY));
+		};
+
+		const handleWindowTouchEnd = (e: TouchEvent) => {
+			const touch = e.changedTouches[0];
+			finishSelection(
+				getRelativeCoordsFromClient(touch.clientX, touch.clientY),
+			);
+		};
+
+		window.addEventListener("mousemove", handleWindowMouseMove);
+		window.addEventListener("mouseup", handleWindowMouseUp);
+		window.addEventListener("touchmove", handleWindowTouchMove, {
+			passive: false,
+		});
+		window.addEventListener("touchend", handleWindowTouchEnd);
+
+		return () => {
+			window.removeEventListener("mousemove", handleWindowMouseMove);
+			window.removeEventListener("mouseup", handleWindowMouseUp);
+			window.removeEventListener("touchmove", handleWindowTouchMove);
+			window.removeEventListener("touchend", handleWindowTouchEnd);
+		};
+	}, [start, onSelect, getRelativeCoordsFromClient]);
+
+	if (!isActive) return null;
 
 	const handleMouseDown = (e: React.MouseEvent) => {
 		e.preventDefault();
-		const coords = getRelativeCoords(e);
+		const coords = getRelativeCoordsFromClient(e.clientX, e.clientY);
 		setStart(coords);
 		setCurrent(coords);
 	};
 
-	const handleMouseMove = (e: React.MouseEvent) => {
-		if (!start) return;
+	const handleTouchStart = (e: React.TouchEvent) => {
+		// Prevent scroll/zoom when initiating a crop selection
 		e.preventDefault();
-		setCurrent(getRelativeCoords(e));
-	};
-
-	const handleMouseUp = (e: React.MouseEvent) => {
-		if (!start || !current) return;
-
-		const end = getRelativeCoords(e);
-
-		// Calculate normalized rect
-		const x = Math.min(start.x, end.x);
-		const y = Math.min(start.y, end.y);
-		const w = Math.abs(end.x - start.x);
-		const h = Math.abs(end.y - start.y);
-
-		// Only trigger if size is significant (> 1% of dimension)
-		if (w > 0.01 && h > 0.01) {
-			onSelect({ x, y, width: w, height: h });
-		}
-
-		setStart(null);
-		setCurrent(null);
+		const touch = e.touches[0];
+		const coords = getRelativeCoordsFromClient(touch.clientX, touch.clientY);
+		setStart(coords);
+		setCurrent(coords);
 	};
 
 	// Calculate style for selection box
@@ -89,14 +132,9 @@ const BoxOverlay: React.FC<BoxOverlayProps> = ({ isActive, onSelect }) => {
 			ref={containerRef}
 			className="absolute inset-0 z-50 cursor-crosshair select-none"
 			onMouseDown={handleMouseDown}
-			onMouseMove={handleMouseMove}
-			onMouseUp={handleMouseUp}
+			onTouchStart={handleTouchStart}
 			onKeyDown={() => {
 				// Keyboard support could be added here if needed
-			}}
-			onMouseLeave={() => {
-				setStart(null);
-				setCurrent(null);
 			}}
 		>
 			{start && current && (

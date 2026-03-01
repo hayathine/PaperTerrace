@@ -2,15 +2,18 @@ import type React from "react";
 import { useTranslation } from "react-i18next";
 import CopyButton from "../Common/CopyButton";
 import MarkdownContent from "../Common/MarkdownContent";
+import ChatFeedback from "./ChatFeedback";
 import type { Message } from "./types";
 
 interface MessageBubbleProps {
 	message: Message;
+	sessionId: string;
 	onEvidenceClick?: (grounding: any) => void;
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
 	message,
+	sessionId,
 	onEvidenceClick,
 }) => {
 	const { t } = useTranslation();
@@ -22,10 +25,10 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 
 	return (
 		<div
-			className={`flex w-full mb-4 ${isUser ? "justify-end" : "justify-start"}`}
+			className={`flex flex-col w-full mb-4 ${isUser ? "items-end" : "items-start"} group/row`}
 		>
 			<div
-				className={`max-w-[85%] rounded border px-3 py-2 group/msg relative ${
+				className={`max-w-[92%] sm:max-w-[85%] rounded border px-3 py-2 group/msg relative ${
 					isUser
 						? "bg-orange-600 text-white border-orange-700 shadow-md shadow-orange-100"
 						: "bg-white text-slate-800 border-slate-200 shadow-sm"
@@ -91,7 +94,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 				)}
 
 				<div
-					className={`text-[9px] font-bold uppercase tracking-widest mt-1.5 opacity-50 ${isUser ? "text-right" : "text-left"}`}
+					className={`text-[10px] font-bold uppercase tracking-widest mt-1.5 opacity-50 ${isUser ? "text-right" : "text-left"}`}
 				>
 					{new Date(message.timestamp).toLocaleTimeString([], {
 						hour: "2-digit",
@@ -99,6 +102,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 					})}
 				</div>
 			</div>
+			{!isUser && (
+				<div className="opacity-0 group-hover/row:opacity-100 transition-opacity duration-150">
+					<ChatFeedback sessionId={sessionId} messageId={message.id} />
+				</div>
+			)}
 		</div>
 	);
 };

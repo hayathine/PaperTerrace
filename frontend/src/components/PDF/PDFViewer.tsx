@@ -1,8 +1,16 @@
 import type React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+	useTransition,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import { useAuth } from "../../contexts/AuthContext";
+import { db } from "../../db";
 import { usePaperCache } from "../../db/hooks";
 import { useSyncStatus } from "../../db/sync";
 import StampPalette from "../Stamps/StampPalette";
@@ -85,6 +93,14 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	const [mode, setMode] = useState<"text" | "stamp" | "area" | "plaintext">(
 		"plaintext",
 	);
+	// PDF ページグリッド（クリック/スタンプ/エリアモード用）の遅延マウント。
+	// 初回アクセス前はマウントせず初期ロードを軽量化する。一度マウントしたら
+	// CSS display トグルに切り替えて再マウントコストなしに高速切り替えを実現。
+	const [hasMountedPdfMode, setHasMountedPdfMode] = useState(false);
+	// モード切り替えを非緊急トランジションとして扱い UI ブロックを防ぐ。
+	// ツールバーボタンのアクティブ状態は即時反映し、重い再レンダリングは
+	// バックグラウンドで処理する。
+	const [isModeTransitionPending, startModeTransition] = useTransition();
 	const [stamps, setStamps] = useState<Stamp[]>([]);
 	const [selectedStamp, setSelectedStamp] = useState<StampType>("👍");
 
@@ -169,6 +185,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	useEffect(() => {
 		pagesRef.current = pages;
 	}, [pages]);
+
+	// PDF グリッドの遅延マウント: plaintext 以外のモードに初めて切り替えた時のみ実行
+	useEffect(() => {
+		if (mode !== "plaintext" && !hasMountedPdfMode) {
+			setHasMountedPdfMode(true);
+		}
+	}, [mode, hasMountedPdfMode]);
 
 	// 検索マッチング処理
 	useEffect(() => {
@@ -718,11 +741,23 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			if (!page || !onAreaSelect) return;
 
 			try {
+				// IndexedDB キャッシュがあればそれを使い、CORS 問題を回避する
+				const cachedImage = await db.images.get(page.image_url);
+				let blobUrl: string | null = null;
+				let imageUrl = page.image_url;
+				if (cachedImage?.blob) {
+					blobUrl = URL.createObjectURL(cachedImage.blob);
+					imageUrl = blobUrl;
+				}
+
 				// Load image for cropping
 				const img = new Image();
-				img.crossOrigin = "anonymous";
-				img.src = page.image_url;
-				await new Promise((resolve) => (img.onload = resolve));
+				if (!blobUrl) img.crossOrigin = "anonymous";
+				img.src = imageUrl;
+				await new Promise((resolve, reject) => {
+					img.onload = resolve;
+					img.onerror = reject;
+				});
 
 				const canvas = document.createElement("canvas");
 				// Coords are in relative [0-1] format
@@ -735,9 +770,14 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				canvas.height = cropH;
 
 				const ctx = canvas.getContext("2d");
-				if (!ctx) return;
+				if (!ctx) {
+					if (blobUrl) URL.revokeObjectURL(blobUrl);
+					return;
+				}
 
 				ctx.drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+				// drawImage 完了後に BlobURL を解放
+				if (blobUrl) URL.revokeObjectURL(blobUrl);
 
 				// Upload the cropped image
 				canvas.toBlob(async (blob) => {
@@ -824,9 +864,30 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				}
 			} catch (e) {
 				console.error("Error saving stamp", e);
+				// Rollback on network error as well
+				setStamps((prev) => prev.filter((s) => s.id !== newStamp.id));
 			}
 		},
 		[loadedPaperId, selectedStamp, token],
+	);
+
+	const handleDeleteStamp = useCallback(
+		async (stampId: string) => {
+			// Optimistic update
+			setStamps((prev) => prev.filter((s) => s.id !== stampId));
+			try {
+				const headers: HeadersInit = {};
+				if (token) headers.Authorization = `Bearer ${token}`;
+				await fetch(`${API_URL}/api/stamps/paper/${stampId}`, {
+					method: "DELETE",
+					headers,
+				});
+			} catch (e) {
+				console.error("Failed to delete stamp", e);
+				// fetchStamps will reconcile state on next load
+			}
+		},
+		[token],
 	);
 
 	const pagesWithLines: PageWithLines[] = useMemo(
@@ -1087,7 +1148,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				<>
 					{/* Toolbar */}
 					<div className="sticky top-4 z-[60] flex justify-center mb-6">
-						<div className="bg-white p-1 rounded-lg shadow-sm border border-slate-200 flex items-center gap-1">
+						<div className="bg-white p-1 rounded-lg shadow-sm border border-slate-200 flex items-center gap-0.5 sm:gap-1">
 							<div
 								className="px-2 flex items-center gap-2 border-r border-slate-100 mr-1"
 								title={`Sync: ${syncStatus}`}
@@ -1104,12 +1165,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							</div>
 							<button
 								type="button"
-								onClick={() => setMode("plaintext")}
-								className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+								onClick={() => startModeTransition(() => setMode("plaintext"))}
+								className={`px-2 sm:px-3 py-1.5 rounded-md flex items-center gap-1 sm:gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
 									mode === "plaintext"
 										? "bg-orange-600 text-white shadow-none"
 										: "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-								}`}
+								} ${isModeTransitionPending ? "opacity-60" : ""}`}
 							>
 								<span className="text-sm">📝</span>
 								<span className="hidden sm:inline">
@@ -1119,12 +1180,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 							<button
 								type="button"
-								onClick={() => setMode("text")}
-								className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+								onClick={() => startModeTransition(() => setMode("text"))}
+								className={`px-2 sm:px-3 py-1.5 rounded-md flex items-center gap-1 sm:gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
 									mode === "text"
 										? "bg-orange-600 text-white shadow-none"
 										: "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-								}`}
+								} ${isModeTransitionPending ? "opacity-60" : ""}`}
 							>
 								<span className="text-sm">📄</span>
 								<span className="hidden sm:inline">
@@ -1135,12 +1196,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							<div className="w-[1px] h-4 bg-slate-200 mx-1 hidden sm:block" />
 							<button
 								type="button"
-								onClick={() => setMode("area")}
-								className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+								onClick={() => startModeTransition(() => setMode("area"))}
+								className={`px-2 sm:px-3 py-1.5 rounded-md flex items-center gap-1 sm:gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
 									mode === "area"
 										? "bg-orange-600 text-white shadow-none"
 										: "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-								}`}
+								} ${isModeTransitionPending ? "opacity-60" : ""}`}
 							>
 								<span className="text-sm">✂️</span>
 								<span className="hidden sm:inline">
@@ -1150,12 +1211,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 							<button
 								type="button"
-								onClick={() => setMode("stamp")}
-								className={`px-3 py-1.5 rounded-md flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
+								onClick={() => startModeTransition(() => setMode("stamp"))}
+								className={`px-2 sm:px-3 py-1.5 rounded-md flex items-center gap-1 sm:gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
 									mode === "stamp"
 										? "bg-orange-600 text-white shadow-none"
 										: "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-								}`}
+								} ${isModeTransitionPending ? "opacity-60" : ""}`}
 							>
 								<span className="text-sm">👍</span>
 								<span className="hidden sm:inline">
@@ -1166,6 +1227,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					</div>
 
 					{/* Content Area */}
+					{/* TextMode: 初期状態からマウント。CSS display で高速切り替え */}
 					<div className={mode === "plaintext" ? "block" : "hidden"}>
 						<TextModeViewer
 							pages={pagesWithLines}
@@ -1176,31 +1238,36 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						/>
 					</div>
 
-					<div className={mode !== "plaintext" ? "block" : "hidden"}>
-						<div
-							className={`space-y-6 ${mode === "stamp" || mode === "area" ? "cursor-crosshair" : ""}`}
-						>
-							{pages.map((page) => (
-								<PDFPage
-									key={page.page_num}
-									page={page}
-									onWordClick={handleWordClick}
-									onTextSelect={handleTextSelect}
-									stamps={stamps}
-									isStampMode={mode === "stamp"}
-									onAddStamp={handleAddStamp}
-									isAreaMode={mode === "area"}
-									onAreaSelect={handleAreaSelect}
-									onAskAI={onAskAI}
-									jumpTarget={jumpTarget}
-									searchTerm={searchTerm}
-									currentSearchMatch={currentSearchMatch}
-									isClickMode={mode === "text"}
-									evidenceHighlights={evidenceHighlights[page.page_num]}
-								/>
-							))}
+					{/* PDF グリッド: 初回アクセス時に初めてマウント（遅延マウント）。
+					     以降は CSS display トグルで再マウントコストなしに切り替え */}
+					{hasMountedPdfMode && (
+						<div className={mode !== "plaintext" ? "block" : "hidden"}>
+							<div
+								className={`space-y-6 ${mode === "stamp" || mode === "area" ? "cursor-crosshair" : ""}`}
+							>
+								{pages.map((page) => (
+									<PDFPage
+										key={page.page_num}
+										page={page}
+										onWordClick={handleWordClick}
+										onTextSelect={handleTextSelect}
+										stamps={stamps}
+										isStampMode={mode === "stamp"}
+										onAddStamp={handleAddStamp}
+										onDeleteStamp={handleDeleteStamp}
+										isAreaMode={mode === "area"}
+										onAreaSelect={handleAreaSelect}
+										onAskAI={onAskAI}
+										jumpTarget={jumpTarget}
+										searchTerm={searchTerm}
+										currentSearchMatch={currentSearchMatch}
+										isClickMode={mode === "text"}
+										evidenceHighlights={evidenceHighlights[page.page_num]}
+									/>
+								))}
+							</div>
 						</div>
-					</div>
+					)}
 
 					{/* Stamp Palette (Only show if we have pages/loadedPaperId) */}
 					{loadedPaperId && mode === "stamp" && (
@@ -1209,6 +1276,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							onToggleMode={() => setMode("text")}
 							selectedStamp={selectedStamp}
 							onSelectStamp={setSelectedStamp}
+							token={token}
 						/>
 					)}
 				</>

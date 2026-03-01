@@ -11,6 +11,7 @@ import GlobalLoading from "./components/UI/GlobalLoading";
 import UploadScreen from "./components/Upload/UploadScreen";
 import { useAuth } from "./contexts/AuthContext";
 import { useLoading } from "./contexts/LoadingContext";
+import { syncTrajectory } from "./lib/recommendation";
 
 function App() {
 	const { user, logout } = useAuth();
@@ -238,6 +239,22 @@ function App() {
 		coords?: { page: number; x: number; y: number },
 		conf?: number,
 	) => {
+		// Fire telemetry for translation
+		if (currentPaperId) {
+			syncTrajectory({
+				session_id: sessionId,
+				paper_id: currentPaperId,
+				word_clicks: [
+					{
+						word,
+						context: context || "",
+						section: "Unknown", // Can be inferred if PDF structure allows, or left as Unknown
+						timestamp: Date.now() / 1000,
+					},
+				],
+			});
+		}
+
 		setSelectedWord(word);
 		setSelectedContext(context);
 		setSelectedCoordinates(coords);
@@ -626,7 +643,7 @@ function App() {
 
 				{/* Main Content Area */}
 				<div className="flex-1 flex flex-col h-full relative transition-all duration-300">
-					<header className="h-12 bg-white border-b border-slate-200 flex items-center px-4">
+					<header className="h-14 sm:h-12 bg-white border-b border-slate-200 flex items-center px-4">
 						{!isLeftSidebarOpen && (
 							<button
 								type="button"
@@ -684,7 +701,7 @@ function App() {
 						{/* PDF Viewer Area */}
 						<div className="flex-1 bg-slate-100 flex items-start justify-center relative overflow-hidden">
 							{uploadFile || currentPaperId ? (
-								<div className="w-full h-full p-4 md:p-8 overflow-y-auto custom-scrollbar">
+								<div className="w-full h-full p-2 sm:p-4 md:p-8 overflow-y-auto custom-scrollbar">
 									<PDFViewer
 										sessionId={sessionId}
 										uploadFile={uploadFile}
@@ -742,7 +759,7 @@ function App() {
 
 						{/* Right Sidebar */}
 						<div
-							style={{ width: isMobile ? "85vw" : sidebarWidth }}
+							style={{ width: isMobile ? "90vw" : sidebarWidth }}
 							className={`absolute md:relative right-0 h-full shadow-xl z-50 md:z-20 bg-white overflow-hidden shrink-0 transition-transform duration-300 ${
 								isRightSidebarOpen
 									? "translate-x-0"

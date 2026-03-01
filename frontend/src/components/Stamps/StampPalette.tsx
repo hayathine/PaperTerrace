@@ -8,6 +8,7 @@ interface StampPaletteProps {
 	onToggleMode: () => void;
 	selectedStamp: StampType;
 	onSelectStamp: (stamp: StampType) => void;
+	token?: string;
 }
 
 const StampPalette: React.FC<StampPaletteProps> = ({
@@ -15,6 +16,7 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 	onToggleMode,
 	selectedStamp,
 	onSelectStamp,
+	token,
 }) => {
 	const [activeCategory, setActiveCategory] = useState(STAMP_CATEGORIES[0].id);
 	const [customStamps, setCustomStamps] = useState<StampType[]>([]);
@@ -47,6 +49,7 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 		try {
 			const response = await fetch(`${API_URL}/api/stamps/upload_custom`, {
 				method: "POST",
+				headers: token ? { Authorization: `Bearer ${token}` } : {},
 				body: formData,
 			});
 

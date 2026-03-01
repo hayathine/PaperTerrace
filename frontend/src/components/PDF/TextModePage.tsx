@@ -1,6 +1,7 @@
 import React, { useMemo } from "react";
 import { useTranslation } from "react-i18next";
 import type { Components } from "react-markdown";
+import { API_URL } from "../../config";
 import MarkdownContent from "../Common/MarkdownContent";
 import type { Figure, PageWithLines } from "./types";
 
@@ -169,7 +170,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 
 	// --- テキスト選択メニュー ---
 	React.useEffect(() => {
-		const handleDocumentMouseUp = () => {
+		const handleSelectionEnd = () => {
 			setTimeout(() => {
 				const selection = window.getSelection();
 				const selectionText = selection?.toString().trim();
@@ -199,9 +200,11 @@ const TextModePage: React.FC<TextModePageProps> = ({
 					const pageWidth = rect.width || 1;
 					const pageHeight = rect.height || 1;
 
-					const menuX =
+					// Clamp menu X to avoid overflow near screen edges (10%–90% of page width)
+					const rawMenuX =
 						(((rangeRect.left + rangeRect.right) / 2 - rect.left) / pageWidth) *
 						100;
+					const menuX = Math.max(10, Math.min(90, rawMenuX));
 					const menuY = ((rangeRect.bottom - rect.top) / pageHeight) * 100;
 
 					const centerX =
@@ -221,8 +224,13 @@ const TextModePage: React.FC<TextModePageProps> = ({
 			}, 10);
 		};
 
-		document.addEventListener("mouseup", handleDocumentMouseUp);
-		return () => document.removeEventListener("mouseup", handleDocumentMouseUp);
+		// Support both mouse and touch text selection
+		document.addEventListener("mouseup", handleSelectionEnd);
+		document.addEventListener("touchend", handleSelectionEnd);
+		return () => {
+			document.removeEventListener("mouseup", handleSelectionEnd);
+			document.removeEventListener("touchend", handleSelectionEnd);
+		};
 	}, [page.page_num]);
 
 	React.useEffect(() => {
@@ -249,6 +257,30 @@ const TextModePage: React.FC<TextModePageProps> = ({
 		return "";
 	}, [page.content, page.lines]);
 
+	// --- Markdown 前処理: 表ブロック → 表画像マーカー置換 ---
+	// バックエンドが生成する "| col | col |" 形式の Markdown 表を、
+	// page.figures の label='table' 実画像に差し替えることで視覚的な表を表示する。
+	const processedMarkdown = useMemo(() => {
+		if (!markdownText) return markdownText;
+
+		const tableFigures = (page.figures ?? [])
+			.filter((f) => (f.label ?? "").toLowerCase() === "table")
+			.sort((a, b) => a.bbox[1] - b.bbox[1]);
+
+		if (tableFigures.length === 0) return markdownText;
+
+		let tableIdx = 0;
+		return markdownText.replace(/((?:\|[^\n]*\n?)+)/g, (match) => {
+			if (tableIdx < tableFigures.length) {
+				const fig = tableFigures[tableIdx++];
+				const [x1, y1, x2, y2] = fig.bbox;
+				return `\n![Table]([${x1}, ${y1}, ${x2}, ${y2}])\n`;
+			}
+			// 対応する figure がない場合は元のテキストを維持
+			return match;
+		});
+	}, [markdownText, page.figures]);
+
 	// --- react-markdown の components カスタマイズ ---
 	const mdComponents: Components = useMemo(() => {
 		const comps: Components = {};
@@ -260,9 +292,13 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				if (bbox) {
 					const figure = findFigureByBbox(page.figures, bbox);
 					if (figure) {
+						// /static/... の相対パスの場合は API_URL プレフィックスを付与
+						const imgSrc = figure.image_url.startsWith("http")
+							? figure.image_url
+							: `${API_URL}${figure.image_url}`;
 						return (
 							<img
-								src={figure.image_url}
+								src={imgSrc}
 								alt={alt || figure.label || "Figure"}
 								className="max-w-full h-auto mx-auto my-4 rounded shadow-sm border border-slate-200"
 								loading="lazy"
@@ -289,6 +325,19 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				/>
 			);
 		};
+
+		// Markdown リンク: 新規タブで開く（同タブ遷移防止）
+		comps.a = ({ href, children }) => (
+			<a
+				href={href}
+				target="_blank"
+				rel="noopener noreferrer"
+				className="text-blue-600 hover:text-blue-800 underline"
+				onClick={(e) => e.stopPropagation()}
+			>
+				{children}
+			</a>
+		);
 
 		// 検索ハイライト: テキスト要素をラップ
 		if (searchTerm && searchTerm.length >= 2) {
@@ -393,13 +442,13 @@ const TextModePage: React.FC<TextModePageProps> = ({
 			</div>
 
 			{/* Markdown Content */}
-			<div className="px-6 py-5 md:px-10 md:py-8 selection:bg-orange-600/30">
-				{markdownText ? (
+			<div className="px-3 py-4 sm:px-6 sm:py-5 md:px-10 md:py-8 selection:bg-orange-600/30">
+				{processedMarkdown ? (
 					<MarkdownContent
 						className="prose prose-slate max-w-none prose-p:my-3 prose-p:leading-7 prose-li:my-1 prose-li:leading-7 prose-img:mx-auto [&_.katex]:text-base [&_.katex]:font-normal [&_.katex-display]:my-4 [&_.math-display]:block"
 						components={mdComponents}
 					>
-						{markdownText}
+						{processedMarkdown}
 					</MarkdownContent>
 				) : (
 					<p className="text-slate-400 italic text-sm">
@@ -433,7 +482,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 								);
 							setSelectionMenu(null);
 						}}
-						className="px-4 py-2 hover:bg-orange-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-100"
+						className="px-4 py-2.5 sm:py-2 hover:bg-orange-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-100 min-h-[44px] sm:min-h-0"
 					>
 						<span>文A</span> {t("menu.translate", "Translate")}
 					</button>
@@ -446,7 +495,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 								onTextSelect(selectionMenu.text, selectionMenu.coords);
 							setSelectionMenu(null);
 						}}
-						className={`px-4 py-2 hover:bg-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors ${onAskAI ? "border-r border-slate-700" : ""}`}
+						className={`px-4 py-2.5 sm:py-2 hover:bg-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors min-h-[44px] sm:min-h-0 ${onAskAI ? "border-r border-slate-700" : ""}`}
 					>
 						<span>📝</span> {t("menu.note", "Note")}
 					</button>
@@ -460,7 +509,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 								onAskAI(prompt);
 								setSelectionMenu(null);
 							}}
-							className="px-4 py-2 hover:bg-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors rounded-r-lg"
+							className="px-4 py-2.5 sm:py-2 hover:bg-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors rounded-r-lg min-h-[44px] sm:min-h-0"
 						>
 							<span>💡</span> {t("menu.explain", "Explain")}
 						</button>

@@ -36,6 +36,7 @@ interface PDFPageProps {
 	stamps?: Stamp[];
 	isStampMode?: boolean;
 	onAddStamp?: (page: number, x: number, y: number) => void;
+	onDeleteStamp?: (stampId: string) => void;
 	// Area selection props
 	isAreaMode?: boolean;
 	onAreaSelect?: (coords: {
@@ -67,6 +68,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 	stamps = [],
 	isStampMode = false,
 	onAddStamp,
+	onDeleteStamp,
 	isAreaMode = false,
 	onAreaSelect,
 	onAskAI,
@@ -404,6 +406,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 					stamps={pageStamps}
 					isStampMode={isStampMode}
 					onAddStamp={handleAddStamp}
+					onDeleteStamp={onDeleteStamp}
 				/>
 
 				{/* Box Selection Overlay */}

@@ -175,15 +175,17 @@ class LlamaCppTranslationService:
             loop = asyncio.get_event_loop()
 
             # DSPy predict can be blocking, so we run it in executor.
+            # Use dspy.context() instead of dspy.settings.configure() because
+            # the latter modifies global state and DSPy forbids it from non-main threads.
             def _run_dspy():
-                dspy.settings.configure(lm=InMemoryLlama(self.llm))
-                predictor = dspy.Predict(ContextAwareTranslation)
-                prediction = predictor(
-                    paper_context=paper_context,
-                    target_text=original_word,
-                    lang_name=lang_name,
-                )
-                return prediction.translation_and_explanation
+                with dspy.context(lm=InMemoryLlama(self.llm)):
+                    predictor = dspy.Predict(ContextAwareTranslation)
+                    prediction = predictor(
+                        paper_context=paper_context,
+                        target_text=original_word,
+                        lang_name=lang_name,
+                    )
+                    return prediction.translation_and_explanation
 
             result = await loop.run_in_executor(None, _run_dspy)
             logger.info("LLM 翻訳が完了しました。")

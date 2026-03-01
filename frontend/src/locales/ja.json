@@ -19,6 +19,7 @@
 		}
 	},
 	"nav": {
+		"explore": "見つける",
 		"library": "ライブラリ",
 		"settings": "設定",
 		"login": "ログイン",
@@ -75,6 +76,7 @@
 			"external_link": "外部リンク",
 			"open_link": "リンクを開く",
 			"ask_ai": "Advanced Translation",
+			"ask_in_chat": "チャットで質問",
 			"save_note": "ノートに保存",
 			"saved": "保存済み",
 			"jump": "場所へ移動"
@@ -145,5 +147,22 @@
 		"close": "閉じる (Esc)",
 		"hint_next": "次へ",
 		"hint_prev": "前へ"
+	},
+	"recommendation": {
+		"explore_title": "次の論文を探す",
+		"explore_description": "あなたの読書履歴と読書行動に基づいて、深く掘り下げるためのパーソナライズされた推薦論文を生成します。",
+		"analyzing": "ユーザープロファイルを分析し、インサイトを生成中...",
+		"reasoning_title": "推薦の根拠",
+		"top_recommendations": "おすすめの論文",
+		"status_clicked": "チェック済み",
+		"action_explore": "内容を見る",
+		"feedback": {
+			"title": "改善にご協力ください",
+			"description": "これらの推薦を評価して、今後の提案の質を向上させましょう。",
+			"poor": "期待外れ",
+			"excellent": "素晴らしい",
+			"submit": "フィードバックを送信",
+			"thank_you": "フィードバックありがとうございます！"
+		}
 	}
 }

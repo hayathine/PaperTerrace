@@ -290,7 +290,18 @@ async function forwardRequest(
 	headers.set("CF-Access-Client-Id", env.CLIENT_ID);
 	headers.set("CF-Access-Client-Secret", env.CLIENT_SECRET);
 
-	// Remove Authorization header (already verified)
+	// Forward additional user info so backend can build AuthenticatedUser without re-verifying the token
+	if (decodedToken.email) headers.set("X-User-Email", decodedToken.email as string);
+	if (decodedToken.name) headers.set("X-User-Name", decodedToken.name as string);
+	if (decodedToken.picture) headers.set("X-User-Picture", decodedToken.picture as string);
+	if (decodedToken.firebase?.sign_in_provider) {
+		headers.set("X-User-Provider", decodedToken.firebase.sign_in_provider as string);
+	}
+	if (decodedToken.email_verified !== undefined) {
+		headers.set("X-User-Email-Verified", String(decodedToken.email_verified));
+	}
+
+	// Remove Authorization header (already verified at the edge)
 	headers.delete("Authorization");
 
 	// Forward request

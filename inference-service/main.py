@@ -226,7 +226,7 @@ async def analyze_images_batch(request: Request, files: list[UploadFile] = File(
 
         logger.info(
             f"Using {max_parallel} parallel workers "
-            f"(CPU count: {cpu_count}, env: {os.getenv('BATCH_PARALLEL_WORKERS', 'not set')})"
+            f"(CPU count: {cpu_count}, USE count: {os.getenv('BATCH_PARALLEL_WORKERS', 'not set')})"
         )
 
         # 全画像を並列処理（さらに一括推論を使用）
@@ -353,15 +353,17 @@ async def translate_text(request: Request, req: TranslationRequest):
                 paper_context=req.paper_context,
                 lang_name="Japanese" if req.target_lang == "ja" else "English",
             )
+            model = "Qwen"
         else:
             # それ以外は通常の M2M100 翻訳を実行 (内部で確信度により LLM へフォールバック)
-            translation = await translation_service.translate(
+            translation, model = await translation_service.translate(
                 req.text, req.target_lang, paper_context=req.paper_context or ""
             )
 
         return TranslationResponse(
             success=True,
             translation=translation,
+            model=model,
             processing_time=time.time() - start_time,
         )
 

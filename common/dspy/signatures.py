@@ -129,6 +129,42 @@ class VisionAnalyzeFigure(dspy.Signature):
 
 
 # =============================================================
+# 推薦機能 (Recommendation) の DSPy Signatures
+# =============================================================
+
+
+class PaperRecommendation(dspy.Signature):
+    """
+    ユーザーの知識レベルや興味、苦手な概念に基づいて、次に読むべき論文を推薦する。
+    推薦論文は3件以上とし、Semantic Scholarでの検索用クエリを2件以上生成すること。
+    初級ユーザーにはsurvey論文を含めることが望ましい。
+    """
+
+    paper_analysis: str = dspy.InputField(desc="現在の論文の解析結果")
+    knowledge_level: str = dspy.InputField(desc="ユーザーの知識レベル")
+    interests: str = dspy.InputField(desc="ユーザーの興味トピック")
+    unknown_concepts: str = dspy.InputField(desc="ユーザーの苦手概念")
+    preferred_direction: str = dspy.InputField(desc="推薦の方向性")
+    recommendations: list[str] = dspy.OutputField(
+        desc="推薦論文リスト（タイトル・理由含む）"
+    )
+    search_queries: list[str] = dspy.OutputField(desc="Semantic Scholar検索クエリ")
+    reasoning: str = dspy.OutputField(desc="推薦理由の説明")
+
+
+class UserProfileEstimation(dspy.Signature):
+    """ユーザーの行動データから理解度・興味・苦手な概念を推定する。"""
+
+    paper_summary: str = dspy.InputField(desc="論文要約")
+    conversation_history: str = dspy.InputField(desc="対話履歴")
+    word_clicks: str = dspy.InputField(desc="クリックされた単語一覧")
+    knowledge_level: str = dspy.OutputField(desc="初級 / 中級 / 上級")
+    interests: list[str] = dspy.OutputField(desc="興味トピック")
+    unknown_concepts: list[str] = dspy.OutputField(desc="理解できていない概念")
+    preferred_direction: str = dspy.OutputField(desc="深堀り / 横展開 / 応用 / 基礎")
+
+
+# =============================================================
 # Translation (翻訳系) の DSPy Signatures
 # =============================================================
 
