@@ -656,9 +656,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						if (!isGuest) {
 							(async () => {
 								const imageUrls = finalPages.map((p) => p.image_url);
-								const ocrText = finalPages
-									.map((p) => p.content)
-									.join("\n\n---\n\n");
+								// Store as JSON array to avoid collision with Markdown horizontal rules (\n\n---\n\n)
+								const ocrText = JSON.stringify(
+									finalPages.map((p) => p.content || ""),
+								);
 								const layoutData = finalPages.map((p) => ({
 									width: p.width,
 									height: p.height,
@@ -969,7 +970,16 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					console.log("[PDFViewer] Fast Load from cache:", id);
 					try {
 						const layoutList = JSON.parse(cached.layout_json);
-						const ocrParts = (cached.ocr_text || "").split("\n\n---\n\n");
+						// Support both new JSON array format and legacy \n\n---\n\n separator
+						let ocrParts: string[];
+						try {
+							const parsed = JSON.parse(cached.ocr_text || "[]");
+							ocrParts = Array.isArray(parsed)
+								? parsed
+								: (cached.ocr_text || "").split("\n\n---\n\n");
+						} catch {
+							ocrParts = (cached.ocr_text || "").split("\n\n---\n\n");
+						}
 						const fileHash = cached.file_hash;
 
 						const cachedPages: PageData[] = layoutList.map(
@@ -988,9 +998,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						if (cachedPages.length > 0) {
 							setPages(cachedPages);
 							setStatus("done");
-							setMode("text");
-							// Cached papers have coordinates ready
-							// If we have content, we could stop here.
+							setMode("plaintext");
+							// Cached papers: default to text mode (Markdown rendering)
 
 							// Trigger lazy layout analysis to fetch figures if not already present
 							const hasFigures = cachedPages.some(

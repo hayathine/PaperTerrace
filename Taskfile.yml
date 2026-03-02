@@ -16,8 +16,8 @@ vars:
   # 環境変数 ENV が未設定の場合はブランチ名をデフォルトとする
   ENV: '{{.ENV | default .GIT_BRANCH | default "main"}}'
 
-  NAMESPACE: '{{if eq .ENV "main"}}paperterrace{{else}}paperterrace-{{.ENV}}{{end}}'
-  RELEASE_NAME: '{{if eq .ENV "main"}}paperterrace{{else}}paperterrace-{{.ENV}}{{end}}'
+  NAMESPACE: paperterrace
+  RELEASE_NAME: paperterrace
 
   # Resource Configurations from JSON
   BE_CPU:
