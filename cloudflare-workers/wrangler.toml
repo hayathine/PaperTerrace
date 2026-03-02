@@ -9,10 +9,9 @@ workers_dev = true
 [vars]
 BACKEND_TUNNEL_URL = "https://tunnel.paperterrace.page" # トンネルの裏口
 ALLOWED_ORIGINS = "https://paperterrace.pages.dev,https://www.paperterrace.page,https://paperterrace.page,http://localhost:5173"
-
+FIREBASE_PROJECT_ID = "paperterrace-a12ad"
 
 # Secrets (set via: wrangler secret put SECRET_NAME)
-# - FIREBASE_PROJECT_ID
 # - FIREBASE_CLIENT_EMAIL
 # - FIREBASE_PRIVATE_KEY
 
@@ -30,14 +29,17 @@ invocation_logs = true
 enabled = false
 persist = true
 head_sampling_rate = 1
+
 [env.dev]
 name = "paperterracedevworker"
 [env.dev.vars]
 BACKEND_TUNNEL_URL = "https://dev-tunnel.paperterrace.page"
 ALLOWED_ORIGINS = "https://paperterrace-dev.pages.dev,https://dev.paperterrace.pages.dev,http://localhost:5173"
+FIREBASE_PROJECT_ID = "paperterrace-a12ad"
 
 [env.main]
 name = "paperterrace"
 [env.main.vars]
 BACKEND_TUNNEL_URL = "https://tunnel.paperterrace.page"
 ALLOWED_ORIGINS = "https://paperterrace.pages.dev,https://www.paperterrace.page,https://paperterrace.page,http://localhost:5173"
+FIREBASE_PROJECT_ID = "paperterrace-a12ad"

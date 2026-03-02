@@ -5,7 +5,7 @@ Provides dependency injection for authenticated routes.
 
 from typing import Annotated
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException, Request, status
 
 from app.auth.firebase import FirebaseAuth, FirebaseAuthError, get_firebase_auth
 from common.logger import logger
@@ -30,19 +30,34 @@ class AuthenticatedUser:
 
 
 async def get_current_user(
+    request: Request,
     authorization: Annotated[str | None, Header()] = None,
     firebase_auth: FirebaseAuth = Depends(get_firebase_auth),
 ) -> AuthenticatedUser:
     """
     Dependency to get the current authenticated user.
 
-    Extracts and verifies the Firebase ID token from the Authorization header.
-
-    Usage:
-        @app.get("/protected")
-        async def protected_route(user: AuthenticatedUser = Depends(get_current_user)):
-            return {"uid": user.uid, "email": user.email}
+    Supports both trusted proxy (API Gateway) and direct token verification.
     """
+    # 1. Check if authenticated at the Edge (Cloudflare Gateway)
+    # Note: request.state.user_id is set by TrustedProxyMiddleware in main.py
+    user_id = getattr(request.state, "user_id", None)
+
+    # If it's a guest, treat as unauthenticated for this dependency
+    if user_id and not user_id.startswith("guest_"):
+        decoded_token = {
+            "uid": user_id,
+            "email": request.headers.get("X-User-Email", ""),
+            "name": request.headers.get("X-User-Name", ""),
+            "picture": request.headers.get("X-User-Picture", ""),
+            "email_verified": request.headers.get("X-User-Email-Verified") == "true",
+            "firebase": {
+                "sign_in_provider": request.headers.get("X-User-Provider", "")
+            },
+        }
+        return AuthenticatedUser(decoded_token)
+
+    # 2. Traditional Authorization Header (Local Dev / Direct Hit)
     if not authorization:
         logger.debug("No authorization header provided")
         raise HTTPException(
@@ -67,7 +82,7 @@ async def get_current_user(
         decoded_token = firebase_auth.verify_token(token)
         user = AuthenticatedUser(decoded_token)
         logger.info(
-            "User authenticated",
+            "User authenticated via token",
             extra={"uid": user.uid, "email": user.email, "provider": user.provider},
         )
         return user
@@ -81,25 +96,29 @@ async def get_current_user(
 
 
 async def get_optional_user(
+    request: Request,
     authorization: Annotated[str | None, Header()] = None,
     firebase_auth: FirebaseAuth = Depends(get_firebase_auth),
 ) -> AuthenticatedUser | None:
     """
     Dependency to optionally get the current user.
-
-    Returns None if no valid token is provided, instead of raising an error.
-    Useful for routes that work differently for authenticated vs anonymous users.
-
-    Usage:
-        @app.get("/papers/{id}")
-        async def get_paper(
-            id: str,
-            user: AuthenticatedUser | None = Depends(get_optional_user)
-        ):
-            # If user is logged in, they can see their private papers
-            # Otherwise, only public papers are visible
-            ...
     """
+    # 1. Trusted Proxy Check
+    user_id = getattr(request.state, "user_id", None)
+    if user_id and not user_id.startswith("guest_"):
+        decoded_token = {
+            "uid": user_id,
+            "email": request.headers.get("X-User-Email", ""),
+            "name": request.headers.get("X-User-Name", ""),
+            "picture": request.headers.get("X-User-Picture", ""),
+            "email_verified": request.headers.get("X-User-Email-Verified") == "true",
+            "firebase": {
+                "sign_in_provider": request.headers.get("X-User-Provider", "")
+            },
+        }
+        return AuthenticatedUser(decoded_token)
+
+    # 2. Direct Authentication
     if not authorization:
         return None
 

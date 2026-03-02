@@ -9,171 +9,171 @@
  */
 
 interface Env {
-	// Environment variables
-	BACKEND_TUNNEL_URL: string;
-	ALLOWED_ORIGINS: string;
-	CLIENT_ID: string;
-	CLIENT_SECRET: string;
+  // Environment variables
+  BACKEND_TUNNEL_URL: string;
+  ALLOWED_ORIGINS: string;
+  CLIENT_ID: string;
+  CLIENT_SECRET: string;
 
-	// Secrets
-	FIREBASE_PROJECT_ID: string;
-	FIREBASE_CLIENT_EMAIL: string;
-	FIREBASE_PRIVATE_KEY: string;
+  // Secrets
+  FIREBASE_PROJECT_ID: string;
+  FIREBASE_CLIENT_EMAIL: string;
+  FIREBASE_PRIVATE_KEY: string;
 }
 
 interface DecodedToken {
-	uid: string;
-	email?: string;
-	[key: string]: any;
+  uid: string;
+  email?: string;
+  [key: string]: any;
 }
 
 /**
  * Main request handler
  */
 export default {
-	async fetch(
-		request: Request,
-		env: Env,
-		ctx: ExecutionContext,
-	): Promise<Response> {
-		// Handle CORS preflight requests
-		if (request.method === "OPTIONS") {
-			return handleCORS(request, env);
-		}
+  async fetch(
+    request: Request,
+    env: Env,
+    ctx: ExecutionContext,
+  ): Promise<Response> {
+    // Handle CORS preflight requests
+    if (request.method === "OPTIONS") {
+      return handleCORS(request, env);
+    }
 
-		try {
-			// Process the main request and get the base response
-			const response = await handleRequest(request, env, ctx);
+    try {
+      // Process the main request and get the base response
+      const response = await handleRequest(request, env, ctx);
 
-			// Add CORS headers to ALL responses
-			return addCORSHeaders(response, request, env);
-		} catch (error) {
-			console.error("API Gateway error:", error);
-			const errorResponse = new Response(
-				JSON.stringify({
-					error: "Internal Server Error",
-					message: error instanceof Error ? error.message : "Unknown error",
-				}),
-				{
-					status: 500,
-					headers: { "Content-Type": "application/json" },
-				},
-			);
+      // Add CORS headers to ALL responses
+      return addCORSHeaders(response, request, env);
+    } catch (error) {
+      console.error("API Gateway error:", error);
+      const errorResponse = new Response(
+        JSON.stringify({
+          error: "Internal Server Error",
+          message: error instanceof Error ? error.message : "Unknown error",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
 
-			// Even internal server errors need CORS headers so the client can read them
-			return addCORSHeaders(errorResponse, request, env);
-		}
-	},
+      // Even internal server errors need CORS headers so the client can read them
+      return addCORSHeaders(errorResponse, request, env);
+    }
+  },
 };
 
 /**
  * Handle business logic of the request
  */
 async function handleRequest(
-	request: Request,
-	env: Env,
-	_ctx: ExecutionContext,
+  request: Request,
+  env: Env,
+  _ctx: ExecutionContext,
 ): Promise<Response> {
-	// Validate origin
-	const originCheck = validateOrigin(request, env);
-	if (!originCheck.valid) {
-		return new Response(
-			JSON.stringify({
-				error: "Forbidden",
-				message: "Origin not allowed",
-			}),
-			{
-				status: 403,
-				headers: { "Content-Type": "application/json" },
-			},
-		);
-	}
+  // Validate origin
+  const originCheck = validateOrigin(request, env);
+  if (!originCheck.valid) {
+    return new Response(
+      JSON.stringify({
+        error: "Forbidden",
+        message: "Origin not allowed",
+      }),
+      {
+        status: 403,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
+  }
 
-	// Verify Firebase Auth token or fallback to Guest
-	const authHeader = request.headers.get("Authorization");
-	let decodedToken: DecodedToken | null = null;
+  // Verify Firebase Auth token or fallback to Guest
+  const authHeader = request.headers.get("Authorization");
+  let decodedToken: DecodedToken | null = null;
 
-	if (authHeader?.startsWith("Bearer ")) {
-		const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-		decodedToken = await verifyFirebaseToken(token, env);
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+    decodedToken = await verifyFirebaseToken(token, env);
 
-		if (!decodedToken) {
-			return new Response(
-				JSON.stringify({
-					error: "Unauthorized",
-					message: "Invalid authentication token",
-				}),
-				{
-					status: 401,
-					headers: { "Content-Type": "application/json" },
-				},
-			);
-		}
-	} else {
-		// GUEST ACCESS: Identify by IP for basic tracking/rate limiting on backend
-		const clientIP = request.headers.get("CF-Connecting-IP") || "anonymous";
-		decodedToken = {
-			uid: `guest_${clientIP}`,
-			isGuest: true,
-		};
-	}
+    if (!decodedToken) {
+      return new Response(
+        JSON.stringify({
+          error: "Unauthorized",
+          message: "Invalid authentication token",
+        }),
+        {
+          status: 401,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+  } else {
+    // GUEST ACCESS: Identify by IP for basic tracking/rate limiting on backend
+    const clientIP = request.headers.get("CF-Connecting-IP") || "anonymous";
+    decodedToken = {
+      uid: `guest_${clientIP}`,
+      isGuest: true,
+    };
+  }
 
-	// Forward request to backend with user ID header
-	return await forwardRequest(request, decodedToken, env);
+  // Forward request to backend with user ID header
+  return await forwardRequest(request, decodedToken, env);
 }
 
 /**
  * Handle CORS preflight requests
  */
 function handleCORS(request: Request, env: Env): Response {
-	const origin = request.headers.get("Origin") || "";
-	const allowedOrigins = parseAllowedOrigins(env);
+  const origin = request.headers.get("Origin") || "";
+  const allowedOrigins = parseAllowedOrigins(env);
 
-	const headers: Record<string, string> = {
-		"Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
-		"Access-Control-Allow-Headers":
-			"Content-Type, Authorization, X-Requested-With, X-User-ID",
-		"Access-Control-Max-Age": "86400",
-	};
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers":
+      "Content-Type, Authorization, X-Requested-With, X-User-ID",
+    "Access-Control-Max-Age": "86400",
+  };
 
-	if (isOriginAllowed(origin, allowedOrigins)) {
-		headers["Access-Control-Allow-Origin"] = origin;
-		headers["Access-Control-Allow-Credentials"] = "true";
-	}
+  if (isOriginAllowed(origin, allowedOrigins)) {
+    headers["Access-Control-Allow-Origin"] = origin;
+    headers["Access-Control-Allow-Credentials"] = "true";
+  }
 
-	return new Response(null, { status: 204, headers });
+  return new Response(null, { status: 204, headers });
 }
 
 /**
  * Validate request origin
  */
 function validateOrigin(request: Request, env: Env): { valid: boolean } {
-	// For GET requests, we can be more permissive to allow direct browser hits
-	// if neither Origin nor Referer is present.
-	if (
-		request.method === "GET" &&
-		!request.headers.get("Origin") &&
-		!request.headers.get("Referer")
-	) {
-		return { valid: true };
-	}
+  // For GET requests, we can be more permissive to allow direct browser hits
+  // if neither Origin nor Referer is present.
+  if (
+    request.method === "GET" &&
+    !request.headers.get("Origin") &&
+    !request.headers.get("Referer")
+  ) {
+    return { valid: true };
+  }
 
-	const origin = request.headers.get("Origin");
-	const referer = request.headers.get("Referer");
+  const origin = request.headers.get("Origin");
+  const referer = request.headers.get("Referer");
 
-	const allowedOrigins = parseAllowedOrigins(env);
+  const allowedOrigins = parseAllowedOrigins(env);
 
-	// Check origin header
-	if (origin && isOriginAllowed(origin, allowedOrigins)) {
-		return { valid: true };
-	}
+  // Check origin header
+  if (origin && isOriginAllowed(origin, allowedOrigins)) {
+    return { valid: true };
+  }
 
-	// Check referer header
-	if (referer && isOriginAllowed(referer, allowedOrigins)) {
-		return { valid: true };
-	}
+  // Check referer header
+  if (referer && isOriginAllowed(referer, allowedOrigins)) {
+    return { valid: true };
+  }
 
-	return { valid: false };
+  return { valid: false };
 }
 
 /**
@@ -182,47 +182,47 @@ function validateOrigin(request: Request, env: Env): { valid: boolean } {
  * in an environment that hasn't been fully configured yet.
  */
 function parseAllowedOrigins(env: Env): string[] {
-	if (!env.ALLOWED_ORIGINS) return [];
-	return env.ALLOWED_ORIGINS.split(",").map((o: string) => o.trim());
+  if (!env.ALLOWED_ORIGINS) return [];
+  return env.ALLOWED_ORIGINS.split(",").map((o: string) => o.trim());
 }
 
 /**
  * Check if origin is in allowed list
  */
 function isOriginAllowed(
-	originOrUrl: string,
-	allowedOrigins: string[],
+  originOrUrl: string,
+  allowedOrigins: string[],
 ): boolean {
-	let origin = originOrUrl;
-	try {
-		// If it's a full URL (like from a Referer header), extract just the origin part
-		const url = new URL(originOrUrl);
-		origin = url.origin;
-	} catch (_e) {
-		// Ignore invalid URLs, origin remains unchanged
-	}
+  let origin = originOrUrl;
+  try {
+    // If it's a full URL (like from a Referer header), extract just the origin part
+    const url = new URL(originOrUrl);
+    origin = url.origin;
+  } catch (_e) {
+    // Ignore invalid URLs, origin remains unchanged
+  }
 
-	// Exact match
-	if (allowedOrigins.includes(origin)) {
-		return true;
-	}
+  // Exact match
+  if (allowedOrigins.includes(origin)) {
+    return true;
+  }
 
-	// Check if origin starts with any allowed origin
-	for (const allowed of allowedOrigins) {
-		if (allowed && origin.startsWith(allowed)) {
-			return true;
-		}
-	}
+  // Check if origin starts with any allowed origin
+  for (const allowed of allowedOrigins) {
+    if (allowed && origin.startsWith(allowed)) {
+      return true;
+    }
+  }
 
-	// Check for Cloudflare Pages preview URLs and root domain
-	// This matches: https://*.paperterrace.page, https://paperterrace.page, https://*.pages.dev
-	if (
-		origin.match(/^https:\/\/((.*?\.)?paperterrace\.page|(.*?\.)?pages\.dev)$/)
-	) {
-		return true;
-	}
+  // Check for Cloudflare Pages preview URLs and root domain
+  // This matches: https://*.paperterrace.page, https://paperterrace.page, https://*.pages.dev
+  if (
+    origin.match(/^https:\/\/((.*?\.)?paperterrace\.page|(.*?\.)?pages\.dev)$/)
+  ) {
+    return true;
+  }
 
-	return false;
+  return false;
 }
 
 /**
@@ -232,133 +232,169 @@ function isOriginAllowed(
  * the Firebase Admin SDK or implement proper JWT verification with caching.
  */
 async function verifyFirebaseToken(
-	token: string,
-	env: Env,
+  token: string,
+  env: Env,
 ): Promise<DecodedToken | null> {
-	try {
-		// Decode JWT without verification (for development)
-		// In production, implement proper JWT verification with Firebase public keys
-		const parts = token.split(".");
-		if (parts.length !== 3) {
-			return null;
-		}
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) {
+      console.error("Invalid token format: expected 3 parts");
+      return null;
+    }
 
-		const payload = JSON.parse(atob(parts[1]));
+    // Base64URL decode the payload
+    const base64Url = parts[1];
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
 
-		// Firebase ID tokens use `sub` (Subject) as the user UID, not `uid`
-		const uid = payload.sub || payload.user_id;
-		if (
-			!uid ||
-			!payload.aud ||
-			payload.aud !== env.FIREBASE_PROJECT_ID
-		) {
-			return null;
-		}
+    // Use TextDecoder for proper UTF-8 handling of non-ASCII characters (e.g. names)
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    const payload = JSON.parse(new TextDecoder().decode(bytes));
 
-		// Check expiration
-		if (payload.exp && payload.exp < Date.now() / 1000) {
-			return null;
-		}
+    // Firebase ID tokens use `sub` (Subject) as the user UID, not `uid`
+    const uid = payload.sub || payload.user_id;
 
-		return {
-			uid,
-			email: payload.email,
-			...payload,
-		};
-	} catch (error) {
-		console.error("Token verification error:", error);
-		return null;
-	}
+    // Validate Required Fields
+    if (!uid) {
+      console.error("Token payload missing UID (sub/user_id)");
+      return null;
+    }
+
+    if (!payload.aud) {
+      console.error("Token payload missing audience (aud)");
+      return null;
+    }
+
+    // Validate Project ID (Audience)
+    // If Env var is missing, skip check but log warning (for initial setup)
+    if (env.FIREBASE_PROJECT_ID && payload.aud !== env.FIREBASE_PROJECT_ID) {
+      console.error(
+        `Project ID mismatch: expected ${env.FIREBASE_PROJECT_ID}, got ${payload.aud}`,
+      );
+      return null;
+    } else if (!env.FIREBASE_PROJECT_ID) {
+      console.warn(
+        "FIREBASE_PROJECT_ID not set in environment, skipping audience check",
+      );
+    }
+
+    // Check expiration
+    if (payload.exp && payload.exp < Date.now() / 1000) {
+      console.error("Token expired", {
+        exp: payload.exp,
+        now: Date.now() / 1000,
+      });
+      return null;
+    }
+
+    return {
+      uid,
+      email: payload.email,
+      ...payload,
+    };
+  } catch (error) {
+    console.error("Token verification error:", error);
+    return null;
+  }
 }
 
 /**
  * Forward request to backend via Cloudflare Tunnel
  */
 async function forwardRequest(
-	request: Request,
-	decodedToken: DecodedToken,
-	env: Env,
+  request: Request,
+  decodedToken: DecodedToken,
+  env: Env,
 ): Promise<Response> {
-	const url = new URL(request.url);
-	const backendUrl = new URL(url.pathname + url.search, env.BACKEND_TUNNEL_URL);
+  const url = new URL(request.url);
+  const backendUrl = new URL(url.pathname + url.search, env.BACKEND_TUNNEL_URL);
 
-	// Create new headers with user ID
-	const headers = new Headers(request.headers);
-	headers.set("X-User-ID", decodedToken.uid);
-	headers.set("X-Forwarded-For", request.headers.get("CF-Connecting-IP") || "");
-	headers.set("X-Real-IP", request.headers.get("CF-Connecting-IP") || "");
-	// ★ Access Service Token
-	headers.set("CF-Access-Client-Id", env.CLIENT_ID);
-	headers.set("CF-Access-Client-Secret", env.CLIENT_SECRET);
+  // Create new headers with user ID
+  const headers = new Headers(request.headers);
+  headers.set("X-User-ID", decodedToken.uid);
+  headers.set("X-Forwarded-For", request.headers.get("CF-Connecting-IP") || "");
+  headers.set("X-Real-IP", request.headers.get("CF-Connecting-IP") || "");
+  // ★ Access Service Token
+  headers.set("CF-Access-Client-Id", env.CLIENT_ID);
+  headers.set("CF-Access-Client-Secret", env.CLIENT_SECRET);
 
-	// Forward additional user info so backend can build AuthenticatedUser without re-verifying the token
-	if (decodedToken.email) headers.set("X-User-Email", decodedToken.email as string);
-	if (decodedToken.name) headers.set("X-User-Name", decodedToken.name as string);
-	if (decodedToken.picture) headers.set("X-User-Picture", decodedToken.picture as string);
-	if (decodedToken.firebase?.sign_in_provider) {
-		headers.set("X-User-Provider", decodedToken.firebase.sign_in_provider as string);
-	}
-	if (decodedToken.email_verified !== undefined) {
-		headers.set("X-User-Email-Verified", String(decodedToken.email_verified));
-	}
+  // Forward additional user info so backend can build AuthenticatedUser without re-verifying the token
+  if (decodedToken.email)
+    headers.set("X-User-Email", decodedToken.email as string);
+  if (decodedToken.name)
+    headers.set("X-User-Name", decodedToken.name as string);
+  if (decodedToken.picture)
+    headers.set("X-User-Picture", decodedToken.picture as string);
+  if (decodedToken.firebase?.sign_in_provider) {
+    headers.set(
+      "X-User-Provider",
+      decodedToken.firebase.sign_in_provider as string,
+    );
+  }
+  if (decodedToken.email_verified !== undefined) {
+    headers.set("X-User-Email-Verified", String(decodedToken.email_verified));
+  }
 
-	// Remove Authorization header (already verified at the edge)
-	headers.delete("Authorization");
+  // Remove Authorization header (already verified at the edge)
+  headers.delete("Authorization");
 
-	// Forward request
-	const response = await fetch(backendUrl.toString(), {
-		method: request.method,
-		headers,
-		body:
-			request.method !== "GET" && request.method !== "HEAD"
-				? request.body
-				: undefined,
-	});
+  // Forward request
+  const response = await fetch(backendUrl.toString(), {
+    method: request.method,
+    headers,
+    body:
+      request.method !== "GET" && request.method !== "HEAD"
+        ? request.body
+        : undefined,
+  });
 
-	return response;
+  return response;
 }
 
 /**
  * Add CORS headers to response
  */
 function addCORSHeaders(
-	response: Response,
-	request: Request,
-	env: Env,
+  response: Response,
+  request: Request,
+  env: Env,
 ): Response {
-	const origin = request.headers.get("Origin");
-	const allowedOrigins = parseAllowedOrigins(env);
+  const origin = request.headers.get("Origin");
+  const allowedOrigins = parseAllowedOrigins(env);
 
-	// If no origin (direct hit) or origin not allowed, return original response
-	if (!origin || !isOriginAllowed(origin, allowedOrigins)) {
-		return response;
-	}
+  // If no origin (direct hit) or origin not allowed, return original response
+  if (!origin || !isOriginAllowed(origin, allowedOrigins)) {
+    return response;
+  }
 
-	// Create new headers based on the backend response headers
-	const newHeaders = new Headers(response.headers);
+  // Create new headers based on the backend response headers
+  const newHeaders = new Headers(response.headers);
 
-	// Set CORS headers
-	newHeaders.set("Access-Control-Allow-Origin", origin);
-	newHeaders.set("Access-Control-Allow-Credentials", "true");
-	newHeaders.set(
-		"Access-Control-Allow-Methods",
-		"GET, POST, PUT, DELETE, OPTIONS",
-	);
-	newHeaders.set(
-		"Access-Control-Allow-Headers",
-		"Content-Type, Authorization, X-Requested-With, X-User-ID",
-	);
-	// Expose useful headers to the frontend
-	newHeaders.set(
-		"Access-Control-Expose-Headers",
-		"Content-Length, X-Request-ID",
-	);
+  // Set CORS headers
+  newHeaders.set("Access-Control-Allow-Origin", origin);
+  newHeaders.set("Access-Control-Allow-Credentials", "true");
+  newHeaders.set(
+    "Access-Control-Allow-Methods",
+    "GET, POST, PUT, DELETE, OPTIONS",
+  );
+  newHeaders.set(
+    "Access-Control-Allow-Headers",
+    "Content-Type, Authorization, X-Requested-With, X-User-ID",
+  );
+  // Expose useful headers to the frontend
+  newHeaders.set(
+    "Access-Control-Expose-Headers",
+    "Content-Length, X-Request-ID",
+  );
 
-	// Return new response with original status and updated headers
-	// Using the pattern: new Response(body, { status, statusText, headers })
-	return new Response(response.body, {
-		status: response.status,
-		statusText: response.statusText,
-		headers: newHeaders,
-	});
+  // Return new response with original status and updated headers
+  // Using the pattern: new Response(body, { status, statusText, headers })
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: newHeaders,
+  });
 }
