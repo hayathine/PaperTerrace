@@ -34,7 +34,7 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({
 	}
 
 	return (
-		<div className="w-full max-w-5xl mx-auto p-4 space-y-12 pb-32">
+		<div className="w-full space-y-12 pb-32">
 			{pages.map((page) => (
 				<TextModePage
 					key={page.page_num}

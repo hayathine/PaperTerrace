@@ -740,7 +740,7 @@ function App() {
 						{/* PDF Viewer Area */}
 						<div className="flex-1 bg-slate-100 flex items-start justify-center relative overflow-hidden">
 							{uploadFile || currentPaperId ? (
-								<div className="w-full h-full p-2 sm:p-4 md:p-8 overflow-y-auto custom-scrollbar">
+								<div className="w-full h-full p-2 sm:p-4 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar">
 									<PDFViewer
 										sessionId={sessionId}
 										uploadFile={uploadFile}

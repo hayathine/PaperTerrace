@@ -150,31 +150,36 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 	return (
 		<div className="flex flex-col h-full bg-white border-l border-slate-200 shadow-sm overflow-hidden font-sans">
-			{/* Tab Navigation */}
-			<div className="flex bg-slate-50 border-b border-slate-200 overflow-x-auto items-center pr-2">
-				{tabs.map((tab) => (
-					<button
-						key={tab.id}
-						type="button"
-						onClick={() => onTabChange(tab.id)}
-						className={`flex-1 min-w-[46px] sm:min-w-[52px] py-2 sm:py-2.5 flex flex-col items-center gap-1 transition-all border-b-2 ${
-							activeTab === tab.id
-								? "bg-white text-orange-500 border-orange-500"
-								: "text-slate-400 border-transparent hover:text-slate-600"
-						}`}
-					>
-						{tab.icon}
-						<span className="text-[10px] sm:text-[11px] font-semibold leading-none">
-							{tab.label}
-						</span>
-					</button>
-				))}
+			{/* Tab Navigation:
+			    ×ボタンは overflow-x-auto コンテナの外に配置する。
+			    overflow-x-auto 内のタッチイベントは pan-x として解釈されるため、
+			    同一コンテナ内のボタンの click が発火しない問題を防ぐ。 */}
+			<div className="flex bg-slate-50 border-b border-slate-200 items-center">
+				<div className="flex flex-1 overflow-x-auto">
+					{tabs.map((tab) => (
+						<button
+							key={tab.id}
+							type="button"
+							onClick={() => onTabChange(tab.id)}
+							className={`flex-1 min-w-[46px] sm:min-w-[52px] py-2 sm:py-2.5 flex flex-col items-center gap-1 transition-all border-b-2 ${
+								activeTab === tab.id
+									? "bg-white text-orange-500 border-orange-500"
+									: "text-slate-400 border-transparent hover:text-slate-600"
+							}`}
+						>
+							{tab.icon}
+							<span className="text-[10px] sm:text-[11px] font-semibold leading-none">
+								{tab.label}
+							</span>
+						</button>
+					))}
+				</div>
 
 				{onClose && (
 					<button
 						type="button"
 						onClick={onClose}
-						className="md:hidden ml-2 p-2 text-slate-400 hover:text-slate-600 shrink-0 border border-transparent hover:bg-slate-200 rounded-md transition-all"
+						className="md:hidden mx-2 p-2 text-slate-400 hover:text-slate-600 shrink-0 border border-transparent hover:bg-slate-200 rounded-md transition-all"
 						title={t("nav.close_panel", "Close panel")}
 					>
 						<svg
