@@ -1,5 +1,9 @@
+import os
+
+import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
 from app.auth import OptionalUser
 from app.crud import get_storage_provider
@@ -12,6 +16,12 @@ log = ServiceLogger("Figures")
 router = APIRouter(tags=["Figures"])
 storage = get_storage_provider()
 figure_service = FigureInsightService()
+
+
+class ExplainRequest(BaseModel):
+    """AI解析リクエスト。DBに存在しないトランジェントfigureの場合は image_url を渡す。"""
+
+    image_url: str | None = None
 
 
 @router.get("/papers/{paper_id}/figures")
@@ -28,65 +38,68 @@ async def get_paper_figures(paper_id: str, user: OptionalUser = None):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
+async def _fetch_image_bytes(image_url: str) -> bytes | None:
+    """image_url から画像バイトを取得する。ローカルパスと HTTP URL の両方に対応。"""
+    if image_url.startswith("/static/"):
+        relative_path = image_url.lstrip("/")
+        file_path = f"src/{relative_path}"
+        if os.path.exists(file_path):
+            with open(file_path, "rb") as f:
+                return f.read()
+    elif image_url.startswith("http"):
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(image_url)
+            if resp.status_code == 200:
+                return resp.content
+    return None
+
+
 @router.post("/figures/{figure_id}/explain")
-async def explain_figure(figure_id: str, user: OptionalUser = None):
-    """Generate or retrieve explanation for a figure."""
+async def explain_figure(
+    figure_id: str,
+    body: ExplainRequest = ExplainRequest(),
+    user: OptionalUser = None,
+):
+    """Generate or retrieve explanation for a figure.
+
+    登録ユーザーのfigureはDBから取得する。未登録ユーザーのトランジェントfigureは
+    DBに存在しないため、リクエストボディの image_url を使って直接解析する。
+    """
     try:
         figure = storage.get_figure(figure_id)
-        if not figure:
+
+        if figure:
+            # DB登録済み: キャッシュ済み解説があればそのまま返す
+            if figure.get("explanation"):
+                return {"explanation": figure["explanation"]}
+            image_url = figure.get("image_url")
+            caption = figure.get("caption", "")
+        elif body.image_url:
+            # トランジェントfigure: DBにないがimage_urlで直接解析する
+            log.info(
+                "explain_figure",
+                "Transient figure: explaining from image_url",
+                figure_id=figure_id,
+            )
+            image_url = body.image_url
+            caption = ""
+        else:
             raise HTTPException(status_code=404, detail="Figure not found")
 
-        if figure.get("explanation"):
-            return {"explanation": figure["explanation"]}
-
-        # Generate explanation
-        image_url = figure.get("image_url")
         if not image_url:
             raise HTTPException(status_code=400, detail="No image URL")
 
-        # We need the image bytes.
-        # Image URL is like /static/paper_images/...
-        # We need to map it back to specific storage or fetch it.
-        # This is a bit tricky if using GCS vs Local.
-
-        # HACK: Assume Local for now or use the path to read.
-        # Ideally ImageStorage should have `read(path)` or similar.
-        # But we only have `get_list`.
-
-        # Let's try to reverse the URL to file path for local.
-        # url: /static/paper_images/{hash}/{filename}
-        # local: src/static/paper_images/{hash}/{filename}
-
-        image_bytes = None
-
-        import os
-
-        if image_url.startswith("/static/"):
-            # Local file
-            relative_path = image_url.lstrip("/")  # static/paper_images/...
-            file_path = f"src/{relative_path}"
-            if os.path.exists(file_path):
-                with open(file_path, "rb") as f:
-                    image_bytes = f.read()
-        elif image_url.startswith("http"):
-            # GCS signed URL or similar
-            # Fetch it
-            import httpx
-
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(image_url)
-                if resp.status_code == 200:
-                    image_bytes = resp.content
-
+        image_bytes = await _fetch_image_bytes(image_url)
         if not image_bytes:
             raise HTTPException(status_code=404, detail="Image file not found")
 
         explanation = await figure_service.analyze_figure(
-            image_bytes, caption=figure.get("caption", ""), target_lang="ja"
+            image_bytes, caption=caption, target_lang="ja"
         )
 
-        # Save it
-        storage.update_figure_explanation(figure_id, explanation)
+        # DB登録済みfigureのみ解説をキャッシュする
+        if figure:
+            storage.update_figure_explanation(figure_id, explanation)
 
         return {"explanation": explanation}
 

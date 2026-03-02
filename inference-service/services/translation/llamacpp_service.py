@@ -1,7 +1,9 @@
 import asyncio
 import logging
 import os
-from typing import Optional
+import re
+import types
+from typing import Any, Optional
 
 from llama_cpp import Llama
 
@@ -56,7 +58,7 @@ class LlamaCppTranslationService:
             logger.info("Llama-cpp モデルの初期化を開始します...")
 
             try:
-                loop = asyncio.get_event_loop()
+                loop = asyncio.get_running_loop()
 
                 # Hugging Face からのダウンロードまたはローカル読み込み
                 # Llama.from_pretrained は重い処理なので executor で実行
@@ -130,52 +132,59 @@ class LlamaCppTranslationService:
 
         from common.dspy.signatures import ContextAwareTranslation
 
-        class InMemoryLlama(dspy.LM):
-            """DSPy 3.x 互換のインメモリLlamaラッパー"""
+        class InMemoryLlama(dspy.BaseLM):
+            """DSPy 3.x 互換のインメモリLlamaラッパー。
 
-            def __init__(self, llm_instance):
-                super().__init__("local-llama")
+            DSPy 3.x では BaseLM.forward() を実装し、OpenAI 互換レスポンス形式を返す必要がある。
+            __call__ は BaseLM が管理するため、ここでは forward() のみ実装する。
+            """
+
+            def __init__(self, llm_instance: Any):
+                super().__init__(model="local-llama", temperature=0.3, max_tokens=1024)
                 self.llm_instance = llm_instance
-                self.kwargs = {"temperature": 0.3, "max_tokens": 1024}
-                self.history = []
 
-            def __call__(
+            def forward(
                 self,
                 prompt: str | None = None,
                 messages: list[dict] | None = None,
                 **kwargs,
-            ) -> list[str]:
-                # DSPy 3.x は messages= キーワード引数でLMを呼び出す
-                if messages:
-                    chat_messages = [
-                        {
-                            "role": "system",
-                            "content": "You are an expert academic research assistant. Never output markdown formatting for JSON, act directly.",
-                        },
-                        *messages,
-                    ]
-                else:
-                    chat_messages = [
-                        {
-                            "role": "system",
-                            "content": "You are an expert academic research assistant. Never output markdown formatting for JSON, act directly.",
-                        },
-                        {"role": "user", "content": prompt or ""},
-                    ]
+            ) -> Any:
+                # Build messages with a fixed system prompt
+                system_msg = {
+                    "role": "system",
+                    "content": "You are an expert academic research assistant. Never output markdown formatting for JSON, act directly.",
+                }
+                chat_messages = [system_msg, *(messages or [{"role": "user", "content": prompt or ""}])]
 
-                response = self.llm_instance.create_chat_completion(
+                raw = self.llm_instance.create_chat_completion(
                     messages=chat_messages,
-                    temperature=kwargs.get("temperature", self.kwargs["temperature"]),
-                    max_tokens=kwargs.get("max_tokens", self.kwargs["max_tokens"]),
+                    temperature=kwargs.get("temperature", 0.3),
+                    max_tokens=kwargs.get("max_tokens", 1024),
                 )
-                text = response["choices"][0]["message"]["content"]
-                self.history.append({"messages": chat_messages, "response": text})
-                return [text]
+
+                # Qwen3 thinking models prepend <think>...</think> blocks.
+                # Strip them before passing the text to DSPy's output parser.
+                text = raw["choices"][0]["message"]["content"]
+                text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+                # DSPy BaseLM._process_completion requires an OpenAI-like response object
+                # with attribute access (response.choices, response.usage, response.model).
+                usage = raw.get(
+                    "usage",
+                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
+                )
+                message_ns = types.SimpleNamespace(content=text, role="assistant")
+                choice_ns = types.SimpleNamespace(message=message_ns)
+                return types.SimpleNamespace(
+                    choices=[choice_ns],
+                    usage=usage,
+                    model="local-llama",
+                )
 
         logger.info(f"LLM 翻訳実行中... (Word: {original_word[:20]}...)")
 
         try:
-            loop = asyncio.get_event_loop()
+            loop = asyncio.get_running_loop()
 
             # DSPy predict can be blocking, so we run it in executor.
             # Use dspy.context() instead of dspy.settings.configure() because

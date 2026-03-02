@@ -200,6 +200,10 @@ class LayoutAnalysisService:
                 batch_figures,
             )
 
+            # DBで生成されたIDをall_figuresに付与してAPIレスポンスに含める
+            for fid, fig in zip(fids, all_figures):
+                fig["id"] = fid
+
             # Start background analysis tasks
             for fid, fig in zip(fids, all_figures):
                 if fig.get("image_url"):
@@ -240,6 +244,12 @@ class LayoutAnalysisService:
                 except Exception as e:
                     logger.warning(f"Failed to update layout_json: {e}")
         elif all_figures:
+            # トランジェントセッション: DBには保存しないが、セッション内でAI解析できるよう
+            # 一時的なUUIDを付与する（このIDはDBに存在しない）
+            import uuid6
+
+            for fig in all_figures:
+                fig["id"] = str(uuid6.uuid7())
             logger.info(
                 f"[analyze_layout_lazy] Skipping DB save for transient session {paper_id}"
             )

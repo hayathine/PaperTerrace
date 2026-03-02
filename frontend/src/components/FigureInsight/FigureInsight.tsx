@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { API_URL } from "@/config";
 import { createLogger } from "@/lib/logger";
 import CopyButton from "../Common/CopyButton";
@@ -15,36 +15,43 @@ const FigureInsight: React.FC<FigureInsightProps> = ({ selectedFigure }) => {
 	const [explanation, setExplanation] = useState<string | null>(null);
 	const [isLoading, setIsLoading] = useState(false);
 	const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+	// 重複リクエスト防止: 処理中の figure ID を追跡する
+	const requestingIdRef = useRef<string | null>(null);
 
-	// 図が切り替わったら解説をリセット
-	const figureKey = selectedFigure?.image_url ?? null;
-	const [prevKey, setPrevKey] = useState<string | null>(null);
-	if (figureKey !== prevKey) {
-		setPrevKey(figureKey);
+	// 図が切り替わったら解説をリセットし、IDがあれば自動でAI解析を開始する
+	useEffect(() => {
 		setExplanation(null);
-	}
-
-	const handleExplain = async () => {
 		if (!selectedFigure?.id) return;
+
+		const figureId = selectedFigure.id;
+		if (requestingIdRef.current === figureId) return;
+		requestingIdRef.current = figureId;
+
 		setIsLoading(true);
-		try {
-			const res = await fetch(
-				`${API_URL}/api/figures/${selectedFigure.id}/explain`,
-				{ method: "POST" },
-			);
-			if (res.ok) {
-				const data = await res.json();
-				setExplanation(data.explanation ?? null);
-			}
-		} catch (e) {
-			log.error("handle_explain", "Failed to explain figure", {
-				figureId: selectedFigure.id,
-				error: e,
+		fetch(`${API_URL}/api/figures/${figureId}/explain`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			// DBに存在しないトランジェントfigureのために image_url を渡す
+			body: JSON.stringify({ image_url: selectedFigure.image_url }),
+		})
+			.then((res) => {
+				if (res.ok) return res.json();
+				return null;
+			})
+			.then((data) => {
+				if (data) setExplanation(data.explanation ?? null);
+			})
+			.catch((e) => {
+				log.error("handle_explain", "Failed to explain figure", {
+					figureId,
+					error: e,
+				});
+			})
+			.finally(() => {
+				setIsLoading(false);
+				requestingIdRef.current = null;
 			});
-		} finally {
-			setIsLoading(false);
-		}
-	};
+	}, [selectedFigure?.id]);
 
 	if (!selectedFigure) {
 		return (
@@ -131,7 +138,12 @@ const FigureInsight: React.FC<FigureInsightProps> = ({ selectedFigure }) => {
 
 				{/* 解説エリア */}
 				<div className="p-4">
-					{explanation ? (
+					{isLoading ? (
+						<div className="flex items-center justify-center gap-2 py-4 text-orange-600">
+							<div className="w-3.5 h-3.5 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin" />
+							<span className="text-[11px] font-bold">AIが解析中...</span>
+						</div>
+					) : explanation ? (
 						<div className="text-xs text-slate-600 leading-relaxed">
 							<div className="flex justify-between items-center mb-1">
 								<span className="font-bold text-orange-600 text-[10px] uppercase tracking-wider">
@@ -144,38 +156,9 @@ const FigureInsight: React.FC<FigureInsightProps> = ({ selectedFigure }) => {
 							</MarkdownContent>
 						</div>
 					) : (
-						<div className="flex flex-col items-center justify-center py-2">
-							<button
-								type="button"
-								onClick={handleExplain}
-								disabled={!selectedFigure.id || isLoading}
-								className="flex items-center space-x-2 px-4 py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg text-[11px] font-bold transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
-							>
-								{isLoading ? (
-									<>
-										<div className="w-3.5 h-3.5 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin" />
-										<span>AIが解析中...</span>
-									</>
-								) : (
-									<>
-										<svg
-											className="w-3.5 h-3.5"
-											fill="currentColor"
-											viewBox="0 0 20 20"
-										>
-											<path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z" />
-											<path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z" />
-										</svg>
-										<span>AIに解説させる</span>
-									</>
-								)}
-							</button>
-							{!selectedFigure.id && (
-								<p className="text-[10px] text-slate-400 mt-2">
-									この図のIDが取得できないため解説できません。
-								</p>
-							)}
-						</div>
+						<p className="text-center text-[10px] text-slate-400 py-2">
+							解析結果はありません
+						</p>
 					)}
 				</div>
 			</div>
