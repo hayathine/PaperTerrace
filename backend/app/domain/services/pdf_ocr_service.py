@@ -384,12 +384,6 @@ class PDFOCRService:
 
                         all_exclude = list(exclude_bboxes_pt)
 
-                        # fitz の table 検出で layout_blocks が見逃した表もカバー。
-                        # 表内の数値データもここで除外対象に含まれる。
-                        for tab in page_obj.find_tables().tables:
-                            r = tab.bbox  # (x0, y0, x1, y1)
-                            all_exclude.append([r[0], r[1], r[2], r[3]])
-
                         # ベクターグラフィック（グラフ・チャート等）の除外。
                         # ページ面積の 1% 以上の描画パスを図表由来とみなす。
                         # 水平線・下線など細長い要素はアスペクト比でスキップ。

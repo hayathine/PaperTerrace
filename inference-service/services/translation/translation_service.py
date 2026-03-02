@@ -49,12 +49,18 @@ class TranslationService:
             logger.info(
                 f"確信度が低いため LlamaCpp (Qwen3) に切り替えます (conf={conf:.3f})"
             )
-            llm_result = await self.llamacpp.translate_with_llamacpp(
-                original_word=text,
-                paper_context=paper_context or "No specific context available.",
-                lang_name=target_lang,
-            )
-            return llm_result, "Qwen"
+            try:
+                llm_result = await self.llamacpp.translate_with_llamacpp(
+                    original_word=text,
+                    paper_context=paper_context or "No specific context available.",
+                    lang_name=target_lang,
+                )
+                return llm_result, "Qwen"
+            except Exception as e:
+                # Qwen3 が失敗した場合、m2m100の結果をそのまま返す
+                logger.warning(
+                    f"Qwen3翻訳失敗 (conf={conf:.3f})、m2m100の結果を使用します: {e}"
+                )
 
         return translation, model
 
@@ -81,12 +87,18 @@ class TranslationService:
                 logger.info(
                     f"バッチ翻訳[{i}]の確信度が低いため LlamaCpp に切り替えます (conf={conf:.3f})"
                 )
-                translation = await self.llamacpp.translate_with_llamacpp(
-                    original_word=texts[i],
-                    paper_context=paper_context or "No specific context available.",
-                    lang_name=target_lang,
-                )
-                model = "Qwen"
+                try:
+                    translation = await self.llamacpp.translate_with_llamacpp(
+                        original_word=texts[i],
+                        paper_context=paper_context or "No specific context available.",
+                        lang_name=target_lang,
+                    )
+                    model = "Qwen"
+                except Exception as e:
+                    # Qwen3 が失敗した場合、m2m100の結果をそのまま使用
+                    logger.warning(
+                        f"バッチ翻訳[{i}] Qwen3失敗、m2m100の結果を使用します: {e}"
+                    )
 
             final_translations.append(translation)
             final_models.append(model)

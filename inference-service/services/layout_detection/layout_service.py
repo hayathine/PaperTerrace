@@ -377,15 +377,15 @@ class LayoutAnalysisService:
         )
 
         # デバッグログ追加: 推論データの生の状態を確認
-        logger.info(f"Postprocess - predictions shape: {predictions.shape}")
+        logger.debug(f"Postprocess - predictions shape: {predictions.shape}")
         if predictions.shape[0] > 0:
             max_score = np.max(predictions[:, 1])
-            logger.info(f"Postprocess - max score in all predictions: {max_score:.4f}")
+            logger.debug(f"Postprocess - max score in all predictions: {max_score:.4f}")
 
             # スコアの分布を確認
             for t in [0.1, 0.2, 0.3, 0.4, 0.5]:
                 count = np.sum(predictions[:, 1] >= t)
-                logger.info(
+                logger.debug(
                     f"Postprocess - elements count above threshold {t}: {count}"
                 )
 
@@ -393,7 +393,7 @@ class LayoutAnalysisService:
             top_indices = np.argsort(predictions[:, 1])[-5:][::-1]
             for i, idx in enumerate(top_indices):
                 p = predictions[idx]
-                logger.info(
+                logger.debug(
                     f"Postprocess - top {i + 1} prediction: class_id={int(p[0])}, score={p[1]:.4f}, raw_bbox={p[2:]}"
                 )
 
