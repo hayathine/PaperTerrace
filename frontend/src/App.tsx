@@ -785,11 +785,7 @@ function App() {
 						<button
 							type="button"
 							onClick={() => setIsRightSidebarOpen((prev) => !prev)}
-							className={`p-2 rounded-md transition-colors shadow-sm border ${
-								isRightSidebarOpen
-									? "bg-orange-600 text-white border-orange-600 hover:bg-orange-700"
-									: "bg-orange-50 text-orange-600 hover:bg-orange-100 border-orange-100"
-							}`}
+							className="ml-4 p-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 hover:text-orange-500 hover:border-orange-100 transition-all duration-200 flex items-center justify-center shadow-sm"
 							title={
 								isRightSidebarOpen
 									? t("nav.close_right_panel", "Close panel")
@@ -797,7 +793,7 @@ function App() {
 							}
 						>
 							<svg
-								className="w-5 h-5"
+								className="w-4 h-4"
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
@@ -805,8 +801,8 @@ function App() {
 								<path
 									strokeLinecap="round"
 									strokeLinejoin="round"
-									strokeWidth="2"
-									d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z"
+									strokeWidth="2.5"
+									d="M4 6h16M4 12h16M4 18h16"
 								/>
 							</svg>
 						</button>
@@ -881,8 +877,14 @@ function App() {
 						<div
 							onTouchStart={handleTouchStart}
 							onTouchEnd={handleRightSidebarTouchEnd}
-							style={{ width: isMobile ? "90vw" : sidebarWidth }}
-							className={`fixed top-0 right-0 md:relative md:top-auto md:right-auto h-screen md:h-full shadow-xl z-50 md:z-20 bg-white overflow-hidden shrink-0 transition-transform duration-300 ${
+							style={{
+								width: isMobile
+									? "90vw"
+									: isRightSidebarOpen
+										? sidebarWidth
+										: 0,
+							}}
+							className={`fixed top-0 right-0 md:relative md:top-auto md:right-auto h-screen md:h-full shadow-xl z-50 md:z-20 bg-white overflow-hidden shrink-0 transition-all duration-300 ${
 								isRightSidebarOpen
 									? "translate-x-0"
 									: "translate-x-full md:translate-x-0"
