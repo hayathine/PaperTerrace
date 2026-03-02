@@ -27,7 +27,10 @@ const MarkdownContent: React.FC<MarkdownContentProps> = ({
 	className = "",
 	components,
 }) => {
-	const processedContent = preprocessMathUnicode(children);
+	// 非文字列が渡された場合（null / undefined / number など）に remark が
+	// .replace() を呼び出して TypeError になるのを防ぐ
+	const safeChildren = typeof children === "string" ? children : "";
+	const processedContent = preprocessMathUnicode(safeChildren);
 
 	return (
 		<div className={className}>

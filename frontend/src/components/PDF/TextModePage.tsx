@@ -306,12 +306,8 @@ const TextModePage: React.FC<TextModePageProps> = ({
 							/>
 						);
 					}
-					// マッチしない場合はプレースホルダー
-					return (
-						<div className="flex items-center justify-center bg-slate-100 border border-dashed border-slate-300 rounded p-6 my-4 text-slate-400 text-sm">
-							{alt || "Figure"} (image not available)
-						</div>
-					);
+					// bbox はあるが figure にマッチしない場合は非表示（レイアウト崩れを防ぐ）
+					return null;
 				}
 			}
 			// 通常の画像
@@ -325,6 +321,10 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				/>
 			);
 		};
+
+		// Markdown テーブル: テキストモードでは図表として処理済みのため、
+		// 変換されなかった生テーブルはレイアウト崩れを防ぐため非表示にする。
+		comps.table = () => null;
 
 		// Markdown リンク: 新規タブで開く（同タブ遷移防止）
 		comps.a = ({ href, children }) => (
