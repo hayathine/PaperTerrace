@@ -36,7 +36,9 @@
 		"paper_library": "論文ライブラリ",
 		"reading_mode": "読書モード",
 		"only_english_supported": "現在、英語の論文のみサポートしています。",
-		"upload_pdf": "PDFをアップロード"
+		"upload_pdf": "PDFをアップロード",
+		"open_right_panel": "パネルを開く",
+		"close_right_panel": "パネルを閉じる"
 	},
 	"auth": {
 		"tagline": "テラスで読むように、論文をカジュアルに",

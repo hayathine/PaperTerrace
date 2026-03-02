@@ -36,7 +36,9 @@
 		"paper_library": "Paper Library",
 		"reading_mode": "Reading Mode",
 		"only_english_supported": "Currently, only English papers are supported.",
-		"upload_pdf": "Upload PDF"
+		"upload_pdf": "Upload PDF",
+		"open_right_panel": "Open panel",
+		"close_right_panel": "Close panel"
 	},
 	"auth": {
 		"tagline": "Read papers casually, like sitting on a terrace",

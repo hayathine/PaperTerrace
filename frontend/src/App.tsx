@@ -496,11 +496,13 @@ function App() {
 					/>
 				)}
 
-				{/* Left Sidebar */}
+				{/* Left Sidebar
+			    モバイルでは fixed 配置にしてドキュメント幅に影響させない。
+			    absolute だと overflow:hidden でクリップされずに横スクロールが発生するため。 */}
 				<div
 					onTouchStart={handleTouchStart}
 					onTouchEnd={handleLeftSidebarTouchEnd}
-					className={`bg-white text-slate-900 border-r border-slate-200 transition-all duration-300 ease-in-out flex flex-col shrink-0 absolute md:relative z-50 h-full ${
+					className={`bg-white text-slate-900 border-r border-slate-200 transition-all duration-300 ease-in-out flex flex-col shrink-0 fixed top-0 left-0 md:relative md:top-auto md:left-auto z-50 h-screen md:h-full ${
 						isLeftSidebarOpen
 							? "w-72 md:w-64 translate-x-0"
 							: "-translate-x-full md:translate-x-0 w-72 md:w-0 overflow-hidden"
@@ -782,9 +784,17 @@ function App() {
 						)}
 						<button
 							type="button"
-							onClick={() => setIsRightSidebarOpen(true)}
-							className="md:hidden p-2 rounded-md bg-orange-50 text-orange-600 hover:bg-orange-100 transition-colors shadow-sm border border-orange-100"
-							title={t("nav.open_right_panel")}
+							onClick={() => setIsRightSidebarOpen((prev) => !prev)}
+							className={`p-2 rounded-md transition-colors shadow-sm border ${
+								isRightSidebarOpen
+									? "bg-orange-600 text-white border-orange-600 hover:bg-orange-700"
+									: "bg-orange-50 text-orange-600 hover:bg-orange-100 border-orange-100"
+							}`}
+							title={
+								isRightSidebarOpen
+									? t("nav.close_right_panel", "Close panel")
+									: t("nav.open_right_panel", "Open panel")
+							}
 						>
 							<svg
 								className="w-5 h-5"
@@ -872,7 +882,7 @@ function App() {
 							onTouchStart={handleTouchStart}
 							onTouchEnd={handleRightSidebarTouchEnd}
 							style={{ width: isMobile ? "90vw" : sidebarWidth }}
-							className={`absolute md:relative right-0 h-full shadow-xl z-50 md:z-20 bg-white overflow-hidden shrink-0 transition-transform duration-300 ${
+							className={`fixed top-0 right-0 md:relative md:top-auto md:right-auto h-screen md:h-full shadow-xl z-50 md:z-20 bg-white overflow-hidden shrink-0 transition-transform duration-300 ${
 								isRightSidebarOpen
 									? "translate-x-0"
 									: "translate-x-full md:translate-x-0"
