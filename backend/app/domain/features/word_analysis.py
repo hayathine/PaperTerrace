@@ -34,7 +34,10 @@ class WordAnalysisService:
     ) -> dict | None:
         # 3.5 Local Machine Translation (M2M100) - ServiceB経由
         try:
-            local_translation = await self.local_translator.translate_async(lemma)
+            # translate_async は (translated_text, model_name) のタプルを返す
+            local_translation, _model = await self.local_translator.translate_async(
+                lemma, tgt_lang=lang
+            )
             if (
                 local_translation and local_translation != lemma
             ):  # 翻訳が成功し、元の単語と異なる場合

@@ -351,10 +351,64 @@ class PDFOCRService:
 
             if pdf_path:
                 # pymupdf4llm による高精度 Markdown 生成
+                # Figure/Table の bbox 領域（画像px座標）を PDF ポイント座標へ変換して収集。
+                # Markdown 生成前に redact で塗りつぶすことで図表内テキストを除外する。
+                figure_table_bboxes_pt = []
+                for block in layout_blocks:
+                    class_name = block.get("class_name", "").lower()
+                    is_visual = any(
+                        kw in class_name
+                        for kw in ["figure", "picture", "chart", "table"]
+                    )
+                    is_caption = "caption" in class_name
+                    if is_visual and not is_caption:
+                        bbox = block.get("bbox", {})
+                        if isinstance(bbox, dict):
+                            figure_table_bboxes_pt.append(
+                                [
+                                    bbox.get("x_min", 0) / zoom,
+                                    bbox.get("y_min", 0) / zoom,
+                                    bbox.get("x_max", 0) / zoom,
+                                    bbox.get("y_max", 0) / zoom,
+                                ]
+                            )
+
                 # fitz.Document はスレッドアンセーフなためページごとに開いて閉じる
-                def _extract_md(path: str, idx: int) -> str:
+                def _extract_md(
+                    path: str, idx: int, exclude_bboxes_pt: list
+                ) -> str:
                     doc = fitz.open(path)
                     try:
+                        page_obj = doc[idx]
+                        page_area = page_obj.rect.width * page_obj.rect.height
+
+                        all_exclude = list(exclude_bboxes_pt)
+
+                        # fitz の table 検出で layout_blocks が見逃した表もカバー。
+                        # 表内の数値データもここで除外対象に含まれる。
+                        for tab in page_obj.find_tables().tables:
+                            r = tab.bbox  # (x0, y0, x1, y1)
+                            all_exclude.append([r[0], r[1], r[2], r[3]])
+
+                        # ベクターグラフィック（グラフ・チャート等）の除外。
+                        # ページ面積の 1% 以上の描画パスを図表由来とみなす。
+                        # 水平線・下線など細長い要素はアスペクト比でスキップ。
+                        for drawing in page_obj.get_drawings():
+                            rect = drawing["rect"]
+                            area = rect.width * rect.height
+                            aspect = (
+                                rect.width / rect.height if rect.height > 0 else 999
+                            )
+                            if area > page_area * 0.01 and aspect < 20:
+                                all_exclude.append(
+                                    [rect.x0, rect.y0, rect.x1, rect.y1]
+                                )
+
+                        if all_exclude:
+                            for bbox_pt in all_exclude:
+                                page_obj.add_redact_annot(fitz.Rect(*bbox_pt))
+                            page_obj.apply_redactions()
+
                         return pymupdf4llm.to_markdown(
                             doc,
                             pages=[idx],
@@ -366,7 +420,7 @@ class PDFOCRService:
 
                 loop = asyncio.get_running_loop()
                 raw_md = await loop.run_in_executor(
-                    None, _extract_md, pdf_path, page_idx
+                    None, _extract_md, pdf_path, page_idx, figure_table_bboxes_pt
                 )
 
                 # pymupdf4llm が挿入した画像参照（![...](...)）を除去
