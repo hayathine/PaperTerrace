@@ -16,9 +16,10 @@ from app.providers import (
     get_image_bytes,
     get_storage_provider,
 )  # RedisService now uses in-memory cache
-from common.logger import get_service_logger
+from common.logger import ServiceLogger
 
-log = get_service_logger("Chat")
+log = ServiceLogger("Chat")
+
 
 router = APIRouter(tags=["Chat"])
 
@@ -103,11 +104,14 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
                 pdf_bytes = img_storage.get_doc_bytes(
                     img_storage.get_doc_path(paper_info["file_hash"])
                 )
-                log.debug(
-                    "chat", "PDF bytes loaded for grounding", paper_id=paper_id
-                )
+                log.debug("chat", "PDF bytes loaded for grounding", paper_id=paper_id)
         except Exception as e:
-            log.warning("chat", f"Failed to load PDF bytes for grounding: {e}")
+            log.warning(
+                "chat",
+                "Failed to load PDF bytes for grounding",
+                error=str(e),
+                paper_id=paper_id,
+            )
 
     response_data = await chat_service.chat(
         request.message,

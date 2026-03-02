@@ -1,5 +1,7 @@
-from common.logger import logger
+from common.logger import ServiceLogger
 from common.utils.crypto import get_file_hash
+
+log = ServiceLogger("Utils")
 
 
 def _get_file_hash(file_bytes: bytes) -> str:
@@ -16,10 +18,12 @@ def log_gemini_token_usage(response, label: str = "Gemini Call"):
         label: ログに出力するラベル（例: "ContextTrans", "OCR"）
     """
     if hasattr(response, "usage_metadata") and response.usage_metadata:
-        logger.info(
-            f"Gemini Token Usage ({label}): "
-            f"input={response.usage_metadata.prompt_token_count}, "
-            f"output={response.usage_metadata.candidates_token_count}"
+        log.info(
+            "gemini_usage",
+            "Gemini Token Usage",
+            label=label,
+            input_tokens=response.usage_metadata.prompt_token_count,
+            output_tokens=response.usage_metadata.candidates_token_count,
         )
 
 
@@ -47,5 +51,6 @@ async def fetch_image_bytes_from_url(url: str) -> bytes | None:
                 if resp.status_code == 200:
                     return resp.content
     except Exception as e:
-        logger.error(f"Failed to fetch image from {url}: {e}")
+        log.error("fetch_image", "Failed to fetch image", url=url, error=str(e))
+
     return None

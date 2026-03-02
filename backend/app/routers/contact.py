@@ -19,7 +19,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.orm.contact import ContactRequest as ContactRequestORM
 from app.schemas.contact import ContactRequest
-from common.logger import logger
+from common.logger import ServiceLogger
+
+log = ServiceLogger("Contact")
+
 
 router = APIRouter(prefix="/contact", tags=["Contact"])
 
@@ -39,10 +42,12 @@ def _send_email(record_id: str, req: ContactRequest) -> None:
     smtp_password = os.getenv("SMTP_PASSWORD", "")
 
     if not smtp_user or not smtp_password:
-        logger.warning(
+        log.warning(
+            "send_email",
             "SMTP credentials not configured. Email skipped.",
             record_id=record_id,
         )
+
         _update_mail_status(record_id, "skipped")
         return
 
@@ -69,12 +74,17 @@ def _send_email(record_id: str, req: ContactRequest) -> None:
             server.starttls()
             server.login(smtp_user, smtp_password)
             server.sendmail(smtp_user, DESTINATION_EMAIL, msg.as_string())
-        logger.info("Contact email sent successfully", record_id=record_id)
+        log.info("send_email", "Contact email sent successfully", record_id=record_id)
         _update_mail_status(record_id, "sent")
+
     except smtplib.SMTPException as exc:
-        logger.error(
-            "Failed to send contact email", record_id=record_id, error=str(exc)
+        log.error(
+            "send_email",
+            "Failed to send contact email",
+            record_id=record_id,
+            error=str(exc),
         )
+
         _update_mail_status(record_id, "failed")
 
 
@@ -89,8 +99,11 @@ def _update_mail_status(record_id: str, status: str) -> None:
                 record.mail_status = status
                 db.commit()
     except Exception as exc:
-        logger.error(
-            "Failed to update mail_status", record_id=record_id, error=str(exc)
+        log.error(
+            "update_mail_status",
+            "Failed to update mail_status",
+            record_id=record_id,
+            error=str(exc),
         )
 
 
@@ -117,10 +130,13 @@ async def submit_contact(
     try:
         db.add(record)
         db.commit()
-        logger.info("Contact request saved to DB", record_id=record_id, name=req.name)
+        log.info(
+            "submit", "Contact request saved to DB", record_id=record_id, name=req.name
+        )
+
     except Exception as exc:
         db.rollback()
-        logger.error("Failed to save contact request", error=str(exc))
+        log.error("submit", "Failed to save contact request", error=str(exc))
         raise HTTPException(
             status_code=500, detail="要望の保存に失敗しました。"
         ) from exc

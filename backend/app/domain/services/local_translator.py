@@ -13,10 +13,10 @@ from app.providers.inference_client import (
     InferenceServiceError,
     get_inference_client,
 )
-from common.logger import get_service_logger
+from common.logger import ServiceLogger
 from common.prompts import DICT_TRANSLATE_WORD_SIMPLE_PROMPT
 
-log = get_service_logger("LocalTranslator")
+log = ServiceLogger("LocalTranslator")
 
 
 class LocalTranslator:
@@ -54,9 +54,9 @@ class LocalTranslator:
         try:
             client = await get_inference_client()
             health_status = await client.health_check()
-            log.info("prewarm", f"ServiceB health check: {health_status}")
+            log.info("prewarm", "ServiceB health check", health_status=health_status)
         except Exception as e:
-            log.warning("prewarm", f"ServiceB warmup failed: {e}")
+            log.warning("prewarm", "ServiceB warmup failed", error=str(e))
 
     async def translate_async(
         self, text: str, tgt_lang: str = "ja", paper_context: str | None = None
@@ -77,8 +77,11 @@ class LocalTranslator:
 
         if use_custom and custom_url:
             log.info(
-                "translate_async", f"Using Custom Translation Backend: {custom_url}"
+                "translate_async",
+                "Using Custom Translation Backend",
+                custom_url=custom_url,
             )
+
             translation = await self._translate_via_custom(text, tgt_lang, custom_url)
             return translation, "custom"
         else:
@@ -89,7 +92,11 @@ class LocalTranslator:
 
     async def _translate_via_custom(self, text: str, tgt_lang: str, url: str) -> str:
         try:
-            log.debug("translate_async", f"Translating via Custom: {text[:50]}...")
+            log.debug(
+                "translate_async",
+                "Translating via Custom",
+                text_preview=f"{text[:50]}...",
+            )
 
             # プロンプトの構築
             lang_name = SUPPORTED_LANGUAGES.get(tgt_lang, tgt_lang)
@@ -126,14 +133,17 @@ class LocalTranslator:
                     if translation:
                         log.debug(
                             "translate_async",
-                            f"Custom Translation result: {translation[:50]}...",
+                            "Custom Translation result",
+                            result_preview=f"{translation[:50]}...",
                         )
+
                         return translation.strip()
 
                 except Exception as json_err:
                     log.debug(
                         "translate_async",
-                        f"Custom response is not valid JSON: {json_err}. Trying raw text.",
+                        "Custom response is not valid JSON. Trying raw text.",
+                        error=str(json_err),
                     )
 
                 # 2. Raw Textとして利用を試みる (JSON解析失敗時 or JSON内に翻訳が見つからない場合)
@@ -150,14 +160,19 @@ class LocalTranslator:
                 return text
 
         except Exception as e:
-            log.error("translate_async", f"Custom Translation error: {e}")
+            log.error("translate_async", "Custom Translation error", error=str(e))
+
             return text
 
     async def _translate_via_service_b(
         self, text: str, tgt_lang: str, paper_context: str | None = None
     ) -> tuple[str, str | None]:
         try:
-            log.debug("translate_async", f"Translating via ServiceB: {text[:50]}...")
+            log.debug(
+                "translate_async",
+                "Translating via ServiceB",
+                text_preview=f"{text[:50]}...",
+            )
 
             client = await get_inference_client()
             # translate_text returns (translation, model) tuple
@@ -172,20 +187,25 @@ class LocalTranslator:
 
             log.debug(
                 "translate_async",
-                f"ServiceB Translation result: {str(translation)[:50]}...",
+                "ServiceB Translation result",
+                result_preview=f"{str(translation)[:50]}...",
             )
+
             return translation, model
 
         except CircuitBreakerError as e:
-            log.error("translate_async", f"Circuit breaker error: {e}")
+            log.error("translate_async", "Circuit breaker error", error=str(e))
+
             raise
 
         except InferenceServiceError as e:
-            log.error("translate_async", f"Inference service error: {e}")
+            log.error("translate_async", "Inference service error", error=str(e))
+
             raise
 
         except Exception as e:
-            log.error("translate_async", f"Unexpected error: {e}")
+            log.error("translate_async", "Unexpected error", error=str(e))
+
             return text, None
 
     def translate(

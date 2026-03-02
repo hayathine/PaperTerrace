@@ -15,7 +15,7 @@ from app.crud import get_ocr_from_db, save_ocr_to_db
 from app.providers import get_ai_provider
 from app.providers.image_storage import get_page_images, save_page_image
 from app.utils import _get_file_hash
-from common.logger import get_service_logger, logger
+from common.logger import ServiceLogger
 from common.utils.bbox import scale_bbox
 from common.utils.math_latex import (
     convert_superscript_brackets,
@@ -26,7 +26,7 @@ from common.utils.math_latex import (
 from .figure_service import FigureService
 from .language_service import LanguageService
 
-log = get_service_logger("OCR")
+log = ServiceLogger("OCR")
 
 
 class PDFOCRService:
@@ -49,7 +49,8 @@ class PDFOCRService:
 
         log.info(
             "extract_start",
-            f"Starting OCR extraction for {filename}",
+            "Starting OCR extraction",
+            filename=filename,
             file_hash=file_hash,
             file_size=len(file_bytes),
             user_plan=user_plan,
@@ -61,27 +62,32 @@ class PDFOCRService:
             storage_type = os.getenv("STORAGE_TYPE", "local").upper()
             log.info(
                 "cache_hit",
-                f"Using cached OCR ({storage_type}) for {filename}",
+                "Using cached OCR",
+                filename=filename,
+                storage_type=storage_type,
                 file_hash=file_hash,
             )
+
             for page in cached_result:
                 yield page
             return
 
         log.info(
             "cache_miss",
-            f"No cache found, starting AI OCR for {filename}",
+            "No cache found, starting AI OCR",
+            filename=filename,
             file_hash=file_hash,
         )
 
         tmp_path = None
         try:
-            log.debug("temp_file_create", f"Creating temp file for {file_hash}")
+            log.debug("temp_file_create", "Creating temp file", file_hash=file_hash)
+
             # Save PDF to temporary file for libraries that need a path (like Camelot)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                 tmp.write(file_bytes)
                 tmp_path = tmp.name
-            log.debug("temp_file_created", f"Temp file created at {tmp_path}")
+            log.debug("temp_file_created", "Temp file created", tmp_path=tmp_path)
 
             with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
                 total_pages = len(pdf.pages)
@@ -99,7 +105,7 @@ class PDFOCRService:
                 for page_num in range(total_pages):
                     log.debug(
                         "page_start",
-                        f"Processing page {page_num + 1}/{total_pages}",
+                        "Processing page",
                         page_num=page_num + 1,
                         total_pages=total_pages,
                     )
@@ -121,10 +127,11 @@ class PDFOCRService:
                             all_layout_parts.append(layout_data)
                             log.info(
                                 "page_complete",
-                                f"Page {page_num + 1} processed",
+                                "Page processed",
                                 page_num=page_num + 1,
                                 text_length=len(page_text),
                             )
+
                         yield result
 
             # 2. Finalize and save to DB
@@ -134,7 +141,8 @@ class PDFOCRService:
             self._finalize_ocr(file_hash, filename, all_text_parts, all_layout_parts)
             log.info(
                 "extract_complete",
-                f"OCR extraction completed for {filename}",
+                "OCR extraction completed",
+                filename=filename,
                 file_hash=file_hash,
                 total_pages=total_pages,
             )
@@ -142,27 +150,33 @@ class PDFOCRService:
         except Exception as e:
             log.error(
                 "extract_failed",
-                f"OCR streaming failed: {str(e)}",
+                "OCR streaming failed",
+                error=str(e),
                 file_hash=file_hash,
                 error_type=type(e).__name__,
             )
-            logger.error(f"Full traceback: {e}", exc_info=True)
+
+            log.error("extract_failed", "Full traceback", error=str(e), exc_info=True)
+
             yield (0, 0, f"ERROR_API_FAILED: {str(e)}", True, file_hash, None, None)
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
-                log.debug("temp_file_cleanup", f"Temp file removed: {tmp_path}")
+                log.debug("temp_file_cleanup", "Temp file removed", tmp_path=tmp_path)
 
     async def _handle_cache(self, file_hash: str) -> list | None:
         """Check if OCR is cached and return formatted pages if so."""
-        logger.debug(f"[OCR] Checking cache for hash: {file_hash}")
+        log.debug("_handle_cache", "Checking cache", file_hash=file_hash)
         cache_data = get_ocr_from_db(file_hash)
         if not cache_data:
-            logger.info(f"[OCR] Cache miss for hash: {file_hash}")
+            log.info("_handle_cache", "Cache miss", file_hash=file_hash)
             return None
 
         storage_type = os.getenv("STORAGE_TYPE", "local").upper()
-        logger.info(f"[OCR] Cache hit ({storage_type}) for hash: {file_hash}")
+        log.info(
+            "_handle_cache", "Cache hit", storage_type=storage_type, file_hash=file_hash
+        )
+
         ocr_text = cache_data["ocr_text"]
         layout_json = cache_data.get("layout_json")
         layout_data_list = []
@@ -170,16 +184,20 @@ class PDFOCRService:
             try:
                 layout_data_list = json.loads(layout_json)
             except Exception:
-                logger.warning(
-                    f"Failed to parse layout_json from cache for {file_hash}"
+                log.warning(
+                    "_handle_cache",
+                    "Failed to parse layout_json from cache",
+                    file_hash=file_hash,
                 )
 
         # Basic split by separator
         pages_text = ocr_text.split("\n\n---\n\n")
         cached_images = get_page_images(file_hash)
         if not cached_images:
-            logger.info(
-                f"[OCR] Cache hit for text but images missing for {file_hash}. Recalculating."
+            log.info(
+                "_handle_cache",
+                "Cache hit for text but images missing. Recalculating.",
+                file_hash=file_hash,
             )
             return None
 
@@ -226,10 +244,31 @@ class PDFOCRService:
         zoom = resolution / 72.0
 
         # Phase 1: Native Text & Links (ULTRA FAST)
-        logger.debug(f"[OCR] Page {page_num}: Phase 1 - Extraction text/links")
-        native_words = page.extract_words(
-            use_text_flow=True, x_tolerance=1, y_tolerance=3
+        log.debug(
+            "_process_page_incremental",
+            "Phase 1 - Extraction text/links",
+            page_num=page_num,
         )
+
+        # Some PDFs have malformed font dictionaries that cause pdfminer to raise
+        # PDFSyntaxError ("Invalid dictionary construct"). Catch it here so the page
+        # can still be rendered as an image even when text extraction fails.
+        try:
+            native_words = page.extract_words(
+                use_text_flow=True, x_tolerance=1, y_tolerance=3
+            )
+            page_text = page.extract_text()
+        except Exception as e:
+            log.warning(
+                "_process_page_incremental",
+                "Text extraction failed for page, falling back to image-only",
+                page_num=page_num,
+                error=str(e),
+                error_type=type(e).__name__,
+            )
+            native_words = []
+            page_text = ""
+
         links = self._extract_links(page, zoom)
 
         # Create initial layout data (coordinates only)
@@ -251,12 +290,14 @@ class PDFOCRService:
             ],
             "links": links,
         }
-        page_text = page.extract_text()
 
         yield (page_num, total_pages, page_text, is_last, file_hash, None, layout_data)
 
         # Phase 2: Page Image (FAST)
-        logger.debug(f"[OCR] Page {page_num}: Phase 2 - Rendering image")
+        log.debug(
+            "_process_page_incremental", "Phase 2 - Rendering image", page_num=page_num
+        )
+
         page_img = page.to_image(resolution=resolution, antialias=True)
         img_pil = page_img.original.convert("RGB")
 
@@ -271,8 +312,14 @@ class PDFOCRService:
         scale_x = img_pil.width / float(page.width)
         scale_y = img_pil.height / float(page.height)
 
-        logger.debug(
-            f"[OCR] Page {page_num}: scale_x={scale_x}, scale_y={scale_y}, img_size={img_pil.width}x{img_pil.height}, page_size={page.width}x{page.height}"
+        log.debug(
+            "_process_page_incremental",
+            "Scaling factors and dimensions",
+            page_num=page_num,
+            scale_x=scale_x,
+            scale_y=scale_y,
+            img_size=f"{img_pil.width}x{img_pil.height}",
+            page_size=f"{page.width}x{page.height}",
         )
 
         layout_data["width"] = float(img_pil.width)
@@ -295,8 +342,11 @@ class PDFOCRService:
 
             layout_svc = get_layout_service()
             layout_blocks = await layout_svc.detect_layout_from_image_async(img_bytes)
-            logger.info(
-                f"[OCR] Page {page_num}: Layout blocks detected: {len(layout_blocks)}"
+            log.info(
+                "_process_page_incremental",
+                "Layout blocks detected",
+                page_num=page_num,
+                block_count=len(layout_blocks),
             )
 
             if pdf_path:
@@ -393,10 +443,15 @@ class PDFOCRService:
                 if figure_refs:
                     page_text += "".join(figure_refs)
 
-                logger.info(
-                    f"[OCR] Page {page_num}: pymupdf4llm markdown generated "
-                    f"(length={len(page_text)}, figures={len(figure_refs)}, equations={eq_count})"
+                log.info(
+                    "_process_page_incremental",
+                    "pymupdf4llm markdown generated",
+                    page_num=page_num,
+                    text_length=len(page_text),
+                    figure_count=len(figure_refs),
+                    equation_count=eq_count,
                 )
+
             else:
                 # pdf_path が取得できない場合は既存方式にフォールバック
                 from app.domain.services.markdown_builder import (
@@ -406,25 +461,43 @@ class PDFOCRService:
                 page_text = generate_markdown_from_layout(
                     layout_data["words"], layout_blocks
                 )
-                logger.info(
-                    f"[OCR] Page {page_num}: Fallback markdown (generate_markdown_from_layout)"
+                log.info(
+                    "_process_page_incremental",
+                    "Fallback markdown (generate_markdown_from_layout)",
+                    page_num=page_num,
                 )
+
         except Exception as e:
-            logger.error(f"[OCR] Page {page_num}: Markdown generation failed: {e}")
+            log.error(
+                "_process_page_incremental",
+                "Markdown generation failed",
+                page_num=page_num,
+                error=str(e),
+            )
             # Fallback to plain text if layout service fails
+
             pass
 
         # Debug: Verify words are correctly populated
-        logger.info(
-            f"[OCR] Page {page_num}: Phase 2 complete - "
-            f"native_words={len(native_words)}, "
-            f"layout_data words={len(layout_data['words'])}, "
-            f"width={layout_data['width']}, height={layout_data['height']}, "
-            f"markdown_length={len(page_text)}"
+        log.info(
+            "_process_page_incremental",
+            "Phase 2 complete",
+            page_num=page_num,
+            native_word_count=len(native_words),
+            layout_word_count=len(layout_data["words"]),
+            width=layout_data["width"],
+            height=layout_data["height"],
+            markdown_length=len(page_text),
         )
+
         if layout_data["words"]:
             sample_word = layout_data["words"][0]
-            logger.debug(f"[OCR] Page {page_num}: Sample word: {sample_word}")
+            log.debug(
+                "_process_page_incremental",
+                "Sample word",
+                page_num=page_num,
+                sample=sample_word,
+            )
 
         # Phase 2 yield with synchronized layout and image
         # Phase 3 (AI Analysis for figures) is now deferred to lazy loading
@@ -440,7 +513,10 @@ class PDFOCRService:
 
     def _extract_links(self, page, zoom):  # TODO: `linkify-it-py`を検討
         """Extract hyperlinks from the PDF page metadata using pdfplumber."""
-        logger.debug(f"[OCR] p.{page.page_number}: Extracting links with zoom={zoom}")
+        log.debug(
+            "_extract_links", "Extracting links", page_num=page.page_number, zoom=zoom
+        )
+
         links = []
         try:
             # pdfplumber >= 0.11.0 has .hyperlinks
@@ -479,7 +555,13 @@ class PDFOCRService:
                             }
                         )
         except Exception as e:
-            logger.warning(f"Link extraction failed on page {page.page_number}: {e}")
+            log.warning(
+                "_extract_links",
+                "Link extraction failed",
+                page_num=page.page_number,
+                error=str(e),
+            )
+
         return links
 
     async def _extract_native_or_vision_text(
@@ -487,15 +569,23 @@ class PDFOCRService:
     ):
         """Try to extract text from PDF directly, fallback to Vision API or Gemini."""
         page_num = page.page_number
-        logger.debug(f"[OCR] p.{page_num}: Attempting native word extraction")
+        log.debug(
+            "_extract_native_or_vision_text",
+            "Attempting native word extraction",
+            page_num=page_num,
+        )
 
         words = page.extract_words(use_text_flow=True, x_tolerance=1, y_tolerance=3)
         if words:
             # Filter words that are inside any figure bbox
             if exclude_bboxes:
-                logger.debug(
-                    f"[OCR] p.{page_num}: Filtering words against {len(exclude_bboxes)} figure boxes"
+                log.debug(
+                    "_extract_native_or_vision_text",
+                    "Filtering words against figure boxes",
+                    page_num=page_num,
+                    box_count=len(exclude_bboxes),
                 )
+
                 filtered_words = []
                 for w in words:
                     # Convert word coords to zoom coords for comparison
@@ -512,9 +602,13 @@ class PDFOCRService:
                         filtered_words.append(w)
                 words = filtered_words
 
-            logger.info(
-                f"[OCR] p.{page_num}: Native word extraction successful ({len(words)} words)"
+            log.info(
+                "_extract_native_or_vision_text",
+                "Native word extraction successful",
+                page_num=page_num,
+                word_count=len(words),
             )
+
             word_list = [
                 {
                     "word": w["text"],
@@ -536,45 +630,77 @@ class PDFOCRService:
             return page_text, layout
 
         # Try secondary native extraction if words is empty but text exists
-        logger.info(f"[OCR] p.{page_num}: Native words empty, trying extract_text()")
+        log.info(
+            "_extract_native_or_vision_text",
+            "Native words empty, trying extract_text()",
+            page_num=page_num,
+        )
         text_fallback = page.extract_text()
         if text_fallback and text_fallback.strip():
-            logger.info(
-                f"[OCR] p.{page_num}: Native extract_text succeeded (length: {len(text_fallback)})"
+            log.info(
+                "_extract_native_or_vision_text",
+                "Native extract_text succeeded",
+                page_num=page_num,
+                text_length=len(text_fallback),
             )
+
             layout = {"width": img_pil.width, "height": img_pil.height, "words": []}
             return text_fallback, layout
 
         # Fallback to Vision OCR
-        logger.warning(
-            f"[OCR] p.{page_num}: No native text found. Falling back to Vision API"
+        log.warning(
+            "_extract_native_or_vision_text",
+            "No native text found. Falling back to Vision API",
+            page_num=page_num,
         )
+
         try:
             from app.providers.vision_ocr import VisionOCRService
 
             vision = VisionOCRService()
             if vision.is_available():
-                logger.info(f"[OCR] p.{page_num}: Using Vision API for extraction")
+                log.info(
+                    "_extract_native_or_vision_text",
+                    "Using Vision API for extraction",
+                    page_num=page_num,
+                )
                 text, layout = await vision.detect_text_with_layout(img_bytes)
                 if layout:
-                    logger.info(f"[OCR] p.{page_num}: Vision API successful")
+                    log.info(
+                        "_extract_native_or_vision_text",
+                        "Vision API successful",
+                        page_num=page_num,
+                    )
                     layout.update({"width": img_pil.width, "height": img_pil.height})
                     return text, layout
                 else:
-                    logger.warning(
-                        f"[OCR] p.{page_num}: Vision API returned no layout/text"
+                    log.warning(
+                        "_extract_native_or_vision_text",
+                        "Vision API returned no layout/text",
+                        page_num=page_num,
                     )
             else:
-                logger.warning(
-                    f"[OCR] p.{page_num}: Vision API is not available (check credentials)"
+                log.warning(
+                    "_extract_native_or_vision_text",
+                    "Vision API is not available (check credentials)",
+                    page_num=page_num,
                 )
+
         except Exception as e:
-            logger.error(f"[OCR] p.{page_num}: Vision OCR failed: {e}")
+            log.error(
+                "_extract_native_or_vision_text",
+                "Vision OCR failed",
+                page_num=page_num,
+                error=str(e),
+            )
 
         # Final fallback to Gemini
-        logger.warning(
-            f"[OCR] p.{page_num}: All native/Vision attempts failed. Falling back to Gemini"
+        log.warning(
+            "_extract_native_or_vision_text",
+            "All native/Vision attempts failed. Falling back to Gemini",
+            page_num=page_num,
         )
+
         try:
             from common.prompts import PDF_EXTRACT_TEXT_OCR_PROMPT
 
@@ -582,15 +708,27 @@ class PDFOCRService:
                 PDF_EXTRACT_TEXT_OCR_PROMPT, img_bytes, "image/png", model=self.model
             )
             if text and text.strip():
-                logger.info(
-                    f"[OCR] p.{page_num}: Gemini OCR successful (length: {len(text)})"
+                log.info(
+                    "_extract_native_or_vision_text",
+                    "Gemini OCR successful",
+                    page_num=page_num,
+                    text_length=len(text),
                 )
                 return text, None
             else:
-                logger.error(f"[OCR] p.{page_num}: Gemini OCR returned empty text")
+                log.error(
+                    "_extract_native_or_vision_text",
+                    "Gemini OCR returned empty text",
+                    page_num=page_num,
+                )
                 return "", None
         except Exception as e:
-            logger.error(f"[OCR] p.{page_num}: Gemini OCR failed: {e}")
+            log.error(
+                "_extract_native_or_vision_text",
+                "Gemini OCR failed",
+                page_num=page_num,
+                error=str(e),
+            )
             return "", None
 
     def _finalize_ocr(self, file_hash, filename, all_text_parts, all_layout_parts=None):
@@ -625,4 +763,4 @@ class PDFOCRService:
             model_name=self.model,
             layout_json=layout_json,
         )
-        logger.info(f"[OCR Streaming] Completed and saved: {filename}")
+        log.info("_finalize_ocr", "Completed and saved", filename=filename)

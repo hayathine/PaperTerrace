@@ -11,7 +11,10 @@ from pathlib import Path
 from fastapi import APIRouter, File, UploadFile
 from fastapi.responses import JSONResponse
 
-from common.logger import logger
+from common.logger import ServiceLogger
+
+log = ServiceLogger("Upload")
+
 
 router = APIRouter(tags=["Upload"])
 
@@ -42,9 +45,10 @@ async def upload_image(file: UploadFile = File(...)):
             shutil.copyfileobj(file.file, buffer)
 
         file_url = f"/static/user_uploads/{filename}"
-        logger.info(f"Image uploaded: {file_url}")
+        log.info("upload_image", "Image uploaded", file_url=file_url)
 
         return JSONResponse({"url": file_url})
     except Exception as e:
-        logger.error(f"Failed to upload image: {e}")
+        log.error("upload_image", "Failed to upload image", error=str(e))
+
         return JSONResponse({"error": "Failed to upload image"}, status_code=500)

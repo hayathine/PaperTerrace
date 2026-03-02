@@ -1,3 +1,7 @@
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Config");
+
 function resolveApiUrl(): string {
 	if (!import.meta.env.PROD) {
 		return "";
@@ -13,7 +17,8 @@ function resolveApiUrl(): string {
 		url = import.meta.env.VITE_API_URL as string;
 	}
 
-	console.log(`[Config] API URL resolved to: ${url} (hostname: ${hostname})`);
+	log.info("resolve_api_url", "API URL resolved", { url, hostname });
+
 	return url;
 }
 

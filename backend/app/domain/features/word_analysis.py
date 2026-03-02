@@ -3,7 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.providers import RedisService, get_ai_provider
 from app.providers.dictionary_provider import get_dictionary_provider
-from common.logger import logger
+from common.logger import ServiceLogger
 from common.prompts import (
     ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT,
     CORE_SYSTEM_PROMPT,
@@ -11,6 +11,8 @@ from common.prompts import (
 from common.utils.text import truncate_context
 
 from .correspondence_lang_dict import SUPPORTED_LANGUAGES
+
+log = ServiceLogger("WordAnalysis")
 
 
 class WordAnalysisService:
@@ -47,7 +49,12 @@ class WordAnalysisService:
                     "source": "ServiceB-MT",
                 }
         except Exception as e:
-            logger.warning(f"ServiceB translation failed for '{lemma}': {e}")
+            log.warning(
+                "translate",
+                "ServiceB translation failed",
+                lemma=lemma,
+                error=str(e),
+            )
 
         # 4. AI Translation (Context-aware if context provided)
         if context:
@@ -87,5 +94,11 @@ class WordAnalysisService:
                 "source": "Gemini (Context)",
             }
         except Exception as e:
-            logger.error(f"Context translation failed for '{word}': {e}")
+            log.error(
+                "translate_with_context",
+                "Context translation failed",
+                word=word,
+                error=str(e),
+            )
+
             return None

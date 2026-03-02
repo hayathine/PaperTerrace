@@ -23,9 +23,10 @@ from app.providers import (
     get_storage_provider,
 )
 from app.utils import _get_file_hash
-from common.logger import get_service_logger, logger
+from common.logger import ServiceLogger
 
-log = get_service_logger("PDF")
+log = ServiceLogger("PDF")
+
 
 router = APIRouter(tags=["PDF Analysis"])
 
@@ -67,7 +68,7 @@ async def analyze_pdf(
     # Language detection
     detected_lang = await service.ocr_service.language_service.detect_language(content)
     if detected_lang and detected_lang != "en":
-        logger.warning(f"Unsupported language detected: {detected_lang}")
+        log.warning("analyze", "Unsupported language detected", lang=detected_lang)
         return Response(
             "Error: Currently, only English papers are supported. / 現在、英語の論文のみサポートしています。",
             status_code=400,
@@ -145,16 +146,18 @@ async def analyze_pdf_json(
     import time
 
     start_time = time.time()
-    logger.info(f"[analyze-pdf-json] START: {file.filename} ({file.size} bytes)")
+    log.info("analyze_json", "START", filename=file.filename, size=file.size)
 
     # Capture user_id
     user_id = user.uid if user else None
     if user_id:
-        logger.info(f"[analyze-pdf-json] Authenticated user: {user_id}")
+        log.info("analyze_json", "Authenticated user", user_id=user_id)
 
     content = await file.read()
     file_hash = _get_file_hash(content)
-    logger.info(f"[analyze-pdf-json] session_id={session_id}, file_hash={file_hash}")
+    log.info(
+        "analyze_json", "Input received", session_id=session_id, file_hash=file_hash
+    )
 
     # Detect PDF language
     try:
@@ -162,7 +165,9 @@ async def analyze_pdf_json(
             content
         )
         if detected_lang and detected_lang != "en":
-            logger.warning(f"Unsupported language detected: {detected_lang}")
+            log.warning(
+                "analyze_json", f"Unsupported language detected: {detected_lang}"
+            )
             return JSONResponse(
                 {
                     "error": "Currently, only English papers are supported. / 現在、英語の論文のみサポートしています。"
@@ -184,19 +189,27 @@ async def analyze_pdf_json(
 
                 cached_images = get_page_images(file_hash)
             except ImportError as ie:
-                logger.error(f"Failed to import get_page_images: {ie}")
+                log.error(
+                    "analyze_json", "Failed to import get_page_images", error=str(ie)
+                )
                 cached_images = []
 
             if not cached_images:
-                logger.info(
-                    f"[analyze-pdf-json] Cache HIT ({paper_id}) but images missing. Regenerating."
+                log.info(
+                    "analyze_json",
+                    "Cache HIT but images missing. Regenerating.",
+                    paper_id=paper_id,
                 )
                 raw_text = None
             else:
                 storage_type = os.getenv("STORAGE_TYPE", "local").upper()
-                logger.info(
-                    f"[analyze-pdf-json] Cache HIT ({storage_type}): paper_id={paper_id}"
+                log.info(
+                    "analyze_json",
+                    "Cache HIT",
+                    storage_type=storage_type,
+                    paper_id=paper_id,
                 )
+
                 if cached_paper.get("html_content"):
                     raw_text = "CACHED_HTML:" + cached_paper["html_content"]
                 else:
@@ -205,9 +218,7 @@ async def analyze_pdf_json(
             import uuid6
 
             paper_id = str(uuid6.uuid7())
-            logger.info(
-                f"[analyze-pdf-json] Cache MISS: Generated new paper_id={paper_id}"
-            )
+            log.info("analyze_json", "Cache MISS", paper_id=paper_id)
             raw_text = None
 
         # Check if user is registered (exists in our DB)
@@ -216,14 +227,15 @@ async def analyze_pdf_json(
             try:
                 if storage.get_user(user_id):
                     is_registered = True
-                    logger.info(f"[analyze-pdf-json] User {user_id} is registered")
+                    log.info("analyze_json", "User is registered", user_id=user_id)
                 else:
-                    logger.info(
-                        f"[analyze-pdf-json] User {user_id} is a guest (not in DB)"
+                    log.info(
+                        "analyze_json", "User is a guest (not in DB)", user_id=user_id
                     )
+
             except Exception as e:
-                logger.error(
-                    f"[analyze-pdf-json] Failed to check user registration: {e}"
+                log.error(
+                    "analyze_json", "Failed to check user registration", error=str(e)
                 )
 
         task_id = str(uuid.uuid4())
@@ -232,12 +244,16 @@ async def analyze_pdf_json(
         if is_registered and session_id and paper_id and paper_id != "pending":
             try:
                 storage.save_session_context(session_id, paper_id)
-                logger.info(
-                    f"[analyze-pdf-json] Pre-saved session context: {session_id} -> {paper_id}"
+                log.info(
+                    "analyze_json",
+                    "Pre-saved session context",
+                    session_id=session_id,
+                    paper_id=paper_id,
                 )
+
             except Exception as e:
-                logger.error(
-                    f"[analyze-pdf-json] Failed to pre-save session context: {e}"
+                log.error(
+                    "analyze_json", "Failed to pre-save session context", error=str(e)
                 )
 
         task_data = {
@@ -271,8 +287,11 @@ async def analyze_pdf_json(
         redis_service.set(f"task:{task_id}", task_data, expire=3600)
 
         total_elapsed = time.time() - start_time
-        logger.info(
-            f"[analyze-pdf-json] Task created: {task_id}, elapsed: {total_elapsed:.2f}s"
+        log.info(
+            "analyze_json",
+            "Task created",
+            task_id=task_id,
+            elapsed=f"{total_elapsed:.2f}s",
         )
 
         return JSONResponse(
@@ -280,7 +299,8 @@ async def analyze_pdf_json(
         )
 
     except Exception as e:
-        logger.error(f"[analyze-pdf-json] Unexpected error: {e}", exc_info=True)
+        log.error("analyze_json", "Unexpected error", error=str(e), exc_info=True)
+
         return JSONResponse(
             {"error": f"Internal Server Error: {str(e)}"}, status_code=500
         )
@@ -348,7 +368,7 @@ async def stream(task_id: str):
     import time
 
     stream_start = time.time()
-    logger.info(f"[stream] START: task_id={task_id}")
+    log.info("stream", "START", task_id=task_id)
 
     data = redis_service.get(f"task:{task_id}")
     if data:
@@ -357,7 +377,8 @@ async def stream(task_id: str):
 
     # Task not found - return proper error response instead of 204
     if not data:
-        logger.warning(f"[stream] Task not found: {task_id}")
+        log.warning("stream", "Task not found", task_id=task_id)
+
         return Response(
             content=f"data: {json.dumps({'type': 'error', 'message': 'Task not found or expired'})}\n\n",
             media_type="text/plain",
@@ -386,9 +407,13 @@ async def stream(task_id: str):
                     try:
                         pdf_content = img_storage.get_doc_bytes(pdf_path)
                     except Exception as e:
-                        logger.error(
-                            f"[stream] {task_id}: Failed to read PDF from {pdf_path}: {e}"
+                        log.error(
+                            "stream",
+                            f"Failed to read PDF from {pdf_path}: {e}",
+                            task_id=task_id,
+                            pdf_path=pdf_path,
                         )
+
                         yield f"data: {json.dumps({'type': 'error', 'message': 'PDF source not found or inaccessible'})}\n\n"
                         return
                 elif pdf_b64:
@@ -396,7 +421,8 @@ async def stream(task_id: str):
 
                     pdf_content = base64.b64decode(pdf_b64)
                 else:
-                    logger.error(f"[stream] {task_id}: No PDF source found")
+                    log.error("stream", "No PDF source found", task_id=task_id)
+
                     yield f"data: {json.dumps({'type': 'error', 'message': 'PDF source not found'})}\n\n"
                     return
 
@@ -410,8 +436,11 @@ async def stream(task_id: str):
                     if user_data:
                         user_plan = user_data.get("plan", "free")
 
-                logger.info(
-                    f"[stream] {task_id}: Starting OCR extraction for {filename}"
+                log.info(
+                    "stream",
+                    "Starting OCR extraction",
+                    task_id=task_id,
+                    filename=filename,
                 )
 
                 # Collect figures to save later
@@ -462,12 +491,15 @@ async def stream(task_id: str):
                             page_payload["figures"] = layout_data.get("figures", [])
 
                             # Debug: Log what we're sending to frontend
-                            logger.info(
-                                f"[stream] {task_id}: Page {page_num} payload - "
-                                f"words={len(page_payload['words'])}, "
-                                f"figures={len(page_payload['figures'])}, "
-                                f"width={page_payload['width']}, "
-                                f"height={page_payload['height']}"
+                            log.info(
+                                "stream",
+                                f"Page {page_num} payload sent to frontend",
+                                task_id=task_id,
+                                page_num=page_num,
+                                words=len(page_payload["words"]),
+                                figures=len(page_payload["figures"]),
+                                width=page_payload["width"],
+                                height=page_payload["height"],
                             )
 
                             # Collect figures if present
@@ -476,17 +508,24 @@ async def stream(task_id: str):
 
                             all_layout_data.append(layout_data)
                         else:
-                            logger.warning(
-                                f"[stream] {task_id}: Page {page_num} has no layout_data!"
+                            log.warning(
+                                "stream",
+                                f"Page {page_num} has no layout_data!",
+                                task_id=task_id,
+                                page_num=page_num,
                             )
+
                             all_layout_data.append(None)
 
                     yield f"event: message\ndata: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
                     await asyncio.sleep(0.01)
 
                 # End of OCR
-                logger.info(
-                    f"[stream] {task_id}: OCR complete. Pages processed: {page_count}"
+                log.info(
+                    "stream",
+                    "OCR complete",
+                    task_id=task_id,
+                    pages_processed=page_count,
                 )
 
                 # Send coordinates ready event (Phase 2 completion)
@@ -525,8 +564,12 @@ async def stream(task_id: str):
                         if session_id:
                             storage.save_session_context(session_id, new_paper_id)
 
-                        logger.info(
-                            f"[stream] {task_id}: Paper saved to DB for user {user_id}"
+                        log.info(
+                            "stream",
+                            f"Paper saved to DB for user {user_id}",
+                            task_id=task_id,
+                            user_id=user_id,
+                            paper_id=new_paper_id,
                         )
 
                         # Trigger background tasks (require DB records)
@@ -558,12 +601,18 @@ async def stream(task_id: str):
                                     )
                                 )
                     except Exception as db_err:
-                        logger.error(
-                            f"[stream] {task_id}: Failed to save to DB: {db_err}"
+                        log.error(
+                            "stream",
+                            f"Failed to save to DB: {db_err}",
+                            task_id=task_id,
+                            paper_id=new_paper_id,
                         )
+
                 else:
-                    logger.info(
-                        f"[stream] {task_id}: Skipping DB save for guest/transient session"
+                    log.info(
+                        "stream",
+                        "Skipping DB save for guest/transient session",
+                        task_id=task_id,
                     )
 
                 # Redis session context (1-hour sliding limit, TRUNCATED to 20k chars to prevent OOM)
@@ -586,33 +635,53 @@ async def stream(task_id: str):
                     if paper_data.get("layout_json"):
                         try:
                             layout_list = json.loads(paper_data["layout_json"])
-                            logger.info(
-                                f"[stream] {task_id}: Loaded layout_list with {len(layout_list)} pages"
+                            log.info(
+                                "stream",
+                                "Loaded layout_list from DB",
+                                task_id=task_id,
+                                pages=len(layout_list),
                             )
                         except Exception as e:
-                            logger.error(
-                                f"[stream] {task_id}: Failed to parse layout_json: {e}"
+                            log.error(
+                                "stream",
+                                f"Failed to parse layout_json: {e}",
+                                task_id=task_id,
                             )
+
                     else:
-                        logger.warning(
-                            f"[stream] {task_id}: No layout_json in paper_data!"
+                        log.warning(
+                            "stream",
+                            "No layout_json in paper_data!",
+                            task_id=task_id,
                         )
 
                     if paper_data.get("ocr_text"):
                         pages_text = paper_data["ocr_text"].split("\n\n---\n\n")
-                        logger.info(
-                            f"[stream] {task_id}: Loaded {len(pages_text)} pages of text"
+                        log.info(
+                            "stream",
+                            "Loaded pages text from DB",
+                            task_id=task_id,
+                            pages=len(pages_text),
                         )
 
                 f_hash = data.get("file_hash")
-                logger.info(
-                    f"[stream] {task_id}: Cache path for paper_id={paper_id}, f_hash={f_hash}"
+                log.info(
+                    "stream",
+                    "Cache path for paper",
+                    task_id=task_id,
+                    paper_id=paper_id,
+                    f_hash=f_hash,
                 )
+
                 if f_hash:
                     cached_images = get_page_images(f_hash)
-                    logger.info(
-                        f"[stream] {task_id}: Found {len(cached_images)} cached images"
+                    log.info(
+                        "stream",
+                        "Found cached images",
+                        task_id=task_id,
+                        count=len(cached_images),
                     )
+
                     for i, img_url in enumerate(cached_images):
                         page_payload = {
                             "page_num": i + 1,
@@ -629,15 +698,23 @@ async def stream(task_id: str):
                             page_payload["words"] = layout_list[i].get("words", [])
                             page_payload["figures"] = layout_list[i].get("figures", [])
 
-                            logger.debug(
-                                f"[stream] {task_id}: Page {i + 1} from cache - "
-                                f"words={len(page_payload['words'])}, "
-                                f"width={page_payload['width']}, height={page_payload['height']}"
+                            log.debug(
+                                "stream",
+                                f"Page {i + 1} loaded from cache",
+                                task_id=task_id,
+                                page_num=i + 1,
+                                words=len(page_payload["words"]),
+                                width=page_payload["width"],
+                                height=page_payload["height"],
                             )
+
                         else:
-                            logger.warning(
-                                f"[stream] {task_id}: Page {i + 1} missing from layout_list! "
-                                f"layout_list length={len(layout_list)}"
+                            log.warning(
+                                "stream",
+                                f"Page {i + 1} missing from layout_list!",
+                                task_id=task_id,
+                                page_num=i + 1,
+                                layout_list_len=len(layout_list),
                             )
 
                         yield f"event: message\ndata: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
@@ -657,16 +734,25 @@ async def stream(task_id: str):
                     redis_service.set(
                         f"session:{s_id}", paper_data["ocr_text"], expire=3600
                     )  # Align TTL to 1 hour
-                    logger.info(f"Restored session context for: {s_id} (Expires in 1h)")
+                    log.info(
+                        "stream",
+                        "Restored session context",
+                        s_id=s_id,
+                    )
+
                 else:
-                    logger.warning(
-                        f"Failed to restore session context: session_id={session_id}, paper_data={paper_data is not None}"
+                    log.warning(
+                        "stream",
+                        "Failed to restore session context",
+                        session_id=session_id,
+                        has_paper_data=paper_data is not None,
                     )
 
                 yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': paper_id, 'cached': True})}\n\n"
                 await asyncio.sleep(0.01)
 
-            logger.info(f"[stream] {task_id}: json_generate finished")
+            log.info("stream", "json_generate finished", task_id=task_id)
+
             # Cleanup handled by wrapper
 
         async def json_generate():
@@ -675,13 +761,20 @@ async def stream(task_id: str):
                     yield item
             except asyncio.CancelledError:
                 # Client disconnected - this is normal, log at info level
-                logger.info(f"[stream] {task_id}: Client disconnected (CancelledError)")
+                log.info(
+                    "stream", "Client disconnected (CancelledError)", task_id=task_id
+                )
+
                 # Don't delete task immediately - keep it for potential reconnection
+
             except Exception as e:
-                logger.error(
-                    f"[stream] {task_id}: Unexpected error in stream: {e}",
+                log.error(
+                    "stream",
+                    f"Unexpected error in stream: {e}",
+                    task_id=task_id,
                     exc_info=True,
                 )
+
                 try:
                     yield f"event: message\ndata: {json.dumps({'type': 'error', 'message': 'Internal Server Error'})}\n\n"
                     yield "event: close\ndata: done\n\n"
@@ -689,12 +782,14 @@ async def stream(task_id: str):
                     pass  # Client may already be disconnected
                 # Delete task only on actual errors, not client disconnects
                 redis_service.delete(f"task:{task_id}")
-                logger.info(f"[stream] {task_id}: Cleaned up task due to error")
+                log.info("stream", "Cleaned up task due to error", task_id=task_id)
             else:
                 # Normal completion - delete task
                 redis_service.delete(f"task:{task_id}")
-                logger.info(
-                    f"[stream] {task_id}: Cleaned up task after normal completion"
+                log.info(
+                    "stream",
+                    "Cleaned up task after normal completion",
+                    task_id=task_id,
                 )
 
         return StreamingResponse(json_generate(), media_type="text/event-stream")
@@ -708,8 +803,8 @@ async def stream(task_id: str):
             try:
                 pdf_content = img_storage.get_doc_bytes(pdf_path)
             except Exception as e:
-                logger.error(
-                    f"[stream] {task_id}: Failed to read PDF from {pdf_path}: {e}"
+                log.error(
+                    "stream", f"{task_id}: Failed to read PDF from {pdf_path}: {e}"
                 )
                 return Response(
                     "Error: PDF source not found or inaccessible", status_code=404
@@ -729,7 +824,8 @@ async def stream(task_id: str):
 
                 paper_id = str(uuid6.uuid7())
 
-            logger.info(f"[stream] ocr_generate using paper_id={paper_id}")
+            log.info("stream", "ocr_generate started", paper_id=paper_id)
+
             yield 'event: message\ndata: <div id="paper-content" hx-swap-oob="innerHTML"><div class="flex flex-col items-center justify-center min-h-[400px] text-center"><div class="animate-spin rounded-full h-12 w-12 border-4 border-indigo-200 border-t-indigo-600 mb-4"></div><p class="text-slate-500 font-medium">📄 PDFを解析中...</p><p class="text-xs text-slate-400 mt-2">AI OCRで文字認識を実行しています<br>ページごとに順次表示されます</p></div></div>\n\n'
 
             full_text_fragments = []
@@ -849,15 +945,18 @@ async def stream(task_id: str):
                     target_language="ja",
                     owner_id=user_id,
                 )
-                logger.info(f"Paper record saved: {paper_id}")
+                log.info("ocr_generate", "Paper record saved", paper_id=paper_id)
 
                 # Save Collected Figures and Explain
                 if collected_figures:
                     from app.crud import save_figure_to_db
 
-                    logger.info(
-                        f"Saving {len(collected_figures)} extracted figures for paper {paper_id}"
+                    log.info(
+                        "ocr_generate",
+                        f"Saving {len(collected_figures)} extracted figures",
+                        paper_id=paper_id,
                     )
+
                     for fig in collected_figures:
                         fid = save_figure_to_db(
                             paper_id=paper_id,
@@ -882,7 +981,11 @@ async def stream(task_id: str):
                     storage.save_session_context(session_id, paper_id)
 
             except Exception as e:
-                logger.error(f"Failed to save paper record: {e}")
+                log.error(
+                    "ocr_generate",
+                    f"Failed to save paper record: {e}",
+                    paper_id=paper_id,
+                )
 
             # Redisセッションコンテキストを1時間保持 (sliding)
             if session_id:
@@ -901,7 +1004,7 @@ async def stream(task_id: str):
     # キャッシュされたHTMLがある場合の処理
     if text.startswith("CACHED_HTML:"):
         html_content = text[12:]
-        logger.info(f"[stream] Serving cached HTML for paper_id={paper_id}")
+        log.info("stream", "Serving cached HTML", paper_id=paper_id)
 
         async def cached_generate():
             # キャッシュされたHTMLを表示（paper-contentの中身を置換）
@@ -921,14 +1024,17 @@ async def stream(task_id: str):
             # SSEコンテナを削除して接続終了
             yield f'event: message\ndata: <div id="sse-container-{task_id}" hx-swap-oob="outerHTML" data-paper-id="finished" style="display:none"></div>\n\n'
             yield "event: close\ndata: done\n\n"
-            logger.info(
-                f"[stream] END (cached): task_id={task_id}, elapsed={time.time() - stream_start:.2f}s"
+            log.info(
+                "cached_generate",
+                "END (cached)",
+                task_id=task_id,
+                elapsed=f"{time.time() - stream_start:.2f}s",
             )
 
         redis_service.delete(f"task:{task_id}")
         return StreamingResponse(cached_generate(), media_type="text/event-stream")
 
-    logger.info(f"[stream] Starting tokenization for paper_id={paper_id}")
+    log.info("stream", "Starting tokenization", paper_id=paper_id)
 
     async def generate():
         async for chunk in service.tokenize_stream(text, paper_id, lang=lang):
@@ -936,9 +1042,14 @@ async def stream(task_id: str):
             await asyncio.sleep(0.01)
 
         redis_service.delete(f"task:{task_id}")
-        logger.info(
-            f"[stream] END: task_id={task_id}, paper_id={paper_id}, elapsed={time.time() - stream_start:.2f}s"
+        log.info(
+            "generate",
+            "END",
+            task_id=task_id,
+            paper_id=paper_id,
+            elapsed=f"{time.time() - stream_start:.2f}s",
         )
+
         # フロントエンドにpaper_idを通知
         yield f'event: message\ndata: <input type="hidden" id="current-paper-id" value="{paper_id}" hx-swap-oob="true" />\n\n'
 

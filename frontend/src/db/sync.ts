@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
+import { createLogger } from "@/lib/logger";
 import { db, isDbAvailable } from "./index";
+
+const log = createLogger("DBSync");
 
 export function useSyncStatus() {
 	const [status, setStatus] = useState<"synced" | "pending" | "offline">(
@@ -40,7 +43,8 @@ export function useSyncStatus() {
 					.count();
 				setStatus(unsyncedCount > 0 ? "pending" : "synced");
 			} catch (e) {
-				console.warn("Failed to check sync status:", e);
+				log.warn("check_sync", "Failed to check sync status", { error: e });
+
 				setStatus("synced");
 			}
 		};
@@ -69,6 +73,6 @@ export async function recordEdit(
 			created_at: Date.now(),
 		});
 	} catch (e) {
-		console.error("Failed to record edit:", e);
+		log.error("record_edit", "Failed to record edit", { error: e });
 	}
 }

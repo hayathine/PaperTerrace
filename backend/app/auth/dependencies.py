@@ -8,7 +8,9 @@ from typing import Annotated
 from fastapi import Depends, Header, HTTPException, Request, status
 
 from app.auth.firebase import FirebaseAuth, FirebaseAuthError, get_firebase_auth
-from common.logger import logger
+from common.logger import ServiceLogger
+
+log = ServiceLogger("AuthDep")
 
 
 class AuthenticatedUser:
@@ -59,7 +61,7 @@ async def get_current_user(
 
     # 2. Traditional Authorization Header (Local Dev / Direct Hit)
     if not authorization:
-        logger.debug("No authorization header provided")
+        log.debug("get_current_user", "No authorization header provided")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="認証が必要です",
@@ -69,7 +71,7 @@ async def get_current_user(
     # Extract token from "Bearer <token>" format
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
-        logger.debug("Invalid authorization header format")
+        log.debug("get_current_user", "Invalid authorization header format")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="無効な認証形式です",
@@ -81,13 +83,17 @@ async def get_current_user(
     try:
         decoded_token = firebase_auth.verify_token(token)
         user = AuthenticatedUser(decoded_token)
-        logger.info(
+        log.info(
+            "get_current_user",
             "User authenticated via token",
-            extra={"uid": user.uid, "email": user.email, "provider": user.provider},
+            uid=user.uid,
+            email=user.email,
+            provider=user.provider,
         )
         return user
+
     except FirebaseAuthError as e:
-        logger.warning("Authentication failed", extra={"error": str(e)})
+        log.warning("get_current_user", "Authentication failed", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail=str(e),

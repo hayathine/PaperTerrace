@@ -1,12 +1,15 @@
 import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { createLogger } from "@/lib/logger";
 import { useLoading } from "../../contexts/LoadingContext";
 import { usePaperCache } from "../../db/hooks";
 import CopyButton from "../Common/CopyButton";
 import FeedbackSection from "../Common/FeedbackSection";
 import MarkdownContent from "../Common/MarkdownContent";
 import type { CritiqueResponse } from "./types";
+
+const log = createLogger("Summary");
 
 interface SummaryProps {
 	sessionId: string;
@@ -45,7 +48,8 @@ const Summary: React.FC<SummaryProps> = ({
 		if (paperId && !summaryData) {
 			getCachedPaper(paperId).then((cached) => {
 				if (cached?.full_summary) {
-					console.log("[Summary] Loading from IndexedDB cache");
+					log.info("load_cache", "Loading summary from IndexedDB cache");
+
 					setSummaryData(cached.full_summary);
 				}
 			});
@@ -97,7 +101,9 @@ const Summary: React.FC<SummaryProps> = ({
 				}
 			} catch (e: any) {
 				setError(`Error: ${e.message}`);
-				console.error(e);
+				log.error("handle_summarize", "Summary generation failed", {
+					error: e,
+				});
 			} finally {
 				setLoading(false);
 				stopLoading();
@@ -136,7 +142,7 @@ const Summary: React.FC<SummaryProps> = ({
 			setCritiqueData(data);
 		} catch (e: any) {
 			setError(`Error: ${e.message}`);
-			console.error(e);
+			log.error("handle_critique", "Critique generation failed", { error: e });
 		} finally {
 			setLoading(false);
 			stopLoading();

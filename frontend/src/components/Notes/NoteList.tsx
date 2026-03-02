@@ -2,10 +2,13 @@ import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { createLogger } from "@/lib/logger";
 import { useAuth } from "../../contexts/AuthContext";
 import AddNoteForm from "./AddNoteForm";
 import NoteItem from "./NoteItem";
 import type { Note } from "./types";
+
+const log = createLogger("NoteList");
 
 interface NoteListProps {
 	sessionId: string;
@@ -113,7 +116,7 @@ const NoteList: React.FC<NoteListProps> = ({
 				window.dispatchEvent(new Event("notes-updated"));
 			}
 		} catch (e) {
-			console.error(e);
+			log.error("add_note", "Failed to add note", { error: e });
 		}
 	};
 
@@ -149,7 +152,7 @@ const NoteList: React.FC<NoteListProps> = ({
 				window.dispatchEvent(new Event("notes-updated"));
 			}
 		} catch (e) {
-			console.error(e);
+			log.error("update_note", "Failed to update note", { error: e });
 		}
 	};
 
@@ -162,7 +165,7 @@ const NoteList: React.FC<NoteListProps> = ({
 			setNotes((prev) => prev.filter((n) => n.note_id !== id));
 			window.dispatchEvent(new Event("notes-updated"));
 		} catch (e) {
-			console.error(e);
+			log.error("delete_note", "Failed to delete note", { error: e });
 		}
 	};
 

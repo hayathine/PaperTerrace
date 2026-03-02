@@ -9,11 +9,13 @@ from common.dspy.modules import (
     SectionSummaryModule,
 )
 from common.dspy.trace import TraceContext, trace_dspy_call
-from common.logger import logger
+from common.logger import ServiceLogger
 from common.prompts import (
     PAPER_SUMMARY_FROM_PDF_PROMPT,
     PAPER_SUMMARY_FULL_PROMPT,
 )
+
+log = ServiceLogger("Summary")
 
 
 class SummaryError(Exception):
@@ -51,8 +53,11 @@ class SummaryService:
         if count <= self.token_limit:
             return text
 
-        logger.warning(
-            f"Token limit exceeded: {count} > {self.token_limit}. Truncating..."
+        log.warning(
+            "truncate",
+            "Token limit exceeded. Truncating...",
+            count=count,
+            limit=self.token_limit,
         )
 
         # 簡易的な反復切り詰め
@@ -64,7 +69,13 @@ class SummaryService:
             current_text = current_text[:cut_len]
             count = await self.ai_provider.count_tokens(current_text, model=self.model)
 
-        logger.info(f"Truncated to {len(current_text)} chars ({count} tokens)")
+        log.info(
+            "truncate",
+            "Truncated text",
+            char_count=len(current_text),
+            token_count=count,
+        )
+
         return current_text
 
     async def summarize_full(
@@ -84,7 +95,7 @@ class SummaryService:
         if paper_id:
             paper = self.storage.get_paper(paper_id)
             if paper and paper.get("full_summary"):
-                logger.info(f"Full summary cache HIT for {paper_id}")
+                log.info("summarize_full", "Full summary cache HIT", paper_id=paper_id)
                 return paper["full_summary"]
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
@@ -96,9 +107,10 @@ class SummaryService:
 
                 import pdfplumber
 
-                logger.debug(
+                log.debug(
+                    "summarize_full",
                     "Generating full summary from PDF images",
-                    extra={"pdf_size": len(pdf_bytes)},
+                    pdf_size=len(pdf_bytes),
                 )
 
                 images = []
@@ -116,12 +128,21 @@ class SummaryService:
                             page_img.original.save(buf, format="PNG")
                             images.append(buf.getvalue())
 
-                        logger.info(
-                            f"Converted {len(images)} PDF pages to images for summary"
+                        log.info(
+                            "summarize_full",
+                            "Converted PDF pages to images for summary",
+                            page_count=len(images),
                         )
+
                 except Exception as ex:
-                    logger.error(f"Failed to convert PDF to images: {ex}")
+                    log.error(
+                        "summarize_full",
+                        "Failed to convert PDF to images",
+                        error=str(ex),
+                    )
+
                     # 失敗した場合はテキストベースにフォールバック... はここでは難しいのでエラー
+
                     raise SummaryError(f"PDFの解析（画像化）に失敗しました: {ex}")
 
                 keyword_focus = ""
@@ -139,19 +160,20 @@ class SummaryService:
                 # Parse the response to extract sections
                 formatted_text = raw_response.strip()
 
-                logger.info(
+                log.info(
+                    "summarize_full",
                     "Full summary generated from PDF images",
-                    extra={
-                        "image_count": len(images),
-                        "output_length": len(formatted_text),
-                    },
+                    image_count=len(images),
+                    output_length=len(formatted_text),
                 )
             else:
                 # 従来のテキストベース方式
-                logger.debug(
+                log.debug(
+                    "summarize_full",
                     "Generating full summary from text",
-                    extra={"text_length": len(text)},
+                    text_length=len(text),
                 )
+
                 safe_text = await self._truncate_to_token_limit(text)
 
                 keyword_focus = ""
@@ -207,24 +229,24 @@ class SummaryService:
                     ]
                 formatted_text = "\n".join(result_lines)
 
-                logger.info(
+                log.info(
+                    "summarize_full",
                     "Full summary generated from text",
-                    extra={
-                        "input_length": len(text),
-                        "output_length": len(formatted_text),
-                    },
+                    input_length=len(text),
+                    output_length=len(formatted_text),
                 )
 
             # Save to cache
             if paper_id:
                 self.storage.update_paper_full_summary(paper_id, formatted_text)
-                logger.info(f"Full summary cached for {paper_id}")
+                log.info("summarize_full", "Full summary cached", paper_id=paper_id)
 
             return formatted_text
         except Exception as e:
-            logger.exception(
+            log.exception(
+                "summarize_full",
                 "Full summary generation failed",
-                extra={"error": str(e), "text_length": len(text) if text else 0},
+                text_length=len(text) if text else 0,
             )
             return f"要約の生成に失敗しました: {str(e)}"
 
@@ -243,22 +265,31 @@ class SummaryService:
 
                 try:
                     cached_sections = json.loads(paper["section_summary_json"])
-                    logger.info(f"Section summary cache HIT for {paper_id}")
+                    log.info(
+                        "summarize_sections",
+                        "Section summary cache HIT",
+                        paper_id=paper_id,
+                    )
+
                     return cached_sections
                 except json.JSONDecodeError:
-                    logger.warning(
-                        f"Invalid JSON in section summary cache for {paper_id}"
+                    log.warning(
+                        "summarize_sections",
+                        "Invalid JSON in section summary cache",
+                        paper_id=paper_id,
                     )
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         safe_text = await self._truncate_to_token_limit(text)
         try:
-            logger.debug(
+            log.debug(
+                "summarize_sections",
                 "Generating section summary",
-                extra={"text_length": len(text)},
+                text_length=len(text),
             )
             # DSPy version
+
             res = trace_dspy_call(
                 "SectionSummaryModule",
                 "PaperSummarySections",
@@ -275,9 +306,10 @@ class SummaryService:
                     # In case DSPy returns a string or something else
                     sections.append({"section": "Chapter", "summary": str(item)})
 
-            logger.info(
+            log.info(
+                "summarize_sections",
                 "Section summary generated",
-                extra={"section_count": len(sections)},
+                section_count=len(sections),
             )
 
             # Save to cache
@@ -287,13 +319,15 @@ class SummaryService:
                 self.storage.update_paper_section_summary(
                     paper_id, json.dumps(sections, ensure_ascii=False)
                 )
-                logger.info(f"Section summary cached for {paper_id}")
+                log.info(
+                    "summarize_sections", "Section summary cached", paper_id=paper_id
+                )
 
             return sections
         except Exception as e:
-            logger.exception(
+            log.exception(
+                "summarize_sections",
                 "Section summary failed",
-                extra={"error": str(e)},
             )
             return [{"section": "Error", "summary": f"要約生成に失敗: {e}"}]
 
@@ -311,9 +345,13 @@ class SummaryService:
         """
         import re
 
-        logger.info("Extracting abstract from text (substituting AI generation)")
+        log.info(
+            "summarize_abstract",
+            "Extracting abstract from text (substituting AI generation)",
+        )
 
         # Normalization: clean up excessive whitespace/newlines
+
         clean_text = re.sub(r"\s+", " ", text[:10000])
 
         # Search for "Abstract" (case-insensitive)
@@ -352,8 +390,16 @@ class SummaryService:
                 {"paper_text": text[:20000], "max_length": max_length},
             )
             summary = res.summary
-            logger.info(f"Context summary generated (length: {len(summary)})")
+            log.info(
+                "summarize_context",
+                "Context summary generated",
+                summary_length=len(summary),
+            )
+
             return summary[:max_length]
         except Exception as e:
-            logger.error(f"Context summary generation failed: {e}")
+            log.error(
+                "summarize_context", "Context summary generation failed", error=str(e)
+            )
+
             return ""

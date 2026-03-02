@@ -1,4 +1,5 @@
 import { useCallback } from "react";
+import { createLogger } from "@/lib/logger";
 import {
 	db,
 	evictIfOverQuota,
@@ -6,6 +7,8 @@ import {
 	isDbAvailable,
 	type PaperCache,
 } from "./index";
+
+const log = createLogger("DBHooks");
 
 /**
  * Fetch an image and store it as a Blob in IndexedDB.
@@ -35,12 +38,17 @@ async function fetchAndCacheImage(
 	} catch (e) {
 		// Handle QuotaExceededError specifically
 		if (isQuotaError(e)) {
-			console.warn(
+			log.warn(
+				"fetch_and_cache_image",
 				"Storage quota exceeded while caching image, evicting old data...",
 			);
+
 			await evictIfOverQuota();
 		} else {
-			console.error("Failed to fetch and cache image:", imageUrl, e);
+			log.error("fetch_and_cache_image", "Failed to fetch and cache image", {
+				imageUrl,
+				error: e,
+			});
 		}
 		return null;
 	}
@@ -62,7 +70,10 @@ export function usePaperCache() {
 			try {
 				return await db.papers.get(paperId);
 			} catch (e) {
-				console.warn("Failed to read paper cache:", e);
+				log.warn("get_cached_paper", "Failed to read paper cache", {
+					error: e,
+				});
+
 				return undefined;
 			}
 		},
@@ -75,16 +86,22 @@ export function usePaperCache() {
 			await db.papers.put(paper);
 		} catch (e) {
 			if (isQuotaError(e)) {
-				console.warn("Quota exceeded while saving paper, evicting...");
+				log.warn(
+					"save_paper_to_cache",
+					"Quota exceeded while saving paper, evicting...",
+				);
+
 				await evictIfOverQuota();
 				// Retry once after eviction
 				try {
 					await db.papers.put(paper);
 				} catch {
-					console.warn("Retry after eviction also failed");
+					log.warn("save_paper_to_cache", "Retry after eviction also failed");
 				}
 			} else {
-				console.error("Failed to save paper cache:", e);
+				log.error("save_paper_to_cache", "Failed to save paper cache", {
+					error: e,
+				});
 			}
 		}
 	}, []);
@@ -95,7 +112,10 @@ export function usePaperCache() {
 			try {
 				return await db.images.get(imageUrl);
 			} catch (e) {
-				console.warn("Failed to read image cache:", e);
+				log.warn("get_cached_image", "Failed to read image cache", {
+					error: e,
+				});
+
 				return undefined;
 			}
 		},
@@ -110,7 +130,9 @@ export function usePaperCache() {
 			if (isQuotaError(e)) {
 				await evictIfOverQuota();
 			}
-			console.warn("Failed to save image cache:", e);
+			log.warn("save_image_to_cache", "Failed to save image cache", {
+				error: e,
+			});
 		}
 	}, []);
 
@@ -120,7 +142,9 @@ export function usePaperCache() {
 			await db.papers.delete(paperId);
 			await db.images.where("paper_id").equals(paperId).delete();
 		} catch (e) {
-			console.error("Failed to delete paper cache:", e);
+			log.error("delete_paper_cache", "Failed to delete paper cache", {
+				error: e,
+			});
 		}
 	}, []);
 
@@ -142,9 +166,13 @@ export function usePaperCache() {
 		if (!isDbAvailable()) return;
 		try {
 			await db.papers.delete(paperId);
-			console.warn(`Deleted corrupted cache for paper: ${paperId}`);
+			log.warn("delete_corrupted_cache", "Deleted corrupted cache for paper", {
+				paperId,
+			});
 		} catch (e) {
-			console.error("Failed to delete corrupted cache:", e);
+			log.error("delete_corrupted_cache", "Failed to delete corrupted cache", {
+				error: e,
+			});
 		}
 	}, []);
 

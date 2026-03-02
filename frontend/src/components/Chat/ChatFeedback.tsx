@@ -1,6 +1,9 @@
 import type React from "react";
 import { useState } from "react";
 import { submitFeedback } from "@/lib/feedback";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("ChatFeedback");
 
 interface ChatFeedbackProps {
 	sessionId: string;
@@ -30,7 +33,9 @@ const ChatFeedback: React.FC<ChatFeedbackProps> = ({
 				user_score: newScore,
 			});
 		} catch (e) {
-			console.error("Chat feedback error:", e);
+			log.error("submit_feedback", "Chat feedback submission error", {
+				error: e,
+			});
 		} finally {
 			setIsSubmitting(false);
 		}

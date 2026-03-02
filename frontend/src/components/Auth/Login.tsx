@@ -1,7 +1,10 @@
 import type React from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "@/lib/logger";
 import { useAuth } from "../../contexts/AuthContext";
+
+const log = createLogger("Login");
 
 const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 	const { t } = useTranslation();
@@ -30,7 +33,12 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 				else await signInWithGithubRedirect();
 			}
 		} catch (err: any) {
-			console.error(`Error signing in with ${provider} (${method}):`, err);
+			log.error("sign_in", "Error signing in", {
+				provider,
+				method,
+				error: err,
+			});
+
 			const errorCode = err.code || "unknown";
 			const errorMessage = err.message || "Error occurred";
 			setError(

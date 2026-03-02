@@ -18,7 +18,10 @@ from app.providers import (
     RedisService,
     get_storage_provider,
 )  # RedisService now uses in-memory cache
-from common.logger import logger
+from common.logger import ServiceLogger
+
+log = ServiceLogger("Analysis")
+
 
 router = APIRouter(tags=["Analysis"])
 
@@ -42,16 +45,21 @@ def _get_context(session_id: str) -> str | None:
     paper = storage.get_paper(resolved_paper_id)
     if paper and paper.get("ocr_text"):
         context = paper["ocr_text"]
-        logger.debug(
-            f"[_get_context] Fetched FULL context from DB for {resolved_paper_id}"
+        log.debug(
+            "get_context",
+            "Fetched FULL context from DB",
+            paper_id=resolved_paper_id,
         )
+
         return context
 
     # 2. Fallback to session cache (recent context)
     context = redis_service.get(f"session:{session_id}")
     if context:
-        logger.debug(f"[_get_context] Cache HIT for session {session_id}")
+        log.debug("get_context", "Cache HIT", session_id=session_id)
+
         redis_service.expire(f"session:{session_id}", 3600)
+
         return context
     return None
 
@@ -72,7 +80,8 @@ async def summarize(
 ):
     context = _get_context(session_id)
     if not context:
-        logger.warning(f"[summarize] Context not found for session {session_id}")
+        log.warning("summarize", "Context not found", session_id=session_id)
+
         return JSONResponse(
             {"error": f"論文が読み込まれていません (session_id: {session_id})"},
             status_code=400,
@@ -84,11 +93,17 @@ async def summarize(
 
     # Clear cached summary if force=True
     if force and paper_id:
-        logger.info(f"[summarize] Force regeneration requested for {paper_id}")
+        log.info("summarize", "Force regeneration requested", paper_id=paper_id)
+
         storage.update_paper_full_summary(paper_id, "")
 
-    logger.info(
-        f"[summarize] session_id={session_id}, paper_id={paper_id}, context_len={len(context)}, force={force}"
+    log.info(
+        "summarize",
+        "Summarize request started",
+        session_id=session_id,
+        paper_id=paper_id,
+        context_len=len(context),
+        force=force,
     )
 
     summary = await summary_service.summarize_full(
@@ -169,5 +184,6 @@ async def analyze_layout_lazy(
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"[analyze-layout-lazy] Unexpected error: {e}", exc_info=True)
+        log.error("layout_lazy", "Unexpected error", error=str(e), exc_info=True)
+
         raise HTTPException(status_code=500, detail=f"Layout analysis failed: {str(e)}")

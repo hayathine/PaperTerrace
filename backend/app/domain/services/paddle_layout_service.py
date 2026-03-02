@@ -11,10 +11,9 @@ from app.providers.inference_client import (
     InferenceServiceError,
     get_inference_client,
 )
+from common.logger import ServiceLogger
 
-from common.logger import get_service_logger
-
-log = get_service_logger("LayoutService")
+log = ServiceLogger("LayoutService")
 
 
 class PaddleLayoutService:
@@ -50,7 +49,9 @@ class PaddleLayoutService:
         import pdfplumber
 
         try:
-            log.info("detect_layout_async", f"Starting layout analysis for {pdf_path}")
+            log.info(
+                "detect_layout_async", "Starting layout analysis", pdf_path=pdf_path
+            )
 
             # ページ指定がない場合は全ページ数を取得
             target_pages = pages
@@ -59,12 +60,18 @@ class PaddleLayoutService:
                     with pdfplumber.open(pdf_path) as pdf:
                         total_pages = len(pdf.pages)
                         target_pages = list(range(total_pages))
+                        target_pages = list(range(total_pages))
                         log.info(
                             "detect_layout_async",
-                            f"Total pages detected: {total_pages}",
+                            "Total pages detected",
+                            total_pages=total_pages,
                         )
+
                 except Exception as e:
-                    log.error("detect_layout_async", f"Failed to count pages: {e}")
+                    log.error(
+                        "detect_layout_async", "Failed to count pages", error=str(e)
+                    )
+
                     # ページ数取得に失敗した場合は、従来通り一括で送る（ServiceB側での処理に任せる）
                     target_pages = None
 
@@ -78,7 +85,7 @@ class PaddleLayoutService:
 
                 for i in range(0, len(target_pages), CHUNK_SIZE):
                     chunk = target_pages[i : i + CHUNK_SIZE]
-                    log.info("detect_layout_async", f"Scheduling chunk: {chunk}")
+                    log.info("detect_layout_async", "Scheduling chunk", chunk=chunk)
 
                     # 各チャンクを並列タスクとして登録
                     tasks.append(client.analyze_layout(pdf_path, chunk))
@@ -87,8 +94,10 @@ class PaddleLayoutService:
                 if tasks:
                     log.info(
                         "detect_layout_async",
-                        f"Executing {len(tasks)} chunks in parallel...",
+                        "Executing chunks in parallel",
+                        chunk_count=len(tasks),
                     )
+
                     # return_exceptions=Trueで一部失敗しても全体を止めない
                     chunk_results_list = await asyncio.gather(
                         *tasks, return_exceptions=True
@@ -97,38 +106,50 @@ class PaddleLayoutService:
                     for i, result in enumerate(chunk_results_list):
                         if isinstance(result, Exception):
                             log.error(
-                                "detect_layout_async", f"Chunk {i} failed: {result}"
+                                "detect_layout_async",
+                                "Chunk failed",
+                                chunk_index=i,
+                                error=str(result),
                             )
+
                             # 失敗したチャンクはスキップ（または再試行ロジックを入れるか）
                         elif isinstance(result, list):
                             all_results.extend(result)
                         else:
                             log.warning(
                                 "detect_layout_async",
-                                f"Chunk {i} returned unexpected type: {type(result)}",
+                                "Chunk returned unexpected type",
+                                chunk_index=i,
+                                type=str(type(result)),
                             )
+
             else:
                 # ページリストがない場合（互換性）
                 all_results = await client.analyze_layout(pdf_path, None)
 
             log.info(
                 "detect_layout_async",
-                f"Layout analysis completed: {len(all_results)} elements detected",
+                "Layout analysis completed",
+                elements_detected=len(all_results),
             )
+
             return all_results
 
         except CircuitBreakerError as e:
-            log.error("detect_layout_async", f"Circuit breaker error: {e}")
+            log.error("detect_layout_async", "Circuit breaker error", error=str(e))
+
             # フォールバック: 空の結果を返す
             return []
 
         except InferenceServiceError as e:
-            log.error("detect_layout_async", f"Inference service error: {e}")
+            log.error("detect_layout_async", "Inference service error", error=str(e))
+
             # フォールバック: 空の結果を返す
             return []
 
         except Exception as e:
-            log.error("detect_layout_async", f"Unexpected error: {e}")
+            log.error("detect_layout_async", "Unexpected error", error=str(e))
+
             return []
 
     async def detect_layout_from_image_async(
@@ -151,7 +172,8 @@ class PaddleLayoutService:
         try:
             log.info(
                 "detect_layout_from_image_async",
-                f"Starting layout analysis for image ({len(image_bytes)} bytes)",
+                "Starting layout analysis for image",
+                image_size=len(image_bytes),
             )
 
             client = await get_inference_client()
@@ -159,20 +181,33 @@ class PaddleLayoutService:
 
             log.info(
                 "detect_layout_from_image_async",
-                f"Layout analysis completed: {len(results)} elements detected",
+                "Layout analysis completed",
+                elements_detected=len(results),
             )
+
             return results
 
         except CircuitBreakerError as e:
-            log.error("detect_layout_from_image_async", f"Circuit breaker error: {e}")
+            log.error(
+                "detect_layout_from_image_async", "Circuit breaker error", error=str(e)
+            )
+
             return []
 
         except InferenceServiceError as e:
-            log.error("detect_layout_from_image_async", f"Inference service error: {e}")
+            log.error(
+                "detect_layout_from_image_async",
+                "Inference service error",
+                error=str(e),
+            )
+
             return []
 
         except Exception as e:
-            log.error("detect_layout_from_image_async", f"Unexpected error: {e}")
+            log.error(
+                "detect_layout_from_image_async", "Unexpected error", error=str(e)
+            )
+
             return []
 
     def detect_layout(self, image_bytes: bytes) -> list[dict[str, Any]]:

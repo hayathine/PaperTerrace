@@ -5,7 +5,9 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from common.logger import logger
+from common.logger import ServiceLogger
+
+log = ServiceLogger("Middleware")
 
 
 class TrustedProxyMiddleware(BaseHTTPMiddleware):
@@ -19,7 +21,7 @@ class TrustedProxyMiddleware(BaseHTTPMiddleware):
         user_id = request.headers.get("x-user-id")
         if user_id:
             request.state.user_id = user_id
-            logger.debug(f"Request authenticated for user: {user_id}")
+            log.debug("trusted_proxy", "Request authenticated", user_id=user_id)
 
         return await call_next(request)
 
@@ -33,11 +35,12 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
         is_health_check = request.url.path == "/api/health"
-        log_func = logger.debug if is_health_check else logger.info
+        log_func = log.debug if is_health_check else log.info
 
         # Log request start
         log_func(
-            "request_started",
+            "dispatch",
+            "Request started",
             method=request.method,
             path=request.url.path,
             query_params=str(request.query_params),
@@ -50,24 +53,28 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
             # Log request completion
             log_func(
-                "request_completed",
+                "dispatch",
+                "Request completed",
                 method=request.method,
                 path=request.url.path,
                 status_code=response.status_code,
                 duration_ms=round(duration * 1000, 2),
             )
+
             return response
         except Exception as e:
             duration = time.time() - start_time
-            logger.error(
-                "request_failed",
+            log.error(
+                "dispatch",
+                "Request failed",
                 method=request.method,
                 path=request.url.path,
                 error=str(e),
                 error_type=type(e).__name__,
                 duration_ms=round(duration * 1000, 2),
             )
-            logger.error(traceback.format_exc())
+
+            log.error("dispatch", traceback.format_exc())
             return JSONResponse(
                 status_code=500,
                 content={"error": "Internal Server Error", "message": str(e)},

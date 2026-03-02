@@ -6,7 +6,9 @@ from app.schemas.gemini_schema import (
 )
 from common.dspy.config import setup_dspy
 from common.dspy.modules import VisionFigureModule
-from common.logger import logger
+from common.logger import ServiceLogger
+
+log = ServiceLogger("FigureInsight")
 
 
 class FigureInsightService:
@@ -49,9 +51,11 @@ class FigureInsightService:
         )
 
         try:
-            logger.debug(
+            log.debug(
+                "analyze",
                 "Analyzing figure",
-                extra={"image_size": len(image_bytes), "mime_type": mime_type},
+                image_size=len(image_bytes),
+                mime_type=mime_type,
             )
             analysis: FigureAnalysisResponse = (
                 await self.ai_provider.generate_with_image(
@@ -74,14 +78,17 @@ class FigureInsightService:
             ]
             formatted_text = "\n".join(result_lines)
 
-            logger.info(
+            log.info(
+                "analyze",
                 "Figure analysis generated",
-                extra={"output_length": len(formatted_text)},
+                output_length=len(formatted_text),
             )
             return formatted_text
+
         except Exception as e:
-            logger.exception(
+            log.exception(
+                "analyze",
                 "Figure analysis failed",
-                extra={"error": str(e), "mime_type": mime_type},
+                mime_type=mime_type,
             )
             return f"図の分析に失敗しました: {e}"

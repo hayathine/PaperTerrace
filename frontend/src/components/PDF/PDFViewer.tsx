@@ -9,6 +9,7 @@ import {
 } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { createLogger } from "@/lib/logger";
 import { useAuth } from "../../contexts/AuthContext";
 import { usePaperCache } from "../../db/hooks";
 // TODO (suspended): db import used by handleAreaSelect - restore when area mode re-enabled.
@@ -17,8 +18,10 @@ import { isDbAvailable } from "../../db/index";
 import { useSyncStatus } from "../../db/sync";
 import PDFPage from "./PDFPage";
 import TextModeViewer from "./TextModeViewer";
-import type { PageData, PageWithLines } from "./types";
+import type { PageData, PageWithLines, SelectedFigure } from "./types";
 import { groupWordsIntoLines } from "./utils";
+
+const log = createLogger("PDFViewer");
 
 interface PDFViewerProps {
 	taskId?: string;
@@ -45,6 +48,7 @@ interface PDFViewerProps {
 	) => void;
 	onPaperLoaded?: (paperId: string | null) => void;
 	onAskAI?: (prompt: string, imageUrl?: string, coords?: any) => void;
+	onFigureSelect?: (figure: SelectedFigure) => void;
 	paperId?: string | null;
 	// 検索関連props
 	searchTerm?: string;
@@ -67,6 +71,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	onStatusChange,
 	onPaperLoaded,
 	onAskAI,
+	onFigureSelect,
 	searchTerm,
 	onSearchMatchesUpdate,
 	currentSearchMatch,
@@ -314,11 +319,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		initialPages?: PageData[],
 	) => {
 		try {
-			console.log(
-				"[PDFViewer] Starting lazy layout analysis for paper:",
-				paperId,
-			);
-
 			// Prefer explicitly passed pages so callers don't have to wait for
 			// pagesRef to sync (useEffect runs after render, so pagesRef.current
 			// may still be stale when called immediately after setPages()).
@@ -334,9 +334,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					.slice(startIdx, endIdx)
 					.map((p) => p.page_num);
 
-				console.log(
-					`[PDFViewer] Triggering lazy layout analysis for pages: ${batchPages.join(",")}`,
-				);
+				log.info("trigger_lazy_layout_analysis", "Triggering batch analysis", {
+					pages: batchPages,
+				});
 
 				const headers: HeadersInit = {
 					"Content-Type": "application/x-www-form-urlencoded",
@@ -359,11 +359,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 				if (!response.ok) {
 					const errorText = await response.text();
-					console.error(
-						`[PDFViewer] Lazy layout analysis failed for pages ${batchPages.join(",")}:`,
-						response.status,
-						errorText,
-					);
+					log.error("trigger_lazy_layout_analysis", "Analysis failed", {
+						pages: batchPages,
+						status: response.status,
+						error: errorText,
+					});
 					continue; // Try next batch even if this one failed
 				}
 
@@ -435,9 +435,14 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					});
 				}
 			}
-			console.log("[PDFViewer] Completely finished lazy layout analysis.");
+			log.info(
+				"trigger_lazy_layout_analysis",
+				"Completed lazy layout analysis",
+			);
 		} catch (err) {
-			console.error("[PDFViewer] Lazy layout analysis error:", err);
+			log.error("trigger_lazy_layout_analysis", "Lazy layout analysis error", {
+				error: err instanceof Error ? err.message : String(err),
+			});
 			// Don't re-throw - this is a background enhancement, not critical
 		}
 	};
@@ -454,9 +459,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				setStamps(data.stamps);
 			}
 		} catch (e) {
-			console.error("Failed to fetch stamps", e);
+			log.error("fetch_stamps", "Failed to fetch stamps", { error: e });
 		}
 	};
+
 	*/
 
 	// Scroll to jump target when it changes
@@ -574,16 +580,14 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		es.onmessage = (event) => {
 			try {
 				const eventData = JSON.parse(event.data);
-				console.debug("[PDFViewer] SSE Message:", eventData.type, eventData);
 
 				if (eventData.type === "page") {
 					setPages((prev) => {
 						let newData = eventData.data;
 						if (!newData || typeof newData.page_num === "undefined") {
-							console.warn(
-								"[PDFViewer] Received malformed page data:",
+							log.warn("sse_message", "Received malformed page data", {
 								newData,
-							);
+							});
 							return prev;
 						}
 
@@ -636,79 +640,59 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						// Use ref to get the latest pages collected during streaming
 						const finalPages = pagesRef.current || [];
 
-						console.log(
-							"[PDFViewer] Final pages collected:",
-							finalPages.length,
-						);
-						if (finalPages && finalPages.length > 0) {
-							console.log("[PDFViewer] Sample page structure:", {
-								page_num: finalPages[0].page_num,
-								width: finalPages[0].width,
-								height: finalPages[0].height,
-								words_count: finalPages[0].words?.length || 0,
-								figures_count: finalPages[0].figures?.length || 0,
-								has_content: !!finalPages[0].content,
-								content_length: finalPages[0].content?.length || 0,
+						(async () => {
+							const imageUrls = finalPages.map((p) => p.image_url);
+							// Store as JSON array to avoid collision with Markdown horizontal rules (\n\n---\n\n)
+							const ocrText = JSON.stringify(
+								finalPages.map((p) => p.content || ""),
+							);
+							const layoutData = finalPages.map((p) => ({
+								width: p.width,
+								height: p.height,
+								words: p.words,
+								figures: p.figures,
+								links: p.links,
+							}));
+
+							// Extract file_hash from image_url (e.g. /static/paper_images/{hash}/page_1.png)
+							let fileHash = "";
+							if (imageUrls.length > 0) {
+								const match = imageUrls[0].match(
+									/\/static\/paper_images\/([^/]+)\//,
+								);
+								if (match) fileHash = match[1];
+							}
+
+							await savePaperToCache({
+								id: pId,
+								file_hash: fileHash,
+								title: processingFileRef.current?.name || "Untitled",
+								ocr_text: ocrText,
+								layout_json: JSON.stringify(layoutData),
+								last_accessed: Date.now(),
 							});
-						}
-
-						// Cache the final results
-						if (!isGuest) {
-							(async () => {
-								const imageUrls = finalPages.map((p) => p.image_url);
-								// Store as JSON array to avoid collision with Markdown horizontal rules (\n\n---\n\n)
-								const ocrText = JSON.stringify(
-									finalPages.map((p) => p.content || ""),
-								);
-								const layoutData = finalPages.map((p) => ({
-									width: p.width,
-									height: p.height,
-									words: p.words,
-									figures: p.figures,
-									links: p.links,
-								}));
-
-								// Extract file_hash from image_url (e.g. /static/paper_images/{hash}/page_1.png)
-								let fileHash = "";
-								if (imageUrls.length > 0) {
-									const match = imageUrls[0].match(
-										/\/static\/paper_images\/([^/]+)\//,
-									);
-									if (match) fileHash = match[1];
-								}
-
-								await savePaperToCache({
-									id: pId,
-									file_hash: fileHash,
-									title: processingFileRef.current?.name || "Untitled",
-									ocr_text: ocrText,
-									layout_json: JSON.stringify(layoutData),
-									last_accessed: Date.now(),
-								});
-								// We don't block on image caching
-								cachePaperImages(pId, imageUrls).catch((err) =>
-									console.warn("[PDFViewer] Image caching failed:", err),
-								);
-							})();
-						}
+							// We don't block on image caching
+							cachePaperImages(pId, imageUrls).catch((err) =>
+								log.warn("image_cache", "Image caching failed", {
+									error: err,
+								}),
+							);
+						})();
 
 						// Trigger lazy layout analysis in background (non-blocking)
-						console.log(
-							"[PDFViewer] Triggering lazy layout analysis for paper:",
-							pId,
+						triggerLazyLayoutAnalysis(pId).catch((err) =>
+							log.warn("trigger_lazy_layout_analysis", "Lazy analysis failed", {
+								error: err,
+							}),
 						);
-						triggerLazyLayoutAnalysis(pId).catch((err) => {
-							console.warn("[PDFViewer] Lazy layout analysis failed:", err);
-						});
 					}
 					es.close();
 					processingFileRef.current = null;
 					activeTaskIdRef.current = null;
 				} else if (eventData.type === "coordinates_ready") {
-					console.log("[PDFViewer] Coordinates ready, enabling assist mode");
 					setMode("plaintext");
 				} else if (eventData.type === "assist_mode_ready") {
-					console.log("[PDFViewer] Assist mode ready");
+					// No action needed; reserved for future use
 				} else if (eventData.type === "error") {
 					setStatus("error");
 					setErrorMsg(eventData.message);
@@ -722,16 +706,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		};
 
 		es.onerror = (err) => {
-			console.error(
-				"SSE Error",
-				err,
-				"pages received:",
-				pagesRef.current.length,
-				"retry count:",
+			log.error("sse_error", "SSE Error", {
+				error: err,
+				pagesReceived: pagesRef.current.length,
 				retryCount,
-				"stream_url:",
-				stream_url,
-			);
+				streamUrl: stream_url,
+			});
 
 			es.close();
 
@@ -745,9 +725,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 			// Retry logic for connection failures
 			if (retryCount < maxRetries) {
-				console.log(
-					`[PDFViewer] Retrying connection in ${retryDelay}ms (attempt ${retryCount + 1}/${maxRetries})`,
-				);
 				setTimeout(() => {
 					startStreaming(stream_url, retryCount + 1);
 				}, retryDelay);
@@ -862,11 +839,14 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						// Switch back to text mode after selection?
 						setMode("text");
 					}
-				}, "image/png");
-			} catch (e) {
-				console.error("Failed to crop/upload image", e);
-			}
+				} catch (e) {
+					log.error("crop_and_upload", "Failed to crop/upload image", {
+						error: e,
+					});
+				}
+			}, "image/png");
 		},
+
 		[pages, onAreaSelect, token],
 	);
 	*/
@@ -917,15 +897,17 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						),
 					);
 				} else {
-					console.error("Failed to save stamp");
+					log.error("add_stamp", "Failed to save stamp");
 					// Rollback?
 					setStamps((prev) => prev.filter((s) => s.id !== newStamp.id));
 				}
+
 			} catch (e) {
-				console.error("Error saving stamp", e);
+				log.error("add_stamp", "Error saving stamp", { error: e });
 				// Rollback on network error as well
 				setStamps((prev) => prev.filter((s) => s.id !== newStamp.id));
 			}
+
 		},
 		[loadedPaperId, selectedStamp, token],
 	);
@@ -944,9 +926,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					headers,
 				});
 			} catch (e) {
-				console.error("Failed to delete stamp", e);
+				log.error("delete_stamp", "Failed to delete stamp", { error: e });
 				// fetchStamps will reconcile state on next load
 			}
+
 		},
 		[token],
 	);
@@ -964,10 +947,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 		try {
 			// 0. Check IndexedDB Cache First (Offline First / Fast Load)
-			if (!isGuest) {
+			// Guests also benefit from IndexedDB cache (CORS avoidance, fast reload within session)
+			{
 				const cached = await getCachedPaper(id);
 				if (cached?.layout_json && cached.file_hash) {
-					console.log("[PDFViewer] Fast Load from cache:", id);
 					try {
 						const layoutList = JSON.parse(cached.layout_json);
 						// Support both new JSON array format and legacy \n\n---\n\n separator
@@ -1006,19 +989,24 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								(p) => p.figures && p.figures.length > 0,
 							);
 							if (!hasFigures) {
-								console.log(
-									"[PDFViewer] No figures in cache, triggering lazy layout analysis",
+								triggerLazyLayoutAnalysis(id, cachedPages).catch((err) =>
+									log.warn(
+										"trigger_lazy_layout_analysis",
+										"Lazy layout analysis failed",
+										{ error: err },
+									),
 								);
-								triggerLazyLayoutAnalysis(id, cachedPages).catch((err) => {
-									console.warn("[PDFViewer] Lazy layout analysis failed:", err);
-								});
 							}
 
 							// Optional: Background check with server to ensure consistency.
 							return;
 						}
 					} catch (e) {
-						console.warn("[PDFViewer] Corrupted cache detected, deleting:", e);
+						log.warn(
+							"load_existing_paper",
+							"Corrupted cache detected, deleting",
+							{ error: e },
+						);
 						await deleteCorruptedCache(id);
 					}
 				}
@@ -1070,35 +1058,35 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							setStatus("done");
 							// Full paper data has coordinates ready
 
-							// Cache images in background if not guest
-							if (!isGuest) {
-								cachePaperImages(
-									id,
-									fullPages.map((p) => p.image_url),
-								).catch((err) =>
-									console.warn("[PDFViewer] Image caching failed:", err),
-								);
-							}
+							// Cache images in background for all users (CORS avoidance, fast reload)
+							cachePaperImages(
+								id,
+								fullPages.map((p) => p.image_url),
+							).catch((err) =>
+								log.warn("image_cache", "Image caching failed", { error: err }),
+							);
 
 							// Trigger lazy layout analysis to fetch figures if not already present
 							const hasFigures = fullPages.some(
 								(p) => p.figures && p.figures.length > 0,
 							);
 							if (!hasFigures) {
-								console.log(
-									"[PDFViewer] No figures found, triggering lazy layout analysis",
+								triggerLazyLayoutAnalysis(id, fullPages).catch((err) =>
+									log.warn(
+										"trigger_lazy_layout_analysis",
+										"Lazy analysis failed",
+										{ error: err },
+									),
 								);
-								triggerLazyLayoutAnalysis(id, fullPages).catch((err) => {
-									console.warn("[PDFViewer] Lazy layout analysis failed:", err);
-								});
 							}
 
 							return; // Success! No need to stream.
 						}
 					} catch (parseErr) {
-						console.warn(
+						log.warn(
+							"load_existing_paper",
 							"Failed to parse cached layout, falling back to stream",
-							parseErr,
+							{ error: parseErr },
 						);
 					}
 				}
@@ -1158,7 +1146,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			};
 
 			es.onerror = (err) => {
-				console.error("SSE Error", err);
+				log.error("sse_error", "SSE Error during reload", { error: err });
 				es.close();
 				if (pages.length === 0) setStatus("error"); // Only error if we got nothing
 			};
@@ -1320,6 +1308,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 										onWordClick={handleWordClick}
 										onTextSelect={handleTextSelect}
 										onAskAI={onAskAI}
+										onFigureSelect={onFigureSelect}
 										jumpTarget={jumpTarget}
 										searchTerm={searchTerm}
 										currentSearchMatch={currentSearchMatch}

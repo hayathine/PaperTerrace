@@ -8,7 +8,9 @@ from typing import Any
 
 from google.cloud import vision
 
-from common.logger import logger
+from common.logger import ServiceLogger
+
+log = ServiceLogger("VisionOCR")
 
 
 class VisionOCRService:
@@ -19,7 +21,9 @@ class VisionOCRService:
             try:
                 self.client = vision.ImageAnnotatorClient()
             except Exception as e:
-                logger.warning(f"Failed to initialize Vision API client: {e}")
+                log.warning(
+                    "init", "Failed to initialize Vision API client", error=str(e)
+                )
 
     def is_available(self) -> bool:
         return self.client is not None
@@ -50,18 +54,19 @@ class VisionOCRService:
         try:
             image = vision.Image(content=image_bytes)
             # Use DOCUMENT_TEXT_DETECTION for better density handling in documents
-            logger.info("[VisionOCR] Sending request to Google Cloud Vision API")
+            log.info("detect_text", "Sending request to Google Cloud Vision API")
             response = self.client.document_text_detection(image=image)
 
             if response.error.message:
-                logger.error(f"[VisionOCR] API Error: {response.error.message}")
+                log.error(
+                    "detect_text", "API Error", error_message=response.error.message
+                )
+
                 return f"Error: {response.error.message}", None
 
             # 1. Build full text
             full_text = response.full_text_annotation.text
-            logger.info(
-                f"[VisionOCR] Received response (text length: {len(full_text)})"
-            )
+            log.info("detect_text", "Received response", text_length=len(full_text))
 
             # 2. Build layout data
             # Vision API returns bounds in pixels relative to the image size.
@@ -118,5 +123,5 @@ class VisionOCRService:
             return full_text, layout_data
 
         except Exception as e:
-            logger.error(f"Vision API call failed: {e}")
+            log.error("detect_text", "Vision API call failed", error=str(e))
             return "", None

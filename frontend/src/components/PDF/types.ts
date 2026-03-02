@@ -26,12 +26,23 @@ export interface PageWord {
 }
 
 export interface Figure {
+	id?: string;
 	bbox: [number, number, number, number]; // [x1, y1, x2, y2]
 	image_url: string;
 	page_num: number;
 	label?: string; // 'figure', 'table', 'equation'
+	caption?: string;
 	explanation?: string;
 	latex?: string;
+}
+
+/** ClickModeで図をクリックした際にFigureInsightパネルへ渡すデータ */
+export interface SelectedFigure {
+	id?: string;
+	image_url: string;
+	label?: string;
+	caption?: string;
+	page_number: number;
 }
 
 export interface LineData {

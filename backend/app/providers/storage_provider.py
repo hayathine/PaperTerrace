@@ -10,9 +10,10 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 
-from common.logger import get_service_logger
+from common.logger import ServiceLogger
 
-log = get_service_logger("Storage")
+log = ServiceLogger("Storage")
+
 
 load_dotenv("secrets/.env")
 
@@ -326,7 +327,7 @@ class SQLiteStorage(StorageInterface):
 
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
-        log.info("db", f"SQLiteStorage initialized with db: {self.db_path}")
+        log.info("init", "SQLiteStorage initialized", db_path=self.db_path)
 
     def _get_connection(self) -> sqlite3.Connection:
         """Get a database connection with row factory."""
@@ -378,7 +379,7 @@ class SQLiteStorage(StorageInterface):
                 ),
             )
             conn.commit()
-        log.info("db", f"Paper saved: {paper_id} ({filename})")
+        log.info("save_paper", "Paper saved", paper_id=paper_id, filename=filename)
         return paper_id
 
     def get_paper(self, paper_id: str) -> dict | None:
@@ -470,7 +471,7 @@ class SQLiteStorage(StorageInterface):
             conn.commit()
             deleted = cursor.rowcount > 0
             if deleted:
-                log.info("db", f"Paper deleted: {paper_id}")
+                log.info("delete_paper", "Paper deleted", paper_id=paper_id)
             return deleted
 
     def update_paper_layout(self, paper_id: str, layout_json: str) -> bool:
@@ -541,7 +542,13 @@ class SQLiteStorage(StorageInterface):
                 ),
             )
             conn.commit()
-        log.info("db", f"Note saved: {note_id} (user: {user_id}, paper: {paper_id})")
+        log.info(
+            "save_note",
+            "Note saved",
+            note_id=note_id,
+            user_id=user_id,
+            paper_id=paper_id,
+        )
         return note_id
 
     def get_notes(
@@ -588,7 +595,7 @@ class SQLiteStorage(StorageInterface):
             conn.commit()
             deleted = cursor.rowcount > 0
             if deleted:
-                log.info("db", f"Note deleted: {note_id}")
+                log.info("delete_note", "Note deleted", note_id=note_id)
             return deleted
 
     # ===== Stamp methods =====
@@ -624,7 +631,9 @@ class SQLiteStorage(StorageInterface):
                 ),
             )
             conn.commit()
-        log.info("db", f"Paper stamp added: {stamp_id} to paper {paper_id}")
+        log.info(
+            "add_paper_stamp", "Paper stamp added", stamp_id=stamp_id, paper_id=paper_id
+        )
         return stamp_id
 
     def get_paper_stamps(self, paper_id: str) -> list[dict]:
@@ -672,7 +681,9 @@ class SQLiteStorage(StorageInterface):
                 ),
             )
             conn.commit()
-        log.info("db", f"Note stamp added: {stamp_id} to note {note_id}")
+        log.info(
+            "add_note_stamp", "Note stamp added", stamp_id=stamp_id, note_id=note_id
+        )
         return stamp_id
 
     def get_note_stamps(self, note_id: str) -> list[dict]:
@@ -852,7 +863,7 @@ class SQLiteStorage(StorageInterface):
                 ),
             )
             conn.commit()
-        log.info("db", f"User created: {user_data['id']}")
+        log.info("create_user", "User created", user_id=user_data["id"])
         return user_data["id"]
 
     def get_user(self, user_id: str) -> dict | None:
@@ -945,10 +956,14 @@ class SQLiteStorage(StorageInterface):
                 )
                 conn.commit()
             log.info(
-                "db", f"[Storage] Session context saved: {session_id} -> {paper_id}"
+                "save_session",
+                "Session context saved",
+                session_id=session_id,
+                paper_id=paper_id,
             )
+
         except Exception as e:
-            log.error("db", f"[Storage] Failed to save session context: {e}")
+            log.error("save_session", "Failed to save session context", error=str(e))
 
     def get_session_paper_id(self, session_id: str) -> str | None:
         """Get paper ID for a session."""
@@ -1096,9 +1111,12 @@ class SQLiteStorage(StorageInterface):
                 try:
                     conn.execute(f"DELETE FROM {table}")
                 except sqlite3.OperationalError:
-                    log.warning("db", f"Table {table} does not exist, skipping.")
+                    log.warning(
+                        "clear_all_data", "Table does not exist, skipping.", table=table
+                    )
+
             conn.commit()
-        log.info("db", "All data cleared from SQLite database.")
+        log.info("clear_all_data", "All data cleared from SQLite database.")
         return True
 
 
@@ -1129,7 +1147,8 @@ def get_storage_provider() -> StorageInterface:
 
             _storage_provider_instance = CloudSQLStorage()
         except ImportError as e:
-            log.error("db", f"Failed to import CloudSQLStorage: {e}")
+            log.error("init", "Failed to import CloudSQLStorage", error=str(e))
+
             raise RuntimeError(
                 "CloudSQLStorage requires 'psycopg2' and 'cloud_sql_storage.py'"
             ) from e

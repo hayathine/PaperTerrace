@@ -8,10 +8,15 @@ export type DictionaryEntryWithCoords = DictionaryEntry & {
 
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { createLogger } from "@/lib/logger";
 import { useAuth } from "../../contexts/AuthContext";
 import CopyButton from "../Common/CopyButton";
 import FeedbackSection from "../Common/FeedbackSection";
 import MarkdownContent from "../Common/MarkdownContent";
+import FigureInsight from "../FigureInsight/FigureInsight";
+import type { SelectedFigure } from "../PDF/types";
+
+const log = createLogger("Dictionary");
 
 interface DictionaryProps {
 	term?: string;
@@ -23,7 +28,7 @@ interface DictionaryProps {
 	onJump?: (page: number, x: number, y: number, term?: string) => void;
 	imageUrl?: string;
 	onAskInChat?: () => void;
-	onTabChange?: (tab: string) => void;
+	selectedFigure?: SelectedFigure | null;
 }
 
 const Dictionary: React.FC<DictionaryProps> = ({
@@ -36,10 +41,19 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	onJump,
 	imageUrl,
 	onAskInChat,
-	onTabChange,
+	selectedFigure,
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token } = useAuth();
+
+	const [activeSubTab, setActiveSubTab] = useState<"dict" | "figures">("dict");
+
+	// 図が選択されたら自動的に figures サブタブへ切り替え
+	useEffect(() => {
+		if (selectedFigure) {
+			setActiveSubTab("figures");
+		}
+	}, [selectedFigure]);
 
 	// Maintain a list of entries instead of a single one
 	const [entries, setEntries] = useState<DictionaryEntryWithCoords[]>([]);
@@ -152,7 +166,11 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					);
 				}
 			} catch (e: any) {
-				console.error("Dictionary fetch error:", e);
+				log.error("fetch_definition", "Dictionary fetch error", {
+					error: e,
+					term,
+				});
+
 				setError(`Failed to fetch definition for "${term}".`);
 			} finally {
 				setLoading(false);
@@ -182,7 +200,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				}
 			}
 		} catch (e) {
-			console.error("Dictionary fetchSavedNotes error:", e);
+			log.error("fetch_saved_notes", "Dictionary fetchSavedNotes error", {
+				error: e,
+			});
 		}
 	}, [sessionId, paperId, token]);
 
@@ -242,7 +262,11 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				setError(`Translation failed: ${res.status} ${errorText}`);
 			}
 		} catch (e) {
-			console.error(e);
+			log.error("deep_translate", "Translation failed", {
+				error: e,
+				term: entry.word,
+			});
+
 			setError("Translation failed.");
 		} finally {
 			setLoading(false);
@@ -276,7 +300,10 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				window.dispatchEvent(new Event("notes-updated"));
 			}
 		} catch (e) {
-			console.error(e);
+			log.error("save_to_note", "Failed to save note", {
+				error: e,
+				term: entry.word,
+			});
 		}
 	};
 
@@ -547,20 +574,37 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			<div className="flex px-4 pt-2 border-b border-slate-100 bg-white sticky top-0 z-20 shrink-0">
 				<button
 					type="button"
-					className="pb-2 px-1 text-xs font-bold text-orange-600 border-b-2 border-orange-600 uppercase tracking-wider transition-all"
+					onClick={() => setActiveSubTab("dict")}
+					className={`pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all ${
+						activeSubTab === "dict"
+							? "text-orange-600 border-orange-600"
+							: "text-slate-400 hover:text-slate-600 border-transparent"
+					}`}
 				>
 					{t("sidebar.tabs.dict")} {entries.length > 0 && `(${entries.length})`}
 				</button>
 				<button
 					type="button"
-					onClick={() => onTabChange?.("figures")}
-					className="ml-6 pb-2 px-1 text-xs font-bold text-slate-400 hover:text-slate-600 border-b-2 border-transparent uppercase tracking-wider transition-all"
+					onClick={() => setActiveSubTab("figures")}
+					className={`ml-6 pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all ${
+						activeSubTab === "figures"
+							? "text-orange-600 border-orange-600"
+							: "text-slate-400 hover:text-slate-600 border-transparent"
+					}`}
 				>
 					{t("sidebar.tabs.figures")}
 				</button>
 			</div>
 
-			<div className="flex-1 overflow-hidden">{content}</div>
+			<div className="flex-1 overflow-y-auto">
+				{activeSubTab === "dict" ? (
+					content
+				) : (
+					<div className="p-4">
+						<FigureInsight selectedFigure={selectedFigure} />
+					</div>
+				)}
+			</div>
 		</div>
 	);
 };

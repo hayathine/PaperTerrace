@@ -11,9 +11,12 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 
-from common.logger import logger
+from common.logger import ServiceLogger
 
 from .storage_provider import StorageInterface
+
+log = ServiceLogger("CloudSQL")
+
 
 load_dotenv("secrets/.env")
 
@@ -33,8 +36,12 @@ class CloudSQLStorage(StorageInterface):
         self.port = os.getenv("DB_PORT", "5432")
         self.instance_connection_name = os.getenv("CLOUDSQL_CONNECTION_NAME")
 
-        logger.info(
-            f"CloudSQLStorage initialized - host: {self.host}, db: {self.db_name}, has_url: {self.db_url is not None}"
+        log.info(
+            "init",
+            "CloudSQLStorage initialized",
+            host=self.host,
+            db_name=self.db_name,
+            has_url=self.db_url is not None,
         )
 
     def _get_connection(self):
@@ -74,8 +81,9 @@ class CloudSQLStorage(StorageInterface):
                     )
                 yield conn
             except Exception as e:
-                logger.error(f"Database connection error: {e}")
+                log.error("connection", "Database connection error", error=str(e))
                 raise
+
             finally:
                 if conn:
                     conn.close()
@@ -143,7 +151,8 @@ class CloudSQLStorage(StorageInterface):
                     ),
                 )
             conn.commit()
-        logger.info(f"Paper saved (CloudSQL): {paper_id}")
+        log.info("save_paper", "Paper saved (CloudSQL)", paper_id=paper_id)
+
         return paper_id
 
     def get_paper(self, paper_id: str) -> dict | None:
@@ -850,11 +859,13 @@ class CloudSQLStorage(StorageInterface):
                         # so we check if the table exists first or just catch the error and rollback/next.
                         cur.execute(f"DELETE FROM {table}")
                     except Exception as e:
-                        logger.warning(
-                            f"CloudSQL: Table {table} clear failed or doesn't exist: {e}"
+                        log.warning(
+                            "clear_all_data",
+                            f"Table {table} clear failed or doesn't exist: {e}",
                         )
                         conn.rollback()  # Postgres needs rollback on error to continue
+
                         continue
             conn.commit()
-        logger.info("All data cleared from Cloud SQL database.")
+        log.info("clear_all_data", "All data cleared from Cloud SQL database.")
         return True

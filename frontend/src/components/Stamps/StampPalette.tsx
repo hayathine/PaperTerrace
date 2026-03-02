@@ -1,7 +1,10 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
 import { API_URL } from "@/config";
+import { createLogger } from "@/lib/logger";
 import { STAMP_CATEGORIES, type StampType } from "./types";
+
+const log = createLogger("StampPalette");
 
 interface StampPaletteProps {
 	isStampMode: boolean;
@@ -28,7 +31,10 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 			try {
 				setCustomStamps(JSON.parse(saved));
 			} catch (_e) {
-				console.error("Failed to parse custom stamps");
+				log.error(
+					"load_cache",
+					"Failed to parse custom stamps from localStorage",
+				);
 			}
 		}
 	}, []);

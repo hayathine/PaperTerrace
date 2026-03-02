@@ -2,8 +2,8 @@ import type React from "react";
 import { useTranslation } from "react-i18next";
 import ChatWindow from "../Chat/ChatWindow";
 import Dictionary from "../Dictionary/Dictionary";
-import FigureInsight from "../FigureInsight/FigureInsight";
 import NoteList from "../Notes/NoteList";
+import type { SelectedFigure } from "../PDF/types";
 import RecommendationTab from "../Recommendation/RecommendationTab";
 import Summary from "../Summary/Summary";
 
@@ -19,6 +19,7 @@ interface SidebarProps {
 	onJump?: (page: number, x: number, y: number, term?: string) => void;
 	isAnalyzing?: boolean;
 	paperId?: string | null;
+	selectedFigure?: SelectedFigure | null;
 	pendingFigureId?: string | null;
 	onPendingFigureConsumed?: () => void;
 	pendingChatPrompt?: string | null;
@@ -39,6 +40,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	onJump,
 	isAnalyzing = false,
 	paperId,
+	selectedFigure,
 	pendingFigureId,
 	onPendingFigureConsumed,
 	pendingChatPrompt,
@@ -207,7 +209,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						onJump={onJump}
 						imageUrl={selectedImage}
 						onAskInChat={() => onTabChange("chat")}
-						onTabChange={onTabChange}
+						selectedFigure={selectedFigure}
 					/>
 				</div>
 
@@ -247,12 +249,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 						selectedTerm={selectedWord}
 						selectedImage={selectedImage}
 					/>
-				</div>
-
-				<div
-					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "figures" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
-				>
-					<FigureInsight paperId={paperId} onTabChange={onTabChange} />
 				</div>
 
 				<div

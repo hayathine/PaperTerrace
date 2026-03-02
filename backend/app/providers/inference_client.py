@@ -4,13 +4,13 @@
 """
 
 import asyncio
-import logging
 import os
 import time
 from typing import Any
 
 import httpx
 
+from common.logger import ServiceLogger
 from common.schemas.inference import (
     LayoutAnalysisRequest,
     TranslationRequest,
@@ -41,7 +41,7 @@ class CircuitBreakerError(Exception):
     pass
 
 
-logger = logging.getLogger(__name__)
+log = ServiceLogger("InferenceClient")
 
 
 class InferenceServiceClient:
@@ -88,7 +88,7 @@ class InferenceServiceClient:
                 # 回路ブレーカーをリセット
                 self.circuit_open = False
                 self.failure_count = 0
-                logger.info("回路ブレーカーをリセットしました")
+                log.info("circuit_breaker", "回路ブレーカーをリセットしました")
             else:
                 raise CircuitBreakerError("推論サービスの回路ブレーカーが開いています")
 
@@ -97,7 +97,7 @@ class InferenceServiceClient:
         self.failure_count = 0
         if self.circuit_open:
             self.circuit_open = False
-            logger.info("推論サービスが復旧しました")
+            log.info("circuit_breaker", "推論サービスが復旧しました")
 
     def _record_failure(self):
         """失敗時の記録"""
@@ -106,8 +106,10 @@ class InferenceServiceClient:
 
         if self.failure_count >= self.failure_threshold:
             self.circuit_open = True
-            logger.error(
-                f"推論サービスの回路ブレーカーを開きました（失敗回数: {self.failure_count}）"
+            log.error(
+                "circuit_breaker",
+                "推論サービスの回路ブレーカーを開きました",
+                failure_count=self.failure_count,
             )
 
     async def _make_request_with_retry(
@@ -129,8 +131,12 @@ class InferenceServiceClient:
 
             except httpx.HTTPError as e:
                 last_exception = e
-                logger.warning(
-                    f"推論サービスリクエスト失敗 (試行 {attempt + 1}/{self.max_retries + 1}): {e}"
+                log.warning(
+                    "request",
+                    "推論サービスリクエスト失敗",
+                    attempt=attempt + 1,
+                    max_retries=self.max_retries + 1,
+                    error=str(e),
                 )
 
                 if attempt < self.max_retries:
@@ -163,29 +169,33 @@ class InferenceServiceClient:
         request_data = LayoutAnalysisRequest(pdf_path=pdf_path, pages=pages)
 
         try:
-            logger.info(f"レイアウト解析リクエスト: {pdf_path}")
+            log.info("analyze_layout", "レイアウト解析リクエスト", pdf_path=pdf_path)
 
             response = await self._make_request_with_retry(
                 "POST", "/api/v1/layout-analysis", json=request_data.model_dump()
             )
 
             if response.get("success"):
-                logger.info(
-                    f"レイアウト解析完了: {response.get('processing_time', 0):.2f}秒"
+                log.info(
+                    "analyze_layout",
+                    "レイアウト解析完了",
+                    processing_time=response.get("processing_time", 0),
                 )
+
                 return response.get("results", [])
             else:
                 error_msg = response.get("message", "不明なエラー")
                 raise InferenceServiceError(f"レイアウト解析失敗: {error_msg}")
 
         except Exception as e:
-            logger.error(f"レイアウト解析エラー: {e}")
+            log.error("analyze_layout", "レイアウト解析エラー", error=str(e))
+
             raise
 
     async def analyze_image_async(self, image_bytes: bytes) -> list[dict[str, Any]]:
         """レイアウト解析の実行（画像データ）"""
         try:
-            logger.info("画像データによるレイアウト解析リクエスト")
+            log.info("analyze_image", "画像データによるレイアウト解析リクエスト")
 
             # multipart/form-dataで画像を送信
             files = {"file": ("image.png", image_bytes, "image/png")}
@@ -195,16 +205,20 @@ class InferenceServiceClient:
             )
 
             if response.get("success"):
-                logger.info(
-                    f"レイアウト解析完了: {response.get('processing_time', 0):.2f}秒"
+                log.info(
+                    "analyze_image",
+                    "レイアウト解析完了",
+                    processing_time=response.get("processing_time", 0),
                 )
+
                 return response.get("results", [])
             else:
                 error_msg = response.get("message", "不明なエラー")
                 raise InferenceServiceError(f"レイアウト解析失敗: {error_msg}")
 
         except Exception as e:
-            logger.error(f"画像レイアウト解析エラー: {e}")
+            log.error("analyze_image", "画像レイアウト解析エラー", error=str(e))
+
             raise
 
     async def analyze_images_batch(
@@ -226,7 +240,11 @@ class InferenceServiceClient:
             各画像の解析結果リスト
         """
         try:
-            logger.info(f"バッチレイアウト解析リクエスト: {len(images)}画像")
+            log.info(
+                "analyze_batch",
+                "バッチレイアウト解析リクエスト",
+                image_count=len(images),
+            )
 
             # バッチサイズで分割
             all_results = []
@@ -246,19 +264,24 @@ class InferenceServiceClient:
                 if response.get("success"):
                     batch_results = response.get("results", [])
                     all_results.extend(batch_results)
-                    logger.info(
-                        f"バッチ解析完了: {len(batch)}画像, "
-                        f"{response.get('processing_time', 0):.2f}秒"
+                    log.info(
+                        "analyze_batch",
+                        "バッチ解析完了",
+                        batch_size=len(batch),
+                        processing_time=response.get("processing_time", 0),
                     )
+
                 else:
                     error_msg = response.get("message", "不明なエラー")
                     raise InferenceServiceError(f"バッチ解析失敗: {error_msg}")
 
-            logger.info(f"全バッチ解析完了: {len(all_results)}結果")
+            log.info("analyze_batch", "全バッチ解析完了", result_count=len(all_results))
+
             return all_results
 
         except Exception as e:
-            logger.error(f"バッチレイアウト解析エラー: {e}")
+            log.error("analyze_batch", "バッチレイアウト解析エラー", error=str(e))
+
             raise
 
     async def translate_text(
@@ -270,22 +293,29 @@ class InferenceServiceClient:
         )
 
         try:
-            logger.debug(f"翻訳リクエスト: {text[:50]}...")
+            log.debug("translate", "翻訳リクエスト", text_preview=text[:50])
 
+            # ... content omitted ...
             response = await self._make_request_with_retry(
                 "POST", "/api/v1/translate", json=request_data.model_dump()
             )
 
             if response.get("success"):
                 translation = response.get("translation", "")
-                logger.debug(f"翻訳完了: {response.get('processing_time', 0):.2f}秒")
+                log.debug(
+                    "translate",
+                    "翻訳完了",
+                    processing_time=response.get("processing_time", 0),
+                )
+
                 return translation
             else:
                 error_msg = response.get("message", "不明なエラー")
                 raise InferenceServiceError(f"翻訳失敗: {error_msg}")
 
         except Exception as e:
-            logger.error(f"翻訳エラー: {e}")
+            log.error("translate", "翻訳エラー", error=str(e))
+
             raise
 
     async def health_check(self) -> dict[str, Any]:
@@ -300,7 +330,8 @@ class InferenceServiceClient:
             return response.json()
         except Exception as e:
             self._record_failure()
-            logger.error(f"ヘルスチェックエラー: {e}")
+            log.error("health_check", "ヘルスチェックエラー", error=str(e))
+
             raise
 
 

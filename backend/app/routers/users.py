@@ -5,10 +5,12 @@ Handles public user profile viewing.
 
 from fastapi import APIRouter, HTTPException, status
 
-from common.logger import logger
 from app.models.paper import PaperListResponse, PaperPublic
 from app.models.user import UserPublic
 from app.providers import get_storage_provider
+from common.logger import ServiceLogger
+
+log = ServiceLogger("Users")
 
 router = APIRouter(prefix="/users", tags=["Users"])
 
@@ -106,10 +108,12 @@ async def get_user_papers(
             has_more=page * per_page < total,
         )
     except Exception as e:
-        logger.exception(
+        log.exception(
+            "get_papers",
             "Failed to get user papers",
-            extra={"user_id": user_id, "error": str(e)},
+            user_id=user_id,
         )
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="論文の取得に失敗しました",

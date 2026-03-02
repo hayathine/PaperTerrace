@@ -17,6 +17,9 @@ import {
 } from "react";
 import { API_URL } from "@/config";
 import { auth, githubProvider, googleProvider } from "@/lib/firebase";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Auth");
 
 interface AuthContextType {
 	user: User | null;
@@ -58,10 +61,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 				},
 			});
 			if (!response.ok) {
-				console.warn("Backend sync returned status:", response.status);
+				log.warn("sync_with_backend", "Backend sync returned non-OK status", {
+					status: response.status,
+				});
 			}
 		} catch (error) {
-			console.error("Failed to sync user with backend:", error);
+			log.error("sync_with_backend", "Failed to sync user with backend", {
+				error,
+			});
 		}
 	}, []);
 
@@ -73,7 +80,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 				setToken(idToken);
 				return idToken;
 			} catch (error) {
-				console.error("Error getting token:", error);
+				log.error("get_token", "Error getting token", { error });
+
 				return null;
 			}
 		},
@@ -85,11 +93,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 		getRedirectResult(auth)
 			.then((result) => {
 				if (result?.user) {
-					console.log("Logged in via redirect:", result.user.email);
+					log.info("redirect_login", "Logged in via redirect", {
+						email: result.user.email,
+					});
 				}
 			})
 			.catch((error) => {
-				console.error("Error handling redirect result:", error);
+				log.error("redirect_login", "Error handling redirect result", {
+					error,
+				});
 			});
 
 		const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
@@ -100,7 +112,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 					setIsGuest(false);
 					await syncWithBackend(idToken);
 				} catch (error) {
-					console.error("Error in auth state change:", error);
+					log.error("auth_state_change", "Error in auth state change", {
+						error,
+					});
 				}
 			} else {
 				setToken(null);
@@ -130,7 +144,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 		try {
 			await signInWithPopup(auth, googleProvider);
 		} catch (error) {
-			console.error("Error signing in with Google", error);
+			log.error("sign_in_google", "Error signing in with Google", { error });
+
 			throw error;
 		}
 	};
@@ -139,7 +154,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 		try {
 			await signInWithRedirect(auth, googleProvider);
 		} catch (error) {
-			console.error("Error signing in with Google Redirect", error);
+			log.error(
+				"sign_in_google_redirect",
+				"Error signing in with Google Redirect",
+				{ error },
+			);
+
 			throw error;
 		}
 	};
@@ -148,7 +168,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 		try {
 			await signInWithPopup(auth, githubProvider);
 		} catch (error) {
-			console.error("Error signing in with Github", error);
+			log.error("sign_in_github", "Error signing in with Github", { error });
+
 			throw error;
 		}
 	};
@@ -157,7 +178,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 		try {
 			await signInWithRedirect(auth, githubProvider);
 		} catch (error) {
-			console.error("Error signing in with Github Redirect", error);
+			log.error(
+				"sign_in_github_redirect",
+				"Error signing in with Github Redirect",
+				{ error },
+			);
+
 			throw error;
 		}
 	};
@@ -173,7 +199,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 			setToken(null);
 			setIsGuest(true);
 		} catch (error) {
-			console.error("Error signing out", error);
+			log.error("logout", "Error signing out", { error });
+
 			throw error;
 		}
 	};

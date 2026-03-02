@@ -2,12 +2,15 @@ import type React from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
+import { createLogger } from "@/lib/logger";
 import {
 	generateRecommendations,
 	type RecommendationGenerateResponse,
 } from "@/lib/recommendation";
 import FeedbackSection from "../Common/FeedbackSection";
 import MarkdownContent from "../Common/MarkdownContent";
+
+const log = createLogger("Recommendation");
 
 interface RecommendationTabProps {
 	sessionId: string;
@@ -32,7 +35,10 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({ sessionId }) => {
 			setResponse(res);
 			setIsOpen(true);
 		} catch (err) {
-			console.error("Failed to fetch recommendations:", err);
+			log.error("handle_generate", "Failed to fetch recommendations", {
+				error: err,
+			});
+
 			setError(
 				t(
 					"error.load_recommendations_failed",

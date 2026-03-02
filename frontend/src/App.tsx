@@ -2,9 +2,11 @@ import type React from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { createLogger } from "@/lib/logger";
 import Login from "./components/Auth/Login";
 import ErrorBoundary from "./components/Error/ErrorBoundary";
 import PDFViewer from "./components/PDF/PDFViewer";
+import type { SelectedFigure } from "./components/PDF/types";
 import SearchBar from "./components/Search/SearchBar";
 import Sidebar from "./components/Sidebar/Sidebar";
 import GlobalLoading from "./components/UI/GlobalLoading";
@@ -12,6 +14,8 @@ import UploadScreen from "./components/Upload/UploadScreen";
 import { useAuth } from "./contexts/AuthContext";
 import { useLoading } from "./contexts/LoadingContext";
 import { syncTrajectory } from "./lib/recommendation";
+
+const log = createLogger("App");
 
 function App() {
 	const { user, logout, token } = useAuth();
@@ -67,6 +71,9 @@ function App() {
 	const [pendingChatPrompt, setPendingChatPrompt] = useState<string | null>(
 		null,
 	);
+	const [selectedFigure, setSelectedFigure] = useState<SelectedFigure | null>(
+		null,
+	);
 	const [sidebarWidth, setSidebarWidth] = useState(384);
 	const [isResizing, setIsResizing] = useState(false);
 	const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
@@ -95,7 +102,8 @@ function App() {
 					setUploadedPapers([]);
 				}
 			} catch (err) {
-				console.error("Failed to fetch papers:", err);
+				log.error("fetch_papers", "Failed to fetch papers", { error: err });
+
 				setUploadedPapers([]);
 			}
 		};
@@ -119,7 +127,9 @@ function App() {
 					method: "POST",
 					body: formData,
 					keepalive: true,
-				}).catch((e) => console.error("Failed to delete cache:", e));
+				}).catch((e) =>
+					log.error("delete_cache", "Failed to delete cache", { error: e }),
+				);
 			}
 		};
 
@@ -217,7 +227,9 @@ function App() {
 					}
 				})
 				.catch((err) => {
-					console.error("Failed to refresh papers:", err);
+					log.error("refresh_papers", "Failed to refresh papers", {
+						error: err,
+					});
 				});
 		}
 	};
@@ -335,6 +347,12 @@ function App() {
 			setActiveTab("chat");
 			setIsRightSidebarOpen(true);
 		}
+	};
+
+	const handleFigureSelect = (figure: SelectedFigure) => {
+		setSelectedFigure(figure);
+		setActiveTab("dict");
+		setIsRightSidebarOpen(true);
 	};
 
 	// Ctrl+F イベントをインターセプトしてカスタム検索を開く
@@ -644,7 +662,11 @@ function App() {
 													setCurrentPaperId(null);
 												})
 												.catch((e) =>
-													console.error("Failed to load test PDF:", e),
+													log.error(
+														"load_test_pdf",
+														"Failed to load test PDF",
+														{ error: e },
+													),
 												);
 										}}
 										id="dev-load-pdf-btn"
@@ -730,6 +752,7 @@ function App() {
 										onStatusChange={handleAnalysisStatusChange}
 										onPaperLoaded={handlePaperLoaded}
 										onAskAI={handleAskAI}
+										onFigureSelect={handleFigureSelect}
 										searchTerm={searchTerm}
 										onSearchMatchesUpdate={handleSearchMatchesUpdate}
 										currentSearchMatch={currentSearchMatch}
@@ -796,6 +819,7 @@ function App() {
 								onJump={handleJumpToLocation}
 								isAnalyzing={isAnalyzing}
 								paperId={currentPaperId}
+								selectedFigure={selectedFigure}
 								pendingFigureId={pendingFigureId}
 								onPendingFigureConsumed={() => setPendingFigureId(null)}
 								pendingChatPrompt={pendingChatPrompt}

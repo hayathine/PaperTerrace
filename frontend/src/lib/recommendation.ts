@@ -1,4 +1,7 @@
 import { API_URL } from "@/config";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("RecommendationLib");
 
 export interface WordClickEvent {
 	word: string;
@@ -71,9 +74,11 @@ export async function syncTrajectory(
 			headers: buildHeaders(token),
 			body: JSON.stringify(payload),
 			keepalive: true,
-		}).catch((err) => console.error("Failed to sync trajectory:", err));
+		}).catch((err) =>
+			log.error("sync_trajectory", "Failed to sync trajectory", { error: err }),
+		);
 	} catch (error) {
-		console.error("Sync error:", error);
+		log.error("sync_trajectory", "Sync error", { error });
 	}
 }
 

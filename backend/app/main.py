@@ -31,7 +31,11 @@ from app.routers import (
     upload_router,
     users_router,
 )
-from common.logger import configure_logging, logger
+from common.logger import ServiceLogger, configure_logging
+
+log = ServiceLogger("Main")
+mw_log = ServiceLogger("Middleware")
+
 
 # Load environment variables from secrets directory
 load_dotenv("secrets/.env")
@@ -68,12 +72,12 @@ async def lifespan(app: FastAPI):
 
             # Prewarm NLP (spaCy) - internal buffers
             NLPService.lemmatize("warmup")
-            logger.info("Pre-warmed NLP (spaCy)")
+            log.info("prewarm", "Pre-warmed NLP (spaCy)")
 
         except Exception as e:
-            logger.warning(f"Failed to pre-warm models: {e}")
+            log.warning("prewarm", "Failed to pre-warm models", error=str(e))
 
-    logger.info("Starting up...")
+    log.info("startup", "Starting up...")
     try:
         # Run Alembic migrations
         from alembic import command
@@ -82,27 +86,30 @@ async def lifespan(app: FastAPI):
         alembic_cfg = Config("alembic.ini")
         # Ensure alembic uses the correct directory if we're not in root (though usually we are)
         command.upgrade(alembic_cfg, "head")
-        logger.info("Database migrations applied successfully")
+        log.info("migration", "Database migrations applied successfully")
 
         # Pre-warm models before server starts (Blocking)
-        logger.info("Pre-warming models before accepting requests...")
+        log.info("prewarm", "Pre-warming models before accepting requests...")
         await _prewarm_models()
-        logger.info("All models loaded. Server is ready.")
+        log.info("prewarm", "All models loaded. Server is ready.")
     except Exception as e:
         # If tables already exist, we might get a DuplicateTable error.
         # We log and continue so the app can still run.
         if "already exists" in str(e).lower():
-            logger.warning(
-                f"Database tables already exist, skipping initial migration: {e}"
+            log.warning(
+                "migration",
+                "Database tables already exist, skipping initial migration",
+                error=str(e),
             )
         else:
-            logger.error(f"Failed to initialize database: {e}")
+            log.error("migration", "Failed to initialize database", error=str(e))
+
             # Re-raise for non-existence errors if necessary, or just continue
             # For now, let's allow the app to try to run.
 
     yield
 
-    logger.info("Shutting down...")
+    log.info("shutdown", "Shutting down...")
 
 
 # Create FastAPI app with lifespan
@@ -142,7 +149,7 @@ class TrustedProxyMiddleware(BaseHTTPMiddleware):
         user_id = request.headers.get("x-user-id")
         if user_id:
             request.state.user_id = user_id
-            logger.debug(f"Request authenticated for user: {user_id}")
+            mw_log.debug("auth", "Request authenticated", user_id=user_id)
 
         return await call_next(request)
 
@@ -156,11 +163,12 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
         is_health_check = request.url.path == "/api/health"
-        log_func = logger.debug if is_health_check else logger.info
+        log_method = mw_log.debug if is_health_check else mw_log.info
 
         # Log request start
-        log_func(
-            "request_started",
+        log_method(
+            "request",
+            "started",
             method=request.method,
             path=request.url.path,
             query_params=str(request.query_params),
@@ -172,8 +180,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             duration = time.time() - start_time
 
             # Log request completion
-            log_func(
-                "request_completed",
+            log_method(
+                "request",
+                "completed",
                 method=request.method,
                 path=request.url.path,
                 status_code=response.status_code,
@@ -182,15 +191,17 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             return response
         except Exception as e:
             duration = time.time() - start_time
-            logger.error(
-                "request_failed",
+            mw_log.error(
+                "request",
+                "failed",
                 method=request.method,
                 path=request.url.path,
                 error=str(e),
                 error_type=type(e).__name__,
                 duration_ms=round(duration * 1000, 2),
             )
-            logger.error(traceback.format_exc())
+            mw_log.error("request", traceback.format_exc())
+
             return JSONResponse(
                 status_code=500,
                 content={"error": "Internal Server Error", "message": str(e)},
@@ -203,8 +214,15 @@ app.add_middleware(LoggingMiddleware)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Global exception: {request.method} {request.url.path}")
-    logger.error(traceback.format_exc())
+    mw_log.error(
+        "exception",
+        "Global exception",
+        method=request.method,
+        path=request.url.path,
+    )
+
+    mw_log.error("exception", traceback.format_exc())
+
     return JSONResponse(
         status_code=500, content={"error": "Internal Server Error", "message": str(exc)}
     )
@@ -295,8 +313,9 @@ if _storage_type == "gcs":
                 },
             )
         except Exception as e:
-            logger.error(f"Failed to serve GCS image: {e}")
+            log.error("serve_gcs_image", "Failed to serve GCS image", error=str(e))
             return FastAPIResponse(status_code=500, content=b"Internal Server Error")
+
 
 else:
     # Local mode: mount static files directory

@@ -4,7 +4,10 @@ from fastapi.responses import JSONResponse
 from app.auth import OptionalUser
 from app.crud import get_storage_provider
 from app.domain.features.figure_insight import FigureInsightService
-from common.logger import logger
+from common.logger import ServiceLogger
+
+log = ServiceLogger("Figures")
+
 
 router = APIRouter(tags=["Figures"])
 storage = get_storage_provider()
@@ -18,7 +21,10 @@ async def get_paper_figures(paper_id: str, user: OptionalUser = None):
         figures = storage.get_paper_figures(paper_id)
         return {"figures": figures}
     except Exception as e:
-        logger.error(f"Failed to get figures: {e}")
+        log.error(
+            "get_figures", "Failed to get figures", error=str(e), paper_id=paper_id
+        )
+
         return JSONResponse({"error": str(e)}, status_code=500)
 
 
@@ -87,5 +93,11 @@ async def explain_figure(figure_id: str, user: OptionalUser = None):
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to explain figure: {e}")
+        log.error(
+            "explain_figure",
+            "Failed to explain figure",
+            error=str(e),
+            figure_id=figure_id,
+        )
+
         return JSONResponse({"error": str(e)}, status_code=500)

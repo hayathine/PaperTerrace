@@ -1,23 +1,14 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { createLogger } from "@/lib/logger";
 import { db } from "../../db";
 import StampOverlay from "../Stamps/StampOverlay";
 import type { Stamp } from "../Stamps/types";
 import BoxOverlay from "./BoxOverlay";
-import type { PageData } from "./types";
+import type { PageData, SelectedFigure } from "./types";
 
-const getFigTypeLabel = (t: any, label: string): string => {
-	const keyMap: Record<string, string> = {
-		table: "pdf.table",
-		figure: "pdf.figure",
-		equation: "pdf.equation",
-		image: "pdf.image",
-	};
-	const normalizedLabel = (label || "").toLowerCase();
-	const key = keyMap[normalizedLabel] || "pdf.figure";
-	return t(key);
-};
+const log = createLogger("PDFPage");
 
 interface PDFPageProps {
 	page: PageData;
@@ -47,6 +38,7 @@ interface PDFPageProps {
 		height: number;
 	}) => void;
 	onAskAI?: (prompt: string, imageUrl?: string, coords?: any) => void;
+	onFigureSelect?: (figure: SelectedFigure) => void;
 	jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
 	// 検索関連props
 	searchTerm?: string;
@@ -70,6 +62,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 	isAreaMode = false,
 	onAreaSelect,
 	onAskAI,
+	onFigureSelect,
 	jumpTarget,
 	searchTerm,
 	currentSearchMatch,
@@ -257,7 +250,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
 						className="w-full h-auto block select-none"
 						loading="lazy"
 						onError={() => {
-							console.warn("PDFPage: Image failed to load:", displayUrl);
+							log.warn("load_image", "Image failed to load", {
+								displayUrl,
+								page_num,
+							});
 							setImageError(true);
 						}}
 						onLoad={() => setImageError(false)}
@@ -318,11 +314,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
 							};
 
 							/*
-							console.log(`[PDFPage ${page_num}] Rendering figure ${idx}:`, {
+							log.debug("render_figure", "Rendering figure", {
+								idx,
 								label: fig.label,
 								bbox: fig.bbox,
-								style,
-								isClickMode,
+								page_num,
 							});
 							*/
 
@@ -352,21 +348,14 @@ const PDFPage: React.FC<PDFPageProps> = ({
 												className="bg-orange-600 text-white text-xs px-3 py-1.5 rounded-md shadow shadow-orange-500/30 hover:bg-orange-700 hover:shadow-orange-600/40 transition-all font-medium flex items-center gap-1.5 cursor-pointer transform hover:scale-105 active:scale-95"
 												onClick={(e) => {
 													e.stopPropagation();
-													if (onAskAI) {
-														const typeName = getFigTypeLabel(
-															t,
-															fig.label || "figure",
-														);
-														// Jump directly to explanation
-														onAskAI(
-															t("chat.explain_fig", { type: typeName }),
-															fig.image_url,
-															{
-																page: page_num,
-																x: (x1 + x2) / 2 / pageWidth,
-																y: (y1 + y2) / 2 / pageHeight,
-															},
-														);
+													if (onFigureSelect) {
+														onFigureSelect({
+															id: fig.id,
+															image_url: fig.image_url,
+															label: fig.label,
+															caption: fig.caption,
+															page_number: page_num,
+														});
 													}
 												}}
 												title={t("menu.ask_ai")}

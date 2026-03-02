@@ -6,11 +6,13 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.domain.services.nlp_service import NLPService
 from app.providers import get_storage_provider
-
-from common.logger import logger
+from common.logger import ServiceLogger
 from common.utils.text import clean_text_for_tokenization
 
 from .word_analysis import WordAnalysisService
+
+log = ServiceLogger("Tokenization")
+
 
 executor = ThreadPoolExecutor(max_workers=4)
 
@@ -153,6 +155,14 @@ class TokenizationService:
                     full_html += f'<p id="{unique_id}" class="mb-6">{all_html_parts[unique_id]}</p>'
             storage = get_storage_provider()
             storage.update_paper_html(paper_id, full_html)
-            logger.info(f"Updated HTML content for paper: {paper_id}")
+            log.info(
+                "save_full_html", "Updated HTML content for paper", paper_id=paper_id
+            )
+
         except Exception as e:
-            logger.error(f"Failed to save content for paper {paper_id}: {e}")
+            log.error(
+                "save_full_html",
+                "Failed to save content for paper",
+                paper_id=paper_id,
+                error=str(e),
+            )

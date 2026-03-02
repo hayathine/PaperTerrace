@@ -10,7 +10,10 @@ from fastapi import APIRouter, HTTPException, status
 from app.auth import CurrentUser
 from app.models.user import UserInDB, UserStats, UserUpdate
 from app.providers import get_storage_provider
-from common.logger import logger
+from common.logger import ServiceLogger
+
+log = ServiceLogger("Auth")
+
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
@@ -29,7 +32,7 @@ async def register_user(
     # Check if user already exists
     existing_user = storage.get_user(user.uid)
     if existing_user:
-        logger.info("User already registered", extra={"uid": user.uid})
+        log.info("register", "User already registered", uid=user.uid)
         return UserInDB(**existing_user)
 
     # Create new user
@@ -49,15 +52,18 @@ async def register_user(
 
     try:
         storage.create_user(user_data)
-        logger.info(
+        log.info(
+            "register",
             "User registered",
-            extra={"uid": user.uid, "email": user.email, "provider": user.provider},
+            uid=user.uid,
+            email=user.email,
+            provider=user.provider,
         )
         return UserInDB(**user_data)
+
     except Exception as e:
-        logger.exception(
-            "Failed to register user", extra={"uid": user.uid, "error": str(e)}
-        )
+        log.exception("register", "Failed to register user", uid=user.uid, error=str(e))
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="ユーザー登録に失敗しました",
@@ -101,12 +107,14 @@ async def update_current_user_profile(
     try:
         storage.update_user(user.uid, update_dict)
         updated_user = storage.get_user(user.uid)
-        logger.info("User profile updated", extra={"uid": user.uid})
+        log.info("update_profile", "User profile updated", uid=user.uid)
         return UserInDB(**updated_user)
+
     except Exception as e:
-        logger.exception(
-            "Failed to update user", extra={"uid": user.uid, "error": str(e)}
+        log.exception(
+            "update_profile", "Failed to update user", uid=user.uid, error=str(e)
         )
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="プロフィールの更新に失敗しました",
@@ -122,9 +130,7 @@ async def get_current_user_stats(user: CurrentUser):
         stats = storage.get_user_stats(user.uid)
         return UserStats(**stats)
     except Exception as e:
-        logger.exception(
-            "Failed to get user stats", extra={"uid": user.uid, "error": str(e)}
-        )
+        log.exception("stats", "Failed to get user stats", uid=user.uid, error=str(e))
         return UserStats()
 
 
@@ -140,11 +146,12 @@ async def delete_current_user(user: CurrentUser):
 
     try:
         storage.delete_user(user.uid)
-        logger.info("User deleted", extra={"uid": user.uid})
+        log.info("delete_account", "User deleted", uid=user.uid)
     except Exception as e:
-        logger.exception(
-            "Failed to delete user", extra={"uid": user.uid, "error": str(e)}
+        log.exception(
+            "delete_account", "Failed to delete user", uid=user.uid, error=str(e)
         )
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="アカウント削除に失敗しました",

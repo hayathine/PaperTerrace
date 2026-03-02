@@ -4,7 +4,10 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.orm.recommendation import Feedback
 from app.schemas.feedback import FeedbackRequest
-from common.logger import logger
+from common.logger import ServiceLogger
+
+log = ServiceLogger("Feedback")
+
 
 router = APIRouter(prefix="/feedback", tags=["Feedback"])
 
@@ -31,16 +34,22 @@ async def submit_feedback(
         user_score=req.user_score,  # 1 for Good, 0 for Bad
         user_comment=req.user_comment,
     )
-    logger.debug(
-        f"[Feedback] New feedback: type={req.target_type}, score={req.user_score}, comment={req.user_comment}"
+    log.debug(
+        "submit",
+        "New feedback received",
+        type=req.target_type,
+        score=req.user_score,
+        comment=req.user_comment,
     )
+
     db.add(feedback)
 
     try:
         db.commit()
     except Exception as e:
         db.rollback()
-        logger.error(f"Failed to save feedback: {e}")
+        log.error("submit", "Failed to save feedback", error=str(e))
+
         raise HTTPException(status_code=500, detail="Failed to save feedback")
 
     return {"status": "ok", "message": "Feedback recorded successfully"}

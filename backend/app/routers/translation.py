@@ -23,14 +23,15 @@ from app.providers.inference_client import (
 from common.dspy.config import setup_dspy
 from common.dspy.modules import TranslationModule
 from common.dspy.trace import TraceContext, trace_dspy_call
-from common.logger import get_service_logger
+from common.logger import ServiceLogger
 from common.prompts import (
     CORE_SYSTEM_PROMPT,
     DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT,
     DICT_TRANSLATE_WORD_SIMPLE_PROMPT,
 )
 
-log = get_service_logger("Translation")
+log = ServiceLogger("Translation")
+
 
 router = APIRouter(tags=["Translation"])
 
@@ -174,7 +175,7 @@ async def explain(
     element_id = element_id or req.headers.get("HX-Trigger")
 
     log.debug(
-        "explain", f"Word lookup: {word}", element_id=element_id, paper_id=paper_id
+        "explain", "Word lookup", word=word, element_id=element_id, paper_id=paper_id
     )
 
     loop = asyncio.get_event_loop()
@@ -208,10 +209,12 @@ async def explain(
             elapsed = asyncio.get_event_loop().time() - start_time
             log.info(
                 "explain",
-                f"Lookup completed (Cache) in {elapsed:.3f}s",
+                "Lookup completed (Cache)",
+                elapsed=f"{elapsed:.3f}s",
                 word=word,
                 paper_id=paper_id,
             )
+
             return HTMLResponse(
                 build_dict_card_html(
                     original_word,
@@ -245,8 +248,11 @@ async def explain(
     if use_llamacpp:
         log.info(
             "explain",
-            f"Word confidence {f_conf} <= 0.5, using LlamaCpp for {original_word}",
+            f"Word confidence {f_conf} <= 0.5, using LlamaCpp",
+            word=original_word,
+            conf=f_conf,
         )
+
         try:
             from app.providers.inference_client import get_inference_client
 
@@ -270,8 +276,12 @@ async def explain(
 
             elapsed = asyncio.get_event_loop().time() - start_time
             log.info(
-                "explain", f"Lookup completed (Qwen3) in {elapsed:.3f}s", word=word
+                "explain",
+                "Lookup completed (Qwen3)",
+                elapsed=f"{elapsed:.3f}s",
+                word=word,
             )
+
             return HTMLResponse(
                 build_dict_card_html(
                     original_word,
@@ -285,7 +295,10 @@ async def explain(
                 )
             )
         except Exception as e:
-            log.warning("explain", f"LlamaCpp translation failed: {e}", lemma=lemma)
+            log.warning(
+                "explain", "LlamaCpp translation failed", error=str(e), lemma=lemma
+            )
+
             # Fall back to rest
 
     # Stage 2: ServiceB Machine Translation (M2M100)
@@ -297,17 +310,24 @@ async def explain(
             )
             log.debug(
                 "explain",
-                f"ServiceB translation result: {local_translation}",
+                "ServiceB translation result",
+                result=local_translation,
                 lemma=lemma,
             )
+
         except InferenceServiceTimeoutError:
             log.warning("explain", "ServiceB translation timeout (busy)", lemma=lemma)
+
             local_translation = "混雑中"
         except (InferenceServiceDownError, CircuitBreakerError):
             log.warning("explain", "ServiceB is down or circuit open", lemma=lemma)
+
             local_translation = "サーバーが故障中です"
         except Exception as e:
-            log.warning("explain", f"ServiceB translation failed: {e}", lemma=lemma)
+            log.warning(
+                "explain", "ServiceB translation failed", error=str(e), lemma=lemma
+            )
+
             local_translation = None
     else:
         local_translation = None
@@ -335,10 +355,12 @@ async def explain(
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(
             "explain",
-            f"Lookup completed (ServiceB) in {elapsed:.3f}s",
+            "Lookup completed (ServiceB)",
+            elapsed=f"{elapsed:.3f}s",
             word=word,
             paper_id=paper_id,
         )
+
         return HTMLResponse(
             build_dict_card_html(
                 original_word,
@@ -413,10 +435,12 @@ async def explain(
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(
             "explain",
-            f"Lookup completed (Gemini) in {elapsed:.3f}s",
+            "Lookup completed (Gemini)",
+            elapsed=f"{elapsed:.3f}s",
             word=word,
             paper_id=paper_id,
         )
+
         return HTMLResponse(
             build_dict_card_html(
                 original_word,
@@ -508,7 +532,11 @@ async def explain_deep(
             "TranslationModule",
             "ContextAwareTranslation",
             trans_mod,
-            {"paper_context": paper_context, "target_text": lemma, "lang_name": lang_name},
+            {
+                "paper_context": paper_context,
+                "target_text": lemma,
+                "lang_name": lang_name,
+            },
             context=TraceContext(paper_id=paper_id),
         )
         translation = res.translation_and_explanation.strip()
@@ -530,10 +558,12 @@ async def explain_deep(
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(
             "explain_deep",
-            f"Deep lookup completed in {elapsed:.3f}s",
+            "Deep lookup completed",
+            elapsed=f"{elapsed:.3f}s",
             word=word,
             paper_id=paper_id,
         )
+
         return HTMLResponse(
             build_dict_card_html(
                 original_word,
@@ -547,7 +577,9 @@ async def explain_deep(
             )
         )
     except Exception as e:
-        log.error("explain_deep", "Gemini translation failed", error=str(e))
+        log.error(
+            "explain_deep", "Gemini translation failed", error=str(e), lemma=lemma
+        )
         if not is_htmx:
             return JSONResponse(
                 {
@@ -615,10 +647,12 @@ async def explain_with_context(req: ExplainContextRequest):
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(
             "explain_context",
-            f"Context lookup completed in {elapsed:.3f}s",
+            "Context lookup completed",
+            elapsed=f"{elapsed:.3f}s",
             word=req.word,
             paper_id=paper_id,
         )
+
         return JSONResponse(
             {
                 "word": req.word,
@@ -628,7 +662,12 @@ async def explain_with_context(req: ExplainContextRequest):
             }
         )
     except Exception as e:
-        log.error("explain_context", "Gemini context explanation failed", error=str(e))
+        log.error(
+            "explain_context",
+            "Gemini context explanation failed",
+            error=str(e),
+            word=req.word,
+        )
         return JSONResponse(
             {
                 "word": req.word,
@@ -664,8 +703,12 @@ async def explain_image(req: ExplainImageRequest):
         )
     except Exception as e:
         log.error(
-            "explain_image", f"Failed to get image bytes for {req.image_url}: {e}"
+            "explain_image",
+            "Failed to get image bytes",
+            image_url=req.image_url,
+            error=str(e),
         )
+
         return JSONResponse(
             {
                 "word": req.prompt,
@@ -692,10 +735,12 @@ async def explain_image(req: ExplainImageRequest):
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(
             "explain_image",
-            f"Image explanation completed in {elapsed:.3f}s",
+            "Image explanation completed",
+            elapsed=f"{elapsed:.3f}s",
             word=req.prompt,
             paper_id=req.paper_id,
         )
+
         return JSONResponse(
             {
                 "word": req.prompt,
@@ -705,7 +750,12 @@ async def explain_image(req: ExplainImageRequest):
             }
         )
     except Exception as e:
-        log.error("explain_image", "Gemini image explanation failed", error=str(e))
+        log.error(
+            "explain_image",
+            "Gemini image explanation failed",
+            error=str(e),
+            prompt=req.prompt,
+        )
         return JSONResponse(
             {
                 "word": req.prompt,

@@ -16,9 +16,10 @@ from pydantic import BaseModel
 
 from app.auth import OptionalUser
 from app.providers import get_storage_provider
-from common.logger import get_service_logger
+from common.logger import ServiceLogger
 
-logger = get_service_logger("Stamps")
+log = ServiceLogger("Stamps")
+
 
 STAMPS_UPLOAD_DIR = Path("app/static/user_uploads/stamps")
 STAMPS_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
@@ -57,12 +58,23 @@ async def add_paper_stamp(paper_id: str, request: StampRequest, user: OptionalUs
             x=request.x,
             y=request.y,
         )
-        logger.info(f"Stamp {stamp_id} added persistently for user {user_id}")
+        log.info(
+            "add_paper_stamp",
+            "Stamp added persistently",
+            stamp_id=stamp_id,
+            user_id=user_id,
+        )
+
     else:
         import uuid6
 
         stamp_id = f"guest-{uuid6.uuid7()}"
-        logger.info(f"Stamp added for guest {user_id} (not saved to DB)")
+        log.info(
+            "add_paper_stamp",
+            "Stamp added for guest",
+            user_id=user_id,
+            stamp_id=stamp_id,
+        )
 
     return JSONResponse(
         {
@@ -169,8 +181,10 @@ async def upload_custom_stamp(file: UploadFile = File(...)):
         image.save(file_path, format="PNG")
         file_url = f"/static/user_uploads/stamps/{filename}"
 
-        logger.info(f"Custom stamp uploaded: {file_url}")
+        log.info("upload_custom", "Custom stamp uploaded", file_url=file_url)
+
         return JSONResponse({"url": file_url})
     except Exception as e:
-        logger.error(f"Failed to upload custom stamp: {e}")
+        log.error("upload_custom", "Failed to upload custom stamp", error=str(e))
+
         return JSONResponse({"error": "Failed to upload custom stamp"}, status_code=500)

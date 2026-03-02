@@ -1,4 +1,7 @@
 import Dexie, { type Table } from "dexie";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("DB");
 
 export interface PaperCache {
 	id: string; // paper_id
@@ -63,7 +66,10 @@ export async function initDB(): Promise<boolean> {
 		await db.open();
 		dbAvailable = true;
 	} catch (e) {
-		console.warn("IndexedDB unavailable — caching disabled:", e);
+		log.warn("init_db", "IndexedDB unavailable — caching disabled", {
+			error: e,
+		});
+
 		dbAvailable = false;
 	}
 	return dbAvailable;
@@ -96,10 +102,7 @@ export async function evictIfOverQuota(): Promise<void> {
 			await db.images.where("paper_id").equals(p.id).delete();
 			await db.papers.delete(p.id);
 		}
-		console.info(
-			`Evicted ${oldest.length} cached paper(s) to free storage space.`,
-		);
 	} catch (e) {
-		console.warn("Cache eviction failed:", e);
+		log.warn("evict_cache", "Cache eviction failed", { error: e });
 	}
 }

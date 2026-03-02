@@ -1,4 +1,7 @@
 import { API_URL } from "@/config";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("FeedbackLib");
 
 export interface FeedbackPayload {
 	session_id: string;
@@ -24,7 +27,8 @@ export async function submitFeedback(payload: FeedbackPayload) {
 		if (!response.ok) throw new Error("Feedback submission failed");
 		return response.json();
 	} catch (error) {
-		console.error("Failed to submit feedback:", error);
+		log.error("submit_feedback", "Failed to submit feedback", { error });
+
 		throw error;
 	}
 }

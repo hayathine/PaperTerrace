@@ -10,7 +10,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from common.logger import logger
+from common.logger import ServiceLogger
+
+log = ServiceLogger("ImageStorage")
+
 
 load_dotenv("secrets/.env")
 
@@ -66,7 +69,8 @@ class LocalImageStorage(ImageStorageStrategy):
         image_path.write_bytes(image_bytes)
 
         relative_path = f"/static/paper_images/{file_hash}/page_{page_num}.png"
-        logger.debug(f"Saved page image (Local): {relative_path}")
+        log.debug("save_local", "Saved page image", path=relative_path)
+
         return relative_path
 
     def save_doc(self, file_hash: str, doc_bytes: bytes) -> str:
@@ -74,7 +78,8 @@ class LocalImageStorage(ImageStorageStrategy):
         doc_dir.mkdir(parents=True, exist_ok=True)
         doc_path = doc_dir / f"{file_hash}.pdf"
         doc_path.write_bytes(doc_bytes)
-        logger.info(f"Saved PDF to disk: {doc_path}")
+        log.info("save_doc_local", "Saved PDF to disk", path=str(doc_path))
+
         return str(doc_path)
 
     def get_doc_path(self, file_hash: str) -> str:
@@ -117,8 +122,10 @@ class LocalImageStorage(ImageStorageStrategy):
         hash_dir = self.images_dir / file_hash
         if hash_dir.exists():
             shutil.rmtree(hash_dir)
-            logger.info(f"Deleted images (Local) for hash: {file_hash}")
+            log.info("delete_local", "Deleted images", file_hash=file_hash)
+
             return True
+
         return False
 
     def get_image_bytes(self, image_url: str) -> bytes:
@@ -143,7 +150,9 @@ class GCSImageStorage(ImageStorageStrategy):
         self.client = storage.Client()
         self.bucket = self.client.bucket(self.bucket_name)
         self.storage_type = "gcs"
-        logger.info(f"GCSImageStorage initialized with bucket: {self.bucket_name}")
+        log.info(
+            "gcs_init", "GCSImageStorage initialized", bucket_name=self.bucket_name
+        )
 
     def save(self, file_hash: str, page_num: int | str, image_b64: str) -> str:
         try:
@@ -157,13 +166,22 @@ class GCSImageStorage(ImageStorageStrategy):
             # This avoids CORS/OpaqueResponseBlocking issues in the browser.
             # The frontend prepends API_URL, and the backend serves via /static/paper_images/ proxy.
             relative_path = f"/static/paper_images/{file_hash}/page_{page_num}.png"
-            logger.debug(f"Saved page image (GCS): {blob_name} -> {relative_path}")
+            log.debug(
+                "save_gcs", "Saved page image", blob_name=blob_name, path=relative_path
+            )
+
             return relative_path
+
         except Exception as e:
-            logger.error(
-                f"Error saving image to GCS (hash={file_hash}, page={page_num}): {e}",
+            log.error(
+                "save_gcs",
+                "Error saving image to GCS",
+                file_hash=file_hash,
+                page_num=page_num,
+                error=str(e),
                 exc_info=True,
             )
+
             raise
 
     def get_list(self, file_hash: str) -> list[str]:
@@ -201,17 +219,28 @@ class GCSImageStorage(ImageStorageStrategy):
                 urls.append(relative_url)
 
             if urls:
-                logger.info(
-                    f"Retrieved {len(urls)} images for {file_hash} from GCS cache"
+                log.info(
+                    "get_list_gcs",
+                    "Retrieved images from GCS cache",
+                    count=len(urls),
+                    file_hash=file_hash,
                 )
+
             else:
-                logger.debug(f"No images found in GCS cache for {file_hash}")
+                log.debug(
+                    "get_list_gcs", "No images found in GCS cache", file_hash=file_hash
+                )
 
             return urls
         except Exception as e:
-            logger.error(
-                f"Error listing images from GCS (hash={file_hash}): {e}", exc_info=True
+            log.error(
+                "get_list_gcs",
+                "Error listing images from GCS",
+                file_hash=file_hash,
+                error=str(e),
+                exc_info=True,
             )
+
             return []
 
     def delete(self, file_hash: str) -> bool:
@@ -225,12 +254,19 @@ class GCSImageStorage(ImageStorageStrategy):
                 deleted = True
 
             if deleted:
-                logger.info(f"Deleted images (GCS) for hash: {file_hash}")
+                log.info("delete_gcs", "Deleted images", file_hash=file_hash)
+
             return deleted
+
         except Exception as e:
-            logger.error(
-                f"Error deleting images from GCS (hash={file_hash}): {e}", exc_info=True
+            log.error(
+                "delete_gcs",
+                "Error deleting images from GCS",
+                file_hash=file_hash,
+                error=str(e),
+                exc_info=True,
             )
+
             return False
 
     def get_image_bytes(self, image_url: str) -> bytes:
@@ -260,10 +296,14 @@ class GCSImageStorage(ImageStorageStrategy):
             blob = self.bucket.blob(blob_name)
             return blob.download_as_bytes()
         except Exception as e:
-            logger.error(
-                f"Error getting image bytes from GCS (url={image_url}): {e}",
+            log.error(
+                "get_image_bytes_gcs",
+                "Error getting image bytes from GCS",
+                image_url=image_url,
+                error=str(e),
                 exc_info=True,
             )
+
             raise
 
     def save_doc(self, file_hash: str, doc_bytes: bytes) -> str:
@@ -271,12 +311,19 @@ class GCSImageStorage(ImageStorageStrategy):
             blob_name = f"pdfs/{file_hash}.pdf"
             blob = self.bucket.blob(blob_name)
             blob.upload_from_string(doc_bytes, content_type="application/pdf")
-            logger.info(f"Saved PDF to GCS: {blob_name}")
+            log.info("save_doc_gcs", "Saved PDF to GCS", blob_name=blob_name)
+
             return blob_name
+
         except Exception as e:
-            logger.error(
-                f"Error saving PDF to GCS (hash={file_hash}): {e}", exc_info=True
+            log.error(
+                "save_doc_gcs",
+                "Error saving PDF to GCS",
+                file_hash=file_hash,
+                error=str(e),
+                exc_info=True,
             )
+
             raise
 
     def get_doc_path(self, file_hash: str) -> str:
@@ -288,10 +335,14 @@ class GCSImageStorage(ImageStorageStrategy):
             blob = self.bucket.blob(doc_path)
             return blob.download_as_bytes()
         except Exception as e:
-            logger.error(
-                f"Error getting PDF bytes from GCS (path={doc_path}): {e}",
+            log.error(
+                "get_doc_bytes_gcs",
+                "Error getting PDF bytes from GCS",
+                path=doc_path,
+                error=str(e),
                 exc_info=True,
             )
+
             raise
 
 

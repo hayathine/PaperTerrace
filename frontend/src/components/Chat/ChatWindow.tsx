@@ -2,10 +2,13 @@ import React, { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { v4 as uuidv4 } from "uuid";
 import { API_URL } from "@/config";
+import { createLogger } from "@/lib/logger";
 import { useLoading } from "../../contexts/LoadingContext";
 import InputArea from "./InputArea";
 import MessageList from "./MessageList";
 import type { Message } from "./types";
+
+const log = createLogger("Chat");
 
 interface ChatWindowProps {
 	sessionId?: string;
@@ -63,7 +66,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 					}
 				}
 			} catch (e) {
-				console.error("Failed to load chat history", e);
+				log.error("fetch_history", "Failed to load chat history", { error: e });
 			} finally {
 				setIsLoading(false);
 			}
@@ -135,7 +138,8 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 
 			setMessages((prev) => [...prev, aiMsg]);
 		} catch (error) {
-			console.error("Chat error:", error);
+			log.error("send_message", "Chat error", { error });
+
 			const errorMsg: Message = {
 				id: uuidv4(),
 				role: "assistant",

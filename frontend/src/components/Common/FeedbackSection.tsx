@@ -2,6 +2,9 @@ import type React from "react";
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { submitFeedback } from "@/lib/feedback";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("FeedbackSection");
 
 interface FeedbackSectionProps {
 	sessionId: string;
@@ -45,7 +48,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 				setStatus((prev) => (prev === "submitted" ? "idle" : prev));
 			}, 3000);
 		} catch (error) {
-			console.error("Feedback error:", error);
+			log.error("send_feedback", "Feedback error", { error });
 			setStatus("error");
 		}
 	};

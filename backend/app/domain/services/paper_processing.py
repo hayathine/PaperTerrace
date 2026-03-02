@@ -1,12 +1,13 @@
-import logging
 import os
 
 import httpx
+
 from app.domain.features.figure_insight import FigureInsightService
 from app.domain.features.summary import SummaryService
 from app.providers import get_storage_provider
+from common.logger import ServiceLogger
 
-logger = logging.getLogger(__name__)
+log = ServiceLogger("Processing")
 storage = get_storage_provider()
 figure_insight = FigureInsightService()
 summary_service = SummaryService(storage=storage)
@@ -21,16 +22,21 @@ async def process_figure_analysis_task(
     if not figure_id:
         return
 
-    logger.info(f"[Task] Processing figure analysis for {figure_id}")
+    log.info("figure_task", "Analysis task started", figure_id=figure_id)
+
     try:
         figure = storage.get_figure(figure_id)
         if not figure:
-            logger.warning(f"Figure {figure_id} not found in DB")
+            log.warning("figure_task", "Figure not found in DB", figure_id=figure_id)
             return
 
         # Skip if already has explanation
         if figure.get("explanation"):
-            logger.info(f"Figure {figure_id} already has explanation, skipping.")
+            log.info(
+                "figure_task",
+                "Figure already has explanation, skipping.",
+                figure_id=figure_id,
+            )
             return
 
         # Retrieve image bytes
@@ -47,7 +53,9 @@ async def process_figure_analysis_task(
                     image_bytes = resp.content
 
         if not image_bytes:
-            logger.warning(f"Could not retrieve image bytes for {image_url}")
+            log.warning(
+                "figure_task", "Could not retrieve image bytes", image_url=image_url
+            )
             return
 
         # All visual elements (figures, tables, equations) are handled via general AI analysis
@@ -59,10 +67,18 @@ async def process_figure_analysis_task(
         storage.update_figure_explanation(figure_id, explanation)
 
         label = figure.get("label", "figure")
-        logger.info(f"[Task] Successfully updated analysis for {label} {figure_id}")
+        log.info(
+            "figure_task", "SUCCESS: updated analysis", label=label, figure_id=figure_id
+        )
 
     except Exception as e:
-        logger.error(f"[Task] Figure analysis failed for {figure_id}: {e}")
+        log.error(
+            "figure_task",
+            "Analysis FAILED",
+            figure_id=figure_id,
+            error=str(e),
+            exc_info=True,
+        )
 
 
 async def process_paper_summary_task(paper_id: str, lang: str = "ja"):
@@ -72,23 +88,38 @@ async def process_paper_summary_task(paper_id: str, lang: str = "ja"):
     if not paper_id:
         return
 
-    logger.info(f"[Task] Processing paper summary for {paper_id}")
+    log.info("summary_task", "Summary task started", paper_id=paper_id)
+
     try:
         paper = storage.get_paper(paper_id)
         if not paper or not paper.get("ocr_text"):
-            logger.warning(f"Paper {paper_id} or its text not found")
+            log.warning(
+                "summary_task", "Paper or its text not found", paper_id=paper_id
+            )
             return
 
         # Skip if already has summary
         if paper.get("full_summary"):
-            logger.info(f"Paper {paper_id} already has full summary, skipping.")
+            log.info(
+                "summary_task",
+                "Paper already has full summary, skipping.",
+                paper_id=paper_id,
+            )
             return
 
         # Execute summary
         await summary_service.summarize_full(
             text=paper["ocr_text"], target_lang=lang, paper_id=paper_id
         )
-        logger.info(f"[Task] Successfully generated summary for paper {paper_id}")
+        log.info(
+            "summary_task", "SUCCESS: generated summary for paper", paper_id=paper_id
+        )
 
     except Exception as e:
-        logger.error(f"[Task] Paper summary failed for {paper_id}: {e}")
+        log.error(
+            "summary_task",
+            "Summary FAILED",
+            paper_id=paper_id,
+            error=str(e),
+            exc_info=True,
+        )
