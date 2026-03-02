@@ -45,6 +45,8 @@ class LlamaCppTranslationService:
         # Disabled by default for 30B models to avoid OOM at load time.
         # Enable only if the host has sufficient free RAM (>14GB).
         self.use_mlock = os.getenv("LLAMACPP_USE_MLOCK", "false").lower() == "true"
+        # mmap allows the model to be loaded from disk on demand, reducing initial RAM usage.
+        self.use_mmap = os.getenv("LLAMACPP_USE_MMAP", "true").lower() == "true"
 
     async def initialize(self):
         """モデルの初期化。初回呼び出し時に実行されます。"""
@@ -73,6 +75,7 @@ class LlamaCppTranslationService:
                             n_batch=self.n_batch,
                             n_gpu_layers=self.n_gpu_layers,
                             use_mlock=self.use_mlock,
+                            use_mmap=self.use_mmap,
                         ),
                     )
                 elif os.getenv("LLAMACPP_ALLOW_DOWNLOAD", "false").lower() == "true":
@@ -96,6 +99,7 @@ class LlamaCppTranslationService:
                             n_batch=self.n_batch,
                             n_gpu_layers=self.n_gpu_layers,
                             use_mlock=self.use_mlock,
+                            use_mmap=self.use_mmap,
                             verbose=False,
                         ),
                     )
@@ -154,7 +158,10 @@ class LlamaCppTranslationService:
                     "role": "system",
                     "content": "You are an expert academic research assistant. Never output markdown formatting for JSON, act directly.",
                 }
-                chat_messages = [system_msg, *(messages or [{"role": "user", "content": prompt or ""}])]
+                chat_messages = [
+                    system_msg,
+                    *(messages or [{"role": "user", "content": prompt or ""}]),
+                ]
 
                 raw = self.llm_instance.create_chat_completion(
                     messages=chat_messages,

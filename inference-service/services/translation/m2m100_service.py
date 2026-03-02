@@ -6,7 +6,6 @@ import asyncio
 import logging
 import math
 import os
-import re
 
 import ctranslate2
 import sentencepiece as spm
@@ -103,66 +102,14 @@ class M2M100TranslationService:
         src_token = get_m2m100_lang_code(self.src_lang)
         return [src_token] + pieces + ["</s>"]
 
-    def _prepare_input_word(self, word: str) -> list[str]:
-        """単語翻訳用: ラッパー文にして文脈を与えたトークン列を構築する。
-
-        単語単体より文脈文の方が M2M100 の翻訳精度が高い（特に専門用語のカタカナ転写）。
-        出力は _extract_word_from_sentence() で日本語パターンマッチして抽出する。
-        """
-        src_token = get_m2m100_lang_code(self.src_lang)
-        pieces = self.tokenizer.encode_as_pieces(f"The term {word} is used here.")
-        return [src_token] + pieces + ["</s>"]
-
-    @staticmethod
-    def _is_single_word(text: str) -> bool:
-        """テキストが単一単語かどうかを判定"""
-        return len(text.strip().split()) == 1
-
-    @staticmethod
-    def _extract_word_from_sentence(sentence: str) -> str | None:
-        """ラッパー文を翻訳した日本語出力から核となる単語部分を抽出する。
-
-        M2M100 の典型的な出力パターン:
-          - 「トランスフォーマー」という用語が… → 「」内を抽出
-          - 注目という言葉はここで…            → という の直前を抽出
-          - ここでグラディエントという…         → ここで〜という の間を抽出
-        """
-        # パターン1: 「term」 形式
-        m = re.search(r"「(.+?)」", sentence)
-        if m:
-            return m.group(1).strip()
-
-        # パターン2: ここで[は][、] term という 形式
-        # 「ここでは、〜という」のように は や読点が続くケースを除外する
-        m = re.search(r"ここでは?[、,]?\s*(.+?)(?:という|の)", sentence)
-        if m:
-            return m.group(1).strip()
-
-        # パターン3: 文頭 term という 形式
-        m = re.match(r"^(.+?)という", sentence)
-        if m:
-            candidate = m.group(1).strip()
-            # 「その用語」「この用語」のような代名詞は除外
-            if candidate not in ("その用語", "この用語", "その言葉", "この言葉"):
-                return candidate
-
-        return None
-
     async def translate(self, text: str, target_lang: str = "ja") -> dict:
-        """単一テキストの翻訳実行と確信度の返却。
-
-        単語単体では翻訳精度が低いため、単語の場合は文章に埋め込んで翻訳し、
-        []内の翻訳結果だけを抽出して返す。
-        """
+        """単一テキストの翻訳実行と確信度の返却。"""
         if not self.translator or not self.tokenizer:
             if os.getenv("DEV_MODE", "false").lower() == "true":
                 return {"translation": f"[Dummy] {text}", "conf": 1.0}
             raise RuntimeError("M2M100モデル未初期化")
 
-        is_word = self._is_single_word(text)
-        input_tokens = (
-            self._prepare_input_word(text) if is_word else self._prepare_input(text)
-        )
+        input_tokens = self._prepare_input(text)
         tgt_code = get_m2m100_lang_code(target_lang)
 
         loop = asyncio.get_event_loop()
@@ -189,20 +136,7 @@ class M2M100TranslationService:
             if output_tokens and output_tokens[0] == tgt_code:
                 output_tokens = output_tokens[1:]
 
-            full_text = self.tokenizer.decode_pieces(output_tokens).strip()
-
-            # 単語翻訳の場合: 日本語文パターンから核となる単語を抽出する。
-            # 抽出できない場合は全文をそのまま返す。
-            if is_word:
-                extracted = self._extract_word_from_sentence(full_text)
-                if extracted:
-                    translation = extracted
-                    logger.debug(f"単語抽出: {text!r} -> {translation!r} (全文: {full_text!r})")
-                else:
-                    translation = full_text
-                    logger.debug(f"抽出失敗、全文返却: {text!r} -> {translation!r}")
-            else:
-                translation = full_text
+            translation = self.tokenizer.decode_pieces(output_tokens).strip()
 
             return {"translation": translation, "conf": conf, "model": "M2M100"}
 
