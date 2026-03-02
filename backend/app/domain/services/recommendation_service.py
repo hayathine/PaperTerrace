@@ -221,7 +221,7 @@ class RecommendationService:
 
     @staticmethod
     def generate_recommendation(
-        req: RecommendationGenerateRequest, db: Session
+        req: RecommendationGenerateRequest, current_user_id: str, db: Session
     ) -> RecommendationGenerateResponse:
         """
         Trajectory履歴とDSPyのRecommendationModuleを用いて推薦論文リストと検索クエリを作成し、
@@ -261,7 +261,7 @@ class RecommendationService:
                     "word_clicks": clicks_str,
                 },
                 context=TraceContext(
-                    user_id=req.user_id,
+                    user_id=current_user_id,
                     session_id=req.session_id,
                     paper_id=trajectory.paper_id if trajectory else None,
                 ),
@@ -303,7 +303,7 @@ class RecommendationService:
                 "preferred_direction": preferred_direction,
             },
             context=TraceContext(
-                user_id=req.user_id,
+                user_id=current_user_id,
                 session_id=req.session_id,
                 paper_id=trajectory.paper_id if trajectory else None,
             ),

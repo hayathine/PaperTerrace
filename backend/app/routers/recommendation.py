@@ -49,10 +49,12 @@ async def submit_rollout(
     summary="個人化論文を生成して検索する",
 )
 async def generate_recommendation(
-    req: RecommendationGenerateRequest, db: Session = Depends(get_db)
+    req: RecommendationGenerateRequest,
+    db: Session = Depends(get_db),
+    current_user_id: str = Depends(get_current_user_id),
 ):
     """
     Trajectory履歴とDSPyのRecommendationModuleを用いて推薦論文リストと検索クエリを作成し、
     Semantic Scholarで最新の論文を取得して応答する
     """
-    return RecommendationService.generate_recommendation(req, db)
+    return RecommendationService.generate_recommendation(req, current_user_id, db)

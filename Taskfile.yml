@@ -432,8 +432,8 @@ tasks:
     cmds:
       - echo "Building frontend for {{.ENV}}..."
       - npm run build -w frontend
-      - echo "Deploying to Cloudflare Pages branch {{if eq .ENV "main"}}main{{else}}dev{{end}}..."
-      - npx wrangler pages deploy frontend/dist --project-name paperterrace --branch {{if eq .ENV "main"}}main{{else}}dev{{end}}
+      - echo "Deploying to Cloudflare Pages project {{if eq .ENV "main"}}paperterrace{{else}}paperterrace-dev{{end}}..."
+      - npx wrangler pages deploy frontend/dist --project-name {{if eq .ENV "main"}}paperterrace{{else}}paperterrace-dev{{end}} --branch {{if eq .ENV "main"}}main{{else}}dev{{end}}
 
   cf:deploy:all:
     desc: "Deploy both Workers and Pages"

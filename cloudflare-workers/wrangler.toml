@@ -31,10 +31,10 @@ enabled = false
 persist = true
 head_sampling_rate = 1
 [env.dev]
-name = "paperterrace-dev"
+name = "paperterracedevworker"
 [env.dev.vars]
 BACKEND_TUNNEL_URL = "https://dev-tunnel.paperterrace.page"
-ALLOWED_ORIGINS = "https://paperterrace-dev.pages.dev,http://localhost:5173"
+ALLOWED_ORIGINS = "https://paperterrace-dev.pages.dev,https://dev.paperterrace.pages.dev,http://localhost:5173"
 
 [env.main]
 name = "paperterrace"

@@ -59,6 +59,12 @@ PaperTerraceは、論文を読むことの心理的・認知的ハードルを�
 
 ---
 
+## 🛠️ 開発時の注意
+
+- ドキュメントファイル（`.md`）の修正に関しては、テストやLintチェックの実行は不要です。
+
+---
+
 ## 📜 ライセンス
 
 Private Project. All rights reserved.

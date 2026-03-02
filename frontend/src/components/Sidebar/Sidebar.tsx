@@ -24,7 +24,6 @@ interface SidebarProps {
 	pendingChatPrompt?: string | null;
 	onPendingChatConsumed?: () => void;
 	onEvidenceClick?: (grounding: any) => void;
-	onFigureExplain?: (figureId: string) => void;
 	onClose?: () => void;
 }
 
@@ -45,7 +44,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 	pendingChatPrompt,
 	onPendingChatConsumed,
 	onEvidenceClick,
-	onFigureExplain,
 	onClose,
 }) => {
 	const { t } = useTranslation();
@@ -254,14 +252,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 				<div
 					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "figures" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
 				>
-					<FigureInsight
-						paperId={paperId}
-						onExplain={(figureId) => {
-							onFigureExplain?.(figureId);
-							onTabChange("chat");
-						}}
-						onTabChange={onTabChange}
-					/>
+					<FigureInsight paperId={paperId} onTabChange={onTabChange} />
 				</div>
 
 				<div

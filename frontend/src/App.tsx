@@ -241,11 +241,6 @@ function App() {
 		setActiveTab("chat");
 	};
 
-	const handleFigureExplain = (figureId: string) => {
-		setPendingFigureId(figureId);
-		setActiveTab("chat");
-	};
-
 	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
 		if (e.target.files?.[0]) {
 			handleDirectFileSelect(e.target.files[0]);
@@ -810,7 +805,6 @@ function App() {
 									// Optionally switch to PDF view if in plaintext mode?
 									// For now just set evidence.
 								}}
-								onFigureExplain={handleFigureExplain}
 							/>
 						</div>
 					</div>
