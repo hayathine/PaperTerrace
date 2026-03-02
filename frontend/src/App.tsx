@@ -76,7 +76,10 @@ function App() {
 	);
 	const [sidebarWidth, setSidebarWidth] = useState(384);
 	const [isResizing, setIsResizing] = useState(false);
-	const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(true);
+	// デスクトップ(>=768px)ではデフォルト表示。モバイル/タブレットでは初期非表示。
+	const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(
+		() => window.innerWidth >= 768,
+	);
 	const [activeEvidence, setActiveEvidence] = useState<any>(null);
 	const [uploadedPapers, setUploadedPapers] = useState<any[]>([]);
 
@@ -155,24 +158,85 @@ function App() {
 
 	// ブレークポイント: 768px未満をモバイル扱い (Tailwind md と一致)
 	const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
-	// デスクトップ(>=768px)ではデフォルト表示。モバイルでは初期非表示。
-	// lazy initializer で初回レンダリング前に正しい値を設定しフラッシュを防ぐ。
-	const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(
-		() => window.innerWidth >= 768,
-	);
+	// 初期状態は全デバイスで閉じた状態。論文選択・単語クリック時に自動で開く。
+	const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
 
 	useEffect(() => {
 		const checkMobile = () => {
 			const mobile = window.innerWidth < 768;
 			setIsMobile(mobile);
-			// デスクトップに拡大したときはサイドバーを自動で開く
-			if (!mobile) setIsRightSidebarOpen(true);
 			// モバイルに縮小したときはサイドバーを閉じて画面領域を確保する
-			else setIsRightSidebarOpen(false);
+			if (mobile) {
+				setIsRightSidebarOpen(false);
+				setIsLeftSidebarOpen(false);
+			}
 		};
 		window.addEventListener("resize", checkMobile);
 		return () => window.removeEventListener("resize", checkMobile);
 	}, []);
+
+	// スワイプジェスチャー用のタッチ開始位置を記録
+	const touchStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
+	const SWIPE_THRESHOLD = 50; // スワイプ判定の最小移動距離 (px)
+	const EDGE_ZONE = 30; // サイドバーを開くための画面端ゾーン (px)
+
+	const handleTouchStart = (e: React.TouchEvent) => {
+		touchStartRef.current = {
+			x: e.touches[0].clientX,
+			y: e.touches[0].clientY,
+		};
+	};
+
+	// メインコンテンツエリアのスワイプ: 画面端から引き出すジェスチャー
+	const handleMainTouchEnd = (e: React.TouchEvent) => {
+		const { x: startX, y: startY } = touchStartRef.current;
+		const deltaX = e.changedTouches[0].clientX - startX;
+		const deltaY = e.changedTouches[0].clientY - startY;
+
+		// 縦スワイプは無視
+		if (Math.abs(deltaY) > Math.abs(deltaX)) return;
+		if (Math.abs(deltaX) < SWIPE_THRESHOLD) return;
+
+		if (deltaX > 0 && startX < EDGE_ZONE && !isLeftSidebarOpen) {
+			// 左端から右スワイプ → 左サイドバーを開く
+			setIsLeftSidebarOpen(true);
+		} else if (
+			deltaX < 0 &&
+			startX > window.innerWidth - EDGE_ZONE &&
+			!isRightSidebarOpen
+		) {
+			// 右端から左スワイプ → 右サイドバーを開く
+			setIsRightSidebarOpen(true);
+		}
+	};
+
+	// 右サイドバーの左スワイプで閉じる
+	const handleRightSidebarTouchEnd = (e: React.TouchEvent) => {
+		const { x: startX, y: startY } = touchStartRef.current;
+		const deltaX = e.changedTouches[0].clientX - startX;
+		const deltaY = e.changedTouches[0].clientY - startY;
+
+		if (Math.abs(deltaY) > Math.abs(deltaX)) return;
+		if (Math.abs(deltaX) < SWIPE_THRESHOLD) return;
+
+		if (deltaX < 0) {
+			setIsRightSidebarOpen(false);
+		}
+	};
+
+	// 左サイドバーの左スワイプで閉じる
+	const handleLeftSidebarTouchEnd = (e: React.TouchEvent) => {
+		const { x: startX, y: startY } = touchStartRef.current;
+		const deltaX = e.changedTouches[0].clientX - startX;
+		const deltaY = e.changedTouches[0].clientY - startY;
+
+		if (Math.abs(deltaY) > Math.abs(deltaX)) return;
+		if (Math.abs(deltaX) < SWIPE_THRESHOLD) return;
+
+		if (deltaX < 0) {
+			setIsLeftSidebarOpen(false);
+		}
+	};
 
 	useEffect(() => {
 		const handleMouseMove = (e: MouseEvent) => {
@@ -434,6 +498,8 @@ function App() {
 
 				{/* Left Sidebar */}
 				<div
+					onTouchStart={handleTouchStart}
+					onTouchEnd={handleLeftSidebarTouchEnd}
 					className={`bg-white text-slate-900 border-r border-slate-200 transition-all duration-300 ease-in-out flex flex-col shrink-0 absolute md:relative z-50 h-full ${
 						isLeftSidebarOpen
 							? "w-72 md:w-64 translate-x-0"
@@ -738,7 +804,11 @@ function App() {
 
 					<div className="flex-1 flex overflow-hidden">
 						{/* PDF Viewer Area */}
-						<div className="flex-1 bg-slate-100 flex items-start justify-center relative overflow-hidden">
+						<div
+							onTouchStart={handleTouchStart}
+							onTouchEnd={handleMainTouchEnd}
+							className="flex-1 bg-slate-100 flex items-start justify-center relative overflow-hidden"
+						>
 							{uploadFile || currentPaperId ? (
 								<div className="w-full h-full p-2 sm:p-4 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar">
 									<PDFViewer
@@ -799,6 +869,8 @@ function App() {
 
 						{/* Right Sidebar */}
 						<div
+							onTouchStart={handleTouchStart}
+							onTouchEnd={handleRightSidebarTouchEnd}
 							style={{ width: isMobile ? "90vw" : sidebarWidth }}
 							className={`absolute md:relative right-0 h-full shadow-xl z-50 md:z-20 bg-white overflow-hidden shrink-0 transition-transform duration-300 ${
 								isRightSidebarOpen

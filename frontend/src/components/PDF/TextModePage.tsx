@@ -432,7 +432,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 		<div
 			id={`text-page-${page.page_num}`}
 			className="relative shadow-sm bg-white border border-slate-200 group mx-auto w-full"
-			style={{ userSelect: "auto", maxWidth: "100%" }}
+			style={{ userSelect: "auto" }}
 		>
 			{/* Header */}
 			<div className="bg-slate-50 border-b border-slate-200 px-4 py-1.5 flex justify-between items-center select-none">
@@ -442,7 +442,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 			</div>
 
 			{/* Markdown Content */}
-			<div className="px-3 py-4 sm:px-6 sm:py-5 md:px-10 md:py-8 selection:bg-orange-600/30 overflow-x-auto">
+			<div className="px-3 py-4 sm:px-6 sm:py-5 md:px-10 md:py-8 selection:bg-orange-600/30">
 				{processedMarkdown ? (
 					<MarkdownContent
 						className="prose prose-slate max-w-none prose-p:my-3 prose-p:leading-7 prose-li:my-1 prose-li:leading-7 prose-img:mx-auto [&_.katex]:text-base [&_.katex]:font-normal [&_.katex-display]:my-4 [&_.math-display]:block [&_.katex-display]:overflow-x-auto [&_.katex-display]:max-w-full prose-pre:overflow-x-auto"
