@@ -331,12 +331,12 @@ const PDFPage: React.FC<PDFPageProps> = ({
 							return (
 								<div
 									key={`fig-img-${idx}`}
-									className="absolute bg-white shadow-sm group pointer-events-none group-data-[click-mode]/viewer:pointer-events-auto group-data-[click-mode]/viewer:border-2 group-data-[click-mode]/viewer:border-orange-300/60 group-data-[click-mode]/viewer:rounded-sm"
+									className="absolute group pointer-events-none group-data-[click-mode]/viewer:pointer-events-auto group-data-[click-mode]/viewer:border-2 group-data-[click-mode]/viewer:border-orange-300/60 group-data-[click-mode]/viewer:rounded-sm"
 									style={style}
 								>
 									<img
 										src={fig.image_url}
-										className="w-full h-full object-fill"
+										className="hidden group-data-[click-mode]/viewer:block w-full h-full object-fill"
 										alt={fig.label}
 									/>
 									{/* クリックモード時のみ表示するインタラクティブ要素。

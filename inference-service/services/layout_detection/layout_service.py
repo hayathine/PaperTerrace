@@ -67,6 +67,7 @@ class LayoutAnalysisService:
         """モデルを初期化"""
         logger.info("Initializing LayoutAnalysisService (Backend: ONNX)...")
         logger.info(f"Model path: {self.model_path}")
+        logger.info(f"LAYOUT_THRESHOLD: {self.threshold}")
 
         # モデルファイルの存在確認
         if not os.path.exists(self.model_path):
@@ -181,7 +182,9 @@ class LayoutAnalysisService:
         if not image_paths:
             return []
 
-        logger.info(f"Starting batch layout analysis for {len(image_paths)} images")
+        logger.info(
+            f"Starting batch layout analysis for {len(image_paths)} images (LAYOUT_THRESHOLD={self.threshold})"
+        )
         start_time = time.time()
 
         try:
@@ -249,7 +252,8 @@ class LayoutAnalysisService:
 
             total_time = time.time() - start_time
             logger.info(
-                f"Batch analysis time: {total_time:.3f}s for {len(image_paths)} images."
+                f"Batch analysis time: {total_time:.3f}s for {len(image_paths)} images. "
+                f"threshold={self.threshold}"
             )
             return batch_results
 
@@ -429,6 +433,26 @@ class LayoutAnalysisService:
                             "bbox": box,
                         }
                     )
+        # クラス別検出数をログに出力（0.9超えの内訳確認用）
+        if results:
+            class_counts: dict[str, int] = {}
+            for r in results:
+                cid = r["class_id"]
+                if isinstance(self.LABELS, dict):
+                    cname = self.LABELS.get(cid, f"Unknown({cid})")
+                else:
+                    cname = (
+                        self.LABELS[cid]
+                        if cid < len(self.LABELS)
+                        else f"Unknown({cid})"
+                    )
+                class_counts[cname] = class_counts.get(cname, 0) + 1
+            logger.info(
+                f"Postprocess - Detections above threshold={threshold}: {class_counts}"
+            )
+        else:
+            logger.info(f"Postprocess - No detections above threshold={threshold}")
+
         return self._apply_nms(results)
 
     def _apply_nms(
@@ -436,6 +460,7 @@ class LayoutAnalysisService:
         results: list[dict],
         iou_threshold: float = 0.5,
         ioa_threshold: float = 0.8,
+        threshold: float | None = None,
     ) -> list[dict]:
         if not results:
             return []

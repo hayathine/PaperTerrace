@@ -705,7 +705,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					activeTaskIdRef.current = null;
 				} else if (eventData.type === "coordinates_ready") {
 					console.log("[PDFViewer] Coordinates ready, enabling assist mode");
-					setMode("text");
+					setMode("plaintext");
 				} else if (eventData.type === "assist_mode_ready") {
 					console.log("[PDFViewer] Assist mode ready");
 				} else if (eventData.type === "error") {

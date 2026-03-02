@@ -62,6 +62,7 @@ class OpenVINOLayoutAnalysisService:
     def _initialize_model(self):
         logger.info("Initializing OpenVINOLayoutAnalysisService (Backend: OpenVINO)...")
         logger.info(f"Model path: {self.model_path}")
+        logger.info(f"LAYOUT_THRESHOLD: {self.threshold}")
 
         if not os.path.exists(self.model_path):
             logger.error(f"Model file not found: {self.model_path}")
@@ -351,6 +352,19 @@ class OpenVINOLayoutAnalysisService:
                         "bbox": box.tolist(),
                     }
                 )
+
+        # クラス別検出数をログに出力（閾値を超えた内訳確認用）
+        if results:
+            class_counts: dict[str, int] = {}
+            for r in results:
+                cid = r["class_id"]
+                cname = self.LABELS.get(cid, f"Unknown({cid})")
+                class_counts[cname] = class_counts.get(cname, 0) + 1
+            logger.info(
+                f"Postprocess - Detections above threshold={threshold}: {class_counts}"
+            )
+        else:
+            logger.info(f"Postprocess - No detections above threshold={threshold}")
 
         return self._apply_nms(results)
 
