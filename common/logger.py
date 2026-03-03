@@ -126,10 +126,13 @@ def configure_logging(log_level: str = "INFO"):
     logging.getLogger("app_logger").setLevel(getattr(logging, env_log_level))
 
     # uvicornのログ設定
-    for logger_name in ["uvicorn", "uvicorn.error"]:
+    for logger_name in ["uvicorn", "uvicorn.error", "httpx"]:
         uv_logger = logging.getLogger(logger_name)
         uv_logger.handlers = []
         uv_logger.propagate = True
+        # httpxは非常に饒舌なのでデフォルトでWARNINGにする
+        if logger_name == "httpx":
+            uv_logger.setLevel(logging.WARNING)
 
     # 静的ファイルアクセスログの設定（環境変数で制御）
     access_log_level = os.getenv("ACCESS_LOG_LEVEL", "WARNING").upper()

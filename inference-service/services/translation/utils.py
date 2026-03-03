@@ -26,16 +26,25 @@ LANG_NAMES = {
 
 def get_lang_name(lang: str) -> str:
     """ISO 639-1 コードを言語名に変換する。"""
-    return LANG_NAMES.get(lang.lower(), lang)
+    if not lang:
+        return "Japanese"
+    base_lang = lang.lower().split("-")[0].split("_")[0]
+    return LANG_NAMES.get(base_lang, lang)
 
 
 def get_m2m100_lang_code(lang: str) -> str:
     """ISO 639-1 コードを M2M100 用の言語コードに変換する。
+    "ja-JP" のようなリージョン付きコードも "ja" に正規化して処理します。
 
     Args:
-        lang: ISO 639-1 言語コード (例: "ja", "en")
+        lang: ISO 639-1 言語コード (例: "ja", "en", "ja-JP")
 
     Returns:
         M2M100 用の言語コード (例: "__ja__")
     """
-    return LANG_CODES.get(lang.lower(), f"__{lang.lower()}__")
+    if not lang:
+        return "__ja__"
+
+    # "ja-JP" -> "ja"
+    base_lang = lang.lower().split("-")[0].split("_")[0]
+    return LANG_CODES.get(base_lang, f"__{base_lang}__")

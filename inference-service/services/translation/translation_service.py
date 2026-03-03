@@ -41,19 +41,22 @@ class TranslationService:
         model = res.get("model", "m2m100")
 
         logger.info(
-            f"M2M100翻訳結果: {text[:30]}... -> {translation[:30]}... (conf={conf:.3f}, model={model})"
+            f"M2M100翻訳結果: {text[:30]}... -> {translation[:30]}... (conf={conf:.3f}, target={target_lang}, model={model})"
         )
 
         # 2. 確信度によるフォールバック
         if conf <= 0.5 and self.llamacpp:
+            from .utils import get_lang_name
+
+            lang_full_name = get_lang_name(target_lang)
             logger.info(
-                f"確信度が低いため LlamaCpp (Qwen3) に切り替えます (conf={conf:.3f}, text='{text[:30]}...', context_len={len(paper_context)})"
+                f"確信度が低いため LlamaCpp (Qwen3) に切り替えます (conf={conf:.3f}, target_lang={target_lang} -> {lang_full_name})"
             )
             try:
                 llm_result = await self.llamacpp.translate_with_llamacpp(
                     original_word=text,
                     paper_context=paper_context or "No specific context available.",
-                    lang_name=target_lang,
+                    lang_name=lang_full_name,
                 )
                 return llm_result, "Qwen"
             except Exception as e:
@@ -68,6 +71,9 @@ class TranslationService:
         self, texts: list[str], target_lang: str = "ja", paper_context: str = ""
     ) -> tuple[list[str], list[str]]:
         """バッチ翻訳の統合実行"""
+        from .utils import get_lang_name
+
+        lang_full_name = get_lang_name(target_lang)
 
         # 1. M2M100バッチ翻訳
         results = await self.m2m100.translate_batch(texts, target_lang)
@@ -85,13 +91,13 @@ class TranslationService:
 
             if conf <= 0.5 and self.llamacpp:
                 logger.info(
-                    f"バッチ翻訳[{i}]の確信度が低いため LlamaCpp に切り替えます (conf={conf:.3f})"
+                    f"バッチ翻訳[{i}]の確信度が低いため LlamaCpp に切り替えます (conf={conf:.3f}, target={lang_full_name})"
                 )
                 try:
                     translation = await self.llamacpp.translate_with_llamacpp(
                         original_word=texts[i],
                         paper_context=paper_context or "No specific context available.",
-                        lang_name=target_lang,
+                        lang_name=lang_full_name,
                     )
                     model = "Qwen"
                 except Exception as e:

@@ -176,7 +176,7 @@ class InferenceServiceClient:
             )
 
             if response.get("success"):
-                log.info(
+                log.debug(
                     "analyze_layout",
                     "レイアウト解析完了",
                     processing_time=response.get("processing_time", 0),
@@ -205,7 +205,7 @@ class InferenceServiceClient:
             )
 
             if response.get("success"):
-                log.info(
+                log.debug(
                     "analyze_image",
                     "レイアウト解析完了",
                     processing_time=response.get("processing_time", 0),
@@ -240,7 +240,7 @@ class InferenceServiceClient:
             各画像の解析結果リスト
         """
         try:
-            log.info(
+            log.debug(
                 "analyze_batch",
                 "バッチレイアウト解析リクエスト",
                 image_count=len(images),
@@ -264,7 +264,7 @@ class InferenceServiceClient:
                 if response.get("success"):
                     batch_results = response.get("results", [])
                     all_results.extend(batch_results)
-                    log.info(
+                    log.debug(
                         "analyze_batch",
                         "バッチ解析完了",
                         batch_size=len(batch),
@@ -303,7 +303,7 @@ class InferenceServiceClient:
             if response.get("success"):
                 translation = response.get("translation", "")
                 model = response.get("model")
-                log.info(
+                log.debug(
                     "translate",
                     "翻訳完了",
                     model=model,

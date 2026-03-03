@@ -38,9 +38,9 @@ class M2M100TranslationService:
             os.getenv("TRANSLATION_REPETITION_PENALTY", "1.1")
         )
         self.no_repeat_ngram_size = int(
-            os.getenv("TRANSLATION_NO_REPEAT_NGRAM_SIZE", "1")
+            os.getenv("TRANSLATION_NO_REPEAT_NGRAM_SIZE", "3")
         )
-        self.max_decoding_length = int(os.getenv("TRANSLATION_MAX_LENGTH", "32"))
+        self.max_decoding_length = int(os.getenv("TRANSLATION_MAX_LENGTH", "256"))
 
     async def initialize(self):
         """モデルの初期化"""
@@ -109,15 +109,18 @@ class M2M100TranslationService:
         src_token = get_m2m100_lang_code(self.src_lang)
         return [src_token] + pieces + ["</s>"]
 
-    async def translate(self, text: str, target_lang: str = "ja") -> str:
+    async def translate(self, text: str, target_lang: str = "ja") -> dict:
         """単一テキストの翻訳"""
         if not self.translator or not self.tokenizer:
             if (
                 os.getenv("DEV_MODE", "false").lower() == "true"
                 or os.getenv("SKIP_MODEL_LOADING", "false").lower() == "true"
             ):
-                logger.warning("開発モード: ダミー翻訳を返します")
-                return f"[翻訳ダミー] {text} -> {target_lang}"
+                return {
+                    "translation": f"[翻訳ダミー] {text} -> {target_lang}",
+                    "conf": 1.0,
+                    "model": "M2M100-Dummy",
+                }
             raise RuntimeError(
                 "翻訳モデルが初期化されていません。initialize()を先に呼び出してください。"
             )
@@ -126,11 +129,14 @@ class M2M100TranslationService:
             return ""
 
         try:
+            # ターゲット言語コードを取得
+            tgt_code = get_m2m100_lang_code(target_lang)
             # Encode
             input_tokens = self._prepare_input(text, target_lang)
 
-            # ターゲット言語コードを取得
-            tgt_code = get_m2m100_lang_code(target_lang)
+            logger.debug(
+                f"M2M100 Translation Request: text='{text}', target='{target_lang}' ({tgt_code}), tokens={input_tokens}"
+            )
 
             # 翻訳実行（非同期実行のためスレッドプールを使用）
             loop = asyncio.get_event_loop()
@@ -148,17 +154,17 @@ class M2M100TranslationService:
             )
 
             # Decode
-            if results and results[0].hypotheses[0]:
+            if results and results[0].hypotheses and results[0].hypotheses[0]:
                 output_tokens = results[0].hypotheses[0]
                 score = results[0].scores[0] if results[0].scores else 0.0
                 conf = math.exp(score)
                 translation = self._postprocess_output(output_tokens, tgt_code)
                 logger.info(
-                    f"翻訳結果: {text} -> {translation} (conf={conf:.3f}, model=M2M100)"
+                    f"M2M100翻訳結果: {text} -> {translation} (conf={conf:.3f}, target={tgt_code})"
                 )
                 return {"translation": translation, "conf": conf, "model": "M2M100"}
             else:
-                logger.warning("翻訳結果が空です")
+                logger.warning(f"M2M100翻訳結果が空です: {text} (target={tgt_code})")
                 return {"translation": "", "conf": 0.0}
 
         except Exception as e:
@@ -166,7 +172,11 @@ class M2M100TranslationService:
             # 開発モードではダミー翻訳を返す
             if os.getenv("DEV_MODE", "false").lower() == "true":
                 logger.warning("開発モード: 翻訳エラーのためダミー翻訳を返します")
-                return f"[翻訳エラー・ダミー] {text} -> {target_lang}"
+                return {
+                    "translation": f"[翻訳エラー・ダミー] {text} -> {target_lang}",
+                    "conf": 0.0,
+                    "model": "M2M100-Error",
+                }
             raise RuntimeError(f"翻訳処理に失敗しました: {e}") from e
 
     def _postprocess_output(self, tokens: list[str], target_lang: str) -> str:
@@ -180,7 +190,7 @@ class M2M100TranslationService:
 
     async def translate_batch(
         self, texts: list[str], target_lang: str = "ja"
-    ) -> list[str]:
+    ) -> list[dict]:
         """複数テキストの一括翻訳"""
         if not self.translator or not self.tokenizer:
             # 開発モードではダミー翻訳を返す
@@ -189,7 +199,14 @@ class M2M100TranslationService:
                 or os.getenv("SKIP_MODEL_LOADING", "false").lower() == "true"
             ):
                 logger.warning("開発モード: ダミーバッチ翻訳を返します")
-                return [f"[バッチ翻訳ダミー] {text} -> {target_lang}" for text in texts]
+                return [
+                    {
+                        "translation": f"[バッチ翻訳ダミー] {text} -> {target_lang}",
+                        "conf": 1.0,
+                        "model": "M2M100-Dummy",
+                    }
+                    for text in texts
+                ]
             raise RuntimeError(
                 "翻訳モデルが初期化されていません。initialize()を先に呼び出してください。"
             )
@@ -217,10 +234,10 @@ class M2M100TranslationService:
                 lambda: self.translator.translate_batch(
                     input_batches,
                     target_prefix=[[tgt_code]] * len(input_batches),
-                    # beam_size=self.beam_size,
-                    # repetition_penalty=self.repetition_penalty,
-                    # no_repeat_ngram_size=self.no_repeat_ngram_size,
-                    # max_decoding_length=self.max_decoding_length,
+                    beam_size=self.beam_size,
+                    repetition_penalty=self.repetition_penalty,
+                    no_repeat_ngram_size=self.no_repeat_ngram_size,
+                    max_decoding_length=self.max_decoding_length,
                     return_scores=True,
                 ),
             )
@@ -247,7 +264,11 @@ class M2M100TranslationService:
             if os.getenv("DEV_MODE", "false").lower() == "true":
                 logger.warning("開発モード: バッチ翻訳エラーのためダミー翻訳を返します")
                 return [
-                    f"[バッチ翻訳エラー・ダミー] {text} -> {target_lang}"
+                    {
+                        "translation": f"[バッチ翻訳エラー・ダミー] {text} -> {target_lang}",
+                        "conf": 0.0,
+                        "model": "M2M100-Error",
+                    }
                     for text in texts
                 ]
             raise RuntimeError(f"バッチ翻訳処理に失敗しました: {e}") from e

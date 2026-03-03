@@ -34,15 +34,16 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
-        is_health_check = request.url.path == "/api/health"
-        log_func = log.debug if is_health_check else log.info
+        path = request.url.path
+        is_noisy_path = path == "/api/health" or path.startswith("/static/")
+        log_func = log.debug if is_noisy_path else log.info
 
         # Log request start
         log_func(
             "dispatch",
             "Request started",
             method=request.method,
-            path=request.url.path,
+            path=path,
             query_params=str(request.query_params),
             client_host=request.client.host if request.client else "unknown",
         )

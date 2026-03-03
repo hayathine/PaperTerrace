@@ -157,22 +157,24 @@ class LlamaCppTranslationService:
                     *(messages or [{"role": "user", "content": prompt or ""}]),
                 ]
 
-                logger.info(f"LLM 推論開始: messages_count={len(chat_messages)}")
+                logger.debug(f"LLM 推論開始: messages_count={len(chat_messages)}")
                 if len(chat_messages) > 0:
                     last_msg = chat_messages[-1]["content"]
-                    logger.info(f"LLM 最終プロンプト: {last_msg[:200]}...")
+                    logger.debug(f"LLM 最終プロンプト: {last_msg[:500]}...")
 
+                logger.debug("llama-cpp-python 推論実行中 (create_chat_completion)...")
                 raw = self.llm_instance.create_chat_completion(
                     messages=chat_messages,
                     temperature=kwargs.get("temperature", 0.3),
                     max_tokens=kwargs.get("max_tokens", 1024),
                 )
+                logger.debug("llama-cpp-python 推論が正常に終了しました。")
 
                 # Qwen3 thinking models prepend <think>...</think> blocks.
                 # Strip them before passing the text to DSPy's output parser.
                 text = raw["choices"][0]["message"]["content"]
-                logger.info(
-                    f"LLM 生レスポンス取得 (文字数={len(text)}): {text[:200]}..."
+                logger.debug(
+                    f"LLM 生レスポンス取得 (文字数={len(text)}): {text[:500]}..."
                 )
                 text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
@@ -195,25 +197,37 @@ class LlamaCppTranslationService:
                 )
 
         try:
-            logger.info(f"LLM 翻訳実行中... (Word: {original_word[:20]}...)")
+            logger.info(
+                f"LLM 翻訳実行開始: word='{original_word[:50]}', lang='{lang_name}', context_len={len(paper_context)}"
+            )
+            import time
+
+            start_time = time.time()
             loop = asyncio.get_running_loop()
 
             # DSPy predict can be blocking, so we run it in executor.
             # Use dspy.context() instead of dspy.settings.configure() because
             # the latter modifies global state and DSPy forbids it from non-main threads.
             def _run_dspy():
-                logger.info("DSPy 推論スレッド開始")
+                logger.debug("DSPy 推論スレッド開始 (executor内)")
                 with dspy.context(lm=InMemoryLlama(self.llm)):
+                    logger.debug("DSPy predictor 初期化中...")
                     predictor = dspy.Predict(ContextAwareTranslation)
+                    logger.debug("DSPy predictor 実行中...")
                     prediction = predictor(
                         paper_context=paper_context,
                         target_text=original_word,
                         lang_name=lang_name,
                     )
+                    logger.debug("DSPy predictor 実行完了")
                     return prediction.translation_and_explanation
 
+            logger.debug("executor に翻訳タスクを投入します...")
             result = await loop.run_in_executor(None, _run_dspy)
-            logger.info("LLM 翻訳が完了しました。")
+            elapsed = time.time() - start_time
+            logger.info(
+                f"LLM 翻訳が正常に完了しました。経過時間: {elapsed:.2f}s, 結果文字数: {len(result)}"
+            )
             return result.strip()
 
         except Exception as e:
