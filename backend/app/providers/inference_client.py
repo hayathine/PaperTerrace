@@ -48,11 +48,13 @@ class InferenceServiceClient:
     """推論サービスクライアント"""
 
     def __init__(self):
-        self.base_url = os.getenv("INFERENCE_SERVICE_URL", "http://localhost:8080")
+        # 個別設定があればそれを使用し、なければ共通設定を使用する
+        default_url = os.getenv("INFERENCE_SERVICE_URL", "http://localhost:8080")
+        self.layout_base_url = os.getenv("INFERENCE_LAYOUT_URL", default_url)
+        self.translation_base_url = os.getenv("INFERENCE_TRANSLATION_URL", default_url)
+
         self.timeout = int(os.getenv("INFERENCE_SERVICE_TIMEOUT", "60"))
-        self.max_retries = int(
-            os.getenv("INFERENCE_SERVICE_RETRIES", "2")
-        )  # Reduced from 3 to 2
+        self.max_retries = int(os.getenv("INFERENCE_SERVICE_RETRIES", "2"))
 
         # 回路ブレーカー設定
         self.failure_count = 0
@@ -65,11 +67,11 @@ class InferenceServiceClient:
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(self.timeout, connect=10.0),
             limits=httpx.Limits(
-                max_connections=20,  # 増加
-                max_keepalive_connections=10,  # 増加
-                keepalive_expiry=30.0,  # Keep-alive時間
+                max_connections=20,
+                max_keepalive_connections=10,
+                keepalive_expiry=30.0,
             ),
-            http2=True,  # HTTP/2有効化
+            http2=True,
         )
 
     async def __aenter__(self):
@@ -113,7 +115,7 @@ class InferenceServiceClient:
             )
 
     async def _make_request_with_retry(
-        self, method: str, endpoint: str, **kwargs
+        self, base_url: str, method: str, endpoint: str, **kwargs
     ) -> dict[str, Any]:
         """リトライ機能付きリクエスト"""
         self._check_circuit_breaker()
@@ -122,7 +124,7 @@ class InferenceServiceClient:
 
         for attempt in range(self.max_retries + 1):
             try:
-                url = f"{self.base_url}{endpoint}"
+                url = f"{base_url}{endpoint}"
                 response = await self.client.request(method, url, **kwargs)
                 response.raise_for_status()
 
@@ -169,10 +171,13 @@ class InferenceServiceClient:
         request_data = LayoutAnalysisRequest(pdf_path=pdf_path, pages=pages)
 
         try:
-            log.info("analyze_layout", "レイアウト解析リクエスト", pdf_path=pdf_path)
+            log.debug("analyze_layout", "レイアウト解析リクエスト", pdf_path=pdf_path)
 
             response = await self._make_request_with_retry(
-                "POST", "/api/v1/layout-analysis", json=request_data.model_dump()
+                self.layout_base_url,
+                "POST",
+                "/api/v1/layout-analysis",
+                json=request_data.model_dump(),
             )
 
             if response.get("success"):
@@ -195,13 +200,13 @@ class InferenceServiceClient:
     async def analyze_image_async(self, image_bytes: bytes) -> list[dict[str, Any]]:
         """レイアウト解析の実行（画像データ）"""
         try:
-            log.info("analyze_image", "画像データによるレイアウト解析リクエスト")
+            log.debug("analyze_image", "画像データによるレイアウト解析リクエスト")
 
             # multipart/form-dataで画像を送信
             files = {"file": ("image.png", image_bytes, "image/png")}
 
             response = await self._make_request_with_retry(
-                "POST", "/api/v1/analyze-image", files=files
+                self.layout_base_url, "POST", "/api/v1/analyze-image", files=files
             )
 
             if response.get("success"):
@@ -258,7 +263,10 @@ class InferenceServiceClient:
                 ]
 
                 response = await self._make_request_with_retry(
-                    "POST", "/api/v1/analyze-images-batch", files=files
+                    self.layout_base_url,
+                    "POST",
+                    "/api/v1/analyze-images-batch",
+                    files=files,
                 )
 
                 if response.get("success"):
@@ -266,7 +274,7 @@ class InferenceServiceClient:
                     all_results.extend(batch_results)
                     log.debug(
                         "analyze_batch",
-                        "バッチ解析完了",
+                        "サブバッチの送信・解析が完了",
                         batch_size=len(batch),
                         processing_time=response.get("processing_time", 0),
                     )
@@ -275,7 +283,11 @@ class InferenceServiceClient:
                     error_msg = response.get("message", "不明なエラー")
                     raise InferenceServiceError(f"バッチ解析失敗: {error_msg}")
 
-            log.info("analyze_batch", "全バッチ解析完了", result_count=len(all_results))
+            log.debug(
+                "analyze_batch",
+                "リクエストされた全画像の解析が完了しました",
+                result_count=len(all_results),
+            )
 
             return all_results
 
@@ -293,11 +305,14 @@ class InferenceServiceClient:
         )
 
         try:
-            log.info("translate", "翻訳リクエスト", text_preview=text[:50])
+            log.debug("translate", "翻訳リクエスト", text_preview=text[:50])
 
             # ... content omitted ...
             response = await self._make_request_with_retry(
-                "POST", "/api/v1/translate", json=request_data.model_dump()
+                self.translation_base_url,
+                "POST",
+                "/api/v1/translate",
+                json=request_data.model_dump(),
             )
 
             if response.get("success"):
@@ -324,7 +339,7 @@ class InferenceServiceClient:
         """推論サービスのヘルスチェック"""
         try:
             # Health check with reduced retries (1 attempt only)
-            url = f"{self.base_url}/health"
+            url = f"{self.layout_base_url}/health"  # 簡易的にlayout側を確認
             response = await self.client.get(url, timeout=5.0)  # 5 second timeout
             response.raise_for_status()
 

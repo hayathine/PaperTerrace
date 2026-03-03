@@ -35,7 +35,11 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
         path = request.url.path
-        is_noisy_path = path == "/api/health" or path.startswith("/static/")
+        is_noisy_path = (
+            path == "/api/health"
+            or path.startswith("/static/")
+            or path == "/api/analyze-layout-lazy"
+        )
         log_func = log.debug if is_noisy_path else log.info
 
         # Log request start

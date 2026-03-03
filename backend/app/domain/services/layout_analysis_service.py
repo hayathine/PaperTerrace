@@ -43,7 +43,7 @@ class LayoutAnalysisService:
                 raise Exception(
                     f"Paper {paper_id} not found in DB and no file_hash provided"
                 )
-            logger.info(
+            logger.debug(
                 f"[analyze_layout_lazy] Paper {paper_id} not in DB, using transient hash {file_hash}"
             )
         else:
@@ -175,7 +175,7 @@ class LayoutAnalysisService:
 
         # 3. Save to DB ONLY for registered users
         if all_figures and user_id:
-            logger.info(
+            logger.debug(
                 f"[analyze_layout_lazy] Saving {len(all_figures)} figures to DB for {paper_id}"
             )
             # Reformat figures for batch saving
@@ -251,7 +251,7 @@ class LayoutAnalysisService:
 
             for fig in all_figures:
                 fig["id"] = str(uuid6.uuid7())
-            logger.info(
+            logger.debug(
                 f"[analyze_layout_lazy] Skipping DB save for transient session {paper_id}"
             )
 

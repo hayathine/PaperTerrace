@@ -78,7 +78,7 @@ class LocalImageStorage(ImageStorageStrategy):
         doc_dir.mkdir(parents=True, exist_ok=True)
         doc_path = doc_dir / f"{file_hash}.pdf"
         doc_path.write_bytes(doc_bytes)
-        log.info("save_doc_local", "Saved PDF to disk", path=str(doc_path))
+        log.debug("save_doc_local", "Saved PDF to disk", path=str(doc_path))
 
         return str(doc_path)
 
@@ -150,7 +150,7 @@ class GCSImageStorage(ImageStorageStrategy):
         self.client = storage.Client()
         self.bucket = self.client.bucket(self.bucket_name)
         self.storage_type = "gcs"
-        log.info(
+        log.debug(
             "gcs_init", "GCSImageStorage initialized", bucket_name=self.bucket_name
         )
 
@@ -219,7 +219,7 @@ class GCSImageStorage(ImageStorageStrategy):
                 urls.append(relative_url)
 
             if urls:
-                log.info(
+                log.debug(
                     "get_list_gcs",
                     "Retrieved images from GCS cache",
                     count=len(urls),
@@ -254,7 +254,7 @@ class GCSImageStorage(ImageStorageStrategy):
                 deleted = True
 
             if deleted:
-                log.info("delete_gcs", "Deleted images", file_hash=file_hash)
+                log.debug("delete_gcs", "Deleted images", file_hash=file_hash)
 
             return deleted
 
@@ -311,7 +311,7 @@ class GCSImageStorage(ImageStorageStrategy):
             blob_name = f"pdfs/{file_hash}.pdf"
             blob = self.bucket.blob(blob_name)
             blob.upload_from_string(doc_bytes, content_type="application/pdf")
-            log.info("save_doc_gcs", "Saved PDF to GCS", blob_name=blob_name)
+            log.debug("save_doc_gcs", "Saved PDF to GCS", blob_name=blob_name)
 
             return blob_name
 

@@ -1,6 +1,6 @@
 # Cloudflare Tunnel Configuration for PaperTerrace (DEV)
 # REPLACE with dev tunnel ID if using a separate tunnel
-tunnel: 7220faaf-4a25-4e25-9f25-3823f87a0704
+tunnel: 30987b37-17e3-41c5-be6c-3175c0520ab8
 credentials-file: /etc/cloudflared/credentials.json
 originRequest:
   noTLSVerify: true

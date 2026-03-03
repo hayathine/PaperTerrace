@@ -325,7 +325,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			const finalPages = initialPages ?? pagesRef.current;
 			if (!finalPages || finalPages.length === 0) return;
 
-			const BATCH_SIZE = 5;
+			const BATCH_SIZE = 10;
 			const totalPages = finalPages.length;
 
 			for (let startIdx = 0; startIdx < totalPages; startIdx += BATCH_SIZE) {

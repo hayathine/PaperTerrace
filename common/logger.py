@@ -31,7 +31,13 @@ def add_service_context(
     """
     サービスコンテキスト（service, operation）を自動追加するプロセッサ。
     """
-    # eventからサービス情報を抽出（例: "[PDF.analyze]" -> service="PDF", operation="analyze"）
+    # eventからサービス情報を抽出（例: "[PDF.analyze] message" -> service="PDF", operation="analyze"）
+    # すでにフィールドにある場合はスキップ
+    if "service" in event_dict or "operation" in event_dict:
+        # もしブラケット形式のメッセージなら、メッセージ側をクリーンアップするオプションも検討できるが、
+        # ここでは単にフィールド付与をスキップするにとどめる
+        return event_dict
+
     event = event_dict.get("event", "")
     if event.startswith("[") and "]" in event:
         bracket_end = event.index("]")
@@ -126,17 +132,28 @@ def configure_logging(log_level: str = "INFO"):
     logging.getLogger("app_logger").setLevel(getattr(logging, env_log_level))
 
     # uvicornのログ設定
-    for logger_name in ["uvicorn", "uvicorn.error", "httpx"]:
+    for logger_name in [
+        "uvicorn",
+        "uvicorn.error",
+        "uvicorn.access",
+        "httpx",
+        "httpcore",
+    ]:
         uv_logger = logging.getLogger(logger_name)
         uv_logger.handlers = []
         uv_logger.propagate = True
-        # httpxは非常に饒舌なのでデフォルトでWARNINGにする
-        if logger_name == "httpx":
-            uv_logger.setLevel(logging.WARNING)
+
+        # 外部ライブラリのログを抑制
+        if logger_name in ["uvicorn.access", "httpx", "httpcore"]:
+            level = logging.WARNING
+            if logger_name == "uvicorn.access":
+                level = getattr(
+                    logging, os.getenv("ACCESS_LOG_LEVEL", "WARNING").upper()
+                )
+            uv_logger.setLevel(level)
 
     # 静的ファイルアクセスログの設定（環境変数で制御）
     access_log_level = os.getenv("ACCESS_LOG_LEVEL", "WARNING").upper()
-    logging.getLogger("uvicorn.access").setLevel(getattr(logging, access_log_level))
 
     # 設定されたログレベルを出力
     print(
@@ -173,23 +190,28 @@ class ServiceLogger:
         self.service_name = service_name
         self._logger = structlog.get_logger("app_logger")
 
-    def _format_event(self, operation: str, message: str) -> str:
-        return f"[{self.service_name}.{operation}] {message}"
+    def _log(self, level: str, operation: str, message: str, **kwargs):
+        """内部共通ロギングメソッド"""
+        method = getattr(self._logger, level)
+        # 構造化データとしてserviceとoperationを渡す
+        # コンソール表示の際に見やすくするため、eventの先頭に最小限のタグを付与するか検討
+        # ここでは純粋なメッセージをeventとし、メタデータはフィールドに逃がす
+        method(message, service=self.service_name, operation=operation, **kwargs)
 
     def debug(self, operation: str, message: str, **kwargs):
-        self._logger.debug(self._format_event(operation, message), **kwargs)
+        self._log("debug", operation, message, **kwargs)
 
     def info(self, operation: str, message: str, **kwargs):
-        self._logger.info(self._format_event(operation, message), **kwargs)
+        self._log("info", operation, message, **kwargs)
 
     def warning(self, operation: str, message: str, **kwargs):
-        self._logger.warning(self._format_event(operation, message), **kwargs)
+        self._log("warning", operation, message, **kwargs)
 
     def error(self, operation: str, message: str, **kwargs):
-        self._logger.error(self._format_event(operation, message), **kwargs)
+        self._log("error", operation, message, **kwargs)
 
     def exception(self, operation: str, message: str, **kwargs):
-        self._logger.exception(self._format_event(operation, message), **kwargs)
+        self._log("exception", operation, message, **kwargs)
 
 
 def get_service_logger(service_name: str) -> ServiceLogger:
