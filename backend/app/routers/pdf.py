@@ -698,7 +698,7 @@ async def stream(task_id: str):
                             page_payload["words"] = layout_list[i].get("words", [])
                             page_payload["figures"] = layout_list[i].get("figures", [])
 
-                            log.debug(
+                            log.info(
                                 "stream",
                                 f"Page {i + 1} loaded from cache",
                                 task_id=task_id,

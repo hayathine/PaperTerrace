@@ -85,7 +85,7 @@ class LocalTranslator:
             translation = await self._translate_via_custom(text, tgt_lang, custom_url)
             return translation, "custom"
         else:
-            log.debug(
+            log.info(
                 "translate_async", "Using ServiceB (Inference Service) for translation"
             )
             return await self._translate_via_service_b(text, tgt_lang, paper_context)
@@ -168,7 +168,7 @@ class LocalTranslator:
         self, text: str, tgt_lang: str, paper_context: str | None = None
     ) -> tuple[str, str | None]:
         try:
-            log.debug(
+            log.info(
                 "translate_async",
                 "Translating via ServiceB",
                 text_preview=f"{text[:50]}...",
@@ -185,7 +185,7 @@ class LocalTranslator:
             else:
                 translation, model = result, None
 
-            log.debug(
+            log.info(
                 "translate_async",
                 "ServiceB Translation result",
                 result_preview=f"{str(translation)[:50]}...",

@@ -84,13 +84,29 @@ async def explain_figure(
             image_url = body.image_url
             caption = ""
         else:
+            log.warning(
+                "explain_figure",
+                "Figure not found in DB and no image_url provided",
+                figure_id=figure_id,
+            )
             raise HTTPException(status_code=404, detail="Figure not found")
 
         if not image_url:
+            log.warning(
+                "explain_figure",
+                "No image URL available",
+                figure_id=figure_id,
+            )
             raise HTTPException(status_code=400, detail="No image URL")
 
         image_bytes = await _fetch_image_bytes(image_url)
         if not image_bytes:
+            log.warning(
+                "explain_figure",
+                "Image file not found",
+                figure_id=figure_id,
+                image_url=image_url,
+            )
             raise HTTPException(status_code=404, detail="Image file not found")
 
         explanation = await figure_service.analyze_figure(

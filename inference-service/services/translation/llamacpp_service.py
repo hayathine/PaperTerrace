@@ -31,13 +31,13 @@ class LlamaCppTranslationService:
         # ローカルパスが優先される設定
         self.model_path = os.getenv("LLAMACPP_MODEL_PATH")
 
-        self.n_ctx = int(os.getenv("LLAMACPP_CTX_SIZE", "4096"))
+        self.n_ctx = int(os.getenv("LLAMACPP_CTX_SIZE", "1024"))
         # 安全性のため、物理コア数(6)より少ないスレッド数(4)をデフォルトに設定します。
         # これにより並列処理による不可解なクラッシュのリスクを軽減します。
         self.n_threads = int(os.getenv("LLAMACPP_THREADS", "4"))
         # Batch size controls peak memory during prompt evaluation.
         # Default reduced from 512 to 64 to prevent OOM on ~10GB Qwen3-30B model.
-        self.n_batch = int(os.getenv("LLAMACPP_BATCH_SIZE", "64"))
+        self.n_batch = int(os.getenv("LLAMACPP_BATCH_SIZE", "512"))
         self.n_gpu_layers = int(
             os.getenv("LLAMACPP_GPU_LAYERS", "0")
         )  # CPU実行をデフォルトに
@@ -47,6 +47,7 @@ class LlamaCppTranslationService:
         self.use_mlock = os.getenv("LLAMACPP_USE_MLOCK", "false").lower() == "true"
         # mmap allows the model to be loaded from disk on demand, reducing initial RAM usage.
         self.use_mmap = os.getenv("LLAMACPP_USE_MMAP", "true").lower() == "true"
+        logger.info(f"Llama-cpp モデルの初期化設定: {self.__dict__}")
 
     async def initialize(self):
         """モデルの初期化。初回呼び出し時に実行されます。"""
@@ -100,7 +101,7 @@ class LlamaCppTranslationService:
                             n_gpu_layers=self.n_gpu_layers,
                             use_mlock=self.use_mlock,
                             use_mmap=self.use_mmap,
-                            verbose=False,
+                            verbose=True,
                         ),
                     )
                 else:
@@ -163,6 +164,11 @@ class LlamaCppTranslationService:
                     *(messages or [{"role": "user", "content": prompt or ""}]),
                 ]
 
+                logger.info(f"LLM 推論開始: messages_count={len(chat_messages)}")
+                if len(chat_messages) > 0:
+                    last_msg = chat_messages[-1]["content"]
+                    logger.info(f"LLM 最終プロンプト: {last_msg[:200]}...")
+
                 raw = self.llm_instance.create_chat_completion(
                     messages=chat_messages,
                     temperature=kwargs.get("temperature", 0.3),
@@ -172,6 +178,9 @@ class LlamaCppTranslationService:
                 # Qwen3 thinking models prepend <think>...</think> blocks.
                 # Strip them before passing the text to DSPy's output parser.
                 text = raw["choices"][0]["message"]["content"]
+                logger.info(
+                    f"LLM 生レスポンス取得 (文字数={len(text)}): {text[:200]}..."
+                )
                 text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
                 # DSPy BaseLM._process_completion requires an OpenAI-like response object
@@ -197,6 +206,7 @@ class LlamaCppTranslationService:
             # Use dspy.context() instead of dspy.settings.configure() because
             # the latter modifies global state and DSPy forbids it from non-main threads.
             def _run_dspy():
+                logger.info("DSPy 推論スレッド開始")
                 with dspy.context(lm=InMemoryLlama(self.llm)):
                     predictor = dspy.Predict(ContextAwareTranslation)
                     prediction = predictor(

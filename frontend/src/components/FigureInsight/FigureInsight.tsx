@@ -34,8 +34,17 @@ const FigureInsight: React.FC<FigureInsightProps> = ({ selectedFigure }) => {
 			// DBに存在しないトランジェントfigureのために image_url を渡す
 			body: JSON.stringify({ image_url: selectedFigure.image_url }),
 		})
-			.then((res) => {
+			.then(async (res) => {
 				if (res.ok) return res.json();
+				const errorBody = await res.json().catch(() => ({}));
+				const detail =
+					errorBody.detail || errorBody.error || `HTTP ${res.status}`;
+				log.error("handle_explain", "API error", {
+					figureId,
+					status: res.status,
+					detail,
+				});
+				setExplanation(`図の解析に失敗しました (${detail})`);
 				return null;
 			})
 			.then((data) => {
@@ -46,6 +55,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({ selectedFigure }) => {
 					figureId,
 					error: e,
 				});
+				setExplanation("図の解析に失敗しました (ネットワークエラー)");
 			})
 			.finally(() => {
 				setIsLoading(false);

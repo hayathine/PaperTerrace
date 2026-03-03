@@ -6,12 +6,11 @@ import asyncio
 import logging
 import math
 import os
-import re
 
 import ctranslate2
 import sentencepiece as spm
 
-from .utils import get_m2m100_lang_code
+from .utils import LANG_CODES, get_m2m100_lang_code
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +24,7 @@ class M2M100TranslationService:
         self.src_lang: str | None = "en"
 
         self.model_path = os.getenv("LOCAL_MODEL_PATH", "models/m2m100_ct2")
+        self.lang_codes = LANG_CODES
 
         # CTranslate2設定
         self.ct2_inter_threads = int(os.getenv("CT2_INTER_THREADS", "1"))
@@ -97,155 +97,161 @@ class M2M100TranslationService:
             self.tokenizer = None
         logger.info("M2M100翻訳サービスをクリーンアップしました")
 
-    def _prepare_input(self, text: str) -> list[str]:
-        """入力テキストの準備"""
+    def _prepare_input(self, text: str, target_lang: str) -> list[str]:
+        """入力テキストの準備
+
+        M2M100では、入力テキストをそのままトークン化し、
+        target_prefixでターゲット言語を指定する
+        """
+
+        # Tokenize using SentencePiece
         pieces = self.tokenizer.encode_as_pieces(text)
         src_token = get_m2m100_lang_code(self.src_lang)
         return [src_token] + pieces + ["</s>"]
 
-    def _prepare_input_word(self, word: str) -> list[str]:
-        """単語翻訳用: ラッパー文にして文脈を与えたトークン列を構築する。
-
-        単語単体より文脈文の方が M2M100 の翻訳精度が高い（特に専門用語のカタカナ転写）。
-        出力は _extract_word_from_sentence() で日本語パターンマッチして抽出する。
-        """
-        src_token = get_m2m100_lang_code(self.src_lang)
-        pieces = self.tokenizer.encode_as_pieces(f"The term {word} is used here.")
-        return [src_token] + pieces + ["</s>"]
-
-    @staticmethod
-    def _is_single_word(text: str) -> bool:
-        """テキストが単一単語かどうかを判定"""
-        return len(text.strip().split()) == 1
-
-    @staticmethod
-    def _extract_word_from_sentence(sentence: str) -> str | None:
-        """ラッパー文を翻訳した日本語出力から核となる単語部分を抽出する。
-
-        M2M100 の典型的な出力パターン:
-          - 「トランスフォーマー」という用語が… → 「」内を抽出
-          - 注目という言葉はここで…            → という の直前を抽出
-          - ここでグラディエントという…         → ここで〜という の間を抽出
-        """
-        # パターン1: 「term」 形式
-        m = re.search(r"「(.+?)」", sentence)
-        if m:
-            return m.group(1).strip()
-
-        # パターン2: ここで[は][、] term という 形式
-        # 「ここでは、〜という」のように は や読点が続くケースを除外する
-        m = re.search(r"ここでは?[、,]?\s*(.+?)(?:という|の)", sentence)
-        if m:
-            return m.group(1).strip()
-
-        # パターン3: 文頭 term という 形式
-        m = re.match(r"^(.+?)という", sentence)
-        if m:
-            candidate = m.group(1).strip()
-            # 「その用語」「この用語」のような代名詞は除外
-            if candidate not in ("その用語", "この用語", "その言葉", "この言葉"):
-                return candidate
-
-        return None
-
-    async def translate(self, text: str, target_lang: str = "ja") -> dict:
-        """単一テキストの翻訳実行と確信度の返却。
-
-        単語単体では翻訳精度が低いため、単語の場合は文章に埋め込んで翻訳し、
-        結果から翻訳単語だけを抽出して返す。
-        """
+    async def translate(self, text: str, target_lang: str = "ja") -> str:
+        """単一テキストの翻訳"""
         if not self.translator or not self.tokenizer:
-            if os.getenv("DEV_MODE", "false").lower() == "true":
-                return {"translation": f"[Dummy] {text}", "conf": 1.0}
-            raise RuntimeError("M2M100モデル未初期化")
+            if (
+                os.getenv("DEV_MODE", "false").lower() == "true"
+                or os.getenv("SKIP_MODEL_LOADING", "false").lower() == "true"
+            ):
+                logger.warning("開発モード: ダミー翻訳を返します")
+                return f"[翻訳ダミー] {text} -> {target_lang}"
+            raise RuntimeError(
+                "翻訳モデルが初期化されていません。initialize()を先に呼び出してください。"
+            )
 
-        is_word = self._is_single_word(text)
-        input_tokens = (
-            self._prepare_input_word(text) if is_word else self._prepare_input(text)
-        )
-        tgt_code = get_m2m100_lang_code(target_lang)
+        if not text.strip():
+            return ""
 
-        loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(
-            None,
-            lambda: self.translator.translate_batch(
-                [input_tokens],
-                target_prefix=[[tgt_code]],
-                beam_size=self.beam_size,
-                repetition_penalty=self.repetition_penalty,
-                no_repeat_ngram_size=self.no_repeat_ngram_size,
-                max_decoding_length=self.max_decoding_length,
-                return_scores=True,
-            ),
-        )
+        try:
+            # Encode
+            input_tokens = self._prepare_input(text, target_lang)
 
-        if results and results[0].hypotheses:
-            result = results[0]
-            output_tokens = result.hypotheses[0]
-            score = result.scores[0] if result.scores else 0.0
-            conf = math.exp(score)
+            # ターゲット言語コードを取得
+            tgt_code = get_m2m100_lang_code(target_lang)
 
-            # Postprocess: strip leading language token
-            if output_tokens and output_tokens[0] == tgt_code:
-                output_tokens = output_tokens[1:]
+            # 翻訳実行（非同期実行のためスレッドプールを使用）
+            loop = asyncio.get_event_loop()
+            results = await loop.run_in_executor(
+                None,
+                lambda: self.translator.translate_batch(
+                    [input_tokens],
+                    target_prefix=[[tgt_code]],  # List[Optional[List[str]]]形式
+                    beam_size=self.beam_size,
+                    repetition_penalty=self.repetition_penalty,
+                    no_repeat_ngram_size=self.no_repeat_ngram_size,
+                    max_decoding_length=self.max_decoding_length,
+                    return_scores=True,
+                ),
+            )
 
-            full_text = self.tokenizer.decode_pieces(output_tokens).strip()
-
-            # 単語翻訳の場合: 日本語文パターンから核となる単語を抽出する。
-            # 抽出できない場合は全文をそのまま返す。
-            if is_word:
-                extracted = self._extract_word_from_sentence(full_text)
-                if extracted:
-                    translation = extracted
-                    logger.debug(f"単語抽出: {text!r} -> {translation!r} (全文: {full_text!r})")
-                else:
-                    translation = full_text
-                    logger.debug(f"抽出失敗、全文返却: {text!r} -> {translation!r}")
+            # Decode
+            if results and results[0].hypotheses[0]:
+                output_tokens = results[0].hypotheses[0]
+                score = results[0].scores[0] if results[0].scores else 0.0
+                conf = math.exp(score)
+                translation = self._postprocess_output(output_tokens, tgt_code)
+                logger.info(
+                    f"翻訳結果: {text} -> {translation} (conf={conf:.3f}, model=M2M100)"
+                )
+                return {"translation": translation, "conf": conf, "model": "M2M100"}
             else:
-                translation = full_text
+                logger.warning("翻訳結果が空です")
+                return {"translation": "", "conf": 0.0}
 
-            return {"translation": translation, "conf": conf, "model": "M2M100"}
+        except Exception as e:
+            logger.error(f"翻訳エラー: {e}")
+            # 開発モードではダミー翻訳を返す
+            if os.getenv("DEV_MODE", "false").lower() == "true":
+                logger.warning("開発モード: 翻訳エラーのためダミー翻訳を返します")
+                return f"[翻訳エラー・ダミー] {text} -> {target_lang}"
+            raise RuntimeError(f"翻訳処理に失敗しました: {e}") from e
 
-        return {"translation": "", "conf": 0.0}
+    def _postprocess_output(self, tokens: list[str], target_lang: str) -> str:
+        """出力の後処理"""
+        # トークンをテキストに変換
+        if tokens and tokens[0] == target_lang:
+            tokens = tokens[1:]
+        text = self.tokenizer.decode_pieces(tokens)
+
+        return text.strip()
 
     async def translate_batch(
         self, texts: list[str], target_lang: str = "ja"
-    ) -> list[dict]:
+    ) -> list[str]:
         """複数テキストの一括翻訳"""
         if not self.translator or not self.tokenizer:
-            return [{"translation": "", "conf": 0.0}] * len(texts)
+            # 開発モードではダミー翻訳を返す
+            if (
+                os.getenv("DEV_MODE", "false").lower() == "true"
+                or os.getenv("SKIP_MODEL_LOADING", "false").lower() == "true"
+            ):
+                logger.warning("開発モード: ダミーバッチ翻訳を返します")
+                return [f"[バッチ翻訳ダミー] {text} -> {target_lang}" for text in texts]
+            raise RuntimeError(
+                "翻訳モデルが初期化されていません。initialize()を先に呼び出してください。"
+            )
 
-        tgt_code = get_m2m100_lang_code(target_lang)
-        input_batches = [self._prepare_input(t) if t.strip() else [] for t in texts]
+        if not texts:
+            return []
 
-        loop = asyncio.get_event_loop()
-        results = await loop.run_in_executor(
-            None,
-            lambda: self.translator.translate_batch(
-                input_batches,
-                target_prefix=[[tgt_code]] * len(input_batches),
-                beam_size=self.beam_size,
-                repetition_penalty=self.repetition_penalty,
-                no_repeat_ngram_size=self.no_repeat_ngram_size,
-                max_decoding_length=self.max_decoding_length,
-                return_scores=True,
-            ),
-        )
+        try:
+            # ターゲット言語コードを取得
+            tgt_code = get_m2m100_lang_code(target_lang)
 
-        outputs = []
-        for i, result in enumerate(results):
-            if input_batches[i] and result.hypotheses:
-                output_tokens = result.hypotheses[0]
-                score = result.scores[0] if result.scores else 0.0
-                conf = math.exp(score)
+            # 入力準備
+            input_batches = []
+            for text in texts:
+                if text.strip():
+                    tokens = self._prepare_input(text, target_lang)
+                    input_batches.append(tokens)
+                else:
+                    input_batches.append([])
 
-                if output_tokens and output_tokens[0] == tgt_code:
-                    output_tokens = output_tokens[1:]
-                translation = self.tokenizer.decode_pieces(output_tokens).strip()
-                outputs.append(
-                    {"translation": translation, "conf": conf, "model": "M2M100"}
-                )
-            else:
-                outputs.append({"translation": "", "conf": 0.0})
+            # バッチ翻訳実行
+            loop = asyncio.get_event_loop()
+            results = await loop.run_in_executor(
+                None,
+                lambda: self.translator.translate_batch(
+                    input_batches,
+                    target_prefix=[[tgt_code]] * len(input_batches),
+                    # beam_size=self.beam_size,
+                    # repetition_penalty=self.repetition_penalty,
+                    # no_repeat_ngram_size=self.no_repeat_ngram_size,
+                    # max_decoding_length=self.max_decoding_length,
+                    return_scores=True,
+                ),
+            )
 
-        return outputs
+            # 結果の後処理
+            translations = []
+            for i, result in enumerate(results):
+                if input_batches[i] and result.hypotheses:
+                    output_tokens = result.hypotheses[0]
+                    score = result.scores[0] if result.scores else 0.0
+                    conf = math.exp(score)
+                    translation = self._postprocess_output(output_tokens, tgt_code)
+                    translations.append(
+                        {"translation": translation, "conf": conf, "model": "M2M100"}
+                    )
+                else:
+                    translations.append({"translation": "", "conf": 0.0})
+
+            return translations
+
+        except Exception as e:
+            logger.error(f"バッチ翻訳エラー: {e}")
+            # 開発モードではダミー翻訳を返す
+            if os.getenv("DEV_MODE", "false").lower() == "true":
+                logger.warning("開発モード: バッチ翻訳エラーのためダミー翻訳を返します")
+                return [
+                    f"[バッチ翻訳エラー・ダミー] {text} -> {target_lang}"
+                    for text in texts
+                ]
+            raise RuntimeError(f"バッチ翻訳処理に失敗しました: {e}") from e
+
+    async def get_supported_languages(self) -> list[str]:
+        """サポートされている言語コードのリストを取得"""
+        return list(self.lang_codes.keys())

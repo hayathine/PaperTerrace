@@ -190,7 +190,7 @@ async def explain(
     # Robust element_id detection: Try query param, then fallback to HTMX header
     element_id = element_id or req.headers.get("HX-Trigger")
 
-    log.debug(
+    log.info(
         "explain", "Word lookup", word=word, element_id=element_id, paper_id=paper_id
     )
 
@@ -324,7 +324,7 @@ async def explain(
             local_translation, _model = await translator.translate_async(
                 lemma, lang, paper_context=paper_context_str
             )
-            log.debug(
+            log.info(
                 "explain",
                 "ServiceB translation result",
                 result=local_translation,

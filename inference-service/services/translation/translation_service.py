@@ -41,13 +41,13 @@ class TranslationService:
         model = res.get("model", "m2m100")
 
         logger.info(
-            f"M2M100翻訳結果: {text} -> {translation} (conf={conf:.3f}, model={model})"
+            f"M2M100翻訳結果: {text[:30]}... -> {translation[:30]}... (conf={conf:.3f}, model={model})"
         )
 
         # 2. 確信度によるフォールバック
         if conf <= 0.5 and self.llamacpp:
             logger.info(
-                f"確信度が低いため LlamaCpp (Qwen3) に切り替えます (conf={conf:.3f})"
+                f"確信度が低いため LlamaCpp (Qwen3) に切り替えます (conf={conf:.3f}, text='{text[:30]}...', context_len={len(paper_context)})"
             )
             try:
                 llm_result = await self.llamacpp.translate_with_llamacpp(
@@ -80,7 +80,7 @@ class TranslationService:
             model = res.get("model", "m2m100")
 
             logger.info(
-                f"M2M100バッチ翻訳[{i}]: {texts[i]} -> {translation} (conf={conf:.3f})"
+                f"M2M100バッチ翻訳[{i}]: {texts[i][:30]}... -> {translation[:30]}... (conf={conf:.3f})"
             )
 
             if conf <= 0.5 and self.llamacpp:

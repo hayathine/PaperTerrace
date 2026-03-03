@@ -286,14 +286,14 @@ class InferenceServiceClient:
 
     async def translate_text(
         self, text: str, target_lang: str = "ja", paper_context: str | None = None
-    ) -> str:
+    ) -> tuple[str, str | None]:
         """単一テキストの翻訳"""
         request_data = TranslationRequest(
             text=text, target_lang=target_lang, paper_context=paper_context
         )
 
         try:
-            log.debug("translate", "翻訳リクエスト", text_preview=text[:50])
+            log.info("translate", "翻訳リクエスト", text_preview=text[:50])
 
             # ... content omitted ...
             response = await self._make_request_with_retry(
@@ -302,13 +302,15 @@ class InferenceServiceClient:
 
             if response.get("success"):
                 translation = response.get("translation", "")
-                log.debug(
+                model = response.get("model")
+                log.info(
                     "translate",
                     "翻訳完了",
+                    model=model,
                     processing_time=response.get("processing_time", 0),
                 )
 
-                return translation
+                return translation, model
             else:
                 error_msg = response.get("message", "不明なエラー")
                 raise InferenceServiceError(f"翻訳失敗: {error_msg}")
