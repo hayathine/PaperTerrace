@@ -4,6 +4,7 @@ import type { DictionaryEntry } from "./types";
 export type DictionaryEntryWithCoords = DictionaryEntry & {
 	coords?: { page: number; x: number; y: number };
 	image_url?: string;
+	is_analyzing?: boolean;
 };
 
 import { useTranslation } from "react-i18next";
@@ -223,6 +224,12 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 	const handleDeepTranslate = async (entry: DictionaryEntryWithCoords) => {
 		if (!entry) return;
+		// Mark specific entry as analyzing locally
+		setEntries((prev) =>
+			prev.map((e) =>
+				e.word === entry.word ? { ...e, is_analyzing: true } : e,
+			),
+		);
 		setLoading(true);
 		setError(null);
 
@@ -255,11 +262,18 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				const data: DictionaryEntryWithCoords = await res.json();
 				data.coords = entry.coords; // Preserve coordinates
 				setEntries((prev) =>
-					prev.map((e) => (e.word === entry.word ? data : e)),
+					prev.map((e) =>
+						e.word === entry.word ? { ...data, is_analyzing: false } : e,
+					),
 				);
 			} else {
 				const errorText = await res.text();
 				setError(`Translation failed: ${res.status} ${errorText}`);
+				setEntries((prev) =>
+					prev.map((e) =>
+						e.word === entry.word ? { ...e, is_analyzing: false } : e,
+					),
+				);
 			}
 		} catch (e) {
 			log.error("deep_translate", "Translation failed", {
@@ -268,6 +282,11 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			});
 
 			setError("Translation failed.");
+			setEntries((prev) =>
+				prev.map((e) =>
+					e.word === entry.word ? { ...e, is_analyzing: false } : e,
+				),
+			);
 		} finally {
 			setLoading(false);
 		}
@@ -388,10 +407,18 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	} else {
 		content = (
 			<div className="p-4 flex-1 overflow-y-auto">
-				{loading && (
-					<div className="animate-pulse space-y-3 mb-4">
-						<div className="h-4 bg-slate-100 rounded w-1/3"></div>
-						<div className="h-20 bg-slate-100 rounded w-full"></div>
+				{loading && entries.length === 0 && (
+					<div className="flex flex-col items-center justify-center py-12 animate-in fade-in duration-500">
+						<div className="relative w-12 h-12 mb-4">
+							<div className="absolute inset-0 rounded-full border-4 border-orange-100"></div>
+							<div className="absolute inset-0 rounded-full border-4 border-orange-500 border-t-transparent animate-spin"></div>
+						</div>
+						<p className="text-sm font-bold text-slate-600 animate-pulse">
+							{t("summary.processing")}
+						</p>
+						<p className="text-[10px] text-slate-400 mt-1">
+							{t("common.loading_description")}
+						</p>
 					</div>
 				)}
 
@@ -405,8 +432,16 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					{entries.map((entry, index) => (
 						<div
 							key={`${entry.word}-${index}`}
-							className="bg-white p-3 sm:p-4 rounded-xl border border-slate-100 shadow-sm animate-fade-in group transition-all hover:shadow-md"
+							className={`bg-white p-3 sm:p-4 rounded-xl border border-slate-100 shadow-sm animate-fade-in group transition-all hover:shadow-md relative overflow-hidden ${entry.is_analyzing ? "opacity-90" : ""}`}
 						>
+							{entry.is_analyzing && (
+								<div className="absolute inset-0 z-50 bg-white/60 backdrop-blur-[1px] flex flex-col items-center justify-center animate-in fade-in duration-300">
+									<div className="w-6 h-6 border-2 border-orange-500 border-t-transparent rounded-full animate-spin mb-2"></div>
+									<span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider animate-pulse">
+										{t("summary.processing")}
+									</span>
+								</div>
+							)}
 							<div className="flex justify-between items-start mb-3">
 								<h2 className="text-lg font-bold text-slate-800">
 									{entry.word}

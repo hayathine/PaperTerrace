@@ -21,18 +21,20 @@ const FigureInsight: React.FC<FigureInsightProps> = ({ selectedFigure }) => {
 	// 図が切り替わったら解説をリセットし、IDがあれば自動でAI解析を開始する
 	useEffect(() => {
 		setExplanation(null);
-		if (!selectedFigure?.id) return;
+		const figureId =
+			selectedFigure?.id || (selectedFigure?.image_url ? "transient" : null);
+		if (!figureId) return;
 
-		const figureId = selectedFigure.id;
 		if (requestingIdRef.current === figureId) return;
 		requestingIdRef.current = figureId;
 
 		setIsLoading(true);
+
 		fetch(`${API_URL}/api/figures/${figureId}/explain`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			// DBに存在しないトランジェントfigureのために image_url を渡す
-			body: JSON.stringify({ image_url: selectedFigure.image_url }),
+			body: JSON.stringify({ image_url: selectedFigure?.image_url }),
 		})
 			.then(async (res) => {
 				if (res.ok) return res.json();

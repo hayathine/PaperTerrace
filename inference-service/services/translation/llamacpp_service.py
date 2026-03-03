@@ -18,22 +18,18 @@ class LlamaCppTranslationService:
 
     def __init__(self):
         self.llm: Optional[Llama] = None
-        # 環境変数から設定を取得
         # デフォルトモデル: byteshape/Qwen3-30B-A3B-Instruct-2507-GGUF
         # ファイル名: Q3_K_S-2.66bow (ユーザー指定)
         self.repo_id = os.getenv(
             "LLAMACPP_REPO_ID", "byteshape/Qwen3-30B-A3B-Instruct-2507-GGUF"
         )
-        self.filename = os.getenv(
-            "LLAMACPP_MODEL_NAME", "Q3_K_S-2.66bow.gguf"
-        )  # 本来は .gguf が付くはずだがユーザー指定に合わせる
+        self.filename = os.getenv("LLAMACPP_MODEL_NAME", "Q3_K_S-2.66bow.gguf")
 
         # ローカルパスが優先される設定
         self.model_path = os.getenv("LLAMACPP_MODEL_PATH")
 
         self.n_ctx = int(os.getenv("LLAMACPP_CTX_SIZE", "1024"))
         # 安全性のため、物理コア数(6)より少ないスレッド数(4)をデフォルトに設定します。
-        # これにより並列処理による不可解なクラッシュのリスクを軽減します。
         self.n_threads = int(os.getenv("LLAMACPP_THREADS", "4"))
         # Batch size controls peak memory during prompt evaluation.
         # Default reduced from 512 to 64 to prevent OOM on ~10GB Qwen3-30B model.
@@ -41,9 +37,6 @@ class LlamaCppTranslationService:
         self.n_gpu_layers = int(
             os.getenv("LLAMACPP_GPU_LAYERS", "0")
         )  # CPU実行をデフォルトに
-        # mlock pins the entire model in RAM, preventing swapping.
-        # Disabled by default for 30B models to avoid OOM at load time.
-        # Enable only if the host has sufficient free RAM (>14GB).
         self.use_mlock = os.getenv("LLAMACPP_USE_MLOCK", "false").lower() == "true"
         # mmap allows the model to be loaded from disk on demand, reducing initial RAM usage.
         self.use_mmap = os.getenv("LLAMACPP_USE_MMAP", "true").lower() == "true"
@@ -190,16 +183,19 @@ class LlamaCppTranslationService:
                     {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
                 )
                 message_ns = types.SimpleNamespace(content=text, role="assistant")
-                choice_ns = types.SimpleNamespace(message=message_ns)
+                choice_ns = types.SimpleNamespace(
+                    message=message_ns,
+                    finish_reason="stop",
+                    index=0,
+                )
                 return types.SimpleNamespace(
                     choices=[choice_ns],
                     usage=usage,
                     model="local-llama",
                 )
 
-        logger.info(f"LLM 翻訳実行中... (Word: {original_word[:20]}...)")
-
         try:
+            logger.info(f"LLM 翻訳実行中... (Word: {original_word[:20]}...)")
             loop = asyncio.get_running_loop()
 
             # DSPy predict can be blocking, so we run it in executor.

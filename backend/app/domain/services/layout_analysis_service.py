@@ -224,6 +224,7 @@ class LayoutAnalysisService:
                                 page_figures[pn] = []
                             page_figures[pn].append(
                                 {
+                                    "id": fig.get("id"),
                                     "bbox": fig["bbox"],
                                     "image_url": fig["image_url"],
                                     "label": fig.get("label", "figure"),
