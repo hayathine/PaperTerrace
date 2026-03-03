@@ -26,6 +26,8 @@ class TraceContext:
     user_id: str | None = None
     session_id: str | None = None
     paper_id: str | None = None
+    is_copied: bool = False
+    comment: str | None = None
 
 
 def _truncate_values(d: dict, max_len: int = MAX_FIELD_LENGTH) -> dict:
@@ -44,7 +46,36 @@ def _prediction_to_dict(prediction) -> dict:
     if hasattr(prediction, "toDict"):
         return prediction.toDict()
     # Fallback: iterate over known keys
-    return {k: getattr(prediction, k, None) for k in dir(prediction) if not k.startswith("_")}
+    return {
+        k: getattr(prediction, k, None)
+        for k in dir(prediction)
+        if not k.startswith("_")
+    }
+
+
+def _extract_answer(outputs: dict) -> str | None:
+    """Extract a representative 'answer' from the prediction outputs."""
+    for key in ["answer", "reply", "explanation", "content", "summary"]:
+        if key in outputs and outputs[key]:
+            return str(outputs[key])
+    return None
+
+
+def _get_last_prompt() -> str | None:
+    """Try to get the last prompt from dspy history."""
+    try:
+        import dspy
+
+        if (
+            hasattr(dspy.settings, "lm")
+            and dspy.settings.lm
+            and hasattr(dspy.settings.lm, "history")
+            and dspy.settings.lm.history
+        ):
+            return dspy.settings.lm.history[-1].get("prompt")
+    except (ImportError, AttributeError, IndexError, KeyError):
+        pass
+    return None
 
 
 def _save_trace_sync(
@@ -57,6 +88,9 @@ def _save_trace_sync(
     is_success: bool,
     error_msg: str | None,
     context: TraceContext | None,
+    is_copied: bool = False,
+    prompt: str | None = None,
+    answer: str | None = None,
 ):
     """Synchronously write a trace record to the DB. Runs in background thread."""
     try:
@@ -74,10 +108,16 @@ def _save_trace_sync(
                 user_id=context.user_id if context else None,
                 session_id=context.session_id if context else None,
                 paper_id=context.paper_id if context else None,
-                model_name=os.environ.get("DSPY_GEMINI_MODEL", "gemini/gemini-2.5-flash-lite"),
+                model_name=os.environ.get(
+                    "DSPY_GEMINI_MODEL", "gemini/gemini-2.5-flash-lite"
+                ),
                 latency_ms=latency_ms,
                 is_success=is_success,
+                is_copied=is_copied or (context.is_copied if context else False),
                 error_msg=error_msg,
+                comment=context.comment if context else None,
+                prompt=prompt,
+                answer=answer,
             )
             db.add(trace)
             db.commit()
@@ -94,8 +134,10 @@ def save_trace(
     is_success: bool = True,
     error_msg: str | None = None,
     context: TraceContext | None = None,
-):
-    """Fire-and-forget trace save via background thread."""
+    prompt: str | None = None,
+    answer: str | None = None,
+) -> str:
+    """Fire-and-forget trace save via background thread. Returns trace_id."""
     trace_id = str(uuid.uuid4())
     _executor.submit(
         _save_trace_sync,
@@ -108,7 +150,11 @@ def save_trace(
         is_success,
         error_msg,
         context,
+        is_copied=context.is_copied if context else False,
+        prompt=prompt,
+        answer=answer,
     )
+    return trace_id
 
 
 def trace_dspy_call(
@@ -129,25 +175,30 @@ def trace_dspy_call(
         context: optional TraceContext with user/session/paper IDs
 
     Returns:
-        The DSPy Prediction result (same as calling module_callable(**inputs))
+        Tuple of (DSPy Prediction result, trace_id string)
     """
     start = time.perf_counter()
+    trace_id = "error"
     try:
         result = module_callable(**inputs)
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         outputs = _prediction_to_dict(result)
-        save_trace(
+        prompt = _get_last_prompt()
+        answer = _extract_answer(outputs)
+        trace_id = save_trace(
             module_name=module_name,
             signature=signature_name,
             inputs=inputs,
             outputs=outputs,
             latency_ms=elapsed_ms,
             context=context,
+            prompt=prompt,
+            answer=answer,
         )
-        return result
+        return result, trace_id
     except Exception as e:
         elapsed_ms = int((time.perf_counter() - start) * 1000)
-        save_trace(
+        trace_id = save_trace(
             module_name=module_name,
             signature=signature_name,
             inputs=inputs,

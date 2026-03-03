@@ -101,7 +101,7 @@ class LocalTranslator:
             # プロンプトの構築
             lang_name = SUPPORTED_LANGUAGES.get(tgt_lang, tgt_lang)
             prompt = DICT_TRANSLATE_WORD_SIMPLE_PROMPT.format(
-                paper_context="", lemma=text, lang_name=lang_name
+                paper_context="", target_word=text, lang_name=lang_name
             )
 
             payload = {"prompt": prompt}

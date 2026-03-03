@@ -13,6 +13,7 @@ export interface FeedbackPayload {
 		| "chat"
 		| "translation";
 	target_id?: string;
+	trace_id?: string;
 	user_score?: number; // 1 for Good, 0 for Bad
 	user_comment?: string;
 }

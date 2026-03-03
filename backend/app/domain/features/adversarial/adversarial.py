@@ -97,7 +97,7 @@ class AdversarialReviewService:
                     extra={"text_length": len(text)},
                 )
                 # DSPy version
-                res = trace_dspy_call(
+                res, trace_id = trace_dspy_call(
                     "AdversarialModule",
                     "AdversarialCritique",
                     self.adversarial_mod,
@@ -110,6 +110,7 @@ class AdversarialReviewService:
                     "reproducibility_risks": res.reproducibility_risks,
                     "methodology_concerns": res.methodology_concerns,
                     "overall_assessment": res.overall_assessment,
+                    "trace_id": trace_id,
                 }
 
                 issue_count = (

@@ -149,7 +149,7 @@ class ChatService:
                             )
 
                 # DSPy version
-                res = trace_dspy_call(
+                res, trace_id = trace_dspy_call(
                     "ChatModule",
                     "ChatGeneral",
                     self.chat_mod,
@@ -185,9 +185,16 @@ class ChatService:
                 },
             )
 
+            # 従来の返り値(str)との互換性を保ちつつ、必要に応じてtrace_id等を返すためdict化を検討
+            # ただし、呼び出し側が str を期待している箇所が多いので慎重に。
+            # 今回は trace_id を含めた dict を返すように統一する（呼び出し側の routers/chat.py を修正）。
+            result = {
+                "text": response_text,
+                "trace_id": trace_id if "trace_id" in locals() else None,
+            }
             if grounding:
-                return {"text": response_text, "grounding": grounding}
-            return response_text
+                result["grounding"] = grounding
+            return result
         except ChatError:
             raise
         except Exception as e:

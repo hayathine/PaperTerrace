@@ -123,18 +123,20 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         pdf_bytes=pdf_bytes,
     )
 
-    # Handle grounding if available
-    if isinstance(response_data, dict):
-        response_text = response_data["text"]
-        grounding = response_data.get("grounding")
-    else:
-        response_text = response_data
-        grounding = None
+    # response_data is now ALWAYS a dict (containing 'text', 'trace_id', and optionally 'grounding')
+    response_text = response_data["text"]
+    grounding = response_data.get("grounding")
+    trace_id = response_data.get("trace_id")
 
     # Update history
     history.append({"role": "user", "content": request.message})
     history.append(
-        {"role": "assistant", "content": response_text, "grounding": grounding}
+        {
+            "role": "assistant",
+            "content": response_text,
+            "grounding": grounding,
+            "trace_id": trace_id,
+        }
     )
 
     # Trim history (keep last 40)
@@ -150,6 +152,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         {
             "response": response_text,
             "grounding": grounding,
+            "trace_id": trace_id,
         }
     )
 

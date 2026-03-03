@@ -61,6 +61,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 							content: h.content,
 							timestamp: Date.now(),
 							grounding: h.grounding,
+							traceId: h.trace_id,
 						}));
 						setMessages(loadedMessages);
 					}
@@ -134,6 +135,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 				content: data.response,
 				timestamp: Date.now(),
 				grounding: data.grounding,
+				traceId: data.trace_id,
 			};
 
 			setMessages((prev) => [...prev, aiMsg]);

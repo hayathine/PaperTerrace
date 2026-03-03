@@ -559,6 +559,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 									sessionId={sessionId}
 									targetType="translation"
 									targetId={entry.word}
+									traceId={entry.trace_id}
 								/>
 							</div>
 						</div>

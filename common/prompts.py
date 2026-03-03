@@ -26,23 +26,24 @@ Your goal is to help users understand complex academic papers, translate technic
 # ==========================================
 # 単語やフレーズの翻訳、辞書的な説明に使用
 
-# Used in: backend/app/routers/translation.py
-# フロントエンド表示: Dictionary.tsx (Advanced Translation / 文脈に応じた翻訳結果として表示)
-DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT = """{paper_context}
+# Used in: common/dspy/signatures.py (ContextAwareTranslation)
+# フロントエンド表示: Dictionary.tsx (文脈に適した翻訳・解説として表示)
+# QwenおよびGeminiの共通プロンプトベースとして利用
+DICT_TRANSLATE_QWEN_PROMPT = """{paper_context}
 Based on the context above, translate the following English text into {lang_name}.
-{original_word}
+{target_word}
 Output the translation and intuitive explanation in short sentences(20-50 characters)."""
 
-# Used in: backend/app/domain/services/local_translator.py
+# Used in: backend/app/routers/translation.py
 # フロントエンド表示: Dictionary.tsx (単語クリック時の簡易翻訳として表示)
 DICT_TRANSLATE_WORD_SIMPLE_PROMPT = """{paper_context}
-In the context of the paper above, what does the word "{lemma}" mean?
+In the context of the paper above, what does the word "{target_word}" mean?
 Provide a concise translation in {lang_name} (1-3 words). Output ONLY the translation."""
 
-# Used in: backend/app/routers/translation.py
+# Used in: common/dspy/signatures.py (DeepExplanation)
 # フロントエンド表示: Dictionary.tsx (文脈を含めた詳細解説として表示)
-DICT_EXPLAIN_WORD_CONTEXT_PROMPT = """
-How is the word "{word}" used in the following context?
+DICT_EXPLAIN_GEMINI_PROMPT = """
+How is the word "{target_word}" used in the following context?
 Please explain it concisely in {lang_name}, taking the context into account.
 
 {summary_context}
@@ -52,14 +53,14 @@ Context:
 
 # Used in: backend/app/domain/features/word_analysis.py
 # フロントエンド表示: Dictionary.tsx (翻訳・解析結果の一部として表示)
-ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT = """Evaluate the meaning of the word "{word}" within the academic context below, and provide the most appropriate translation in {lang_name}.
+ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT = """Evaluate the meaning of the word "{target_word}" within the academic context below, and provide the most appropriate translation in {lang_name}.
 Keep it concise (1-3 words). Output ONLY the translation.
 
 [Academic Context]
 {context}
 
 [Target Word]
-{word}
+{target_word}
 
 [Output]
 Translation only in {lang_name}.
@@ -108,7 +109,7 @@ Output ONLY valid JSON. All text must be in {lang_name}.
 # Used in: backend/app/domain/features/summary/summary.py
 # フロントエンド表示: 直接の表示はなし（技術用語の翻訳用コンテキストとして内部利用）
 PAPER_SUMMARY_AI_CONTEXT_PROMPT = """
-Summarize the following paper text in Japanese within {max_length} characters.
+Summarize the following paper text in {lang_name} within {max_length} characters.
 Focus on key terminology and the main research topic to serve as context for technical term translation.
 
 [Paper Text]
@@ -140,6 +141,25 @@ Output in {lang_name}.
 # Review & Analysis Agents Prompts
 # ==========================================
 # 批判的レビュー、引用意図分析、著者ペルソナ作成、主張検証に使用
+
+# Used in: common/dspy/signatures.py (PaperRecommendation)
+# フロントエンド表示: 推薦タブなどで「AIによる推薦理由」として表示
+RECOMMENDATION_PAPER_PROMPT = """
+Based on the user's knowledge level, interests, and unknown concepts, recommend the next papers they should read.
+- Provide at least 3 recommended papers.
+- Generate at least 2 search queries for Semantic Scholar.
+- For beginner users, including survey papers is preferred.
+"""
+
+# Used in: common/dspy/signatures.py (UserProfileEstimation)
+# フロントエンド表示: 直接の表示はなし（推薦ロジックの内部データとして利用）
+RECOMMENDATION_USER_PROFILE_PROMPT = """
+Estimate the user's understanding, interests, and unknown concepts from their behavioral data.
+- Knowledge level (Beginner / Intermediate / Advanced)
+- Extract interesting topics
+- Identify concepts the user might not understand
+- Direction of recommendation (Deep dive / Broadening / Application / Fundamentals)
+"""
 
 # Used in: backend/app/domain/features/adversarial/adversarial.py
 # Used in: common/dspy/signatures.py (AdversarialCritique)
@@ -284,5 +304,3 @@ Based on the provided image and paper context, answer the user's question in {la
 
 Please provide a clear and easy-to-understand explanation in {lang_name}.
 """
-
-

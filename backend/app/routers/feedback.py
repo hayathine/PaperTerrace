@@ -31,6 +31,7 @@ async def submit_feedback(
         user_id=current_user_id,
         target_type=req.target_type,
         target_id=req.target_id,
+        trace_id=req.trace_id,
         user_score=req.user_score,  # 1 for Good, 0 for Bad
         user_comment=req.user_comment,
     )

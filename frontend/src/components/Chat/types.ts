@@ -4,6 +4,7 @@ export interface Message {
 	content: string;
 	timestamp: number;
 	grounding?: any;
+	traceId?: string;
 }
 
 export interface ChatResponse {

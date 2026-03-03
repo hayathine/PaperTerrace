@@ -103,6 +103,7 @@ class RecommendationService:
                 "interests": trajectory.interests,
                 "unknown_concepts": trajectory.unknown_concepts,
                 "preferred_direction": trajectory.preferred_direction,
+                "copy_events": trajectory.copy_events,
                 "last_db_sync": time.time(),
             }
 
@@ -124,6 +125,11 @@ class RecommendationService:
             existing_clicks = cached_data.get("word_clicks") or []
             existing_clicks.extend(clicks_data)
             cached_data["word_clicks"] = existing_clicks
+        if req.copy_events is not None:
+            copy_data = [c.dict() for c in req.copy_events]
+            existing_copies = cached_data.get("copy_events") or []
+            existing_copies.extend(copy_data)
+            cached_data["copy_events"] = existing_copies
         if req.session_duration is not None:
             cached_data["session_duration"] = req.session_duration
 
@@ -155,6 +161,7 @@ class RecommendationService:
             trajectory.interests = cached_data.get("interests")
             trajectory.unknown_concepts = cached_data.get("unknown_concepts")
             trajectory.preferred_direction = cached_data.get("preferred_direction")
+            trajectory.copy_events = cached_data.get("copy_events")
 
             repo.save(trajectory)
 
@@ -251,7 +258,7 @@ class RecommendationService:
             profile_mod = RecommendationService._get_profile_module()
 
             clicks_str = json.dumps(trajectory.word_clicks or [], ensure_ascii=False)
-            profile_res = trace_dspy_call(
+            profile_res, trace_id = trace_dspy_call(
                 "UserProfileModule",
                 "UserProfileEstimation",
                 profile_mod,
@@ -291,7 +298,7 @@ class RecommendationService:
             else str(unknown_concepts)
         )
 
-        rec_res = trace_dspy_call(
+        rec_res, trace_id = trace_dspy_call(
             "RecommendationModule",
             "PaperRecommendation",
             rec_mod,

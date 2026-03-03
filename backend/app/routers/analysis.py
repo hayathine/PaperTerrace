@@ -106,10 +106,10 @@ async def summarize(
         force=force,
     )
 
-    summary = await summary_service.summarize_full(
+    summary, trace_id = await summary_service.summarize_full(
         context, target_lang=lang, paper_id=paper_id, key_word=key_word
     )
-    return JSONResponse({"summary": summary})
+    return JSONResponse({"summary": summary, "trace_id": trace_id})
 
 
 # ============================================================================

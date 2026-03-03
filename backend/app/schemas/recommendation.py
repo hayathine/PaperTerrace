@@ -10,6 +10,13 @@ class WordClickEvent(BaseModel):
     timestamp: float
 
 
+class CopyEvent(BaseModel):
+    text: str
+    context: Optional[str] = None
+    target_type: str = "text"  # "text", "translation", "summary"
+    timestamp: float
+
+
 class RecommendationSyncRequest(BaseModel):
     session_id: str
     paper_id: Optional[str] = None
@@ -19,6 +26,7 @@ class RecommendationSyncRequest(BaseModel):
     paper_difficulty: Optional[str] = None
     conversation_history: Optional[str] = None
     word_clicks: Optional[List[WordClickEvent]] = None
+    copy_events: Optional[List[CopyEvent]] = None
     session_duration: Optional[float] = None
     is_final: bool = False
 

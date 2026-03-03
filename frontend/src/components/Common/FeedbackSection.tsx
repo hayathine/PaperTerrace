@@ -16,12 +16,14 @@ interface FeedbackSectionProps {
 		| "chat"
 		| "translation";
 	targetId?: string;
+	traceId?: string;
 }
 
 const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 	sessionId,
 	targetType,
 	targetId,
+	traceId,
 }) => {
 	const { t } = useTranslation();
 	const [status, setStatus] = useState<
@@ -40,6 +42,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 				session_id: sessionId,
 				target_type: targetType,
 				target_id: targetId,
+				trace_id: traceId,
 				user_score: currentScore,
 				user_comment: currentComment?.trim() || undefined,
 			});

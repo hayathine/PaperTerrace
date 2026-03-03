@@ -21,13 +21,15 @@ from app.providers.inference_client import (
     InferenceServiceTimeoutError,
 )
 from common.dspy.config import setup_dspy
-from common.dspy.modules import TranslationModule
+from common.dspy.modules import (
+    DeepExplanationModule,
+    SimpleTranslationModule,
+    TranslationModule,
+)
 from common.dspy.trace import TraceContext, trace_dspy_call
 from common.logger import ServiceLogger
 from common.prompts import (
     CORE_SYSTEM_PROMPT,
-    DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT,
-    DICT_TRANSLATE_WORD_SIMPLE_PROMPT,
 )
 
 log = ServiceLogger("Translation")
@@ -49,6 +51,7 @@ def build_dict_card_html(
     paper_id: str | None = None,
     show_deep_btn: bool = True,
     element_id: str | None = None,
+    trace_id: str | None = None,
 ) -> str:
     """辞書カードのHTMLレイアウトを構築します"""
     paper_param = f"&paper_id={paper_id}" if paper_id else ""
@@ -57,6 +60,18 @@ def build_dict_card_html(
     # JS safety: escape single quotes for word and lemma, backticks for translation
     js_word = word.replace("'", "\\'").replace('"', '\\"')
     js_translation = translation.replace("`", "\\`").replace("$", "\\$")
+
+    # Copy button
+    copy_logic = f"navigator.clipboard.writeText(`{js_translation}`)"
+    if trace_id:
+        copy_logic += f"; fetch('/api/dspy/trace/{trace_id}/copy', {{method: 'POST'}})"
+
+    copy_btn = f"""
+    <button onclick="{copy_logic}; this.innerHTML='COPIED'; setTimeout(()=>this.innerHTML='COPY', 1000)" 
+        class="p-1 px-2 text-[8px] font-black text-slate-400 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded transition-all uppercase tracking-wider">
+        COPY
+    </button>
+    """
 
     # 1. AI Re-translate Button (Lemma based)
     deep_btn = ""
@@ -135,6 +150,7 @@ def build_dict_card_html(
                 <div class="flex items-center gap-2 mb-0.5">
                     <span class="text-xs font-black text-slate-800 tracking-tight">{word}</span>
                     {source_label}
+                    {copy_btn}
                 </div>
                 <span class="text-[9px] font-bold text-slate-400 font-mono italic">lemma: {lemma}</span>
             </div>
@@ -381,7 +397,6 @@ async def explain(
 
     try:
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
-        provider = get_ai_provider()
 
         # Fetch paper summary context
         paper_context = ""
@@ -396,27 +411,35 @@ async def explain(
             paper_context += f"\n[Surrounding Context]\n...{context}...\n"
 
         is_phrase = " " in lemma.strip()
+        setup_dspy()
         if is_phrase:
-            prompt = DICT_TRANSLATE_PHRASE_CONTEXT_PROMPT.format(
-                paper_context=paper_context,
-                lang_name=lang_name,
-                original_word=original_word,
+            trans_mod = TranslationModule()
+            res, trace_id = trace_dspy_call(
+                "TranslationModule",
+                "ContextAwareTranslation",
+                trans_mod,
+                {
+                    "paper_context": paper_context,
+                    "target_word": original_word,
+                    "lang_name": lang_name,
+                },
+                context=TraceContext(paper_id=paper_id),
             )
+            translation = res.translation_and_explanation.strip()
         else:
-            prompt = DICT_TRANSLATE_WORD_SIMPLE_PROMPT.format(
-                paper_context=paper_context, lemma=lemma, lang_name=lang_name
+            simple_mod = SimpleTranslationModule()
+            res, trace_id = trace_dspy_call(
+                "SimpleTranslationModule",
+                "SimpleTranslation",
+                simple_mod,
+                {
+                    "paper_context": paper_context,
+                    "target_word": lemma,
+                    "lang_name": lang_name,
+                },
+                context=TraceContext(paper_id=paper_id),
             )
-
-        translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
-        translation = (
-            (
-                await provider.generate(
-                    prompt, model=translate_model, system_instruction=CORE_SYSTEM_PROMPT
-                )
-            )
-            .strip()
-            .strip("'\"")
-        )
+            translation = res.translation.strip()
 
         service.translation_cache[lemma] = translation
         service.word_cache[lemma] = False
@@ -428,6 +451,7 @@ async def explain(
                     "lemma": lemma,
                     "translation": translation,
                     "source": "Gemini",
+                    "trace_id": trace_id,
                     "element_id": element_id,
                 }
             )
@@ -450,6 +474,7 @@ async def explain(
                 lang,
                 paper_id,
                 element_id=element_id,
+                trace_id=trace_id,
             )
         )
     except Exception as e:
@@ -528,7 +553,7 @@ async def explain_deep(
         # DSPy version
         setup_dspy()
         trans_mod = TranslationModule()
-        res = trace_dspy_call(
+        res, trace_id = trace_dspy_call(
             "TranslationModule",
             "ContextAwareTranslation",
             trans_mod,
@@ -551,6 +576,7 @@ async def explain_deep(
                     "lemma": lemma,
                     "translation": translation,
                     "source": "Gemini",
+                    "trace_id": trace_id,
                     "element_id": element_id,
                 }
             )
@@ -574,6 +600,7 @@ async def explain_deep(
                 paper_id,
                 show_deep_btn=False,
                 element_id=element_id,
+                trace_id=trace_id,
             )
         )
     except Exception as e:
@@ -630,19 +657,21 @@ async def explain_with_context(req: ExplainContextRequest):
     try:
         # DSPy version
         setup_dspy()
-        trans_mod = TranslationModule()
-        res = trace_dspy_call(
-            "TranslationModule",
-            "ContextAwareTranslation",
-            trans_mod,
+        # DeepExplanation uses summary_context, context, word, lang_name
+        deep_mod = DeepExplanationModule()
+        res, trace_id = trace_dspy_call(
+            "DeepExplanationModule",
+            "DeepExplanation",
+            deep_mod,
             {
-                "paper_context": f"{summary_context}\n{req.context}",
-                "target_text": req.word,
+                "summary_context": summary_context,
+                "context": req.context,
+                "target_word": req.word,
                 "lang_name": lang_name,
             },
             context=TraceContext(paper_id=paper_id),
         )
-        explanation = res.translation_and_explanation
+        explanation = res.explanation
 
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(
@@ -659,6 +688,7 @@ async def explain_with_context(req: ExplainContextRequest):
                 "lemma": req.word,
                 "translation": explanation,
                 "source": "Gemini (Context)",
+                "trace_id": trace_id,
             }
         )
     except Exception as e:

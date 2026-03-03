@@ -8,6 +8,7 @@ const log = createLogger("ChatFeedback");
 interface ChatFeedbackProps {
 	sessionId: string;
 	messageId: string;
+	traceId?: string;
 }
 
 /**
@@ -17,6 +18,7 @@ interface ChatFeedbackProps {
 const ChatFeedback: React.FC<ChatFeedbackProps> = ({
 	sessionId,
 	messageId,
+	traceId,
 }) => {
 	const [score, setScore] = useState<number | null>(null);
 	const [isSubmitting, setIsSubmitting] = useState(false);
@@ -30,6 +32,7 @@ const ChatFeedback: React.FC<ChatFeedbackProps> = ({
 				session_id: sessionId,
 				target_type: "chat",
 				target_id: messageId,
+				trace_id: traceId,
 				user_score: newScore,
 			});
 		} catch (e) {

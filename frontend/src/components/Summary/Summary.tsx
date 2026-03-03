@@ -32,8 +32,14 @@ const Summary: React.FC<SummaryProps> = ({
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 	const [summaryData, setSummaryData] = useState<string | null>(null);
+	const [summaryTraceId, setSummaryTraceId] = useState<string | undefined>(
+		undefined,
+	);
 	const [critiqueData, setCritiqueData] = useState<CritiqueResponse | null>(
 		null,
+	);
+	const [critiqueTraceId, setCritiqueTraceId] = useState<string | undefined>(
+		undefined,
 	);
 
 	// Reset data when paperId changes
@@ -79,6 +85,7 @@ const Summary: React.FC<SummaryProps> = ({
 				const data = await res.json();
 				if (data.summary) {
 					setSummaryData(data.summary);
+					setSummaryTraceId(data.trace_id);
 					// Save to IndexedDB
 					if (paperId) {
 						getCachedPaper(paperId).then((cached) => {
@@ -140,6 +147,7 @@ const Summary: React.FC<SummaryProps> = ({
 			}
 			const data = await res.json();
 			setCritiqueData(data);
+			setCritiqueTraceId(data.trace_id);
 		} catch (e: any) {
 			setError(`Error: ${e.message}`);
 			log.error("handle_critique", "Critique generation failed", { error: e });
@@ -266,6 +274,7 @@ const Summary: React.FC<SummaryProps> = ({
 									sessionId={sessionId}
 									targetType="summary"
 									targetId={paperId || undefined}
+									traceId={summaryTraceId}
 								/>
 							</div>
 						)}
@@ -377,6 +386,7 @@ const Summary: React.FC<SummaryProps> = ({
 									sessionId={sessionId}
 									targetType="critique"
 									targetId={paperId || undefined}
+									traceId={critiqueTraceId}
 								/>
 							</div>
 						)}

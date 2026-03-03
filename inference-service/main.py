@@ -15,6 +15,7 @@ from fastapi import FastAPI, File, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
+from fastapi.responses import JSONResponse
 
 if os.getenv("USE_OPENVINO", "true").lower() == "true":
     from services.layout_detection.openvino_layout_service import (
@@ -121,22 +122,43 @@ async def ensure_initialized():
 
 
 # --------------------------------------------------
+# ライフサイクル管理
+# --------------------------------------------------
+
+
+@app.on_event("startup")
+async def startup_event():
+    # 環境変数 PRELOAD_MODELS=true の場合、バックグラウンドで直ちに初期化を開始
+    if os.getenv("PRELOAD_MODELS", "false").lower() == "true":
+        logger.info("PRELOAD_MODELS is enabled. Starting eager initialization...")
+        asyncio.create_task(ensure_initialized())
+
+
+# --------------------------------------------------
 # ヘルスチェック
 # --------------------------------------------------
 
 
 @app.get("/health")
-async def health_check():
+async def health_check(request: Request):
     gpu_status = "not_checked"
-    # Skip nvidia-smi if not found to avoid hanging or errors
-    # It's better to check for device presence more safely if needed
 
-    return {
-        "status": "healthy" if _initialized else "starting",
-        "initialized": _initialized,
-        "gpu": gpu_status,
-        "uptime_sec": None if not _init_started_at else time.time() - _init_started_at,
-    }
+    # 初期化が完了していない場合は 503 を返すことで、
+    # Kubernetes の Readiness Probe に「まだトラフィックを受けられない」と伝える
+    is_ready = _initialized
+    status_code = 200 if is_ready else 503
+
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "healthy" if is_ready else "starting",
+            "initialized": is_ready,
+            "gpu": gpu_status,
+            "uptime_sec": None
+            if not _init_started_at
+            else time.time() - _init_started_at,
+        },
+    )
 
 
 # --------------------------------------------------

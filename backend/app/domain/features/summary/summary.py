@@ -85,7 +85,7 @@ class SummaryService:
         paper_id: str | None = None,
         pdf_bytes: bytes | None = None,
         key_word: str | None = None,
-    ) -> str:
+    ) -> tuple[str, str | None]:
         """
         論文全体の包括的な要約を生成する。
         pdf_bytesが指定されている場合はPDF直接入力方式を使用。
@@ -96,7 +96,7 @@ class SummaryService:
             paper = self.storage.get_paper(paper_id)
             if paper and paper.get("full_summary"):
                 log.info("summarize_full", "Full summary cache HIT", paper_id=paper_id)
-                return paper["full_summary"]
+                return paper["full_summary"], None
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
@@ -187,7 +187,7 @@ class SummaryService:
                 )
 
                 # DSPy version
-                res = trace_dspy_call(
+                res, trace_id = trace_dspy_call(
                     "PaperSummaryModule",
                     "PaperSummary",
                     self.summary_mod,
@@ -241,14 +241,14 @@ class SummaryService:
                 self.storage.update_paper_full_summary(paper_id, formatted_text)
                 log.info("summarize_full", "Full summary cached", paper_id=paper_id)
 
-            return formatted_text
+            return formatted_text, locals().get("trace_id")
         except Exception as e:
             log.exception(
                 "summarize_full",
                 "Full summary generation failed",
                 text_length=len(text) if text else 0,
             )
-            return f"要約の生成に失敗しました: {str(e)}"
+            return f"要約の生成に失敗しました: {str(e)}", None
 
     async def summarize_sections(
         self, text: str, target_lang: str = "ja", paper_id: str | None = None
@@ -290,7 +290,7 @@ class SummaryService:
             )
             # DSPy version
 
-            res = trace_dspy_call(
+            res, trace_id = trace_dspy_call(
                 "SectionSummaryModule",
                 "PaperSummarySections",
                 self.section_mod,
@@ -323,13 +323,13 @@ class SummaryService:
                     "summarize_sections", "Section summary cached", paper_id=paper_id
                 )
 
-            return sections
+            return sections, trace_id
         except Exception as e:
             log.exception(
                 "summarize_sections",
                 "Section summary failed",
             )
-            return [{"section": "Error", "summary": f"要約生成に失敗: {e}"}]
+            return [{"section": "Error", "summary": f"要約生成に失敗: {e}"}], "error"
 
     async def summarize_abstract(self, text: str, target_lang: str = "ja") -> str:
         """
@@ -383,7 +383,7 @@ class SummaryService:
         """
         try:
             # DSPy version
-            res = trace_dspy_call(
+            res, trace_id = trace_dspy_call(
                 "ContextSummaryModule",
                 "PaperSummaryContext",
                 self.context_mod,

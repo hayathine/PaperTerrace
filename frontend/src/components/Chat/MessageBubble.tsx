@@ -104,7 +104,11 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 			</div>
 			{!isUser && (
 				<div className="opacity-0 group-hover/row:opacity-100 transition-opacity duration-150">
-					<ChatFeedback sessionId={sessionId} messageId={message.id} />
+					<ChatFeedback
+						sessionId={sessionId}
+						messageId={message.id}
+						traceId={message.traceId}
+					/>
 				</div>
 			)}
 		</div>

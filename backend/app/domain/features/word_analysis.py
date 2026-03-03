@@ -3,11 +3,10 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.providers import RedisService, get_ai_provider
 from app.providers.dictionary_provider import get_dictionary_provider
+from common.dspy.config import setup_dspy
+from common.dspy.modules import WordTranslationModule
+from common.dspy.trace import trace_dspy_call
 from common.logger import ServiceLogger
-from common.prompts import (
-    ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT,
-    CORE_SYSTEM_PROMPT,
-)
 from common.utils.text import truncate_context
 
 from .correspondence_lang_dict import SUPPORTED_LANGUAGES
@@ -76,17 +75,20 @@ class WordAnalysisService:
         truncated = truncate_context(context, word, max_context_length)
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
-        prompt = ANALYSIS_WORD_TRANSLATE_CONTEXT_PROMPT.format(
-            word=word, context=truncated, lang_name=lang_name
-        )
-
         try:
-            translation = await self.ai_provider.generate(
-                prompt,
-                model=self.translate_model,
-                system_instruction=CORE_SYSTEM_PROMPT,
+            setup_dspy()
+            trans_mod = WordTranslationModule()
+            res, trace_id = trace_dspy_call(
+                "WordTranslationModule",
+                "WordTranslationInContext",
+                trans_mod,
+                {
+                    "target_word": word,
+                    "context": truncated,
+                    "lang_name": lang_name,
+                },
             )
-            translation = translation.strip()
+            translation = res.translation.strip()
 
             self.translation_cache[word] = translation
             self.redis.set(f"trans:{lang}:{word}", translation, expire=604800)
@@ -95,6 +97,7 @@ class WordAnalysisService:
                 "word": word,
                 "translation": translation,
                 "source": "Gemini (Context)",
+                "trace_id": trace_id,
             }
         except Exception as e:
             log.error(

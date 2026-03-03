@@ -4,12 +4,15 @@ from common.dspy.signatures import (
     AdversarialCritique,
     ChatGeneral,
     ContextAwareTranslation,
+    DeepExplanation,
     PaperRecommendation,
     PaperSummary,
     PaperSummaryContext,
     PaperSummarySections,
+    SimpleTranslation,
     UserProfileEstimation,
     VisionAnalyzeFigure,
+    WordTranslationInContext,
 )
 
 
@@ -98,9 +101,36 @@ class TranslationModule(dspy.Module):
         super().__init__()
         self.translate = dspy.Predict(ContextAwareTranslation)
 
-    def forward(self, paper_context: str, target_text: str, lang_name: str):
+    def forward(self, paper_context: str, target_word: str, lang_name: str):
         return self.translate(
-            paper_context=paper_context, target_text=target_text, lang_name=lang_name
+            paper_context=paper_context, target_word=target_word, lang_name=lang_name
+        )
+
+
+class SimpleTranslationModule(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.translate = dspy.Predict(SimpleTranslation)
+
+    def forward(self, paper_context: str, target_word: str, lang_name: str):
+        return self.translate(
+            paper_context=paper_context, target_word=target_word, lang_name=lang_name
+        )
+
+
+class DeepExplanationModule(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.explain = dspy.Predict(DeepExplanation)
+
+    def forward(
+        self, summary_context: str, context: str, target_word: str, lang_name: str
+    ):
+        return self.explain(
+            summary_context=summary_context,
+            context=context,
+            target_word=target_word,
+            lang_name=lang_name,
         )
 
 
@@ -141,3 +171,14 @@ class ContextSummaryModule(dspy.Module):
 
     def forward(self, paper_text: str, max_length: int):
         return self.summarize(paper_text=paper_text, max_length=max_length)
+
+
+class WordTranslationModule(dspy.Module):
+    def __init__(self):
+        super().__init__()
+        self.translate = dspy.Predict(WordTranslationInContext)
+
+    def forward(self, target_word: str, context: str, lang_name: str):
+        return self.translate(
+            target_word=target_word, context=context, lang_name=lang_name
+        )
