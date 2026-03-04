@@ -155,6 +155,40 @@ def configure_logging(log_level: str = "INFO"):
     # 静的ファイルアクセスログの設定（環境変数で制御）
     access_log_level = os.getenv("ACCESS_LOG_LEVEL", "WARNING").upper()
 
+    # サードパーティライブラリのデバッグログを抑制（アプリのLOG_LEVELに関係なくWARNING以上のみ）
+    noisy_loggers = [
+        # PDF処理
+        "pdfminer",
+        "pdfminer.pdfdocument",
+        "pdfminer.pdfparser",
+        "pdfminer.pdfpage",
+        "pdfminer.pdfinterp",
+        "pdfminer.converter",
+        "pdfminer.cmapdb",
+        "pdfminer.layout",
+        # HTTP通信
+        "urllib3",
+        "urllib3.connectionpool",
+        "urllib3.util.retry",
+        "requests",
+        # Google Cloud
+        "google.auth",
+        "google.auth.transport",
+        "google.cloud",
+        "google.cloud.storage",
+        "google.api_core",
+        "googleapiclient",
+        # その他
+        "PIL",
+        "charset_normalizer",
+        "asyncio",
+        "multipart",
+        "aiohttp",
+        "grpc",
+    ]
+    for noisy_logger_name in noisy_loggers:
+        logging.getLogger(noisy_logger_name).setLevel(logging.WARNING)
+
     # 設定されたログレベルを出力
     print(
         f"Logging configured: level={env_log_level}, access_log={access_log_level}",

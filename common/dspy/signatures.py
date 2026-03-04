@@ -39,6 +39,12 @@ def clean_prompt_for_dspy(prompt_str: str) -> str:
     cleaned = cleaned.replace("{table_text}", "the table text")
     cleaned = cleaned.replace("{paragraph}", "the paragraph text")
     cleaned = cleaned.replace("{target_word}", "the target word")
+    # paper_context は DSPy InputField として動的に渡されるため、
+    # テンプレート文字列をプロンプト冒頭の自然な指示文に置換する
+    cleaned = cleaned.replace(
+        "{paper_context}",
+        "Use the provided academic paper context (surrounding sentences and/or paper summary) for accurate translation.",
+    )
 
     # Core Promptを結合して、安定した品質のベースラインとする
     return f"{CORE_SYSTEM_PROMPT}\n\n[Task Instructions]\n{cleaned}".strip()
@@ -195,8 +201,10 @@ class UserProfileEstimation(dspy.Signature):
 class ContextAwareTranslation(dspy.Signature):
     __doc__ = clean_prompt_for_dspy(DICT_TRANSLATE_QWEN_PROMPT)
 
-    paper_context: str = dspy.InputField(desc="Academic context or summary")
-    target_word: str = dspy.InputField(desc="Target word or phrase")
+    paper_context: str = dspy.InputField(
+        desc="Academic paper context including surrounding sentences around the target word (paper summary and/or nearby text excerpt)"
+    )
+    target_word: str = dspy.InputField(desc="Target word or phrase to translate")
     lang_name: str = dspy.InputField(desc="Target language (e.g., Japanese)")
     translation_and_explanation: str = dspy.OutputField(
         desc="Translation and context-aware explanation"

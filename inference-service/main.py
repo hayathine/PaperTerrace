@@ -212,9 +212,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
             if hasattr(layout_service, "engine"):
                 logger.info(f"Using {layout_service.engine} for layout analysis")
 
-            results = await run_in_threadpool(
-                layout_service.analyze_image, str(temp_path)
-            )
+            results = await layout_service.analyze_image(str(temp_path))
 
             serializable = [
                 {
@@ -286,8 +284,8 @@ if INFERENCE_TYPE in ["all", "layout"]:
 
                 # 一括解析を実行
                 if hasattr(layout_service, "analyze_images_batch"):
-                    batch_results = await run_in_threadpool(
-                        layout_service.analyze_images_batch, temp_paths
+                    batch_results = await layout_service.analyze_images_batch(
+                        temp_paths
                     )
                 else:
                     # フォールバック

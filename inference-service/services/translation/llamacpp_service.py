@@ -5,6 +5,7 @@ import re
 import types
 from typing import Any, Optional
 
+import dspy
 from llama_cpp import Llama
 
 logger = logging.getLogger(__name__)
@@ -106,8 +107,6 @@ class LlamaCppTranslationService:
         if self.llm is None:
             return "Error: LLM service is not initialized."
 
-        import dspy
-
         from common.dspy.signatures import ContextAwareTranslation
 
         class InMemoryLlama(dspy.BaseLM):
@@ -130,15 +129,8 @@ class LlamaCppTranslationService:
                 messages: list[dict] | None = None,
                 **kwargs,
             ) -> Any:
-                # Build messages with a fixed system prompt
-                system_msg = {
-                    "role": "system",
-                    "content": "You are an expert academic research assistant. Never output markdown formatting for JSON, act directly.",
-                }
-                chat_messages = [
-                    system_msg,
-                    *(messages or [{"role": "user", "content": prompt or ""}]),
-                ]
+                # Use messages if provided by ChatAdapter, otherwise fallback to wrapping prompt
+                chat_messages = messages or [{"role": "user", "content": prompt or ""}]
 
                 logger.debug(f"LLM 推論開始: messages_count={len(chat_messages)}")
                 if len(chat_messages) > 0:
@@ -193,8 +185,13 @@ class LlamaCppTranslationService:
             # the latter modifies global state and DSPy forbids it from non-main threads.
             def _run_dspy():
                 logger.debug("DSPy 推論スレッド開始 (executor内)")
-                with dspy.context(lm=InMemoryLlama(self.llm, self.max_tokens)):
+                lm = InMemoryLlama(self.llm, self.max_tokens)
+                # Use ChatAdapter to properly handle system prompts from Signatures
+                with dspy.context(lm=lm, adapter=dspy.ChatAdapter()):
                     logger.debug("DSPy predictor 初期化中...")
+                    logger.debug(
+                        f"コンテキスト確認: paper_context 先頭200文字 = {paper_context[:200]!r}"
+                    )
                     predictor = dspy.Predict(ContextAwareTranslation)
                     logger.debug("DSPy predictor 実行中...")
                     prediction = predictor(

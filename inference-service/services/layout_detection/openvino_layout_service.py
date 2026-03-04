@@ -143,13 +143,13 @@ class OpenVINOLayoutAnalysisService:
             logger.error(f"Failed to initialize OpenVINOLayoutAnalysisService: {e}")
             self.compiled_model = None
 
-    def analyze_image(
+    async def analyze_image(
         self, image_path: str | Path, target_classes: list[str] | None = None
     ) -> list[LayoutItem]:
-        results = self.analyze_images_batch([image_path], target_classes)
+        results = await self.analyze_images_batch([image_path], target_classes)
         return results[0]
 
-    def analyze_images_batch(
+    async def analyze_images_batch(
         self, image_paths: list[str | Path], target_classes: list[str] | None = None
     ) -> list[list[LayoutItem]]:
         if self.compiled_model is None:
@@ -176,25 +176,13 @@ class OpenVINOLayoutAnalysisService:
                 for path in image_paths
             ]
 
-            # 2. Batch inference
-            # We need to reshape the model if the batch size is different?
-            # Static batching is faster so we'll just loop or use multiple requests if available
-            # However, for simplicity and since OpenVINO handles streams, we can use the request pool
-
-            async def _process_parallel():
-                tasks = []
-                for i, (img, im_shape, scale_factor, _, _) in enumerate(
-                    preprocessed_list
-                ):
-                    tasks.append(
-                        asyncio.to_thread(self._inference, img, scale_factor, im_shape)
-                    )
-                return await asyncio.gather(*tasks)
-
-            # Use simple loop with inference requests as it's already using OPTIMAL_NUMBER_OF_INFER_REQUESTS
-            all_outputs = []
-            for img, im_shape, scale_factor, _, _ in preprocessed_list:
-                all_outputs.append(self._inference(img, scale_factor, im_shape))
+            # 2. Parallel batch inference using asyncio.gather
+            # OPTIMAL_NUMBER_OF_INFER_REQUESTS 分のリクエストプールを活用して並列推論
+            tasks = [
+                asyncio.to_thread(self._inference, img, scale_factor, im_shape)
+                for img, im_shape, scale_factor, _, _ in preprocessed_list
+            ]
+            all_outputs = await asyncio.gather(*tasks)
 
             # 3. Postprocess
             batch_results = []

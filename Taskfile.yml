@@ -242,11 +242,40 @@ tasks:
         echo "❌ Cloud SQL did not become RUNNABLE"
         exit 1
 
+  db:proxy:
+    desc: "Port-forward Cloud SQL Proxy to localhost:15432 (run in a separate terminal)"
+    cmds:
+      - echo "🔌 Forwarding cloud-sql-proxy → localhost:15432 (Ctrl+C to stop)"
+      - kubectl port-forward svc/cloud-sql-proxy 15432:5432 -n {{.NAMESPACE}}
+
   db:migrate:
-    desc: "Run database migrations"
+    desc: "Run database migrations (auto port-forward if DATABASE_URL_LOCAL is set)"
     cmds:
       - echo "🔄 Running database migrations..."
-      - uv run --directory backend alembic upgrade head
+      - |
+        if [ -n "$DATABASE_URL_LOCAL" ]; then
+          echo "🔌 Using DATABASE_URL_LOCAL: starting kubectl port-forward..."
+          kubectl port-forward svc/cloud-sql-proxy 15432:5432 -n {{.NAMESPACE}} &
+          PROXY_PID=$!
+          echo "   Port-forward PID: $PROXY_PID"
+          sleep 3
+          DATABASE_URL="$DATABASE_URL_LOCAL" uv run --directory backend alembic upgrade head
+          EXIT_CODE=$?
+          kill $PROXY_PID 2>/dev/null
+          wait $PROXY_PID 2>/dev/null
+          echo "🔌 Port-forward stopped"
+          exit $EXIT_CODE
+        else
+          echo "⚠️  DATABASE_URL_LOCAL not set — connecting directly via DATABASE_URL"
+          echo "   (This works inside Kubernetes but likely fails locally)"
+          uv run --directory backend alembic upgrade head
+        fi
+
+  db:migrate:k8s:
+    desc: "Run migrations directly from inside the running backend pod (k8s only)"
+    cmds:
+      - echo "🔄 Running migrations inside backend pod..."
+      - kubectl exec -n {{.NAMESPACE}} deployment/backend -- uv run --directory backend alembic upgrade head
 
   # ============================================================================
   # Staging Environment Tasks

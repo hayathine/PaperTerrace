@@ -95,9 +95,13 @@ class TokenizationService:
 
                 paper_param = f"&paper_id={paper_id}" if paper_id else ""
                 token_id = f"{unique_id}-{j}"
+                # hx-vals を使い、クリック時にスパンが属する段落のテキストを context として渡す。
+                # JS 式でクリック要素の最近接 .paragraph-container のテキストを取得し、
+                # 先頭 800 文字に制限してコンテキスト過大によるURL肥大化を防ぐ。
                 p_tokens_html.append(
                     f'<span id="{token_id}" class="cursor-pointer border-b transition-colors {color}'
                     f'" hx-get="/explain/{lemma}?lang={lang}{paper_param}&element_id={token_id}" hx-trigger="click" '
+                    f'hx-vals=\'js:{{context: (document.getElementById("{token_id}").closest(".paragraph-container, p") || document.getElementById("{token_id}").parentElement)?.innerText?.slice(0, 800) || ""}}\' '
                     f'hx-indicator="#dict-loading" '
                     f'hx-target="#dict-stack" hx-swap="afterbegin">{token.text}</span>{whitespace}'
                 )
