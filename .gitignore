@@ -21,12 +21,7 @@ config.ts
 # C extensions
 *.so
 # local-files/
-local-files/secrets/
-local-files/logs/
-local-files/.agents/
-local-files/.claude/
-local-files/.kiro/
-local-files/*.db
+local-files/
 .claude
 # local
 *.toml
