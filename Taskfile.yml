@@ -477,7 +477,7 @@ tasks:
   cf:workers:deploy:
     desc: "Deploy Cloudflare Workers"
     cmds:
-      - cd cloudflare-workers && npx wrangler deploy --env {{.ENV}}
+      - cd local-files/cloudflare-workers && npx wrangler deploy --env {{.ENV}}
 
   cf:pages:deploy:
     desc: "Deploy frontend to Cloudflare Pages"

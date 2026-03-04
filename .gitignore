@@ -7,7 +7,7 @@ scripts/
 infrastructure/k8s/
 .testmondata
 .testmondata*
-cloudflare-workers/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]
