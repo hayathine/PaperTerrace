@@ -637,7 +637,10 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					content
 				) : (
 					<div className="p-4">
-						<FigureInsight selectedFigure={selectedFigure} />
+						<FigureInsight
+							selectedFigure={selectedFigure}
+							sessionId={sessionId}
+						/>
 					</div>
 				)}
 			</div>

@@ -14,7 +14,8 @@ interface FeedbackSectionProps {
 		| "critique"
 		| "related_papers"
 		| "chat"
-		| "translation";
+		| "translation"
+		| "figure_insight";
 	targetId?: string;
 	traceId?: string;
 }

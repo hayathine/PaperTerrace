@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { API_URL } from "@/config";
 import { createLogger } from "@/lib/logger";
 import CopyButton from "../Common/CopyButton";
+import FeedbackSection from "../Common/FeedbackSection";
 import MarkdownContent from "../Common/MarkdownContent";
 import type { SelectedFigure } from "../PDF/types";
 
@@ -9,31 +10,75 @@ const log = createLogger("FigureInsight");
 
 interface FigureInsightProps {
 	selectedFigure?: SelectedFigure | null;
+	sessionId: string;
 }
 
-const FigureInsight: React.FC<FigureInsightProps> = ({ selectedFigure }) => {
-	const [explanation, setExplanation] = useState<string | null>(null);
-	const [isLoading, setIsLoading] = useState(false);
-	const [zoomedImage, setZoomedImage] = useState<string | null>(null);
-	// 重複リクエスト防止: 処理中の figure ID を追跡する
-	const requestingIdRef = useRef<string | null>(null);
+interface FigureResult {
+	figure: SelectedFigure;
+	explanation: string | null;
+	isLoading: boolean;
+	error: string | null;
+	traceId?: string;
+}
 
-	// 図が切り替わったら解説をリセットし、IDがあれば自動でAI解析を開始する
+const FigureInsight: React.FC<FigureInsightProps> = ({
+	selectedFigure,
+	sessionId,
+}) => {
+	// スタックされた解析済み図表の配列（新しいものが先頭）
+	const [stack, setStack] = useState<FigureResult[]>([]);
+	const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+
+	// 重複リクエスト防止: 処理中の figure ID を追跡する
+	const requestingFigureIdsRef = useRef<Set<string>>(new Set());
+	// 解析済み figure ID のキャッシュ（タブ切り替えによる再取得を防ぐ）
+	const analyzedFigureIdsRef = useRef<Set<string>>(new Set());
+
+	/**
+	 * selectedFigure が変化したとき、まだ解析していない図であれば
+	 * スタックに追加してAPIを呼び出す。
+	 * 既に解析済みの場合はAPIを呼ばない。
+	 */
 	useEffect(() => {
-		setExplanation(null);
+		if (!selectedFigure) return;
+
 		const figureId =
-			selectedFigure?.id || (selectedFigure?.image_url ? "transient" : null);
+			selectedFigure.id ||
+			(selectedFigure.image_url
+				? `transient-${selectedFigure.image_url}`
+				: null);
 		if (!figureId) return;
 
-		if (requestingIdRef.current === figureId) return;
-		requestingIdRef.current = figureId;
+		// 既に解析済み or 現在リクエスト中の場合はスキップ
+		if (
+			analyzedFigureIdsRef.current.has(figureId) ||
+			requestingFigureIdsRef.current.has(figureId)
+		) {
+			return;
+		}
 
-		setIsLoading(true);
+		// スタックに「ローディング中」の要素を追加
+		const newEntry: FigureResult = {
+			figure: selectedFigure,
+			explanation: null,
+			isLoading: true,
+			error: null,
+		};
 
-		fetch(`${API_URL}/api/figures/${figureId}/explain`, {
+		setStack((prev) => {
+			// 同じ figureId が既にスタックにある場合は重複追加しない
+			if (prev.some((r) => getFigureId(r.figure) === figureId)) {
+				return prev;
+			}
+			return [newEntry, ...prev];
+		});
+
+		requestingFigureIdsRef.current.add(figureId);
+
+		const idForApi = selectedFigure.id || "transient";
+		fetch(`${API_URL}/api/figures/${idForApi}/explain`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			// DBに存在しないトランジェントfigureのために image_url を渡す
 			body: JSON.stringify({ image_url: selectedFigure?.image_url }),
 		})
 			.then(async (res) => {
@@ -46,26 +91,59 @@ const FigureInsight: React.FC<FigureInsightProps> = ({ selectedFigure }) => {
 					status: res.status,
 					detail,
 				});
-				setExplanation(`図の解析に失敗しました (${detail})`);
+				setStack((prev) =>
+					prev.map((r) =>
+						getFigureId(r.figure) === figureId
+							? {
+									...r,
+									isLoading: false,
+									error: `図の解析に失敗しました (${detail})`,
+								}
+							: r,
+					),
+				);
 				return null;
 			})
 			.then((data) => {
-				if (data) setExplanation(data.explanation ?? null);
+				if (data) {
+					setStack((prev) =>
+						prev.map((r) =>
+							getFigureId(r.figure) === figureId
+								? {
+										...r,
+										isLoading: false,
+										explanation: data.explanation ?? null,
+										traceId: data.trace_id,
+									}
+								: r,
+						),
+					);
+					analyzedFigureIdsRef.current.add(figureId);
+				}
 			})
 			.catch((e) => {
 				log.error("handle_explain", "Failed to explain figure", {
 					figureId,
 					error: e,
 				});
-				setExplanation("図の解析に失敗しました (ネットワークエラー)");
+				setStack((prev) =>
+					prev.map((r) =>
+						getFigureId(r.figure) === figureId
+							? {
+									...r,
+									isLoading: false,
+									error: "図の解析に失敗しました (ネットワークエラー)",
+								}
+							: r,
+					),
+				);
 			})
 			.finally(() => {
-				setIsLoading(false);
-				requestingIdRef.current = null;
+				requestingFigureIdsRef.current.delete(figureId);
 			});
-	}, [selectedFigure?.id]);
+	}, [selectedFigure?.id, selectedFigure?.image_url]); // selectedFigure が変わったときだけ発動
 
-	if (!selectedFigure) {
+	if (!selectedFigure && stack.length === 0) {
 		return (
 			<div className="text-center py-16 px-6">
 				<div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4 border border-slate-100">
@@ -94,86 +172,34 @@ const FigureInsight: React.FC<FigureInsightProps> = ({ selectedFigure }) => {
 	}
 
 	return (
-		<div className="relative">
-			{/* 選択された図 */}
-			<div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
-				{/* 画像エリア */}
-				<button
-					type="button"
-					onClick={() =>
-						selectedFigure.image_url && setZoomedImage(selectedFigure.image_url)
-					}
-					className="relative w-full bg-slate-100 aspect-video flex items-center justify-center overflow-hidden border-b border-slate-100 cursor-zoom-in group/img border-none p-0"
-				>
-					<img
-						src={
-							selectedFigure.image_url.startsWith("http")
-								? selectedFigure.image_url
-								: `${API_URL}${selectedFigure.image_url}`
-						}
-						alt={`Figure on page ${selectedFigure.page_number}`}
-						className="max-w-full max-h-full object-contain transition-transform group-hover/img:scale-105"
-					/>
-					<div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/5 transition-colors flex items-center justify-center">
-						<div className="opacity-0 group-hover/img:opacity-100 transition-opacity bg-white/90 p-2 rounded-full shadow-lg text-orange-600">
-							<svg
-								className="w-5 h-5"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth="2"
-									d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
-								/>
-							</svg>
-						</div>
-					</div>
-					<div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm">
-						P.{selectedFigure.page_number}
-					</div>
-					{selectedFigure.label && selectedFigure.label !== "image" && (
-						<div className="absolute top-2 right-2 bg-orange-600/80 text-white text-[9px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm uppercase">
-							{selectedFigure.label}
-						</div>
-					)}
-				</button>
-
-				{/* キャプション */}
-				{selectedFigure.caption && (
-					<p className="px-4 pt-3 text-[10px] text-slate-500 leading-relaxed border-b border-slate-100 pb-3">
-						{selectedFigure.caption}
-					</p>
-				)}
-
-				{/* 解説エリア */}
-				<div className="p-4">
-					{isLoading ? (
-						<div className="flex items-center justify-center gap-2 py-4 text-orange-600">
-							<div className="w-3.5 h-3.5 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin" />
-							<span className="text-[11px] font-bold">AIが解析中...</span>
-						</div>
-					) : explanation ? (
-						<div className="text-xs text-slate-600 leading-relaxed">
-							<div className="flex justify-between items-center mb-1">
-								<span className="font-bold text-orange-600 text-[10px] uppercase tracking-wider">
-									Analysis
-								</span>
-								<CopyButton text={explanation} size={12} />
-							</div>
-							<MarkdownContent className="prose prose-xs max-w-none text-xs text-slate-600 leading-relaxed">
-								{explanation}
-							</MarkdownContent>
-						</div>
-					) : (
-						<p className="text-center text-[10px] text-slate-400 py-2">
-							解析結果はありません
-						</p>
-					)}
+		<div className="relative space-y-4">
+			{stack.length > 1 && (
+				<div className="flex items-center justify-between mb-1">
+					<span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+						{stack.length}件の図解
+					</span>
+					<button
+						type="button"
+						onClick={() => {
+							setStack([]);
+							analyzedFigureIdsRef.current.clear();
+						}}
+						className="text-[10px] text-slate-400 hover:text-rose-500 transition-colors font-bold uppercase tracking-wider"
+					>
+						すべてクリア
+					</button>
 				</div>
-			</div>
+			)}
+
+			{stack.map((result, idx) => (
+				<FigureCard
+					key={getFigureId(result.figure) || idx}
+					result={result}
+					isLatest={idx === 0}
+					sessionId={sessionId}
+					onZoom={(url) => setZoomedImage(url)}
+				/>
+			))}
 
 			{/* Zoom Modal */}
 			{zoomedImage && (
@@ -221,6 +247,156 @@ const FigureInsight: React.FC<FigureInsightProps> = ({ selectedFigure }) => {
 						/>
 					</div>
 				</button>
+			)}
+		</div>
+	);
+};
+
+// ------- Helper -------
+
+function getFigureId(figure: SelectedFigure): string {
+	return figure.id || `transient-${figure.image_url}`;
+}
+
+interface FigureCardProps {
+	result: FigureResult;
+	isLatest: boolean;
+	sessionId: string;
+	onZoom: (url: string) => void;
+}
+
+const FigureCard: React.FC<FigureCardProps> = ({
+	result,
+	isLatest,
+	sessionId,
+	onZoom,
+}) => {
+	const { figure, explanation, isLoading, error, traceId } = result;
+	const [collapsed, setCollapsed] = useState(!isLatest);
+
+	return (
+		<div
+			className={`bg-white rounded-xl shadow-sm border overflow-hidden transition-all ${
+				isLatest ? "border-orange-200 shadow-orange-100/50" : "border-slate-200"
+			}`}
+		>
+			{/* 画像エリア */}
+			<button
+				type="button"
+				onClick={() => figure.image_url && onZoom(figure.image_url)}
+				className="relative w-full bg-slate-100 aspect-video flex items-center justify-center overflow-hidden border-b border-slate-100 cursor-zoom-in group/img border-none p-0"
+			>
+				<img
+					src={
+						figure.image_url.startsWith("http")
+							? figure.image_url
+							: `${API_URL}${figure.image_url}`
+					}
+					alt={`Figure on page ${figure.page_number}`}
+					className="max-w-full max-h-full object-contain transition-transform group-hover/img:scale-105"
+				/>
+				<div className="absolute inset-0 bg-black/0 group-hover/img:bg-black/5 transition-colors flex items-center justify-center">
+					<div className="opacity-0 group-hover/img:opacity-100 transition-opacity bg-white/90 p-2 rounded-full shadow-lg text-orange-600">
+						<svg
+							className="w-5 h-5"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth="2"
+								d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0zM10 7v3m0 0v3m0-3h3m-3 0H7"
+							/>
+						</svg>
+					</div>
+				</div>
+				<div className="absolute top-2 left-2 bg-black/60 text-white text-[10px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm">
+					P.{figure.page_number}
+				</div>
+				{figure.label && figure.label !== "image" && (
+					<div className="absolute top-2 right-2 bg-orange-600/80 text-white text-[9px] font-bold px-2 py-0.5 rounded-full backdrop-blur-sm uppercase">
+						{figure.label}
+					</div>
+				)}
+			</button>
+
+			{/* キャプション */}
+			{figure.caption && (
+				<p className="px-4 pt-3 text-[10px] text-slate-500 leading-relaxed border-b border-slate-100 pb-3">
+					{figure.caption}
+				</p>
+			)}
+
+			{/* 解説ヘッダー（折りたたみトグル） */}
+			<button
+				type="button"
+				className="w-full flex items-center justify-between px-4 py-2 bg-slate-50/50 hover:bg-slate-50 transition-colors border-none text-left"
+				onClick={() => setCollapsed((c) => !c)}
+			>
+				<span className="text-[10px] font-bold text-orange-600 uppercase tracking-wider">
+					{isLoading ? (
+						<span className="flex items-center gap-1.5">
+							<span className="w-3 h-3 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin inline-block" />
+							AIが解析中...
+						</span>
+					) : (
+						"Analysis"
+					)}
+				</span>
+				{!isLoading && (
+					<svg
+						className={`w-4 h-4 text-slate-400 transition-transform ${collapsed ? "" : "rotate-180"}`}
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth="2"
+							d="M19 9l-7 7-7-7"
+						/>
+					</svg>
+				)}
+			</button>
+
+			{/* 解説エリア（折りたたみ可能） */}
+			{!collapsed && (
+				<div className="p-4">
+					{isLoading ? (
+						<div className="flex items-center justify-center gap-2 py-4 text-orange-600">
+							<div className="w-3.5 h-3.5 border-2 border-orange-300 border-t-orange-600 rounded-full animate-spin" />
+							<span className="text-[11px] font-bold">AIが解析中...</span>
+						</div>
+					) : error ? (
+						<p className="text-center text-[10px] text-rose-500 py-2">
+							{error}
+						</p>
+					) : explanation ? (
+						<>
+							<div className="flex justify-end mb-1">
+								<CopyButton text={explanation} size={12} />
+							</div>
+							<MarkdownContent className="prose prose-xs max-w-none text-xs text-slate-600 leading-relaxed">
+								{explanation}
+							</MarkdownContent>
+
+							{/* フィードバック */}
+							<FeedbackSection
+								sessionId={sessionId}
+								targetType="figure_insight"
+								targetId={getFigureId(figure)}
+								traceId={traceId}
+							/>
+						</>
+					) : (
+						<p className="text-center text-[10px] text-slate-400 py-2">
+							解析結果はありません
+						</p>
+					)}
+				</div>
 			)}
 		</div>
 	);

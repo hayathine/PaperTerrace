@@ -32,7 +32,7 @@ Your goal is to help users understand complex academic papers, translate technic
 DICT_TRANSLATE_QWEN_PROMPT = """{paper_context}
 Based on the context above, translate the following English text into {lang_name}.
 {target_word}
-Output the translation and intuitive explanation in short sentences(20-50 characters)."""
+Output the translation and intuitive explanation in short sentences(50 -100 characters)."""
 
 # Used in: backend/app/routers/translation.py
 # フロントエンド表示: Dictionary.tsx (単語クリック時の簡易翻訳として表示)

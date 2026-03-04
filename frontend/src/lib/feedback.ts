@@ -11,7 +11,8 @@ export interface FeedbackPayload {
 		| "critique"
 		| "related_papers"
 		| "chat"
-		| "translation";
+		| "translation"
+		| "figure_insight";
 	target_id?: string;
 	trace_id?: string;
 	user_score?: number; // 1 for Good, 0 for Bad
