@@ -227,7 +227,10 @@ class InferenceServiceClient:
             raise
 
     async def analyze_images_batch(
-        self, images: list[bytes], max_batch_size: int = 10
+        self,
+        images: list[bytes],
+        page_nums: list[int] | None = None,
+        max_batch_size: int = 10,
     ) -> list[list[dict[str, Any]]]:
         """
         複数画像を一括で解析（バッチ処理）
@@ -257,10 +260,10 @@ class InferenceServiceClient:
                 batch = images[i : i + max_batch_size]
 
                 # multipart/form-dataで複数画像を送信
-                files = [
-                    ("files", (f"image_{j}.jpg", img, "image/jpeg"))
-                    for j, img in enumerate(batch)
-                ]
+                files = []
+                for j, img in enumerate(batch):
+                    page_num = page_nums[i + j] if page_nums else j
+                    files.append(("files", (f"page_{page_num}.jpg", img, "image/jpeg")))
 
                 response = await self._make_request_with_retry(
                     self.layout_base_url,
@@ -297,7 +300,10 @@ class InferenceServiceClient:
             raise
 
     async def analyze_images_batch_streaming(
-        self, images: list[bytes], max_batch_size: int = 10
+        self,
+        images: list[bytes],
+        page_nums: list[int] | None = None,
+        max_batch_size: int = 10,
     ):
         """
         複数画像をバッチで解析し、バッチ完了ごとに結果を yield する (async generator)
@@ -316,10 +322,10 @@ class InferenceServiceClient:
         for i in range(0, len(images), max_batch_size):
             batch = images[i : i + max_batch_size]
 
-            files = [
-                ("files", (f"image_{j}.jpg", img, "image/jpeg"))
-                for j, img in enumerate(batch)
-            ]
+            files = []
+            for j, img in enumerate(batch):
+                page_num = page_nums[i + j] if page_nums else i + j
+                files.append(("files", (f"page_{page_num}.jpg", img, "image/jpeg")))
 
             try:
                 response = await self._make_request_with_retry(

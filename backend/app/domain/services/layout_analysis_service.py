@@ -183,12 +183,11 @@ class LayoutAnalysisService:
 
         all_figures = []
 
-        # バッチが返ってくるたびに即処理する（ストリーミングジェネレータ）
         async for (
             batch_start,
             batch_results,
         ) in inference_client.analyze_images_batch_streaming(
-            image_data_list, max_batch_size=10
+            image_data_list, page_nums=page_info_list, max_batch_size=10
         ):
             batch_page_nums = page_info_list[
                 batch_start : batch_start + len(batch_results)

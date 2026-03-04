@@ -265,7 +265,23 @@ if INFERENCE_TYPE in ["all", "layout"]:
             raise HTTPException(status_code=503, detail="Layout service unavailable")
 
         start_time = time.time()
-        logger.info(f"Batch analysis request: {len(files)} images")
+        # ファイル名からページ番号を抽出（クライアント側で page_{num}.jpg としている前提）
+        page_list = []
+        for f in files:
+            fname = f.filename or ""
+            if fname.startswith("page_"):
+                # "page_1.jpg" -> "1"
+                p_str = fname.replace("page_", "").split(".")[0]
+                if p_str.isdigit():
+                    page_list.append(int(p_str))
+                else:
+                    page_list.append(fname)
+            else:
+                page_list.append(fname)
+
+        logger.info(
+            f"Batch analysis request: {len(files)} images, page_list: {page_list}"
+        )
 
         try:
             # 環境変数から並列数を取得

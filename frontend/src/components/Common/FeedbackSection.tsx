@@ -108,24 +108,24 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 				</div>
 			</div>
 
-			<div className="space-y-3 pt-2">
+			<div className="relative pt-2">
 				<textarea
 					value={comment}
 					onChange={(e) => setComment(e.target.value)}
 					placeholder={t("common.feedback.placeholder")}
 					rows={1}
-					className="w-full p-3 text-xs bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all resize-none"
+					className="w-full p-3 pr-[110px] text-xs bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all resize-none min-h-[46px]"
 				/>
-				<div className="flex justify-end">
+				<div className="absolute right-1.5 bottom-1.5">
 					<button
 						type="button"
 						disabled={status === "submitting" || !comment.trim()}
 						onClick={handleCommentSubmit}
-						className="px-4 py-2 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-200 text-white text-xs font-bold rounded-lg transition-all shadow-md active:scale-95 disabled:active:scale-100"
+						className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-200 text-white text-[10px] font-bold rounded-lg transition-all shadow-md active:scale-95 disabled:active:scale-100 h-[34px] flex items-center justify-center"
 					>
 						{status === "submitting" ? (
-							<div className="flex items-center gap-2">
-								<div className="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+							<div className="flex items-center gap-1.5">
+								<div className="w-2.5 h-2.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
 								<span>{t("common.loading")}</span>
 							</div>
 						) : (

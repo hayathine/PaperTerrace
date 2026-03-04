@@ -348,7 +348,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				formData.append("page_numbers", batchPages.join(","));
 
 				// Important for transient sessions: provide file_hash explicitly
-				const fileHash = finalPages[0]?.image_url?.split("/")[5]; // Extract from /static/paper_images/{hash}/...
+				const firstImgUrl = finalPages[0]?.image_url || "";
+				const hashMatch = firstImgUrl.match(
+					/\/static\/paper_images\/([^/]+)\//,
+				);
+				const fileHash = hashMatch ? hashMatch[1] : null;
+
 				if (fileHash) formData.append("file_hash", fileHash);
 
 				const response = await fetch(`${API_URL}/api/analyze-layout-lazy`, {

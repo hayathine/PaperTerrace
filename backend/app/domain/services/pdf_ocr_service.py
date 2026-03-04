@@ -289,6 +289,7 @@ class PDFOCRService:
                 for w in native_words
             ],
             "links": links,
+            "figures": [],
         }
 
         yield (page_num, total_pages, page_text, is_last, file_hash, None, layout_data)
@@ -374,9 +375,7 @@ class PDFOCRService:
                             )
 
                 # fitz.Document はスレッドアンセーフなためページごとに開いて閉じる
-                def _extract_md(
-                    path: str, idx: int, exclude_bboxes_pt: list
-                ) -> str:
+                def _extract_md(path: str, idx: int, exclude_bboxes_pt: list) -> str:
                     doc = fitz.open(path)
                     try:
                         page_obj = doc[idx]
@@ -394,9 +393,7 @@ class PDFOCRService:
                                 rect.width / rect.height if rect.height > 0 else 999
                             )
                             if area > page_area * 0.01 and aspect < 20:
-                                all_exclude.append(
-                                    [rect.x0, rect.y0, rect.x1, rect.y1]
-                                )
+                                all_exclude.append([rect.x0, rect.y0, rect.x1, rect.y1])
 
                         if all_exclude:
                             for bbox_pt in all_exclude:
@@ -469,24 +466,73 @@ class PDFOCRService:
                 # フロントエンドの TextModePage で遅延ローディング図画像として利用される
                 figure_refs = []
                 eq_count = 0
+                fig_idx = 0
                 for block in layout_blocks:
                     class_name = block.get("class_name", "").lower()
-                    if "equation" in class_name or "formula" in class_name:
-                        eq_count += 1
-                        continue
-                    is_figure = any(
-                        kw in class_name for kw in ["figure", "picture", "chart"]
-                    )
-                    is_caption = "caption" in class_name
-                    if is_figure and not is_caption:
-                        bbox = block.get("bbox", {})
-                        bbox_list = [
+
+                    # Handle BBox Extraction
+                    bbox = block.get("bbox", {})
+                    if isinstance(bbox, dict):
+                        bx1, by1, bx2, by2 = (
                             bbox.get("x_min", 0),
                             bbox.get("y_min", 0),
                             bbox.get("x_max", 0),
                             bbox.get("y_max", 0),
-                        ]
+                        )
+                    else:
+                        bx1, by1, bx2, by2 = bbox
+                    bbox_list = [bx1, by1, bx2, by2]
+
+                    if "equation" in class_name or "formula" in class_name:
+                        eq_count += 1
+                        continue
+
+                    is_figure = any(
+                        kw in class_name
+                        for kw in ["figure", "picture", "chart", "table", "algorithm"]
+                    )
+                    is_caption = "caption" in class_name
+
+                    if is_figure and not is_caption:
                         figure_refs.append(f"\n\n![Figure]({bbox_list})\n")
+
+                        # Issue 2: Immediate Figure/Table Frame Support
+                        # Crop the figure now so it can be viewed immediately without lazy-loading
+                        try:
+                            margin = 5
+                            crop_box = (
+                                max(0, bx1 - margin),
+                                max(0, by1 - margin),
+                                min(img_pil.width, bx2 + margin),
+                                min(img_pil.height, by2 + margin),
+                            )
+                            if crop_box[2] > crop_box[0] and crop_box[3] > crop_box[1]:
+                                crop_img = img_pil.crop(crop_box)
+                                buf = io.BytesIO()
+                                crop_img.save(buf, format="JPEG", quality=85)
+                                crop_b64 = base64.b64encode(buf.getvalue()).decode(
+                                    "utf-8"
+                                )
+
+                                img_name = f"p{page_num}_{class_name.replace(' ', '_')}_{fig_idx}"
+                                fig_url = save_page_image(file_hash, img_name, crop_b64)
+                                fig_idx += 1
+
+                                layout_data["figures"].append(
+                                    {
+                                        "page_num": page_num,
+                                        "bbox": bbox_list,
+                                        "label": class_name,
+                                        "image_url": fig_url,
+                                    }
+                                )
+                        except Exception as crop_err:
+                            log.warning(
+                                "_process_page_incremental",
+                                "Failed to crop visual element",
+                                class_name=class_name,
+                                error=str(crop_err),
+                            )
 
                 if figure_refs:
                     page_text += "".join(figure_refs)
