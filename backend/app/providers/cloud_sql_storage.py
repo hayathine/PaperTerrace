@@ -18,7 +18,7 @@ from .storage_provider import StorageInterface
 log = ServiceLogger("CloudSQL")
 
 
-load_dotenv("secrets/.env")
+load_dotenv("../local-files/secrets/.env")
 
 
 class CloudSQLStorage(StorageInterface):

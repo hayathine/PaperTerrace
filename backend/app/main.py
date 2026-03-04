@@ -39,7 +39,7 @@ mw_log = ServiceLogger("Middleware")
 
 
 # Load environment variables from secrets directory
-load_dotenv("secrets/.env")
+load_dotenv("../local-files/secrets/.env")
 
 # Firebase Config for Frontend
 FIREBASE_CONFIG = {

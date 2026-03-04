@@ -18,13 +18,6 @@ class LlamaCppTranslationService:
 
     def __init__(self):
         self.llm: Optional[Llama] = None
-        # デフォルトモデル: byteshape/Qwen3-30B-A3B-Instruct-2507-GGUF
-        # ファイル名: Q3_K_S-2.66bow (ユーザー指定)
-        self.repo_id = os.getenv(
-            "LLAMACPP_REPO_ID", "byteshape/Qwen3-30B-A3B-Instruct-2507-GGUF"
-        )
-        self.filename = os.getenv("LLAMACPP_MODEL_NAME", "Q3_K_S-2.66bow.gguf")
-
         # ローカルパスが優先される設定
         self.model_path = os.getenv("LLAMACPP_MODEL_PATH")
 
@@ -56,8 +49,7 @@ class LlamaCppTranslationService:
             try:
                 loop = asyncio.get_running_loop()
 
-                # Hugging Face からのダウンロードまたはローカル読み込み
-                # Llama.from_pretrained は重い処理なので executor で実行
+                # ローカルパスから読み込みます
                 if self.model_path and os.path.exists(self.model_path):
                     logger.info(f"ローカルパスから読み込みます: {self.model_path}")
                     self.llm = await loop.run_in_executor(
@@ -72,36 +64,13 @@ class LlamaCppTranslationService:
                             use_mmap=self.use_mmap,
                         ),
                     )
-                elif os.getenv("LLAMACPP_ALLOW_DOWNLOAD", "false").lower() == "true":
-                    logger.info(
-                        f"Hugging Face Hub から読み込みます: {self.repo_id} ({self.filename})"
-                    )
-                    # llama-cpp-python の from_pretrained を使用
-                    target_filename = (
-                        self.filename
-                        if self.filename.endswith(".gguf")
-                        else f"{self.filename}.gguf"
-                    )
-
-                    self.llm = await loop.run_in_executor(
-                        None,
-                        lambda: Llama.from_pretrained(
-                            repo_id=self.repo_id,
-                            filename=target_filename,
-                            n_ctx=self.n_ctx,
-                            n_threads=self.n_threads,
-                            n_batch=self.n_batch,
-                            n_gpu_layers=self.n_gpu_layers,
-                            use_mlock=self.use_mlock,
-                            use_mmap=self.use_mmap,
-                            verbose=True,
-                        ),
-                    )
                 else:
-                    logger.warning(
-                        "LLAMACPP_MODEL_PATH が設定されていないか見つかりません。ダウンロードも許可されていないため、LLM初期化をスキップします。"
+                    logger.error(
+                        f"モデルが見つかりません: {self.model_path or 'パス未設定'}"
                     )
-                    return
+                    raise FileNotFoundError(
+                        f"Model path not found or invalid: {self.model_path}"
+                    )
 
                 logger.info("Llama-cpp モデルの読み込みが完了しました。")
             except Exception as e:

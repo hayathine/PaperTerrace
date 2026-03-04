@@ -12,12 +12,9 @@ dependencies = [
     "pydantic>=2.10.4",
     "python-multipart>=0.0.9",
     "httpx[http2]>=0.27.0",
-    "jinja2>=3.1.6",
     # Google Cloud & AI
     "google-genai>=1.60.0",
-    "google-cloud-aiplatform>=1.135.0",
     "google-cloud-storage>=3.8.0",
-    "google-cloud-tasks>=2.21.0",
     "firebase-admin>=6.0.0",
     # Database
     "sqlalchemy>=2.0.46",
@@ -26,27 +23,17 @@ dependencies = [
     # NLP & ML
     "spacy>=3.8.11",
     "en-core-web-sm",
-    "tiktoken>=0.12.0",
-    "opencv-python-headless>=4.8.0",
-    "numpy>=1.26.4",
     "Pillow>=11.0.0",
     # PDF Processing
     "pdfplumber>=0.11.9",
-    "beautifulsoup4>=4.14.3",
     # Utilities
     "structlog>=24.1.0",
-    "chardet>=5.2.0",
     "python-dotenv>=1.0.1",
     "email-validator>=2.3.0",
     "go-task-bin>=3.48.0",
-    "typer>=0.21.1",
     "uuid6>=2025.0.1",
     "redis>=7.2.0",
     "dspy>=2.5.26",
-    "schedule>=1.2.2",
-    "cloud-sql-python-connector>=1.20.0",
-    "openai>=1.0.0",
-    "litellm>=1.40.0",
     "pymupdf4llm>=0.3.4",
 ]
 

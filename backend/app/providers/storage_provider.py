@@ -15,7 +15,7 @@ from common.logger import ServiceLogger
 log = ServiceLogger("Storage")
 
 
-load_dotenv("secrets/.env")
+load_dotenv("../local-files/secrets/.env")
 
 DB_PATH = os.getenv("DB_PATH", "ocr_reader.db")
 

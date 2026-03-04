@@ -252,7 +252,7 @@ class LayoutAnalysisService:
 
             total_time = time.time() - start_time
             logger.info(
-                f"Batch analysis time: {total_time:.3f}s for {len(image_paths)} images. "
+                f"Batch analysis time: {total_time:.3f}s for {len(image_paths)} pages. "
                 f"threshold={self.threshold}"
             )
             return batch_results

@@ -15,7 +15,7 @@ from common.logger import ServiceLogger
 log = ServiceLogger("ImageStorage")
 
 
-load_dotenv("secrets/.env")
+load_dotenv("../local-files/secrets/.env")
 
 
 class ImageStorageStrategy(ABC):

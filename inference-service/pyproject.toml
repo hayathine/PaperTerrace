@@ -17,7 +17,6 @@ dependencies = [
     "structlog>=24.1.0",
     "python-dotenv>=1.0.1",
     "slowapi>=0.1.9",
-    "chardet>=5.2.0",
 ]
 
 [dependency-groups]
@@ -32,7 +31,6 @@ translation = [
     "ctranslate2>=4.4.0",
     "sentencepiece>=0.2.0",
     "llama-cpp-python>=0.3.16",
-    "huggingface-hub>=0.20.0",
     "dspy-ai>=2.4.9",
 ]
 dev = [

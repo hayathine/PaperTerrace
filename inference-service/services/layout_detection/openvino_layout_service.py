@@ -222,7 +222,7 @@ class OpenVINOLayoutAnalysisService:
 
             total_time = time.time() - start_time
             logger.info(
-                f"Batch analysis time: {total_time:.3f}s for {len(image_paths)} images."
+                f"Batch analysis time: {total_time:.3f}s for {len(image_paths)} pages."
             )
             return batch_results
 
@@ -364,7 +364,18 @@ class OpenVINOLayoutAnalysisService:
                 f"Postprocess - Detections above threshold={threshold}: {class_counts}"
             )
         else:
-            logger.info(f"Postprocess - No detections above threshold={threshold}")
+            # 何も検出されなかった場合に、対象としていたクラス名を出す
+            if target_class_ids:
+                target_class_names = [
+                    self.LABELS.get(cid, f"Unknown({cid})") for cid in target_class_ids
+                ]
+                logger.info(
+                    f"Postprocess - No detections above threshold={threshold} for classes: {target_class_names}"
+                )
+            else:
+                logger.info(
+                    f"Postprocess - No detections above threshold={threshold} across all classes"
+                )
 
         return self._apply_nms(results)
 

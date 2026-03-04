@@ -2,7 +2,7 @@
 set -e
 
 # Load .env
-source secrets/.env
+source local-files/secrets/.env
 
 PROJECT_ID="gen-lang-client-0800253336"
 SERVICE_ACCOUNT="602776143589-compute@developer.gserviceaccount.com"

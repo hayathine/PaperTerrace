@@ -12,7 +12,7 @@ from common.logger import ServiceLogger
 log = ServiceLogger("AIProvider")
 
 
-load_dotenv("secrets/.env")
+load_dotenv("../local-files/secrets/.env")
 
 
 class AIProviderError(Exception):
