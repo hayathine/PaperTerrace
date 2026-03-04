@@ -130,11 +130,41 @@ class AdversarialReviewService:
                 "Adversarial review failed",
                 extra={"error": str(e)},
             )
+
+            # DSPyの履歴から生の応答を抽出して復元を試みる
+            raw_response = ""
+            try:
+                import dspy
+
+                if (
+                    hasattr(dspy.settings, "lm")
+                    and dspy.settings.lm
+                    and hasattr(dspy.settings.lm, "history")
+                    and dspy.settings.lm.history
+                ):
+                    last_turn = dspy.settings.lm.history[-1]
+                    # LiteLLM/Geminiアダプタの場合、出力は'response'キー内のリストに含まれることが多い
+                    if "response" in last_turn and isinstance(
+                        last_turn["response"], list
+                    ):
+                        raw_response = last_turn["response"][0].get("text", "")
+                    elif "response" in last_turn:
+                        raw_response = str(last_turn["response"])
+            except Exception:
+                logger.warning("Failed to recover raw response from DSPy history")
+
+            assessment = "分析に失敗しました。"
+            if raw_response:
+                assessment = (
+                    "【注意】AIの応答が途中で切れたため、解析の一部のみを表示しています：\n\n"
+                    + raw_response
+                )
+
             return {
                 "error": str(e),
                 "hidden_assumptions": [],
                 "unverified_conditions": [],
                 "reproducibility_risks": [],
                 "methodology_concerns": [],
-                "overall_assessment": "分析に失敗しました",
+                "overall_assessment": assessment,
             }

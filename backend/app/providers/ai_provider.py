@@ -118,6 +118,24 @@ class AIProviderInterface(ABC):
         """Delete a context cache by name."""
         ...
 
+    def _check_truncation(
+        self, response: Any, model: str, method: str, max_tokens: int
+    ) -> None:
+        """Check and log if the response was truncated due to token limits."""
+        try:
+            if response.candidates and response.candidates[0].finish_reason:
+                reason = str(response.candidates[0].finish_reason)
+                if "MAX_TOKENS" in reason:
+                    log.warning(
+                        f"{method}_truncated",
+                        "AI response truncated (reached max_output_tokens)",
+                        model=model,
+                        max_tokens=max_tokens,
+                        finish_reason=reason,
+                    )
+        except Exception:
+            pass
+
 
 class GeminiProvider(AIProviderInterface):
     """Gemini API provider implementation."""
@@ -128,7 +146,15 @@ class GeminiProvider(AIProviderInterface):
             raise ValueError("GEMINI_API_KEY environment variable is required")
         self.client = genai.Client(api_key=api_key, vertexai=False)
         self.model = os.getenv("MODEL_OCR", "gemini-2.0-flash")
-        log.info("gemini_init", "GeminiProvider initialized", model=self.model)
+        self.temperature = float(os.getenv("AI_TEMPERATURE", "0.1"))
+        self.max_tokens = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "1024"))
+        log.info(
+            "gemini_init",
+            "GeminiProvider initialized",
+            model=self.model,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
+        )
 
     async def generate(
         self,
@@ -160,8 +186,8 @@ class GeminiProvider(AIProviderInterface):
 
             # Configure generation config
             config_params: GenConfig = {
-                "temperature": 0.1,
-                "max_output_tokens": 1024,
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
             }
             if tools and not cached_content_name:
                 config_params["tools"] = tools
@@ -185,6 +211,9 @@ class GeminiProvider(AIProviderInterface):
                 model=target_model,
                 contents=contents,
                 config=config,
+            )
+            self._check_truncation(
+                response, target_model, "gemini_generate", self.max_tokens
             )
 
             # Log grounding metadata for debugging (Visual Grounding / Evidence)
@@ -332,8 +361,8 @@ class GeminiProvider(AIProviderInterface):
 
             # Configure generation config
             config_params: GenConfig = {
-                "temperature": 0.1,
-                "max_output_tokens": 1024,
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
             }
             if response_model:
                 config_params["response_mime_type"] = "application/json"
@@ -361,6 +390,9 @@ class GeminiProvider(AIProviderInterface):
                 model=target_model,
                 contents=contents,
                 config=config,
+            )
+            self._check_truncation(
+                response, target_model, "gemini_image", self.max_tokens
             )
 
             if response_model:
@@ -438,8 +470,8 @@ class GeminiProvider(AIProviderInterface):
 
             # Configure generation config
             config_params: GenConfig = {
-                "temperature": 0.1,
-                "max_output_tokens": 1024,
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
             }
             if response_model:
                 config_params["response_mime_type"] = "application/json"
@@ -468,6 +500,9 @@ class GeminiProvider(AIProviderInterface):
                 model=target_model,
                 contents=contents,
                 config=config,
+            )
+            self._check_truncation(
+                response, target_model, "gemini_multi_image", self.max_tokens
             )
 
             if response_model:
@@ -518,8 +553,8 @@ class GeminiProvider(AIProviderInterface):
             )
 
             config_params: GenConfig = {
-                "temperature": 0.1,
-                "max_output_tokens": 1024,
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
             }
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name
@@ -538,6 +573,9 @@ class GeminiProvider(AIProviderInterface):
                 model=target_model,
                 contents=contents,
                 config=config,
+            )
+            self._check_truncation(
+                response, target_model, "gemini_pdf", self.max_tokens
             )
             result = str(response.text or "").strip()
             log.debug(
@@ -701,12 +739,17 @@ class VertexAIProvider(AIProviderInterface):
                 location=self.location,
             )
 
+        self.temperature = float(os.getenv("AI_TEMPERATURE", "0.1"))
+        self.max_tokens = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "1024"))
+
         log.info(
             "vertex_init",
             "VertexAIProvider initialized",
             project=self.project_id,
             location=self.location,
             model=self.model,
+            temperature=self.temperature,
+            max_tokens=self.max_tokens,
         )
 
     async def generate(
@@ -736,8 +779,8 @@ class VertexAIProvider(AIProviderInterface):
                 tools = [types.Tool(google_search=types.GoogleSearch())]
 
             config_params: GenConfig = {
-                "temperature": 0.1,
-                "max_output_tokens": 1024,
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
             }
             if tools and not cached_content_name:
                 config_params["tools"] = tools
@@ -765,6 +808,9 @@ class VertexAIProvider(AIProviderInterface):
                 model=target_model,
                 contents=contents,
                 config=config,
+            )
+            self._check_truncation(
+                response, target_model, "vertex_generate", self.max_tokens
             )
 
             if response_model:
@@ -822,7 +868,10 @@ class VertexAIProvider(AIProviderInterface):
                 ]
             )
 
-            config_params: GenConfig = {"temperature": 0.7, "max_output_tokens": 1024}
+            config_params: GenConfig = {
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
+            }
             if response_model:
                 config_params["response_mime_type"] = "application/json"
                 config_params["response_json_schema"] = (
@@ -840,6 +889,9 @@ class VertexAIProvider(AIProviderInterface):
                 model=target_model,
                 contents=contents,
                 config=config,
+            )
+            self._check_truncation(
+                response, target_model, "vertex_image", self.max_tokens
             )
 
             if response_model:
@@ -902,7 +954,10 @@ class VertexAIProvider(AIProviderInterface):
                     )
                 contents.append(prompt)
 
-            config_params: GenConfig = {"temperature": 0.1, "max_output_tokens": 1024}
+            config_params: GenConfig = {
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
+            }
             if response_model:
                 config_params["response_mime_type"] = "application/json"
                 config_params["response_json_schema"] = (
@@ -920,6 +975,9 @@ class VertexAIProvider(AIProviderInterface):
                 model=target_model,
                 contents=contents,
                 config=config,
+            )
+            self._check_truncation(
+                response, target_model, "vertex_multi_image", self.max_tokens
             )
 
             if response_model:
@@ -969,7 +1027,10 @@ class VertexAIProvider(AIProviderInterface):
                 ]
             )
 
-            config_params: GenConfig = {"temperature": 0.7, "max_output_tokens": 1024}
+            config_params: GenConfig = {
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
+            }
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name
 
@@ -979,6 +1040,9 @@ class VertexAIProvider(AIProviderInterface):
                 model=target_model,
                 contents=contents,
                 config=config,
+            )
+            self._check_truncation(
+                response, target_model, "vertex_pdf", self.max_tokens
             )
             return str(response.text or "").strip()
 
