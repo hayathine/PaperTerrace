@@ -16,39 +16,46 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 # 依存関係ファイルのコピー
 COPY backend/pyproject.toml backend/uv.lock ./
 
-RUN uv sync --no-dev
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --no-dev
 
 # --- Stage 3: Production Stage ---
 FROM python:3.12-slim AS production
 WORKDIR /app
 
 # Install runtime dependencies and gcsfuse
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     libpq5 curl libgl1 libglib2.0-0 libxcb1 libx11-6 \
     libxext6 libsm6 libxrender1 gnupg lsb-release ca-certificates \
     && curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
        | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
     && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt gcsfuse-$(lsb_release -c -s) main" \
        | tee /etc/apt/sources.list.d/gcsfuse.list \
-    && apt-get update && apt-get install -y --no-install-recommends gcsfuse \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+    && apt-get update && apt-get install -y --no-install-recommends gcsfuse
 
-COPY --from=runtime-builder /app/.venv /app/.venv
+RUN useradd -m -r appuser && chown -R appuser:appuser /app
+COPY --chown=appuser:appuser --from=runtime-builder /app/.venv /app/.venv
 # Use pre-built frontend dist
-COPY frontend/dist ./app/static/dist
+COPY --chown=appuser:appuser frontend/dist ./app/static/dist
 
-COPY backend/alembic.ini ./
-COPY backend/migrations ./migrations
-COPY backend/app/ ./app/
-COPY common/ ./common/
-COPY redis_provider/ ./redis_provider/
+COPY --chown=appuser:appuser backend/alembic.ini ./
+COPY --chown=appuser:appuser backend/migrations ./migrations
+COPY --chown=appuser:appuser backend/app/ ./app/
+COPY --chown=appuser:appuser common/ ./common/
+COPY --chown=appuser:appuser redis_provider/ ./redis_provider/
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \
     PYTHONUNBUFFERED=1
 
 EXPOSE 8080
+
+USER appuser
+
 HEALTHCHECK --interval=60s --timeout=10s --start-period=5s --retries=3 \
     CMD curl -f http://localhost:${PORT:-8080}/api/health || exit 1
 
-CMD ["/bin/bash", "-c", "/app/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]
+CMD ["/bin/bash", "-c", "exec /app/.venv/bin/uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8080}"]

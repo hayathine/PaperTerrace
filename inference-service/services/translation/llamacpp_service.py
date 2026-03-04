@@ -33,6 +33,7 @@ class LlamaCppTranslationService:
         self.use_mlock = os.getenv("LLAMACPP_USE_MLOCK", "false").lower() == "true"
         # mmap allows the model to be loaded from disk on demand, reducing initial RAM usage.
         self.use_mmap = os.getenv("LLAMACPP_USE_MMAP", "true").lower() == "true"
+        self.max_tokens = int(os.getenv("LLAMACPP_MAX_TOKENS", "2048"))
         logger.info(f"Llama-cpp モデルの初期化設定: {self.__dict__}")
 
     async def initialize(self):
@@ -48,6 +49,16 @@ class LlamaCppTranslationService:
 
             try:
                 loop = asyncio.get_running_loop()
+
+                logger.info(
+                    "dspy 関連モジュールの事前読み込みを開始します（数分かかる場合があります）..."
+                )
+
+                def _preload_dspy():
+                    pass
+
+                await loop.run_in_executor(None, _preload_dspy)
+                logger.info("dspy の事前読み込みが完了しました。")
 
                 # ローカルパスから読み込みます
                 if self.model_path and os.path.exists(self.model_path):
@@ -106,9 +117,12 @@ class LlamaCppTranslationService:
             __call__ は BaseLM が管理するため、ここでは forward() のみ実装する。
             """
 
-            def __init__(self, llm_instance: Any):
-                super().__init__(model="local-llama", temperature=0.3, max_tokens=1024)
+            def __init__(self, llm_instance: Any, max_tokens: int):
+                super().__init__(
+                    model="local-llama", temperature=0.3, max_tokens=max_tokens
+                )
                 self.llm_instance = llm_instance
+                self._max_tokens = max_tokens
 
             def forward(
                 self,
@@ -135,7 +149,7 @@ class LlamaCppTranslationService:
                 raw = self.llm_instance.create_chat_completion(
                     messages=chat_messages,
                     temperature=kwargs.get("temperature", 0.3),
-                    max_tokens=kwargs.get("max_tokens", 1024),
+                    max_tokens=kwargs.get("max_tokens", self._max_tokens),
                 )
                 logger.debug("llama-cpp-python 推論が正常に終了しました。")
 
@@ -179,7 +193,7 @@ class LlamaCppTranslationService:
             # the latter modifies global state and DSPy forbids it from non-main threads.
             def _run_dspy():
                 logger.debug("DSPy 推論スレッド開始 (executor内)")
-                with dspy.context(lm=InMemoryLlama(self.llm)):
+                with dspy.context(lm=InMemoryLlama(self.llm, self.max_tokens)):
                     logger.debug("DSPy predictor 初期化中...")
                     predictor = dspy.Predict(ContextAwareTranslation)
                     logger.debug("DSPy predictor 実行中...")

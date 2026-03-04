@@ -447,17 +447,26 @@ async def stream(task_id: str):
                 collected_figures = []
 
                 page_count = 0
-                async for (
-                    page_num,
-                    total_pages,
-                    page_text,
-                    is_last,
-                    f_hash,
-                    page_image_url,
-                    layout_data,
-                ) in service.ocr_service.extract_text_streaming(
+                async for result_tuple in service.ocr_service.extract_text_streaming(
                     pdf_content, filename, user_plan=user_plan
                 ):
+                    if len(result_tuple) != 7:
+                        log.error(
+                            "stream",
+                            f"UNEXPECTED TUPLE LENGTH: {len(result_tuple)} - {result_tuple}",
+                            task_id=task_id,
+                        )
+                        continue
+
+                    (
+                        page_num,
+                        total_pages,
+                        page_text,
+                        is_last,
+                        f_hash,
+                        page_image_url,
+                        layout_data,
+                    ) = result_tuple
                     page_count += 1
                     if page_text and page_text.startswith("ERROR_API_FAILED:"):
                         error_msg = page_text.replace("ERROR_API_FAILED: ", "")
@@ -833,15 +842,24 @@ async def stream(task_id: str):
             collected_figures = []
 
             # ページ単位OCRストリーム
-            async for (
-                page_num,
-                total_pages,
-                page_text,
-                is_last,
-                f_hash,
-                page_image_url,
-                layout_data,
-            ) in service.ocr_service.extract_text_streaming(pdf_content, filename):
+            async for result_tuple in service.ocr_service.extract_text_streaming(
+                pdf_content, filename
+            ):
+                if len(result_tuple) != 7:
+                    log.error(
+                        "stream_html",
+                        f"UNEXPECTED TUPLE LENGTH: {len(result_tuple)} - {result_tuple}",
+                    )
+                    continue
+                (
+                    page_num,
+                    total_pages,
+                    page_text,
+                    is_last,
+                    f_hash,
+                    page_image_url,
+                    layout_data,
+                ) = result_tuple
                 # APIエラーチェック
                 if page_text and page_text.startswith("ERROR_API_FAILED:"):
                     error_detail = page_text.replace("ERROR_API_FAILED: ", "")
