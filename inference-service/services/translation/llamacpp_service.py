@@ -38,61 +38,50 @@ class LlamaCppTranslationService:
         logger.info(f"Llama-cpp モデルの初期化設定: {self.__dict__}")
 
     async def initialize(self):
-        """モデルの初期化。初回呼び出し時に実行されます。"""
+        """モデルの初期化。アプリケーション起動時に1度だけ呼び出されます。
+
+        排他制御は呼び出し元（main.py の ensure_initialized）が担保するため、
+        このメソッド自体は冪等性チェックのみ行います。
+        """
         if self.llm is not None:
+            logger.debug("Llama-cpp モデルは既に初期化済みです。スキップします。")
             return
 
-        async with asyncio.Lock():  # 二重初期化防止
-            if self.llm is not None:
-                return
+        logger.info("Llama-cpp モデルの初期化を開始します...")
 
-            logger.info("Llama-cpp モデルの初期化を開始します...")
+        try:
+            loop = asyncio.get_running_loop()
 
-            try:
-                loop = asyncio.get_running_loop()
-
-                logger.info(
-                    "dspy 関連モジュールの事前読み込みを開始します（数分かかる場合があります）..."
+            # ローカルパスから読み込みます
+            if self.model_path and os.path.exists(self.model_path):
+                logger.info(f"ローカルパスから読み込みます: {self.model_path}")
+                self.llm = await loop.run_in_executor(
+                    None,
+                    lambda: Llama(
+                        model_path=self.model_path,
+                        n_ctx=self.n_ctx,
+                        n_threads=self.n_threads,
+                        n_batch=self.n_batch,
+                        n_gpu_layers=self.n_gpu_layers,
+                        use_mlock=self.use_mlock,
+                        use_mmap=self.use_mmap,
+                    ),
+                )
+            else:
+                logger.error(
+                    f"モデルが見つかりません: {self.model_path or 'パス未設定'}"
+                )
+                raise FileNotFoundError(
+                    f"Model path not found or invalid: {self.model_path}"
                 )
 
-                def _preload_dspy():
-                    pass
-
-                await loop.run_in_executor(None, _preload_dspy)
-                logger.info("dspy の事前読み込みが完了しました。")
-
-                # ローカルパスから読み込みます
-                if self.model_path and os.path.exists(self.model_path):
-                    logger.info(f"ローカルパスから読み込みます: {self.model_path}")
-                    self.llm = await loop.run_in_executor(
-                        None,
-                        lambda: Llama(
-                            model_path=self.model_path,
-                            n_ctx=self.n_ctx,
-                            n_threads=self.n_threads,
-                            n_batch=self.n_batch,
-                            n_gpu_layers=self.n_gpu_layers,
-                            use_mlock=self.use_mlock,
-                            use_mmap=self.use_mmap,
-                        ),
-                    )
-                else:
-                    logger.error(
-                        f"モデルが見つかりません: {self.model_path or 'パス未設定'}"
-                    )
-                    raise FileNotFoundError(
-                        f"Model path not found or invalid: {self.model_path}"
-                    )
-
-                logger.info("Llama-cpp モデルの読み込みが完了しました。")
-            except Exception as e:
-                logger.error(f"Llama-cpp モデルの初期化中にエラーが発生しました: {e}")
-                if os.getenv("DEV_MODE", "false").lower() == "true":
-                    logger.warning(
-                        "開発モードのため継続します（推論時にエラーになります）"
-                    )
-                    return
-                raise RuntimeError(f"Failed to load LLM: {e}")
+            logger.info("Llama-cpp モデルの読み込みが完了しました。")
+        except Exception as e:
+            logger.error(f"Llama-cpp モデルの初期化中にエラーが発生しました: {e}")
+            if os.getenv("DEV_MODE", "false").lower() == "true":
+                logger.warning("開発モードのため継続します（推論時にエラーになります）")
+                return
+            raise RuntimeError(f"Failed to load LLM: {e}")
 
     async def translate_with_llamacpp(
         self, original_word: str, paper_context: str, lang_name: str = "Japanese"
@@ -102,9 +91,11 @@ class LlamaCppTranslationService:
         DSPyを用いてプロンプト構築と実行を行います。
         """
         if self.llm is None:
-            await self.initialize()
-
-        if self.llm is None:
+            # initialize() は起動時に ensure_initialized() から1度だけ呼ばれる前提。
+            # ここに到達した場合は起動シーケンスの異常を示す。
+            logger.error(
+                "LLM が未初期化の状態で翻訳が要求されました。起動処理を確認してください。"
+            )
             return "Error: LLM service is not initialized."
 
         from common.dspy.signatures import ContextAwareTranslation

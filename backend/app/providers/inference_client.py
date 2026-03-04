@@ -296,6 +296,64 @@ class InferenceServiceClient:
 
             raise
 
+    async def analyze_images_batch_streaming(
+        self, images: list[bytes], max_batch_size: int = 10
+    ):
+        """
+        複数画像をバッチで解析し、バッチ完了ごとに結果を yield する (async generator)
+
+        Returns
+        -------
+        AsyncGenerator[(batch_start_index, list[dict]), ...]
+            バッチの先頭インデックスと、そのバッチ内の各画像の解析結果リスト
+        """
+        log.debug(
+            "analyze_batch_streaming",
+            "ストリーミングバッチ解析開始",
+            image_count=len(images),
+        )
+
+        for i in range(0, len(images), max_batch_size):
+            batch = images[i : i + max_batch_size]
+
+            files = [
+                ("files", (f"image_{j}.jpg", img, "image/jpeg"))
+                for j, img in enumerate(batch)
+            ]
+
+            try:
+                response = await self._make_request_with_retry(
+                    self.layout_base_url,
+                    "POST",
+                    "/api/v1/analyze-images-batch",
+                    files=files,
+                )
+
+                if response.get("success"):
+                    batch_results = response.get("results", [])
+                    log.debug(
+                        "analyze_batch_streaming",
+                        "サブバッチ完了 → yield",
+                        batch_start=i,
+                        batch_size=len(batch),
+                        processing_time=response.get("processing_time", 0),
+                    )
+                    # バッチが返ってきた時点で即座に yield
+                    yield i, batch_results
+                else:
+                    error_msg = response.get("message", "不明なエラー")
+                    raise InferenceServiceError(f"バッチ解析失敗: {error_msg}")
+
+            except Exception as e:
+                log.error(
+                    "analyze_batch_streaming",
+                    "サブバッチ解析エラー（スキップ）",
+                    batch_start=i,
+                    error=str(e),
+                )
+                # 1バッチに失敗しても他のバッチは続ける
+                yield i, [[] for _ in batch]
+
     async def translate_text(
         self, text: str, target_lang: str = "ja", paper_context: str | None = None
     ) -> tuple[str, str | None]:

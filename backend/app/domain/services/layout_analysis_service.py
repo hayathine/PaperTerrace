@@ -27,6 +27,83 @@ class LayoutAnalysisService:
     def __init__(self):
         self.storage = get_storage_provider()
 
+    async def _process_page_results(
+        self,
+        page_num: int,
+        img_bytes: bytes,
+        results: list,
+        file_hash: str,
+    ) -> list[dict]:
+        """1ページ分の推論結果をクロップ・保存して figures リストを返す"""
+        img_pil = Image.open(io.BytesIO(img_bytes))
+        img_w, img_h = img_pil.size
+        fig_idx = 0
+        page_figures = []
+
+        logger.debug(f"Page {page_num}: Found {len(results)} raw detections")
+        for res in results:
+            class_name = res.get("class_name", "").lower()
+            logger.debug(f"  - Detected: {class_name} (score: {res.get('score')})")
+            if class_name not in self.TARGET_CLASSES:
+                continue
+
+            bbox_dict = res.get("bbox", {})
+            if not bbox_dict:
+                continue
+
+            x_min, y_min = bbox_dict.get("x_min", 0), bbox_dict.get("y_min", 0)
+            x_max, y_max = bbox_dict.get("x_max", 0), bbox_dict.get("y_max", 0)
+
+            x_min, y_min = max(0, min(img_w, x_min)), max(0, min(img_h, y_min))
+            x_max, y_max = max(0, min(img_w, x_max)), max(0, min(img_h, y_max))
+
+            if x_max <= x_min or y_max <= y_min:
+                continue
+
+            try:
+
+                def _crop_and_encode(img_data: bytes, box: tuple):
+                    from PIL import Image
+
+                    img = Image.open(io.BytesIO(img_data))
+                    crop = img.crop(box).convert("RGB")
+                    buf = io.BytesIO()
+                    crop.save(buf, format="JPEG", quality=85, optimize=True)
+                    return base64.b64encode(buf.getvalue()).decode("utf-8")
+
+                margin = 5
+                crop_box = (
+                    max(0, x_min - margin),
+                    max(0, y_min - margin),
+                    min(img_w, x_max + margin),
+                    min(img_h, y_max + margin),
+                )
+                img_b64 = await anyio.to_thread.run_sync(
+                    _crop_and_encode, img_bytes, crop_box
+                )
+
+                img_name = f"p{page_num}_{class_name}_{fig_idx}"
+                figure_image_url = await anyio.to_thread.run_sync(
+                    save_page_image, file_hash, img_name, img_b64
+                )
+                fig_idx += 1
+
+                page_figures.append(
+                    {
+                        "page_num": page_num,
+                        "bbox": [crop_box[0], crop_box[1], crop_box[2], crop_box[3]],
+                        "label": class_name,
+                        "image_url": figure_image_url,
+                    }
+                )
+            except Exception as crop_err:
+                logger.warning(
+                    f"Failed to crop {class_name} on page {page_num}: {crop_err}"
+                )
+                continue
+
+        return page_figures
+
     async def analyze_layout_lazy(
         self,
         paper_id: str,
@@ -103,86 +180,34 @@ class LayoutAnalysisService:
             f"[analyze_layout_lazy] Sending {len(image_data_list)} images to inference service for paper {paper_id}"
         )
         inference_client = await get_inference_client()
-        # Batch sizes are handled within the client as well, but we can send all to client.
-        batch_results = await inference_client.analyze_images_batch(
-            image_data_list, max_batch_size=10
-        )
 
-        logger.info(
-            f"[analyze_layout_lazy] Received results for {len(batch_results)} pages"
-        )
         all_figures = []
-        for page_num, img_bytes, results in zip(
-            page_info_list, image_data_list, batch_results
+
+        # バッチが返ってくるたびに即処理する（ストリーミングジェネレータ）
+        async for (
+            batch_start,
+            batch_results,
+        ) in inference_client.analyze_images_batch_streaming(
+            image_data_list, max_batch_size=10
         ):
-            img_pil = Image.open(io.BytesIO(img_bytes))
-            img_w, img_h = img_pil.size
-            fig_idx = 0
+            batch_page_nums = page_info_list[
+                batch_start : batch_start + len(batch_results)
+            ]
+            batch_img_bytes = image_data_list[
+                batch_start : batch_start + len(batch_results)
+            ]
 
-            logger.debug(f"Page {page_num}: Found {len(results)} raw detections")
-            for res in results:
-                class_name = res.get("class_name", "").lower()
-                logger.debug(f"  - Detected: {class_name} (score: {res.get('score')})")
-                if class_name in self.TARGET_CLASSES:
-                    bbox_dict = res.get("bbox", {})
-                    if not bbox_dict:
-                        continue
+            logger.info(
+                f"[analyze_layout_lazy] Batch received: pages {batch_page_nums}"
+            )
 
-                    x_min, y_min = bbox_dict.get("x_min", 0), bbox_dict.get("y_min", 0)
-                    x_max, y_max = bbox_dict.get("x_max", 0), bbox_dict.get("y_max", 0)
-
-                    x_min, y_min = max(0, min(img_w, x_min)), max(0, min(img_h, y_min))
-                    x_max, y_max = max(0, min(img_w, x_max)), max(0, min(img_h, y_max))
-
-                    if x_max <= x_min or y_max <= y_min:
-                        continue
-
-                    try:
-
-                        def _crop_and_encode(img_data: bytes, box: tuple):
-                            from PIL import Image
-
-                            img = Image.open(io.BytesIO(img_data))
-                            crop = img.crop(box).convert("RGB")
-                            buf = io.BytesIO()
-                            crop.save(buf, format="JPEG", quality=85, optimize=True)
-                            return base64.b64encode(buf.getvalue()).decode("utf-8")
-
-                        margin = 5
-                        crop_box = (
-                            max(0, x_min - margin),
-                            max(0, y_min - margin),
-                            min(img_w, x_max + margin),
-                            min(img_h, y_max + margin),
-                        )
-                        img_b64 = await anyio.to_thread.run_sync(
-                            _crop_and_encode, img_bytes, crop_box
-                        )
-
-                        img_name = f"p{page_num}_{class_name}_{fig_idx}"
-                        figure_image_url = await anyio.to_thread.run_sync(
-                            save_page_image, file_hash, img_name, img_b64
-                        )
-                        fig_idx += 1
-
-                        all_figures.append(
-                            {
-                                "page_num": page_num,
-                                "bbox": [
-                                    crop_box[0],
-                                    crop_box[1],
-                                    crop_box[2],
-                                    crop_box[3],
-                                ],
-                                "label": class_name,
-                                "image_url": figure_image_url,
-                            }
-                        )
-                    except Exception as crop_err:
-                        logger.warning(
-                            f"Failed to crop {class_name} on page {page_num}: {crop_err}"
-                        )
-                        continue
+            for page_num, img_bytes, results in zip(
+                batch_page_nums, batch_img_bytes, batch_results
+            ):
+                page_figures = await self._process_page_results(
+                    page_num, img_bytes, results, file_hash
+                )
+                all_figures.extend(page_figures)
 
         # 3. Save to DB ONLY for registered users
         if all_figures and user_id:
