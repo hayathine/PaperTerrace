@@ -1,8 +1,7 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
-from sqlalchemy.orm import Session
+from fastapi import APIRouter, HTTPException, Request
 
-from app.database import get_db
-from app.models.orm.recommendation import Feedback
+from app.models.bigquery.schemas import FeedbackData
+from app.models.repositories.feedback_repository import FeedbackRepository
 from app.schemas.feedback import FeedbackRequest
 from common.logger import ServiceLogger
 
@@ -19,20 +18,20 @@ def get_current_user_id(request: Request) -> str:
 @router.post("", summary="汎用的なフィードバックを記録する")
 async def submit_feedback(
     req: FeedbackRequest,
-    db: Session = Depends(get_db),
-    current_user_id: str = Depends(get_current_user_id),
+    request: Request,
 ):
     """
     AI生成結果（推薦、要約、レビュー等）に対するユーザーの評価（Good/Bad）を記録する
     """
-    # Record feedback
-    feedback = Feedback(
+    current_user_id = get_current_user_id(request)
+
+    feedback = FeedbackData(
         session_id=req.session_id,
         user_id=current_user_id,
         target_type=req.target_type,
         target_id=req.target_id,
         trace_id=req.trace_id,
-        user_score=req.user_score,  # 1 for Good, 0 for Bad
+        user_score=req.user_score,
         user_comment=req.user_comment,
     )
     log.debug(
@@ -43,14 +42,11 @@ async def submit_feedback(
         comment=req.user_comment,
     )
 
-    db.add(feedback)
-
+    repo = FeedbackRepository()
     try:
-        db.commit()
+        repo.create(feedback)
     except Exception as e:
-        db.rollback()
         log.error("submit", "Failed to save feedback", error=str(e))
-
         raise HTTPException(status_code=500, detail="Failed to save feedback")
 
     return {"status": "ok", "message": "Feedback recorded successfully"}

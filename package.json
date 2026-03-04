@@ -10,7 +10,7 @@
   },
   "workspaces": [
     "frontend",
-    "cloudflare-workers"
+    "local-files/cloudflare-workers"
   ],
   "devDependencies": {
     "@biomejs/biome": "^2.4.4",

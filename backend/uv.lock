@@ -933,6 +933,24 @@ requests = [
 ]
 
 [[package]]
+name = "google-cloud-bigquery"
+version = "3.40.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "google-api-core", extra = ["grpc"] },
+    { name = "google-auth" },
+    { name = "google-cloud-core" },
+    { name = "google-resumable-media" },
+    { name = "packaging" },
+    { name = "python-dateutil" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/11/0c/153ee546c288949fcc6794d58811ab5420f3ecad5fa7f9e73f78d9512a6e/google_cloud_bigquery-3.40.1.tar.gz", hash = "sha256:75afcfb6e007238fe1deefb2182105249321145ff921784fe7b1de2b4ba24506", size = 511761, upload-time = "2026-02-12T18:44:18.958Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/7c/f5/081cf5b90adfe524ae0d671781b0d497a75a0f2601d075af518828e22d8f/google_cloud_bigquery-3.40.1-py3-none-any.whl", hash = "sha256:9082a6b8193aba87bed6a2c79cf1152b524c99bb7e7ac33a785e333c09eac868", size = 262018, upload-time = "2026-02-12T18:44:16.913Z" },
+]
+
+[[package]]
 name = "google-cloud-core"
 version = "2.5.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1967,6 +1985,7 @@ dependencies = [
     { name = "fastapi" },
     { name = "firebase-admin" },
     { name = "go-task-bin" },
+    { name = "google-cloud-bigquery" },
     { name = "google-cloud-storage" },
     { name = "google-genai" },
     { name = "httpx", extra = ["http2"] },
@@ -2007,6 +2026,7 @@ requires-dist = [
     { name = "fastapi", specifier = ">=0.128.0" },
     { name = "firebase-admin", specifier = ">=6.0.0" },
     { name = "go-task-bin", specifier = ">=3.48.0" },
+    { name = "google-cloud-bigquery", specifier = ">=3.25.0" },
     { name = "google-cloud-storage", specifier = ">=3.8.0" },
     { name = "google-genai", specifier = ">=1.60.0" },
     { name = "httpx", extras = ["http2"], specifier = ">=0.27.0" },

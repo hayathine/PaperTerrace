@@ -1,6 +1,6 @@
 """
 DSPy module trace recording utility.
-Records input/output pairs for later use as DSPy training examples.
+Records input/output pairs to BigQuery for later use as DSPy training examples.
 """
 
 import json
@@ -9,6 +9,7 @@ import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 from common.logger import get_logger
 
@@ -31,7 +32,7 @@ class TraceContext:
 
 
 def _truncate_values(d: dict, max_len: int = MAX_FIELD_LENGTH) -> dict:
-    """Truncate string values in a dict to prevent oversized DB rows."""
+    """Truncate string values in a dict to prevent oversized rows."""
     out = {}
     for k, v in d.items():
         if isinstance(v, str) and len(v) > max_len:
@@ -92,35 +93,33 @@ def _save_trace_sync(
     prompt: str | None = None,
     answer: str | None = None,
 ):
-    """Synchronously write a trace record to the DB. Runs in background thread."""
+    """Synchronously write a trace record to BigQuery. Runs in background thread."""
     try:
-        # Lazy import to avoid circular imports and keep common/ lightweight
-        from app.database import get_db_context
-        from app.models.orm.dspy_trace import DspyTrace
+        from app.providers.bigquery_log import BigQueryLogClient
 
-        with get_db_context() as db:
-            trace = DspyTrace(
-                trace_id=trace_id,
-                module_name=module_name,
-                signature=signature,
-                inputs=json.dumps(_truncate_values(inputs), ensure_ascii=False),
-                outputs=json.dumps(_truncate_values(outputs), ensure_ascii=False),
-                user_id=context.user_id if context else None,
-                session_id=context.session_id if context else None,
-                paper_id=context.paper_id if context else None,
-                model_name=os.environ.get(
-                    "DSPY_GEMINI_MODEL", "gemini/gemini-2.5-flash-lite"
-                ),
-                latency_ms=latency_ms,
-                is_success=is_success,
-                is_copied=is_copied or (context.is_copied if context else False),
-                error_msg=error_msg,
-                comment=context.comment if context else None,
-                prompt=prompt,
-                answer=answer,
-            )
-            db.add(trace)
-            db.commit()
+        bq = BigQueryLogClient.get_instance()
+        row = {
+            "trace_id": trace_id,
+            "module_name": module_name,
+            "signature": signature,
+            "inputs": json.dumps(_truncate_values(inputs), ensure_ascii=False),
+            "outputs": json.dumps(_truncate_values(outputs), ensure_ascii=False),
+            "user_id": context.user_id if context else None,
+            "session_id": context.session_id if context else None,
+            "paper_id": context.paper_id if context else None,
+            "model_name": os.environ.get(
+                "DSPY_GEMINI_MODEL", "gemini/gemini-2.5-flash-lite"
+            ),
+            "latency_ms": latency_ms,
+            "is_success": is_success,
+            "is_copied": is_copied or (context.is_copied if context else False),
+            "error_msg": error_msg,
+            "comment": context.comment if context else None,
+            "prompt": prompt,
+            "answer": answer,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        }
+        bq.streaming_insert("dspy_traces", [row])
     except Exception:
         logger.exception("Failed to save DSPy trace %s", trace_id)
 

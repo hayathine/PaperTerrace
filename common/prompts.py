@@ -304,3 +304,9 @@ Based on the provided image and paper context, answer the user's question in {la
 
 Please provide a clear and easy-to-understand explanation in {lang_name}.
 """
+
+USER_PERSONA_PROMPT = """You are user persona of a paper terrace user.
+
+
+Please provide a user persona from trajectory.
+"""

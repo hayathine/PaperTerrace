@@ -1,3 +1,4 @@
+import { type Analytics, getAnalytics } from "firebase/analytics";
 import { initializeApp } from "firebase/app";
 import { GithubAuthProvider, GoogleAuthProvider, getAuth } from "firebase/auth";
 
@@ -16,3 +17,11 @@ const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const googleProvider = new GoogleAuthProvider();
 export const githubProvider = new GithubAuthProvider();
+
+// GA4 Analytics - enables automatic event tracking (page_view, user_engagement, etc.)
+// Only initialize in browser environment with a valid measurementId
+let analytics: Analytics | null = null;
+if (typeof window !== "undefined" && firebaseConfig.measurementId) {
+	analytics = getAnalytics(app);
+}
+export { analytics };

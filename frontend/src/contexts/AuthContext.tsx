@@ -1,3 +1,4 @@
+import { setUserId } from "firebase/analytics";
 import {
 	signOut as firebaseSignOut,
 	getIdToken,
@@ -16,7 +17,12 @@ import {
 	useState,
 } from "react";
 import { API_URL } from "@/config";
-import { auth, githubProvider, googleProvider } from "@/lib/firebase";
+import {
+	analytics,
+	auth,
+	githubProvider,
+	googleProvider,
+} from "@/lib/firebase";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("Auth");
@@ -110,6 +116,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 					const idToken = await currentUser.getIdToken();
 					setToken(idToken);
 					setIsGuest(false);
+					// Link Firebase Auth UID to GA4 for BigQuery correlation
+					if (analytics) {
+						setUserId(analytics, currentUser.uid);
+					}
 					await syncWithBackend(idToken);
 				} catch (error) {
 					log.error("auth_state_change", "Error in auth state change", {
@@ -119,6 +129,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 			} else {
 				setToken(null);
 				setIsGuest(true);
+				// Clear GA4 user ID on logout
+				if (analytics) {
+					setUserId(analytics, null);
+				}
 			}
 			setUser(currentUser);
 			setLoading(false);

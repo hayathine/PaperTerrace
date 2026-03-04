@@ -13,6 +13,7 @@ from common.prompts import (
     PAPER_SUMMARY_SECTIONS_PROMPT,
     RECOMMENDATION_PAPER_PROMPT,
     RECOMMENDATION_USER_PROFILE_PROMPT,
+    USER_PERSONA_PROMPT,
     VISION_ANALYZE_FIGURE_PROMPT,
 )
 
@@ -39,6 +40,7 @@ def clean_prompt_for_dspy(prompt_str: str) -> str:
     cleaned = cleaned.replace("{table_text}", "the table text")
     cleaned = cleaned.replace("{paragraph}", "the paragraph text")
     cleaned = cleaned.replace("{target_word}", "the target word")
+    cleaned = cleaned.replace("{trajectory}", "the user's trajectory")
     # paper_context は DSPy InputField として動的に渡されるため、
     # テンプレート文字列をプロンプト冒頭の自然な指示文に置換する
     cleaned = cleaned.replace(
@@ -237,3 +239,9 @@ class WordTranslationInContext(dspy.Signature):
     target_word: str = dspy.InputField(desc="Target word or phrase")
     lang_name: str = dspy.InputField(desc="Target language (e.g., Japanese)")
     translation: str = dspy.OutputField(desc="Concise translation (1-3 words)")
+
+
+class UserPersona(dspy.Signature):
+    __doc__ = clean_prompt_for_dspy(USER_PERSONA_PROMPT)
+    trajectory: str = dspy.InputField(desc="User's trajectory")
+    persona: str = dspy.OutputField(desc="User's persona")

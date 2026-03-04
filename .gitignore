@@ -20,7 +20,13 @@ config.ts
 !frontend/src/config.ts
 # C extensions
 *.so
-local-files/
+# local-files/
+local-files/secrets/
+local-files/logs/
+local-files/.agents/
+local-files/.claude/
+local-files/.kiro/
+local-files/*.db
 .claude
 # local
 *.toml
@@ -260,4 +266,3 @@ models/
 .kiro
 .agents
 CLAUDE.md
-local-files/
