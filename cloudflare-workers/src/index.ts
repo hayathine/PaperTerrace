@@ -317,9 +317,13 @@ async function forwardRequest(
   headers.set("X-User-ID", decodedToken.uid);
   headers.set("X-Forwarded-For", request.headers.get("CF-Connecting-IP") || "");
   headers.set("X-Real-IP", request.headers.get("CF-Connecting-IP") || "");
-  // ★ Access Service Token
-  headers.set("CF-Access-Client-Id", env.CLIENT_ID);
-  headers.set("CF-Access-Client-Secret", env.CLIENT_SECRET);
+  // ★ Access Service Token (Optional)
+  if (env.CLIENT_ID && env.CLIENT_SECRET) {
+    headers.set("CF-Access-Client-Id", env.CLIENT_ID);
+    headers.set("CF-Access-Client-Secret", env.CLIENT_SECRET);
+  } else {
+    console.warn("CLIENT_ID or CLIENT_SECRET missing, skipping Access headers");
+  }
 
   // Forward additional user info so backend can build AuthenticatedUser without re-verifying the token
   if (decodedToken.email)
