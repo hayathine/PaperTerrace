@@ -8,30 +8,33 @@ authors = [
 ]
 requires-python = ">=3.12"
 dependencies = [
-    # ML推論ライブラリ
-    "ctranslate2>=4.4.0",
-    "sentencepiece>=0.2.0",
-    "onnxruntime>=1.23.2",
-    "openvino>=2024.0.0",
-    "opencv-python-headless>=4.13.0.92",
-    "onnx-graphsurgeon>=0.5.8",
-    "slowapi>=0.1.9",
     "fastapi>=0.128.0",
     "uvicorn[standard]>=0.32.1",
     "pydantic>=2.10.4",
     "python-multipart>=0.0.9",
     "httpx>=0.24.0",
     "numpy>=1.26.4",
-    "Pillow>=11.0.0",
     "structlog>=24.1.0",
-    "chardet>=5.2.0",
     "python-dotenv>=1.0.1",
+    "slowapi>=0.1.9",
+    "chardet>=5.2.0",
+]
+
+[dependency-groups]
+layout = [
+    "onnxruntime>=1.23.2",
+    "openvino>=2024.0.0",
+    "opencv-python-headless>=4.13.0.92",
+    "onnx-graphsurgeon>=0.5.8",
+    "Pillow>=11.0.0",
+]
+translation = [
+    "ctranslate2>=4.4.0",
+    "sentencepiece>=0.2.0",
     "llama-cpp-python>=0.3.16",
     "huggingface-hub>=0.20.0",
     "dspy-ai>=2.4.9",
 ]
-
-[dependency-groups]
 dev = [
     "pyright>=1.1.408",
     "pytest>=9.0.2",

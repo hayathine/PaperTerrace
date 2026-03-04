@@ -94,14 +94,23 @@ class LayoutAnalysisService:
                 continue
 
         if not image_data_list:
+            logger.warning(
+                f"[analyze_layout_lazy] No valid images found to process for paper {paper_id}"
+            )
             raise Exception("No valid images to process")
 
+        logger.info(
+            f"[analyze_layout_lazy] Sending {len(image_data_list)} images to inference service for paper {paper_id}"
+        )
         inference_client = await get_inference_client()
         # Batch sizes are handled within the client as well, but we can send all to client.
         batch_results = await inference_client.analyze_images_batch(
             image_data_list, max_batch_size=10
         )
 
+        logger.info(
+            f"[analyze_layout_lazy] Received results for {len(batch_results)} pages"
+        )
         all_figures = []
         for page_num, img_bytes, results in zip(
             page_info_list, image_data_list, batch_results
@@ -110,8 +119,10 @@ class LayoutAnalysisService:
             img_w, img_h = img_pil.size
             fig_idx = 0
 
+            logger.debug(f"Page {page_num}: Found {len(results)} raw detections")
             for res in results:
                 class_name = res.get("class_name", "").lower()
+                logger.debug(f"  - Detected: {class_name} (score: {res.get('score')})")
                 if class_name in self.TARGET_CLASSES:
                     bbox_dict = res.get("bbox", {})
                     if not bbox_dict:

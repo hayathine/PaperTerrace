@@ -216,7 +216,7 @@ class LlamaCppTranslationService:
                     logger.debug("DSPy predictor 実行中...")
                     prediction = predictor(
                         paper_context=paper_context,
-                        target_text=original_word,
+                        target_word=original_word,
                         lang_name=lang_name,
                     )
                     logger.debug("DSPy predictor 実行完了")

@@ -16,16 +16,6 @@ from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-
-if os.getenv("USE_OPENVINO", "true").lower() == "true":
-    from services.layout_detection.openvino_layout_service import (
-        OpenVINOLayoutAnalysisService as LayoutAnalysisService,
-    )
-else:
-    from services.layout_detection.layout_service import LayoutAnalysisService
-from services.translation.llamacpp_service import LlamaCppTranslationService
-from services.translation.m2m100_service import M2M100TranslationService
-from services.translation.translation_service import TranslationService
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
@@ -45,6 +35,31 @@ from common.schemas.inference import (
 configure_logging()
 
 INFERENCE_TYPE = os.getenv("INFERENCE_TYPE", "all").lower()
+
+# サービスインスタンス
+layout_service = None
+m2m100_service = None
+llamacpp_service = None
+translation_service = None
+
+if INFERENCE_TYPE in ["all", "layout"]:
+    try:
+        if os.getenv("USE_OPENVINO", "true").lower() == "true":
+            from services.layout_detection.openvino_layout_service import (
+                OpenVINOLayoutAnalysisService as LayoutAnalysisService,
+            )
+        else:
+            from services.layout_detection.layout_service import LayoutAnalysisService
+    except ImportError:
+        logger.warning("Layout detection dependencies not found, skipping import")
+
+if INFERENCE_TYPE in ["all", "translation"]:
+    try:
+        from services.translation.llamacpp_service import LlamaCppTranslationService
+        from services.translation.m2m100_service import M2M100TranslationService
+        from services.translation.translation_service import TranslationService
+    except ImportError:
+        logger.warning("Translation dependencies not found, skipping import")
 
 limiter = Limiter(
     key_func=get_remote_address,
@@ -76,12 +91,6 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 _initialized = False
 _init_lock = asyncio.Lock()
 _init_started_at: Optional[float] = None
-
-# サービスインスタンス
-layout_service = None
-m2m100_service = None
-llamacpp_service = None
-translation_service = None
 
 
 # --------------------------------------------------

@@ -155,6 +155,12 @@ async def analyze_layout_lazy(
     """
     画面表示後に遅延実行されるレイアウト解析エンドポイント（バッチ処理版）
     """
+    log.info(
+        "layout_lazy",
+        "Received lazy layout analysis request",
+        paper_id=paper_id,
+        pages=page_numbers,
+    )
     try:
         # Parse page numbers
         parsed_pages = None

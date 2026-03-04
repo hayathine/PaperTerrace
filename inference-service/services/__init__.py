@@ -2,8 +2,5 @@
 ServiceB（推論サービス）のサービスモジュール
 """
 
-from .layout_detection.layout_service import LayoutAnalysisService
-
-__all__ = [
-    "LayoutAnalysisService",
-]
+# トップレベルでのインポートは行わず、各サービスごとに遅延ロードを行う
+# これにより、依存関係が一部欠けているイメージでも起動可能にする
