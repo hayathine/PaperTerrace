@@ -113,7 +113,8 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 					value={comment}
 					onChange={(e) => setComment(e.target.value)}
 					placeholder={t("common.feedback.placeholder")}
-					className="w-full min-h-[80px] p-3 text-xs bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all resize-none"
+					rows={1}
+					className="w-full p-3 text-xs bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all resize-none"
 				/>
 				<div className="flex justify-end">
 					<button

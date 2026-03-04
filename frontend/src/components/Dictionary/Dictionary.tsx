@@ -109,6 +109,21 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 			setError(null);
 
+			// Add a temporary entry to show analyzing indicator for the new word
+			const tempEntry: DictionaryEntryWithCoords = {
+				word: term,
+				translation: "...",
+				source: "Analyzing",
+				is_analyzing: true,
+				coords: coordinates,
+			};
+			if (imageUrl) tempEntry.image_url = imageUrl;
+
+			setEntries((prev) => {
+				const filtered = prev.filter((e) => e.word !== term);
+				return [tempEntry, ...filtered];
+			});
+
 			try {
 				const headers: HeadersInit = {};
 				if (token) headers.Authorization = `Bearer ${token}`;
@@ -159,11 +174,17 @@ const Dictionary: React.FC<DictionaryProps> = ({
 						setError(
 							`Could not explain "${term}". It may be a URL or special term.`,
 						);
+						setEntries((prev) =>
+							prev.filter((e) => e.word !== term || !e.is_analyzing),
+						);
 					}
 				} else {
 					const errorText = await res.text();
 					setError(
 						`Definition not found: ${res.status} ${errorText.substring(0, 50)}`,
+					);
+					setEntries((prev) =>
+						prev.filter((e) => e.word !== term || !e.is_analyzing),
 					);
 				}
 			} catch (e: any) {
@@ -173,6 +194,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				});
 
 				setError(`Failed to fetch definition for "${term}".`);
+				setEntries((prev) =>
+					prev.filter((e) => e.word !== term || !e.is_analyzing),
+				);
 			} finally {
 				setLoading(false);
 			}

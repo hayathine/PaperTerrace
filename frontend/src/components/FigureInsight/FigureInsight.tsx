@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { API_URL } from "@/config";
 import { createLogger } from "@/lib/logger";
 import CopyButton from "../Common/CopyButton";
@@ -21,18 +21,44 @@ interface FigureResult {
 	traceId?: string;
 }
 
+// セッション単位のキャッシュ（アンマウントされても状態を保持する）
+const globalStackCache: Record<string, FigureResult[]> = {};
+const globalAnalyzedIds: Record<string, Set<string>> = {};
+const globalRequestingIds: Record<string, Set<string>> = {};
+
+function initSessionCache(sessionId: string) {
+	if (!globalStackCache[sessionId]) globalStackCache[sessionId] = [];
+	if (!globalAnalyzedIds[sessionId]) globalAnalyzedIds[sessionId] = new Set();
+	if (!globalRequestingIds[sessionId])
+		globalRequestingIds[sessionId] = new Set();
+}
+
 const FigureInsight: React.FC<FigureInsightProps> = ({
 	selectedFigure,
 	sessionId,
 }) => {
+	initSessionCache(sessionId);
+
 	// スタックされた解析済み図表の配列（新しいものが先頭）
-	const [stack, setStack] = useState<FigureResult[]>([]);
+	const [stackState, setStackState] = useState<FigureResult[]>(
+		globalStackCache[sessionId],
+	);
 	const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
-	// 重複リクエスト防止: 処理中の figure ID を追跡する
-	const requestingFigureIdsRef = useRef<Set<string>>(new Set());
-	// 解析済み figure ID のキャッシュ（タブ切り替えによる再取得を防ぐ）
-	const analyzedFigureIdsRef = useRef<Set<string>>(new Set());
+	// セッションが変更されたときに状態を復元
+	useEffect(() => {
+		initSessionCache(sessionId);
+		setStackState(globalStackCache[sessionId]);
+	}, [sessionId]);
+
+	// キャッシュとローカルステートを同期更新するラッパー関数
+	const setStack = (updater: React.SetStateAction<FigureResult[]>) => {
+		setStackState((prev) => {
+			const next = typeof updater === "function" ? updater(prev) : updater;
+			globalStackCache[sessionId] = next;
+			return next;
+		});
+	};
 
 	/**
 	 * selectedFigure が変化したとき、まだ解析していない図であれば
@@ -51,8 +77,8 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 
 		// 既に解析済み or 現在リクエスト中の場合はスキップ
 		if (
-			analyzedFigureIdsRef.current.has(figureId) ||
-			requestingFigureIdsRef.current.has(figureId)
+			globalAnalyzedIds[sessionId].has(figureId) ||
+			globalRequestingIds[sessionId].has(figureId)
 		) {
 			return;
 		}
@@ -73,7 +99,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 			return [newEntry, ...prev];
 		});
 
-		requestingFigureIdsRef.current.add(figureId);
+		globalRequestingIds[sessionId].add(figureId);
 
 		const idForApi = selectedFigure.id || "transient";
 		fetch(`${API_URL}/api/figures/${idForApi}/explain`, {
@@ -118,7 +144,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 								: r,
 						),
 					);
-					analyzedFigureIdsRef.current.add(figureId);
+					globalAnalyzedIds[sessionId].add(figureId);
 				}
 			})
 			.catch((e) => {
@@ -139,11 +165,11 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 				);
 			})
 			.finally(() => {
-				requestingFigureIdsRef.current.delete(figureId);
+				globalRequestingIds[sessionId].delete(figureId);
 			});
-	}, [selectedFigure?.id, selectedFigure?.image_url]); // selectedFigure が変わったときだけ発動
+	}, [selectedFigure?.id, selectedFigure?.image_url, sessionId]); // selectedFigure, sessionId が変わったときだけ発動
 
-	if (!selectedFigure && stack.length === 0) {
+	if (!selectedFigure && stackState.length === 0) {
 		return (
 			<div className="text-center py-16 px-6">
 				<div className="w-16 h-16 bg-white rounded-2xl shadow-sm flex items-center justify-center mx-auto mb-4 border border-slate-100">
@@ -173,16 +199,16 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 
 	return (
 		<div className="relative space-y-4">
-			{stack.length > 1 && (
+			{stackState.length > 1 && (
 				<div className="flex items-center justify-between mb-1">
 					<span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-						{stack.length}件の図解
+						{stackState.length}件の図解
 					</span>
 					<button
 						type="button"
 						onClick={() => {
 							setStack([]);
-							analyzedFigureIdsRef.current.clear();
+							globalAnalyzedIds[sessionId].clear();
 						}}
 						className="text-[10px] text-slate-400 hover:text-rose-500 transition-colors font-bold uppercase tracking-wider"
 					>
@@ -191,7 +217,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 				</div>
 			)}
 
-			{stack.map((result, idx) => (
+			{stackState.map((result, idx) => (
 				<FigureCard
 					key={getFigureId(result.figure) || idx}
 					result={result}
