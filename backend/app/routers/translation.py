@@ -261,6 +261,7 @@ async def explain(
         )
 
     # Low confidence override -> Qwen3
+    skip_m2m100 = False
     if use_llamacpp:
         log.info(
             "explain",
@@ -274,7 +275,7 @@ async def explain(
 
             client = await get_inference_client()
 
-            local_translation = await client.translate_text(
+            local_translation, _model = await client.translate_with_qwen(
                 original_word, lang, paper_context=paper_context_str
             )
             source = "Qwen3"
@@ -310,15 +311,23 @@ async def explain(
                     show_deep_btn=False,
                 )
             )
+        except InferenceServiceTimeoutError as e:
+            log.warning(
+                "explain",
+                "Qwen translation timeout, skipping M2M100 and falling back to Gemini",
+                error=str(e),
+                lemma=lemma,
+            )
+            skip_m2m100 = True
         except Exception as e:
             log.warning(
                 "explain", "LlamaCpp translation failed", error=str(e), lemma=lemma
             )
-
-            # Fall back to rest
+            # Fall back to M2M100
 
     # Stage 2: ServiceB Machine Translation (M2M100)
-    translator = local_translator.get_local_translator()
+    if not skip_m2m100:
+        translator = local_translator.get_local_translator()
     if translator._initialized:
         try:
             local_translation, _model = await translator.translate_async(
@@ -345,9 +354,13 @@ async def explain(
             )
 
             local_translation = None
+        else:
+            local_translation = None
+            log.warning("explain", "Local translator not initialized", lemma=lemma)
     else:
+        # We skipped M2M100 (e.g. Qwen timed out), so we want to force Gemini
         local_translation = None
-        log.warning("explain", "Local translator not initialized", lemma=lemma)
+
     if local_translation:
         if local_translation not in ["混雑中", "サーバーが故障中です"]:
             service.translation_cache[lemma] = local_translation
