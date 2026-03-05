@@ -4,6 +4,7 @@
 """
 
 import logging
+import os
 
 from .llamacpp_service import LlamaCppTranslationService
 from .m2m100_service import M2M100TranslationService
@@ -23,6 +24,9 @@ class TranslationService:
         self.m2m100 = m2m100_service
         self.llamacpp = llamacpp_service
         self.inference_type = inference_type
+        self.fallback_threshold = float(
+            os.getenv("TRANSLATION_FALLBACK_THRESHOLD", "0.5")
+        )
 
     async def initialize(self):
         """依存サービスの初期化（main.py側で初期化済みの場合はスキップ可能だが一応）"""
@@ -73,7 +77,7 @@ class TranslationService:
 
         # 2. 確信度によるフォールバック (translation モードのみ)
         if (
-            conf <= 0.5
+            conf <= self.fallback_threshold
             and self.llamacpp
             and self.inference_type in ["translation", "all"]
         ):
@@ -137,7 +141,7 @@ class TranslationService:
             )
 
             if (
-                conf <= 0.5
+                conf <= self.fallback_threshold
                 and self.llamacpp
                 and self.inference_type in ["translation", "all"]
             ):

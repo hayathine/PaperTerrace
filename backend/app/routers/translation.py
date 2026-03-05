@@ -311,10 +311,10 @@ async def explain(
                     show_deep_btn=False,
                 )
             )
-        except InferenceServiceTimeoutError as e:
+        except (InferenceServiceTimeoutError, CircuitBreakerError) as e:
             log.warning(
                 "explain",
-                "Qwen translation timeout, skipping M2M100 and falling back to Gemini",
+                "Qwen translation timeout or circuit open, skipping M2M100 and falling back to Gemini",
                 error=str(e),
                 lemma=lemma,
             )

@@ -381,10 +381,15 @@ tasks:
     cmds:
       - kubectl logs -f -l app=inference-layout -n {{.NAMESPACE}}
 
-  k3s:logs:inference-translation:
-    desc: "View inference-translation logs in k3s"
+  k3s:logs:inference-m2m100:
+    desc: "View inference-m2m100 logs in k3s"
     cmds:
-      - kubectl logs -f -l app=inference-translation -n {{.NAMESPACE}}
+      - kubectl logs -f -l app=inference-m2m100 -n {{.NAMESPACE}}
+
+  k3s:logs:inference-qwen:
+    desc: "View inference-qwen logs in k3s"
+    cmds:
+      - kubectl logs -f -l app=inference-qwen -n {{.NAMESPACE}}
 
   k3s:restart:backend:
     desc: "Restart backend in k3s"
@@ -401,18 +406,23 @@ tasks:
     cmds:
       - kubectl rollout restart deployment/inference-layout -n {{.NAMESPACE}} || true
 
-  k3s:restart:inference-translation:
-    desc: "Restart inference-translation in k3s"
+  k3s:restart:inference-m2m100:
+    desc: "Restart inference-m2m100 in k3s"
     cmds:
-      - kubectl rollout restart deployment/inference-translation -n {{.NAMESPACE}} || true
+      - kubectl rollout restart deployment/inference-m2m100 -n {{.NAMESPACE}} || true
+
+  k3s:restart:inference-qwen:
+    desc: "Restart inference-qwen in k3s"
+    cmds:
+      - kubectl rollout restart deployment/inference-qwen -n {{.NAMESPACE}} || true
 
   k3s:restart:all:
     desc: "Restart all application services in k3s"
     cmds:
       - task: k3s:restart:backend
       - task: k3s:restart:inference-layout
-      - task: k3s:restart:inference-translation
-      - task: k3s:restart:inference
+      - task: k3s:restart:inference-m2m100
+      - task: k3s:restart:inference-qwen
 
   k3s:health:
     desc: "Check health of services in k3s"
@@ -425,9 +435,9 @@ tasks:
         echo "❌ Unhealthy"
         echo ""
         echo "Inference Server (All):"
-        kubectl exec -n {{.NAMESPACE}} deployment/inference -- curl -s http://localhost:8080/health 2>/dev/null && echo "✅ Inference general" || true
         kubectl exec -n {{.NAMESPACE}} deployment/inference-layout -- curl -s http://localhost:8080/health 2>/dev/null && echo "✅ Inference layout" || true
-        kubectl exec -n {{.NAMESPACE}} deployment/inference-translation -- curl -s http://localhost:8080/health 2>/dev/null && echo "✅ Inference translation" || true
+        kubectl exec -n {{.NAMESPACE}} deployment/inference-m2m100 -- curl -s http://localhost:8080/health 2>/dev/null && echo "✅ Inference m2m100" || true
+        kubectl exec -n {{.NAMESPACE}} deployment/inference-qwen -- curl -s http://localhost:8080/health 2>/dev/null && echo "✅ Inference qwen" || true
         echo ""
         echo "Redis:"
         kubectl exec -n {{.NAMESPACE}} statefulset/{{.RELEASE_NAME}}-redis-master -- redis-cli ping || echo "❌ Unhealthy"
