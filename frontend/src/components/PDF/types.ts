@@ -34,6 +34,7 @@ export interface Figure {
 	caption?: string;
 	explanation?: string;
 	latex?: string;
+	conf?: number;
 }
 
 /** ClickModeで図をクリックした際にFigureInsightパネルへ渡すデータ */
@@ -43,6 +44,7 @@ export interface SelectedFigure {
 	label?: string;
 	caption?: string;
 	page_number: number;
+	conf?: number;
 }
 
 export interface LineData {

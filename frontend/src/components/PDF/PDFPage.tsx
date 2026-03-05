@@ -70,6 +70,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 }) => {
 	const { t } = useTranslation();
 	const { width, height, words, figures, image_url, page_num } = page;
+	const is_dev = import.meta.env.DEV;
 
 	// Check for cached image in IndexedDB
 	const cachedImage = useLiveQuery(async () => {
@@ -327,7 +328,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
 							return (
 								<div
 									key={`fig-img-${idx}`}
-									className="absolute group pointer-events-none group-data-[click-mode]/viewer:pointer-events-auto group-data-[click-mode]/viewer:border-2 group-data-[click-mode]/viewer:border-orange-300/60 group-data-[click-mode]/viewer:rounded-sm"
+									className={`absolute group pointer-events-none group-data-[click-mode]/viewer:pointer-events-auto group-data-[click-mode]/viewer:rounded-sm ${
+										is_dev
+											? "group-data-[click-mode]/viewer:border-2 group-data-[click-mode]/viewer:border-orange-300/60"
+											: ""
+									}`}
 									style={style}
 								>
 									<img
@@ -338,11 +343,15 @@ const PDFPage: React.FC<PDFPageProps> = ({
 									{/* クリックモード時のみ表示するインタラクティブ要素。
 									    子要素はすべて absolute なのでラッパー div はレイアウトに影響しない。 */}
 									<div className="hidden group-data-[click-mode]/viewer:block">
-										{/* Hover overlay for visual feedback */}
-										<div className="absolute inset-0 bg-orange-500/0 hover:bg-orange-500/10 transition-colors border-2 border-transparent hover:border-orange-400 rounded-sm pointer-events-none" />
+										{/* 確信度バッジ (is_dev=true のみ) */}
+										{is_dev && fig.conf !== undefined && (
+											<div className="absolute top-0 left-0 bg-black/70 text-white text-[10px] px-1 py-0.5 rounded-br z-[9999] pointer-events-none">
+												Score: {(fig.conf * 100).toFixed(1)}%
+											</div>
+										)}
 
 										{/* Ask AI button shown on hover */}
-										<div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-50">
+										<div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-[9999]">
 											<button
 												type="button"
 												className="bg-orange-600 text-white text-xs px-3 py-1.5 rounded-md shadow shadow-orange-500/30 hover:bg-orange-700 hover:shadow-orange-600/40 transition-all font-medium flex items-center gap-1.5 cursor-pointer transform hover:scale-105 active:scale-95"
@@ -355,6 +364,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 															label: fig.label,
 															caption: fig.caption,
 															page_number: page_num,
+															conf: fig.conf,
 														});
 													}
 												}}
@@ -479,7 +489,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 									type="button"
 									id={isCurrentSearchMatch ? "current-search-match" : undefined}
 									className={`absolute rounded-sm group text-layer-word pointer-events-none group-data-[click-mode]/viewer:cursor-pointer group-data-[click-mode]/viewer:pointer-events-auto
-										${!isStampMode && !isSelected && !isJumpHighlight && !isSearchMatch ? "group-data-[click-mode]/viewer:hover:bg-yellow-300/30" : ""}
+										${!isStampMode && !isSelected && !isJumpHighlight && !isSearchMatch ? "" : ""}
 										${isSelected ? "bg-orange-500/30 border border-orange-500/50" : ""}
 										${isJumpHighlight ? "bg-yellow-400/60 z-20" : ""}
 										${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 border border-amber-400" : ""}

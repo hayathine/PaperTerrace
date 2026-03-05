@@ -87,7 +87,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
           ${
 						isDragging
 							? "border-orange-400 bg-orange-50/80 scale-[1.02] shadow-xl shadow-orange-200/50"
-							: "border-slate-300 bg-white/60 hover:border-orange-300 hover:bg-white hover:shadow-2xl hover:shadow-orange-100/50"
+							: "border-slate-300 bg-white/60 hover:bg-white hover:shadow-2xl"
 					}
         `}
 			>
@@ -136,7 +136,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
             ${
 							isDragging
 								? "bg-orange-100 text-orange-500 scale-110 rotate-12"
-								: "bg-slate-100 text-slate-400 group-hover:bg-orange-50 group-hover:text-orange-400 group-hover:-translate-y-1"
+								: "bg-slate-100 text-slate-400 group-hover:bg-slate-50 group-hover:text-slate-600 group-hover:-translate-y-1"
 						}
           `}
 					>

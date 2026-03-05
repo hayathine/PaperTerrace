@@ -695,7 +695,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					processingFileRef.current = null;
 					activeTaskIdRef.current = null;
 				} else if (eventData.type === "coordinates_ready") {
-					setMode("plaintext");
+					// No action needed; mode is preserved
 				} else if (eventData.type === "assist_mode_ready") {
 					// No action needed; reserved for future use
 				} else if (eventData.type === "error") {
@@ -986,8 +986,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						if (cachedPages.length > 0) {
 							setPages(cachedPages);
 							setStatus("done");
-							setMode("plaintext");
-							// Cached papers: default to text mode (Markdown rendering)
+							// Cached papers: preserved current mode
 
 							// Trigger lazy layout analysis to fetch figures if not already present
 							const hasFigures = cachedPages.some(

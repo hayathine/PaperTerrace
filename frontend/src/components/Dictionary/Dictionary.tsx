@@ -514,7 +514,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 									className={`flex-1 py-2.5 sm:py-2 text-xs font-bold rounded-lg transition-all flex items-center justify-center gap-2 border ${
 										savedItems.has(entry.word)
 											? "bg-green-50 text-green-600 border-green-200 cursor-default"
-											: "bg-slate-50 hover:bg-orange-50 text-slate-500 hover:text-orange-600 border-transparent group-hover:border-orange-100"
+											: "bg-slate-50 hover:bg-slate-100 text-slate-500 border-transparent group-hover:border-slate-200"
 									}`}
 								>
 									{savedItems.has(entry.word) ? (
@@ -579,7 +579,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 									<button
 										type="button"
 										onClick={() => handleDeepTranslate(entry)}
-										className="flex-1 py-2.5 sm:py-2 bg-orange-50 hover:bg-orange-100 text-orange-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
+										className="flex-1 py-2.5 sm:py-2 bg-slate-50 hover:bg-slate-100 text-orange-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
 									>
 										<svg
 											className="w-3.5 h-3.5"

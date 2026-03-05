@@ -482,7 +482,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 								);
 							setSelectionMenu(null);
 						}}
-						className="px-4 py-2.5 sm:py-2 hover:bg-orange-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-100 min-h-[44px] sm:min-h-0"
+						className="px-4 py-2.5 sm:py-2 hover:bg-slate-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-100 min-h-[44px] sm:min-h-0"
 					>
 						<span>文A</span> {t("menu.translate", "Translate")}
 					</button>
@@ -495,7 +495,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 								onTextSelect(selectionMenu.text, selectionMenu.coords);
 							setSelectionMenu(null);
 						}}
-						className={`px-4 py-2.5 sm:py-2 hover:bg-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors min-h-[44px] sm:min-h-0 ${onAskAI ? "border-r border-slate-700" : ""}`}
+						className={`px-4 py-2.5 sm:py-2 hover:bg-slate-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors min-h-[44px] sm:min-h-0 ${onAskAI ? "border-r border-slate-700" : ""}`}
 					>
 						<span>📝</span> {t("menu.note", "Note")}
 					</button>
@@ -509,7 +509,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 								onAskAI(prompt);
 								setSelectionMenu(null);
 							}}
-							className="px-4 py-2.5 sm:py-2 hover:bg-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors rounded-r-lg min-h-[44px] sm:min-h-0"
+							className="px-4 py-2.5 sm:py-2 hover:bg-slate-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors rounded-r-lg min-h-[44px] sm:min-h-0"
 						>
 							<span>💡</span> {t("menu.explain", "Explain")}
 						</button>

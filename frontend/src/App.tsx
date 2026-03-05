@@ -13,6 +13,7 @@ import GlobalLoading from "./components/UI/GlobalLoading";
 import UploadScreen from "./components/Upload/UploadScreen";
 import { useAuth } from "./contexts/AuthContext";
 import { useLoading } from "./contexts/LoadingContext";
+import { useScrollTracking } from "./hooks/useScrollTracking";
 import { syncTrajectory } from "./lib/recommendation";
 
 const log = createLogger("App");
@@ -84,6 +85,9 @@ function App() {
 	const [uploadedPapers, setUploadedPapers] = useState<any[]>([]);
 
 	const prevPaperIdRef = useRef<string | null>(null);
+	const paperStartTimeRef = useRef<number | null>(null);
+
+	const handleScroll = useScrollTracking(currentPaperId || uploadFile?.name);
 
 	// Developer settings
 	const SHOW_DEV_TOOLS = true;
@@ -116,7 +120,7 @@ function App() {
 
 	const { loginAsGuest: handleLoginAsGuest } = useAuth();
 
-	// Context Cache Lifecycle Management
+	// Context Cache Lifecycle Management & Session Duration Tracking
 	useEffect(() => {
 		const deleteCache = (paperId: string) => {
 			const formData = new FormData();
@@ -136,15 +140,49 @@ function App() {
 			}
 		};
 
+		const sendDurationTrace = (paperId: string) => {
+			if (paperStartTimeRef.current) {
+				const duration = (Date.now() - paperStartTimeRef.current) / 1000;
+				syncTrajectory(
+					{
+						session_id: sessionId,
+						paper_id: paperId,
+						session_duration: duration,
+					},
+					token,
+				);
+			}
+		};
+
 		if (prevPaperIdRef.current && prevPaperIdRef.current !== currentPaperId) {
+			sendDurationTrace(prevPaperIdRef.current);
 			deleteCache(prevPaperIdRef.current);
 		}
+
+		if (currentPaperId && prevPaperIdRef.current !== currentPaperId) {
+			paperStartTimeRef.current = Date.now();
+		} else if (!currentPaperId) {
+			paperStartTimeRef.current = null;
+		}
+
 		prevPaperIdRef.current = currentPaperId;
-	}, [currentPaperId, sessionId]);
+	}, [currentPaperId, sessionId, token]);
 
 	useEffect(() => {
 		const handleBeforeUnload = () => {
 			if (currentPaperId) {
+				if (paperStartTimeRef.current) {
+					const duration = (Date.now() - paperStartTimeRef.current) / 1000;
+					syncTrajectory(
+						{
+							session_id: sessionId,
+							paper_id: currentPaperId,
+							session_duration: duration,
+						},
+						token,
+					);
+				}
+
 				const formData = new FormData();
 				formData.append("session_id", sessionId);
 				formData.append("paper_id", currentPaperId);
@@ -154,7 +192,7 @@ function App() {
 
 		window.addEventListener("beforeunload", handleBeforeUnload);
 		return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-	}, [currentPaperId, sessionId]);
+	}, [currentPaperId, sessionId, token]);
 
 	// ブレークポイント: 768px未満をモバイル扱い (Tailwind md と一致)
 	const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
@@ -551,7 +589,7 @@ function App() {
 											className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-200 group relative ${
 												currentPaperId === paper.paper_id
 													? "bg-orange-500 text-white shadow-lg shadow-orange-900/10"
-													: "text-slate-500 hover:bg-orange-50 hover:text-orange-500"
+													: "text-slate-500 hover:bg-slate-50"
 											}`}
 										>
 											<div className="flex items-start gap-3">
@@ -559,7 +597,7 @@ function App() {
 													className={`mt-0.5 shrink-0 w-1.5 h-1.5 rounded-full ${
 														currentPaperId === paper.paper_id
 															? "bg-orange-300"
-															: "bg-slate-200 group-hover:bg-orange-300"
+															: "bg-slate-200 group-hover:bg-slate-300"
 													}`}
 												/>
 												<div className="overflow-hidden">
@@ -755,7 +793,7 @@ function App() {
 							<button
 								type="button"
 								onClick={() => setIsLeftSidebarOpen(true)}
-								className="mr-4 p-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 hover:text-orange-500 hover:border-orange-100 transition-all duration-200 flex items-center justify-center shadow-sm"
+								className="mr-4 p-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all duration-200 flex items-center justify-center shadow-sm"
 								title={t("nav.open_menu")}
 							>
 								<svg
@@ -785,7 +823,7 @@ function App() {
 						<button
 							type="button"
 							onClick={() => setIsRightSidebarOpen((prev) => !prev)}
-							className="ml-4 p-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 hover:text-orange-500 hover:border-orange-100 transition-all duration-200 flex items-center justify-center shadow-sm"
+							className="ml-4 p-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all duration-200 flex items-center justify-center shadow-sm"
 							title={
 								isRightSidebarOpen
 									? t("nav.close_right_panel", "Close panel")
@@ -816,7 +854,10 @@ function App() {
 							className="flex-1 bg-slate-100 flex items-start justify-center relative overflow-hidden"
 						>
 							{uploadFile || currentPaperId ? (
-								<div className="w-full h-full p-2 sm:p-4 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar">
+								<div
+									onScroll={handleScroll}
+									className="w-full h-full p-2 sm:p-4 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar"
+								>
 									<PDFViewer
 										sessionId={sessionId}
 										uploadFile={uploadFile}
@@ -849,7 +890,7 @@ function App() {
 							aria-valuemin={150}
 							aria-valuemax={500}
 							tabIndex={0}
-							className={`hidden md:block w-1.5 h-full cursor-col-resize hover:bg-orange-500/30 transition-colors z-30 shrink-0 border-none m-0 p-0 ${isResizing ? "bg-orange-500/50" : "bg-transparent"}`}
+							className={`hidden md:block w-1.5 h-full cursor-col-resize hover:bg-slate-500/10 transition-colors z-30 shrink-0 border-none m-0 p-0 ${isResizing ? "bg-slate-500/20" : "bg-transparent"}`}
 							onMouseDown={(e) => {
 								e.preventDefault();
 								setIsResizing(true);
