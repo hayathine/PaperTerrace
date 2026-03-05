@@ -8,16 +8,8 @@ const log = createLogger("FeedbackSection");
 
 interface FeedbackSectionProps {
 	sessionId: string;
-	targetType:
-		| "recommendation"
-		| "summary"
-		| "critique"
-		| "related_papers"
-		| "chat"
-		| "translation"
-		| "figure_insight";
-	targetId?: string;
 	traceId?: string;
+	compact?: boolean;
 }
 
 const FeedbackSection: React.FC<FeedbackSectionProps> = ({
@@ -25,6 +17,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 	targetType,
 	targetId,
 	traceId,
+	compact = false,
 }) => {
 	const { t } = useTranslation();
 	const [status, setStatus] = useState<
