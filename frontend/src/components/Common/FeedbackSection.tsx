@@ -8,6 +8,15 @@ const log = createLogger("FeedbackSection");
 
 interface FeedbackSectionProps {
 	sessionId: string;
+	targetType:
+		| "recommendation"
+		| "summary"
+		| "critique"
+		| "related_papers"
+		| "chat"
+		| "translation"
+		| "figure_insight";
+	targetId?: string;
 	traceId?: string;
 	compact?: boolean;
 }
@@ -62,16 +71,17 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 		setComment("");
 	};
 
-	// Removing early return for "submitted" so buttons and textarea stay visible.
-	// We'll show a small success message below instead.
-
 	return (
-		<div className="space-y-4 py-5 border-t border-slate-100 mt-6 animate-in fade-in slide-in-from-bottom-2 duration-500">
+		<div
+			className={`${compact ? "space-y-2 py-2 border-t border-slate-100 mt-2" : "space-y-4 py-5 border-t border-slate-100 mt-6"} animate-in fade-in slide-in-from-bottom-2 duration-500`}
+		>
 			<div className="flex items-center justify-between">
-				<span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-					{t("common.feedback.title")}
-				</span>
-				<div className="flex gap-2">
+				{!compact && (
+					<span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
+						{t("common.feedback.title")}
+					</span>
+				)}
+				<div className={`flex gap-2 ${compact ? "w-full justify-end" : ""}`}>
 					<button
 						type="button"
 						disabled={status === "submitting"}
@@ -80,7 +90,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 							score === 1
 								? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30 scale-105"
 								: "bg-slate-50 text-slate-500 hover:bg-emerald-50 hover:text-emerald-600"
-						}`}
+						} ${compact ? "px-2 py-1 text-[10px]" : ""}`}
 					>
 						<span className={`${score === 1 ? "animate-bounce" : ""}`}>👍</span>
 						{t("common.feedback.good")}
@@ -93,7 +103,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 							score === 0
 								? "bg-rose-500 text-white shadow-lg shadow-rose-500/30 scale-105"
 								: "bg-slate-50 text-slate-500 hover:bg-rose-50 hover:text-rose-600"
-						}`}
+						} ${compact ? "px-2 py-1 text-[10px]" : ""}`}
 					>
 						<span className={`${score === 0 ? "animate-bounce" : ""}`}>👎</span>
 						{t("common.feedback.bad")}
@@ -107,14 +117,14 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 					onChange={(e) => setComment(e.target.value)}
 					placeholder={t("common.feedback.placeholder")}
 					rows={1}
-					className="w-full p-3 pr-[110px] text-xs bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all resize-none min-h-[46px]"
+					className={`w-full p-3 pr-[110px] text-xs bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all resize-none ${compact ? "min-h-[38px] p-2 pr-[80px] text-[10px]" : "min-h-[46px]"}`}
 				/>
 				<div className="absolute right-1.5 bottom-1.5">
 					<button
 						type="button"
 						disabled={status === "submitting" || !comment.trim()}
 						onClick={handleCommentSubmit}
-						className="px-3 py-1.5 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-200 text-white text-[10px] font-bold rounded-lg transition-all shadow-md active:scale-95 disabled:active:scale-100 h-[34px] flex items-center justify-center"
+						className={`px-3 py-1.5 bg-orange-600 hover:bg-orange-500 disabled:bg-slate-200 text-white text-[10px] font-bold rounded-lg transition-all shadow-md active:scale-95 disabled:active:scale-100 flex items-center justify-center ${compact ? "h-[28px] px-2 py-1 text-[9px]" : "h-[34px]"}`}
 					>
 						{status === "submitting" ? (
 							<div className="flex items-center gap-1.5">

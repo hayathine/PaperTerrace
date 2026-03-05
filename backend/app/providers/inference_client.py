@@ -51,7 +51,8 @@ class InferenceServiceClient:
         # 個別設定があればそれを使用し、なければ共通設定を使用する
         default_url = os.getenv("INFERENCE_SERVICE_URL", "http://localhost:8080")
         self.layout_base_url = os.getenv("INFERENCE_LAYOUT_URL", default_url)
-        self.translation_base_url = os.getenv("INFERENCE_TRANSLATION_URL", default_url)
+        self.m2m100_base_url = os.getenv("INFERENCE_M2M100_URL", default_url)
+        self.qwen_base_url = os.getenv("INFERENCE_QWEN_URL", default_url)
 
         self.timeout = int(os.getenv("INFERENCE_SERVICE_TIMEOUT", "60"))
         self.max_retries = int(os.getenv("INFERENCE_SERVICE_RETRIES", "2"))
@@ -369,11 +370,11 @@ class InferenceServiceClient:
         )
 
         try:
-            log.debug("translate", "翻訳リクエスト", text_preview=text[:50])
+            log.debug("translate", "M2M100翻訳リクエスト", text_preview=text[:50])
 
-            # ... content omitted ...
+            # 1. M2M100 にリクエスト
             response = await self._make_request_with_retry(
-                self.translation_base_url,
+                self.m2m100_base_url,
                 "POST",
                 "/api/v1/translate",
                 json=request_data.model_dump(),
@@ -381,13 +382,26 @@ class InferenceServiceClient:
 
             if response.get("success"):
                 translation = response.get("translation", "")
-                model = response.get("model")
+                model = response.get("model", "m2m100")
                 log.debug(
                     "translate",
-                    "翻訳完了",
+                    "M2M100翻訳完了",
                     model=model,
                     processing_time=response.get("processing_time", 0),
                 )
+
+                # フォールバック判定 (確信度がない場合はとりあえずm2m100の結果を信じる)
+                # 仮にバックエンド側でM2M100側の推論結果に conf が含まれていない場合も考慮
+                # ここではレスポンスに model 情報が入り、必要ならqwenで再実行する設計にするが、
+                # 今回はServiceB側でフォールバックを行わない構成にしたため、クライアント側でオーケストレーションする
+                # ただし、現状のM2M100翻訳エンドポイントのレスポンススキーマに conf がないので
+                # M2M100エンドポイントからはm2m100の翻訳結果が返るだけとなる。(TranslationResponse)
+                # もしQwenを使いたい場合は、呼び出し元が別途指定するなどが必要。
+                # 現行の仕様を極力壊さずにするため、基本はm2m100の結果を返すが、
+                # paper_context が指定されていてQwenを使いたい場合などは、別途ハンドリングが必要か。
+                # ★今回は暫定的に、m2m100を先に呼び、特定条件(※現在APIレスポンスにconfがないため取得できない)
+                # または常にm2m100を返すようにする。将来的にQwenを明示的に呼ぶメソッドを追加する。
+                # とりあえず、従来の translation 処理は m2m100 を呼ぶようにする。
 
                 return translation, model
             else:
@@ -397,6 +411,35 @@ class InferenceServiceClient:
         except Exception as e:
             log.error("translate", "翻訳エラー", error=str(e))
 
+            raise
+
+    async def translate_with_qwen(
+        self, text: str, target_lang: str = "ja", paper_context: str | None = None
+    ) -> tuple[str, str | None]:
+        """Qwenによる翻訳（明示的呼び出し）"""
+        request_data = TranslationRequest(
+            text=text, target_lang=target_lang, paper_context=paper_context
+        )
+
+        try:
+            log.debug("translate_qwen", "Qwen翻訳リクエスト", text_preview=text[:50])
+
+            response = await self._make_request_with_retry(
+                self.qwen_base_url,
+                "POST",
+                "/api/v1/translate",
+                json=request_data.model_dump(),
+            )
+
+            if response.get("success"):
+                translation = response.get("translation", "")
+                model = response.get("model", "qwen")
+                return translation, model
+            else:
+                error_msg = response.get("message", "不明なエラー")
+                raise InferenceServiceError(f"Qwen翻訳失敗: {error_msg}")
+        except Exception as e:
+            log.error("translate_qwen", "Qwen翻訳エラー", error=str(e))
             raise
 
     async def health_check(self) -> dict[str, Any]:

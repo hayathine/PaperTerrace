@@ -53,7 +53,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
     except ImportError:
         logger.warning("Layout detection dependencies not found, skipping import")
 
-if INFERENCE_TYPE in ["all", "translation"]:
+if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
     try:
         from services.translation.llamacpp_service import LlamaCppTranslationService
         from services.translation.m2m100_service import M2M100TranslationService
@@ -121,20 +121,24 @@ async def ensure_initialized():
             layout_service = LayoutAnalysisService(lang="en")
             logger.info("LayoutAnalysisService initialized")
 
-        if INFERENCE_TYPE in ["all", "translation"]:
-            # M2M100
-            m2m100_service = M2M100TranslationService()
-            await m2m100_service.initialize()
-            logger.info("M2M100TranslationService initialized")
+        if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
+            if INFERENCE_TYPE in ["all", "translation", "m2m100"]:
+                # M2M100
+                m2m100_service = M2M100TranslationService()
+                await m2m100_service.initialize()
+                logger.info("M2M100TranslationService initialized")
 
-            # LlamaCpp
-            llamacpp_service = LlamaCppTranslationService()
-            await llamacpp_service.initialize()
-            logger.info("LlamaCppTranslationService initialized")
+            if INFERENCE_TYPE in ["all", "translation", "qwen"]:
+                # LlamaCpp
+                llamacpp_service = LlamaCppTranslationService()
+                await llamacpp_service.initialize()
+                logger.info("LlamaCppTranslationService initialized")
 
             # Orchestrator
             translation_service = TranslationService(
-                m2m100_service=m2m100_service, llamacpp_service=llamacpp_service
+                m2m100_service=m2m100_service,
+                llamacpp_service=llamacpp_service,
+                inference_type=INFERENCE_TYPE,
             )
             logger.info("TranslationService orchestrator initialized")
 
@@ -388,7 +392,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
 # --------------------------------------------------
 
 
-if INFERENCE_TYPE in ["all", "translation"]:
+if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
 
     @app.post("/api/v1/translate", response_model=TranslationResponse)
     @limiter.limit(os.getenv("RATE_LIMIT_TRANSLATE", "300/minute"))

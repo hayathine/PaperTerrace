@@ -1,8 +1,8 @@
 import type React from "react";
 import { useTranslation } from "react-i18next";
 import CopyButton from "../Common/CopyButton";
+import FeedbackSection from "../Common/FeedbackSection";
 import MarkdownContent from "../Common/MarkdownContent";
-import ChatFeedback from "./ChatFeedback";
 import type { Message } from "./types";
 
 interface MessageBubbleProps {
@@ -101,16 +101,17 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 						minute: "2-digit",
 					})}
 				</div>
-			</div>
-			{!isUser && (
-				<div className="opacity-0 group-hover/row:opacity-100 transition-opacity duration-150">
-					<ChatFeedback
+
+				{!isUser && (
+					<FeedbackSection
 						sessionId={sessionId}
-						messageId={message.id}
+						targetType="chat"
+						targetId={message.id}
 						traceId={message.traceId}
+						compact
 					/>
-				</div>
-			)}
+				)}
+			</div>
 		</div>
 	);
 };
