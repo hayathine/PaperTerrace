@@ -88,9 +88,33 @@ function App() {
 	const paperStartTimeRef = useRef<number | null>(null);
 
 	const handleScroll = useScrollTracking(currentPaperId || uploadFile?.name);
+	const [appEnv, setAppEnv] = useState<string>("production");
+
+	useEffect(() => {
+		const fetchConfig = async () => {
+			try {
+				const res = await fetch(`${API_URL}/api/config`);
+				const data = await res.json();
+				if (data?.app_env) {
+					setAppEnv(data.app_env);
+				}
+			} catch (err) {
+				log.error("fetch_config", "Failed to fetch config", { error: err });
+			}
+		};
+		fetchConfig();
+	}, []);
 
 	// Developer settings
-	const SHOW_DEV_TOOLS = true;
+	const SHOW_DEV_TOOLS = import.meta.env.DEV || appEnv === "development";
+
+	useEffect(() => {
+		if (import.meta.env.DEV || appEnv === "development") {
+			document.title = `PaperTerrace (Dev) - ${t("tagline", "Read papers casually, like sitting on a terrace")}`;
+		} else {
+			document.title = `PaperTerrace - ${t("tagline", "Read papers casually, like sitting on a terrace")}`;
+		}
+	}, [t, appEnv]);
 
 	useEffect(() => {
 		const fetchPapers = async () => {

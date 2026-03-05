@@ -663,7 +663,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								type="button"
 								onClick={(e) => {
 									e.stopPropagation();
-									const prompt = `以下の文章をわかりやすく解説してください。\n\n"${selectionMenu.text}"`;
+									const prompt = `以下の文章を、文脈（${selectionMenu.context}）の中での役割をふまえつつ、わかりやすく解説してください。\n\n対象の文章: "${selectionMenu.text}"`;
 									onAskAI(prompt);
 									setSelectionMenu(null);
 									setSelectionStart(null);

@@ -165,6 +165,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 		x: number;
 		y: number;
 		text: string;
+		context: string;
 		coords: any;
 	} | null>(null);
 
@@ -212,10 +213,26 @@ const TextModePage: React.FC<TextModePageProps> = ({
 					const centerY =
 						((rangeRect.top + rangeRect.bottom) / 2 - rect.top) / pageHeight;
 
+					// Extract context text (parent paragraph or surrounding text)
+					let contextText = selectionText;
+					let currentEl = range.startContainer.parentElement;
+					while (currentEl && currentEl !== container) {
+						if (
+							["P", "LI", "H1", "H2", "H3", "H4", "H5", "H6"].includes(
+								currentEl.tagName,
+							)
+						) {
+							contextText = currentEl.textContent || selectionText;
+							break;
+						}
+						currentEl = currentEl.parentElement;
+					}
+
 					setSelectionMenu({
 						x: menuX,
 						y: menuY,
 						text: selectionText,
+						context: contextText,
 						coords: { page: page.page_num, x: centerX, y: centerY },
 					});
 				} else {
@@ -477,7 +494,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 							if (onWordClick)
 								onWordClick(
 									selectionMenu.text,
-									undefined,
+									selectionMenu.context,
 									selectionMenu.coords,
 								);
 							setSelectionMenu(null);
@@ -505,7 +522,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 							type="button"
 							onClick={(e) => {
 								e.stopPropagation();
-								const prompt = `以下の文章をわかりやすく解説してください。\n\n"${selectionMenu.text}"`;
+								const prompt = `以下の文章を、文脈（${selectionMenu.context}）の中での役割をふまえつつ、わかりやすく解説してください。\n\n対象の文章: "${selectionMenu.text}"`;
 								onAskAI(prompt);
 								setSelectionMenu(null);
 							}}

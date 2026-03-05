@@ -404,4 +404,9 @@ async def health_check():
 @app.get("/api/config")
 async def get_config():
     """Returns configuration for the frontend."""
-    return JSONResponse(content={"firebase_config": FIREBASE_CONFIG})
+    return JSONResponse(
+        content={
+            "firebase_config": FIREBASE_CONFIG,
+            "app_env": os.getenv("APP_ENV", "production"),
+        }
+    )
