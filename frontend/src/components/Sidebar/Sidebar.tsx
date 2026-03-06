@@ -4,7 +4,6 @@ import ChatWindow from "../Chat/ChatWindow";
 import Dictionary from "../Dictionary/Dictionary";
 import NoteList from "../Notes/NoteList";
 import type { SelectedFigure } from "../PDF/types";
-import RecommendationTab from "../Recommendation/RecommendationTab";
 import Summary from "../Summary/Summary";
 
 interface SidebarProps {
@@ -52,8 +51,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 	const tabs = [
 		{
-			id: "dict",
-			label: t("sidebar.tabs.dict"),
+			id: "notes",
+			label: t("sidebar.tabs.notes"),
 			icon: (
 				<svg
 					className="w-3.5 h-3.5"
@@ -65,14 +64,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 						strokeLinecap="round"
 						strokeLinejoin="round"
 						strokeWidth="2"
-						d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+						d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
 					/>
 				</svg>
 			),
 		},
 		{
-			id: "summary",
-			label: t("sidebar.tabs.summary"),
+			id: "analysis",
+			label: t("sidebar.tabs.analysis"),
 			icon: (
 				<svg
 					className="w-3.5 h-3.5"
@@ -84,7 +83,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						strokeLinecap="round"
 						strokeLinejoin="round"
 						strokeWidth="2"
-						d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+						d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"
 					/>
 				</svg>
 			),
@@ -109,8 +108,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 			),
 		},
 		{
-			id: "notes",
-			label: t("sidebar.tabs.notes"),
+			id: "comments",
+			label: t("sidebar.tabs.comments"),
 			icon: (
 				<svg
 					className="w-3.5 h-3.5"
@@ -122,26 +121,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						strokeLinecap="round"
 						strokeLinejoin="round"
 						strokeWidth="2"
-						d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-					/>
-				</svg>
-			),
-		},
-		{
-			id: "explore",
-			label: t("nav.explore"),
-			icon: (
-				<svg
-					className="w-3.5 h-3.5"
-					fill="none"
-					stroke="currentColor"
-					viewBox="0 0 24 24"
-				>
-					<path
-						strokeLinecap="round"
-						strokeLinejoin="round"
-						strokeWidth="2"
-						d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"
+						d="M7 8h10M7 12h4m1 8l-4-4H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-3l-4 4z"
 					/>
 				</svg>
 			),
@@ -202,7 +182,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 			{/* Tab Content - All rendered but hidden when not active to preserve state */}
 			<div className="flex-1 overflow-hidden relative">
 				<div
-					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "dict" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
+					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "notes" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
 				>
 					<Dictionary
 						sessionId={sessionId}
@@ -219,7 +199,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 				</div>
 
 				<div
-					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "summary" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
+					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "analysis" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
 				>
 					<Summary
 						sessionId={sessionId}
@@ -243,7 +223,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 				</div>
 
 				<div
-					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "notes" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
+					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "comments" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
 				>
 					<NoteList
 						sessionId={sessionId}
@@ -254,12 +234,6 @@ const Sidebar: React.FC<SidebarProps> = ({
 						selectedTerm={selectedWord}
 						selectedImage={selectedImage}
 					/>
-				</div>
-
-				<div
-					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "explore" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
-				>
-					<RecommendationTab sessionId={sessionId} />
 				</div>
 			</div>
 		</div>

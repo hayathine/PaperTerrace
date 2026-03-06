@@ -2,6 +2,11 @@ import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import { createLogger } from "@/lib/logger";
+import {
+	generateRecommendations,
+	type RecommendationGenerateResponse,
+} from "@/lib/recommendation";
+import { useAuth } from "../../contexts/AuthContext";
 import { useLoading } from "../../contexts/LoadingContext";
 import { usePaperCache } from "../../db/hooks";
 import CopyButton from "../Common/CopyButton";
@@ -17,7 +22,7 @@ interface SummaryProps {
 	isAnalyzing?: boolean;
 }
 
-type Mode = "summary" | "critique";
+type Mode = "summary" | "critique" | "discover";
 
 const Summary: React.FC<SummaryProps> = ({
 	sessionId,
@@ -25,6 +30,7 @@ const Summary: React.FC<SummaryProps> = ({
 	isAnalyzing = false,
 }) => {
 	const { t, i18n } = useTranslation();
+	const { token } = useAuth();
 	const { startLoading, stopLoading } = useLoading();
 	const { getCachedPaper, savePaperToCache } = usePaperCache();
 
@@ -41,6 +47,16 @@ const Summary: React.FC<SummaryProps> = ({
 	const [critiqueTraceId, setCritiqueTraceId] = useState<string | undefined>(
 		undefined,
 	);
+
+	// Recommendation state
+	const [recommendationOpen, setRecommendationOpen] = useState(false);
+	const [recommendationLoading, setRecommendationLoading] = useState(false);
+	const [recommendationError, setRecommendationError] = useState<string | null>(
+		null,
+	);
+	const [recommendationResponse, setRecommendationResponse] =
+		useState<RecommendationGenerateResponse | null>(null);
+	const [clickedPapers, setClickedPapers] = useState<Set<string>>(new Set());
 
 	// Reset data when paperId changes
 	React.useEffect(() => {
@@ -174,6 +190,39 @@ const Summary: React.FC<SummaryProps> = ({
 		}
 	}, [sessionId, paperId, isAnalyzing, summaryData, handleSummarize]);
 
+	const handleGenerateRecommendations = async () => {
+		setRecommendationLoading(true);
+		setRecommendationError(null);
+		setClickedPapers(new Set());
+		try {
+			const res = await generateRecommendations(sessionId, token);
+			setRecommendationResponse(res);
+			setRecommendationOpen(true);
+		} catch (err) {
+			log.error("handle_generate", "Failed to fetch recommendations", {
+				error: err,
+			});
+
+			setRecommendationError(
+				t(
+					"error.load_recommendations_failed",
+					"Failed to generate recommendations. Please try again.",
+				),
+			);
+		} finally {
+			setRecommendationLoading(false);
+		}
+	};
+
+	const handlePaperClick = (paperTitle: string, url: string | undefined) => {
+		setClickedPapers((prev) => new Set(prev).add(paperTitle));
+
+		const target =
+			url ||
+			`https://scholar.google.com/scholar?q=${encodeURIComponent(paperTitle)}`;
+		window.open(target, "_blank", "noopener,noreferrer");
+	};
+
 	return (
 		<div className="flex flex-col h-full bg-slate-50">
 			<div className="flex p-2 bg-white border-b border-slate-100 gap-2 overflow-x-auto">
@@ -190,6 +239,13 @@ const Summary: React.FC<SummaryProps> = ({
 					className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "critique" ? "bg-red-50 text-red-600" : "text-slate-400"}`}
 				>
 					{t("summary.modes.critique")}
+				</button>
+				<button
+					type="button"
+					onClick={() => setMode("discover")}
+					className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase transition-all whitespace-nowrap ${mode === "discover" ? "bg-orange-50 text-orange-600" : "text-slate-400"}`}
+				>
+					{t("sidebar.tabs.discover")}
 				</button>
 			</div>
 
@@ -278,6 +334,195 @@ const Summary: React.FC<SummaryProps> = ({
 								/>
 							</div>
 						)}
+					</div>
+				)}
+
+				{mode === "discover" && (
+					<div className="space-y-4">
+						{!recommendationOpen && !recommendationLoading ? (
+							<div className="flex flex-col items-center justify-center py-12 text-center">
+								<div className="w-16 h-16 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center mb-4">
+									<svg
+										className="w-8 h-8"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth="2"
+											d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 002-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"
+										/>
+									</svg>
+								</div>
+								<h3 className="text-lg font-bold text-slate-800 mb-2">
+									{t("recommendation.explore_title", "Explore Next Papers")}
+								</h3>
+								<p className="text-sm text-slate-500 mb-6">
+									{t(
+										"recommendation.explore_description",
+										"Based on your reading history and behavior, we'll generate personalized recommendations.",
+									)}
+								</p>
+								<button
+									type="button"
+									onClick={handleGenerateRecommendations}
+									className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-lg shadow-orange-600/30 transition-transform active:scale-95 flex items-center gap-2"
+								>
+									<svg
+										className="w-5 h-5 animate-pulse"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth="2"
+											d="M13 10V3L4 14h7v7l9-11h-7z"
+										/>
+									</svg>
+									{t("summary.generate_recommend", "Generate Recommendations")}
+								</button>
+								{recommendationError && (
+									<p className="mt-4 text-xs text-red-500">
+										{recommendationError}
+									</p>
+								)}
+							</div>
+						) : recommendationLoading ? (
+							<div className="h-full flex flex-col items-center justify-center gap-4 py-12">
+								<div className="flex space-x-2">
+									<div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+									<div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+									<div className="w-3 h-3 bg-orange-500 rounded-full animate-bounce"></div>
+								</div>
+								<p className="text-sm font-medium text-slate-500 animate-pulse">
+									{t(
+										"recommendation.analyzing",
+										"Analyzing user profile and generating insights...",
+									)}
+								</p>
+							</div>
+						) : recommendationResponse ? (
+							<div className="space-y-4">
+								<div className="bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+									<div className="flex justify-end mb-2">
+										<CopyButton text={recommendationResponse.reasoning} />
+									</div>
+									<h4 className="text-sm font-bold text-orange-900 mb-2">
+										{t(
+											"recommendation.reasoning_title",
+											"Recommendation Reasoning",
+										)}
+									</h4>
+									<MarkdownContent className="prose prose-sm max-w-none text-sm text-slate-600 leading-relaxed mb-3">
+										{recommendationResponse.reasoning}
+									</MarkdownContent>
+									<div className="flex flex-wrap gap-2">
+										<span className="px-2 py-1 bg-orange-50 border border-orange-100 rounded-md text-xs font-bold text-orange-600 uppercase tracking-wider">
+											Skill Level: {recommendationResponse.knowledge_level}
+										</span>
+										{recommendationResponse.search_queries
+											.slice(0, 2)
+											.map((q, idx) => (
+												<span
+													key={idx}
+													className="px-2 py-1 bg-slate-50 border border-slate-100 rounded-md text-xs font-bold text-slate-500"
+												>
+													🔍 {q}
+												</span>
+											))}
+									</div>
+								</div>
+
+								<div className="space-y-3">
+									<h4 className="text-sm font-bold text-slate-700">
+										{t(
+											"recommendation.top_recommendations",
+											"Top Recommendations",
+										)}
+									</h4>
+									{recommendationResponse.recommendations.map((paper, idx) => (
+										<div
+											key={idx}
+											className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm"
+										>
+											<div className="flex justify-end mb-2">
+												<CopyButton
+													text={`${paper.title}\n${paper.abstract}`}
+												/>
+											</div>
+											<h5 className="font-bold text-slate-800 text-sm mb-1 leading-tight">
+												{paper.title}
+											</h5>
+											{paper.authors && (
+												<p className="text-xs text-slate-400 mb-2 font-medium truncate">
+													{paper.authors.map((a) => a.name).join(", ")}{" "}
+													{paper.year ? `(${paper.year})` : ""}
+												</p>
+											)}
+											<MarkdownContent className="prose prose-sm max-w-none text-sm text-slate-600 leading-relaxed mb-3">
+												{paper.abstract}
+											</MarkdownContent>
+											<div className="flex items-center justify-between">
+												<button
+													type="button"
+													onClick={() =>
+														handlePaperClick(
+															paper.title,
+															paper.openAccessPdf?.url || paper.url,
+														)
+													}
+													className={`text-xs font-bold px-3 py-2 rounded-lg border flex items-center gap-1.5 transition-colors ${clickedPapers.has(paper.title) ? "bg-green-50 text-green-700 border-green-200" : "bg-orange-50 hover:bg-orange-100 text-orange-700 border-orange-100"}`}
+												>
+													<svg
+														className="w-3.5 h-3.5"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+													>
+														<path
+															strokeLinecap="round"
+															strokeLinejoin="round"
+															strokeWidth="2.5"
+															d="M12 6v6m0 0v6m0-6h6m-6 0H6"
+														/>
+													</svg>
+													{clickedPapers.has(paper.title)
+														? t("recommendation.status_clicked", "Clicked")
+														: t("recommendation.action_explore", "Explore")}
+												</button>
+												{paper.citationCount !== undefined && (
+													<span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-1 rounded">
+														Citations: {paper.citationCount}
+													</span>
+												)}
+											</div>
+										</div>
+									))}
+								</div>
+
+								<FeedbackSection
+									sessionId={sessionId}
+									targetType="recommendation"
+									targetId={Array.from(clickedPapers)[0]}
+								/>
+								<div className="pb-8 flex justify-center">
+									<button
+										type="button"
+										onClick={() => {
+											setRecommendationOpen(false);
+											setRecommendationResponse(null);
+										}}
+										className="text-xs text-slate-400 hover:text-slate-600 font-medium underline"
+									>
+										Start Over
+									</button>
+								</div>
+							</div>
+						) : null}
 					</div>
 				)}
 

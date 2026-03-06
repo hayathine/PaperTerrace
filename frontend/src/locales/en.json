@@ -51,11 +51,14 @@
 	},
 	"sidebar": {
 		"tabs": {
-			"dict": "Dict",
-			"summary": "Summary",
-			"chat": "Chat",
 			"notes": "Notes",
-			"figures": "Figures"
+			"analysis": "Analysis",
+			"chat": "Chat",
+			"comments": "Comments",
+			"figures": "Figures",
+			"translation": "Translation",
+			"explanation": "Explanation",
+			"discover": "Discover"
 		}
 	},
 	"viewer": {
@@ -89,7 +92,7 @@
 		"modes": {
 			"summary": "Summary",
 			"critique": "Critique",
-			"recommend": "Recommend"
+			"discover": "Discover"
 		},
 		"generate": "Generate Summary",
 		"start_critique": "Start Critique",

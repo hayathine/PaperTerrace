@@ -51,11 +51,14 @@
 	},
 	"sidebar": {
 		"tabs": {
-			"dict": "辞書",
-			"summary": "要約",
-			"chat": "チャット",
 			"notes": "ノート",
-			"figures": "図解"
+			"analysis": "分析",
+			"chat": "チャット",
+			"comments": "コメント",
+			"figures": "図解",
+			"translation": "翻訳",
+			"explanation": "解説",
+			"discover": "見つける"
 		}
 	},
 	"viewer": {
@@ -89,7 +92,7 @@
 		"modes": {
 			"summary": "要約",
 			"critique": "レビュー",
-			"recommend": "お薦め論文"
+			"discover": "見つける"
 		},
 		"generate": "要約を生成",
 		"start_critique": "レビューを開始",

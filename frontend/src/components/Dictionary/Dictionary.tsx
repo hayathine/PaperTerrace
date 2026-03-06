@@ -47,7 +47,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	const { t, i18n } = useTranslation();
 	const { token } = useAuth();
 
-	const [activeSubTab, setActiveSubTab] = useState<"dict" | "figures">("dict");
+	const [activeSubTab, setActiveSubTab] = useState<
+		"translation" | "explanation" | "figures"
+	>("translation");
 
 	// 図が選択されたら自動的に figures サブタブへ切り替え
 	useEffect(() => {
@@ -634,14 +636,26 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			<div className="flex px-4 pt-2 border-b border-slate-100 bg-white sticky top-0 z-20 shrink-0">
 				<button
 					type="button"
-					onClick={() => setActiveSubTab("dict")}
+					onClick={() => setActiveSubTab("translation")}
 					className={`pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all ${
-						activeSubTab === "dict"
+						activeSubTab === "translation"
 							? "text-orange-600 border-orange-600"
 							: "text-slate-400 hover:text-slate-600 border-transparent"
 					}`}
 				>
-					{t("sidebar.tabs.dict")} {entries.length > 0 && `(${entries.length})`}
+					{t("sidebar.tabs.translation")}{" "}
+					{entries.length > 0 && `(${entries.length})`}
+				</button>
+				<button
+					type="button"
+					onClick={() => setActiveSubTab("explanation")}
+					className={`ml-6 pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all ${
+						activeSubTab === "explanation"
+							? "text-orange-600 border-orange-600"
+							: "text-slate-400 hover:text-slate-600 border-transparent"
+					}`}
+				>
+					{t("sidebar.tabs.explanation")}
 				</button>
 				<button
 					type="button"
@@ -657,7 +671,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			</div>
 
 			<div className="flex-1 overflow-y-auto">
-				{activeSubTab === "dict" ? (
+				{activeSubTab === "translation" || activeSubTab === "explanation" ? (
 					content
 				) : (
 					<div className="p-4">
