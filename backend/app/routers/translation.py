@@ -260,12 +260,14 @@ async def explain(
             "No specific context available, but please translate carefully."
         )
 
-    # Low confidence override -> Qwen3
-    skip_m2m100 = False
+    # Stage 2: Local Translation (Qwen or M2M100)
+    local_translation = None
+    qwen_skipped_to_gemini = False
+    # if word confidence is low, use Qwen
     if use_llamacpp:
         log.info(
             "explain",
-            f"Word confidence {f_conf} <= 0.5, using LlamaCpp",
+            f"Word confidence {f_conf} <= 0.5, switching to Qwen",
             word=original_word,
             conf=f_conf,
         )
@@ -278,87 +280,95 @@ async def explain(
             local_translation, _model = await client.translate_with_qwen(
                 original_word, lang, paper_context=paper_context_str
             )
-            source = "Qwen3"
 
-            if not is_htmx:
-                return JSONResponse(
-                    {
-                        "word": original_word,
-                        "lemma": lemma,
-                        "translation": local_translation,
-                        "source": source,
-                        "element_id": element_id,
-                    }
+            if local_translation:
+                if not is_htmx:
+                    return JSONResponse(
+                        {
+                            "word": original_word,
+                            "lemma": lemma,
+                            "translation": local_translation,
+                            "source": "Qwen3",
+                            "element_id": element_id,
+                        }
+                    )
+
+                elapsed = asyncio.get_event_loop().time() - start_time
+                log.info(
+                    "explain",
+                    "Lookup completed (Qwen3)",
+                    elapsed=f"{elapsed:.3f}s",
+                    word=word,
                 )
 
-            elapsed = asyncio.get_event_loop().time() - start_time
-            log.info(
-                "explain",
-                "Lookup completed (Qwen3)",
-                elapsed=f"{elapsed:.3f}s",
-                word=word,
-            )
-
-            return HTMLResponse(
-                build_dict_card_html(
-                    original_word,
-                    lemma,
-                    local_translation,
-                    source,
-                    lang,
-                    paper_id,
-                    element_id=element_id,
-                    show_deep_btn=False,
+                return HTMLResponse(
+                    build_dict_card_html(
+                        original_word,
+                        lemma,
+                        local_translation,
+                        "Qwen3",
+                        lang,
+                        paper_id,
+                        element_id=element_id,
+                        show_deep_btn=False,
+                    )
                 )
-            )
         except (InferenceServiceTimeoutError, CircuitBreakerError) as e:
             log.warning(
                 "explain",
-                "Qwen translation timeout or circuit open, skipping M2M100 and falling back to Gemini",
+                "Qwen translation timeout or circuit open, skipping directly to Gemini",
                 error=str(e),
                 lemma=lemma,
             )
-            skip_m2m100 = True
+            qwen_skipped_to_gemini = True
         except Exception as e:
             log.warning(
-                "explain", "LlamaCpp translation failed", error=str(e), lemma=lemma
-            )
-            # Fall back to M2M100
-
-    # Stage 2: ServiceB Machine Translation (M2M100)
-    if not skip_m2m100:
-        translator = local_translator.get_local_translator()
-    if translator._initialized:
-        try:
-            local_translation, _model = await translator.translate_async(
-                lemma, lang, paper_context=paper_context_str
-            )
-            log.info(
                 "explain",
-                "ServiceB translation result",
-                result=local_translation,
+                "Qwen translation failed, trying M2M100 fallback",
+                error=str(e),
                 lemma=lemma,
             )
+            # Proceed to M2M100 fallback
 
-        except InferenceServiceTimeoutError:
-            log.warning("explain", "ServiceB translation timeout (busy)", lemma=lemma)
+    # Stage 2: ServiceB Machine Translation (M2M100)
+    if not local_translation and not qwen_skipped_to_gemini:
+        translator = local_translator.get_local_translator()
+        if translator._initialized:
+            try:
+                local_translation, _model = await translator.translate_async(
+                    lemma, lang, paper_context=paper_context_str
+                )
+                log.info(
+                    "explain",
+                    "ServiceB translation result",
+                    result=local_translation,
+                    lemma=lemma,
+                )
 
-            local_translation = "混雑中"
-        except (InferenceServiceDownError, CircuitBreakerError):
-            log.warning("explain", "ServiceB is down or circuit open", lemma=lemma)
-
-            local_translation = "サーバーが故障中です"
-        except Exception as e:
-            log.warning(
-                "explain", "ServiceB translation failed", error=str(e), lemma=lemma
-            )
-
-            local_translation = None
+            except InferenceServiceTimeoutError:
+                log.warning(
+                    "explain",
+                    "ServiceB translation timeout (busy), falling back to Gemini",
+                    lemma=lemma,
+                )
+                local_translation = None
+            except (InferenceServiceDownError, CircuitBreakerError):
+                log.warning(
+                    "explain",
+                    "ServiceB is down or circuit open, falling back to Gemini",
+                    lemma=lemma,
+                )
+                local_translation = None
+            except Exception as e:
+                log.warning(
+                    "explain", "ServiceB translation failed", error=str(e), lemma=lemma
+                )
+                local_translation = None
         else:
-            local_translation = None
             log.warning("explain", "Local translator not initialized", lemma=lemma)
-    else:
-        # We skipped M2M100 (e.g. Qwen timed out), so we want to force Gemini
+            local_translation = None
+    elif qwen_skipped_to_gemini:
+        # We already decided to skip to Gemini
         local_translation = None
 
     if local_translation:
@@ -367,10 +377,6 @@ async def explain(
             service.word_cache[lemma] = False
 
         source = "Local-MT"
-        if local_translation == "混雑中":
-            source = "Busy"
-        elif local_translation == "サーバーが故障中です":
-            source = "Down"
 
         if not is_htmx:
             return JSONResponse(

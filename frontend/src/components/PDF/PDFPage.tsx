@@ -49,6 +49,7 @@ interface PDFPageProps {
 		width: number;
 		height: number;
 	}>;
+	isDev?: boolean;
 }
 
 const PDFPage: React.FC<PDFPageProps> = ({
@@ -67,10 +68,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
 	searchTerm,
 	currentSearchMatch,
 	evidenceHighlights = [],
+	isDev = false,
 }) => {
 	const { t } = useTranslation();
 	const { width, height, words, figures, image_url, page_num } = page;
-	const is_dev = import.meta.env.DEV;
 
 	// Check for cached image in IndexedDB
 	const cachedImage = useLiveQuery(async () => {
@@ -329,7 +330,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								<div
 									key={`fig-img-${idx}`}
 									className={`absolute group pointer-events-none group-data-[click-mode]/viewer:pointer-events-auto group-data-[click-mode]/viewer:rounded-sm ${
-										is_dev
+										isDev
 											? "group-data-[click-mode]/viewer:border-2 group-data-[click-mode]/viewer:border-orange-300/60"
 											: ""
 									}`}
@@ -343,8 +344,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
 									{/* クリックモード時のみ表示するインタラクティブ要素。
 									    子要素はすべて absolute なのでラッパー div はレイアウトに影響しない。 */}
 									<div className="hidden group-data-[click-mode]/viewer:block">
-										{/* 確信度バッジ (is_dev=true のみ) */}
-										{is_dev && fig.conf !== undefined && (
+										{/* 確信度バッジ (isDev=true のみ) */}
+										{isDev && fig.conf !== undefined && (
 											<div className="absolute top-0 left-0 bg-black/70 text-white text-[10px] px-1 py-0.5 rounded-br z-[9999] pointer-events-none">
 												Score: {(fig.conf * 100).toFixed(1)}%
 											</div>
@@ -471,7 +472,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 									(Math.abs(centerX - jumpTarget.x) < 0.005 &&
 										Math.abs(centerY - jumpTarget.y) < 0.005));
 
-							// 検索マッチのハイライト
+							// 検索マッチングのハイライト
 							const isSearchMatch =
 								searchTerm &&
 								searchTerm.length >= 2 &&

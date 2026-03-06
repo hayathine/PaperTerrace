@@ -106,10 +106,10 @@ function App() {
 	}, []);
 
 	// Developer settings
-	const SHOW_DEV_TOOLS = import.meta.env.DEV || appEnv === "development";
+	const SHOW_DEV_TOOLS = appEnv === "development";
 
 	useEffect(() => {
-		if (import.meta.env.DEV || appEnv === "development") {
+		if (appEnv === "development") {
 			document.title = `PaperTerrace (Dev) - ${t("tagline", "Read papers casually, like sitting on a terrace")}`;
 		} else {
 			document.title = `PaperTerrace - ${t("tagline", "Read papers casually, like sitting on a terrace")}`;
@@ -898,6 +898,7 @@ function App() {
 										onSearchMatchesUpdate={handleSearchMatchesUpdate}
 										currentSearchMatch={currentSearchMatch}
 										evidence={activeEvidence}
+										appEnv={appEnv}
 									/>
 								</div>
 							) : (

@@ -57,6 +57,7 @@ interface PDFViewerProps {
 	) => void;
 	currentSearchMatch?: { page: number; wordIndex: number } | null;
 	evidence?: any;
+	appEnv?: string;
 }
 
 const PDFViewer: React.FC<PDFViewerProps> = ({
@@ -76,9 +77,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	onSearchMatchesUpdate,
 	currentSearchMatch,
 	evidence,
+	appEnv = "production",
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token, isGuest } = useAuth();
+	const isDev = appEnv === "development";
 	const {
 		getCachedPaper,
 		savePaperToCache,
@@ -1317,6 +1320,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 										searchTerm={searchTerm}
 										currentSearchMatch={currentSearchMatch}
 										evidenceHighlights={evidenceHighlights[page.page_num]}
+										isDev={isDev}
 									/>
 								))}
 							</div>
