@@ -353,14 +353,18 @@ class PDFOCRService:
             if pdf_path:
                 # pymupdf4llm による高精度 Markdown 生成
                 # Figure/Table の bbox 領域（画像px座標）を PDF ポイント座標へ変換して収集。
-                # Markdown 生成前に redact で塗りつぶすことで図表内テキストを除外する。
                 figure_table_bboxes_pt = []
                 for block in layout_blocks:
                     class_name = block.get("class_name", "").lower()
-                    is_visual = any(
-                        kw in class_name
-                        for kw in ["figure", "picture", "chart", "table"]
-                    )
+                    is_visual = class_name in [
+                        "figure",
+                        "picture",
+                        "chart",
+                        "table",
+                        "algorithm",
+                        "formula",
+                        "equation",
+                    ]
                     is_caption = "caption" in class_name
                     if is_visual and not is_caption:
                         bbox = block.get("bbox", {})
@@ -483,14 +487,17 @@ class PDFOCRService:
                         bx1, by1, bx2, by2 = bbox
                     bbox_list = [bx1, by1, bx2, by2]
 
-                    if "equation" in class_name or "formula" in class_name:
-                        eq_count += 1
-                        continue
+                    # Equations are now also treated as figures for border/extraction consistency
 
-                    is_figure = any(
-                        kw in class_name
-                        for kw in ["figure", "picture", "chart", "table", "algorithm"]
-                    )
+                    is_figure = class_name in [
+                        "figure",
+                        "picture",
+                        "chart",
+                        "table",
+                        "algorithm",
+                        "formula",
+                        "equation",
+                    ]
                     is_caption = "caption" in class_name
 
                     if is_figure and not is_caption:

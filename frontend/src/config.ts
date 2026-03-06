@@ -14,7 +14,7 @@ function resolveApiUrl(): string {
 	if (
 		(hostname.includes(".pages.dev") &&
 			hostname !== "paperterrace.pages.dev") ||
-		hostname.startsWith("dev.") ||
+		hostname.startsWith("dev") ||
 		hostname === "localhost" ||
 		hostname === "127.0.0.1"
 	) {
