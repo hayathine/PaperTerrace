@@ -52,6 +52,7 @@
 	},
 	"description": "",
 	"dependencies": {
+		"@sentry/react": "^10.42.0",
 		"dexie": "^4.3.0",
 		"dexie-react-hooks": "^4.2.0",
 		"firebase": "^11.3.0",

@@ -156,6 +156,11 @@ tasks:
     cmds:
       - cd frontend && npm run test || [ $? -eq 1 ]
 
+  test:integration:
+    desc: "Run Playwright integration tests (Backend + Headless Browser)"
+    cmds:
+      - uv run --directory backend env PYTHONPATH=.:.. pytest -v tests/test_playwright_e2e.py
+
   test:
     desc: "Run affected tests for all components (Optimized)"
     cmds:
