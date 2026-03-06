@@ -38,7 +38,9 @@
 		"only_english_supported": "現在、英語の論文のみサポートしています。",
 		"upload_pdf": "PDFをアップロード",
 		"open_right_panel": "パネルを開く",
-		"close_right_panel": "パネルを閉じる"
+		"close_right_panel": "パネルを閉じる",
+		"menu_label": "メニュー",
+		"assistant_label": "アシスタント"
 	},
 	"auth": {
 		"tagline": "テラスで読むように、論文をカジュアルに",
@@ -153,6 +155,15 @@
 		"close": "閉じる (Esc)",
 		"hint_next": "次へ",
 		"hint_prev": "前へ"
+	},
+	"contact": {
+		"title": "要望・ご意見を送る",
+		"placeholder": "機能要望やご意見をお気軽にどうぞ...",
+		"submit": "送信する",
+		"submitting": "送信中",
+		"success": "ありがとうございます！",
+		"retry": "もう一度",
+		"error": "送信に失敗しました。再試行してください。"
 	},
 	"recommendation": {
 		"explore_title": "次の論文を探す",

@@ -4,6 +4,7 @@ import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import { createLogger } from "@/lib/logger";
 import Login from "./components/Auth/Login";
+import RequestForm from "./components/Contact/RequestForm";
 import ErrorBoundary from "./components/Error/ErrorBoundary";
 import PDFViewer from "./components/PDF/PDFViewer";
 import type { SelectedFigure } from "./components/PDF/types";
@@ -236,69 +237,6 @@ function App() {
 		window.addEventListener("resize", checkMobile);
 		return () => window.removeEventListener("resize", checkMobile);
 	}, []);
-
-	// スワイプジェスチャー用のタッチ開始位置を記録
-	const touchStartRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
-	const SWIPE_THRESHOLD = 50; // スワイプ判定の最小移動距離 (px)
-	const EDGE_ZONE = 30; // サイドバーを開くための画面端ゾーン (px)
-
-	const handleTouchStart = (e: React.TouchEvent) => {
-		touchStartRef.current = {
-			x: e.touches[0].clientX,
-			y: e.touches[0].clientY,
-		};
-	};
-
-	// メインコンテンツエリアのスワイプ: 画面端から引き出すジェスチャー
-	const handleMainTouchEnd = (e: React.TouchEvent) => {
-		const { x: startX, y: startY } = touchStartRef.current;
-		const deltaX = e.changedTouches[0].clientX - startX;
-		const deltaY = e.changedTouches[0].clientY - startY;
-
-		// 縦スワイプは無視
-		if (Math.abs(deltaY) > Math.abs(deltaX)) return;
-		if (Math.abs(deltaX) < SWIPE_THRESHOLD) return;
-
-		if (deltaX > 0 && startX < EDGE_ZONE && !isLeftSidebarOpen) {
-			// 左端から右スワイプ → 左サイドバーを開く
-			setIsLeftSidebarOpen(true);
-		} else if (
-			deltaX < 0 &&
-			startX > window.innerWidth - EDGE_ZONE &&
-			!isRightSidebarOpen
-		) {
-			// 右端から左スワイプ → 右サイドバーを開く
-			setIsRightSidebarOpen(true);
-		}
-	};
-
-	// 右サイドバーの左スワイプで閉じる
-	const handleRightSidebarTouchEnd = (e: React.TouchEvent) => {
-		const { x: startX, y: startY } = touchStartRef.current;
-		const deltaX = e.changedTouches[0].clientX - startX;
-		const deltaY = e.changedTouches[0].clientY - startY;
-
-		if (Math.abs(deltaY) > Math.abs(deltaX)) return;
-		if (Math.abs(deltaX) < SWIPE_THRESHOLD) return;
-
-		if (deltaX < 0) {
-			setIsRightSidebarOpen(false);
-		}
-	};
-
-	// 左サイドバーの左スワイプで閉じる
-	const handleLeftSidebarTouchEnd = (e: React.TouchEvent) => {
-		const { x: startX, y: startY } = touchStartRef.current;
-		const deltaX = e.changedTouches[0].clientX - startX;
-		const deltaY = e.changedTouches[0].clientY - startY;
-
-		if (Math.abs(deltaY) > Math.abs(deltaX)) return;
-		if (Math.abs(deltaX) < SWIPE_THRESHOLD) return;
-
-		if (deltaX < 0) {
-			setIsLeftSidebarOpen(false);
-		}
-	};
 
 	useEffect(() => {
 		const handleMouseMove = (e: MouseEvent) => {
@@ -562,8 +500,6 @@ function App() {
 			    モバイルでは fixed 配置にしてドキュメント幅に影響させない。
 			    absolute だと overflow:hidden でクリップされずに横スクロールが発生するため。 */}
 				<div
-					onTouchStart={handleTouchStart}
-					onTouchEnd={handleLeftSidebarTouchEnd}
 					className={`bg-white text-slate-900 border-r border-slate-200 transition-all duration-300 ease-in-out flex flex-col shrink-0 fixed top-0 left-0 md:relative md:top-auto md:left-auto z-50 h-screen md:h-full ${
 						isLeftSidebarOpen
 							? "w-72 md:w-64 translate-x-0"
@@ -645,6 +581,10 @@ function App() {
 										</button>
 									))
 								)}
+							</div>
+
+							<div className="mt-8 mb-4">
+								<RequestForm />
 							</div>
 						</div>
 
@@ -817,7 +757,7 @@ function App() {
 							<button
 								type="button"
 								onClick={() => setIsLeftSidebarOpen(true)}
-								className="mr-4 p-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all duration-200 flex items-center justify-center shadow-sm"
+								className="mr-4 px-3 py-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
 								title={t("nav.open_menu")}
 							>
 								<svg
@@ -833,6 +773,9 @@ function App() {
 										d="M4 6h16M4 12h16M4 18h16"
 									/>
 								</svg>
+								<span className="text-xs font-bold tracking-tight">
+									[{t("nav.menu_label")}]
+								</span>
 							</button>
 						)}
 						<span className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
@@ -847,13 +790,16 @@ function App() {
 						<button
 							type="button"
 							onClick={() => setIsRightSidebarOpen((prev) => !prev)}
-							className="ml-4 p-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all duration-200 flex items-center justify-center shadow-sm"
+							className="ml-4 px-3 py-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
 							title={
 								isRightSidebarOpen
 									? t("nav.close_right_panel", "Close panel")
 									: t("nav.open_right_panel", "Open panel")
 							}
 						>
+							<span className="text-xs font-bold tracking-tight">
+								[{t("nav.assistant_label")}]
+							</span>
 							<svg
 								className="w-4 h-4"
 								fill="none"
@@ -872,11 +818,7 @@ function App() {
 
 					<div className="flex-1 flex overflow-hidden">
 						{/* PDF Viewer Area */}
-						<div
-							onTouchStart={handleTouchStart}
-							onTouchEnd={handleMainTouchEnd}
-							className="flex-1 bg-slate-100 flex items-start justify-center relative overflow-hidden"
-						>
+						<div className="flex-1 bg-slate-100 flex items-start justify-center relative overflow-hidden">
 							{uploadFile || currentPaperId ? (
 								<div
 									onScroll={handleScroll}
@@ -941,8 +883,6 @@ function App() {
 
 						{/* Right Sidebar */}
 						<div
-							onTouchStart={handleTouchStart}
-							onTouchEnd={handleRightSidebarTouchEnd}
 							style={{
 								width: isMobile
 									? "90vw"

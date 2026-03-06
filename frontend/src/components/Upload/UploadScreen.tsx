@@ -1,6 +1,5 @@
 import type React from "react";
 import { useCallback, useRef, useState } from "react";
-import RequestForm from "@/components/Contact/RequestForm";
 
 interface UploadScreenProps {
 	onFileSelect: (file: File) => void;
@@ -186,8 +185,6 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 				<br />
 				アップロードされたファイルは安全に処理され、解析後に破棄されます。
 			</p>
-
-			<RequestForm />
 		</div>
 	);
 };

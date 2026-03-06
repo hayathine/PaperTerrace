@@ -38,7 +38,9 @@
 		"only_english_supported": "Currently, only English papers are supported.",
 		"upload_pdf": "Upload PDF",
 		"open_right_panel": "Open panel",
-		"close_right_panel": "Close panel"
+		"close_right_panel": "Close panel",
+		"menu_label": "Menu",
+		"assistant_label": "Assistant"
 	},
 	"auth": {
 		"tagline": "Read papers casually, like sitting on a terrace",
@@ -153,5 +155,14 @@
 		"close": "Close (Esc)",
 		"hint_next": "Next",
 		"hint_prev": "Previous"
+	},
+	"contact": {
+		"title": "Send Requests / Feedback",
+		"placeholder": "Feel free to share your requests or opinions...",
+		"submit": "Send",
+		"submitting": "Sending",
+		"success": "Thank you!",
+		"retry": "Once more",
+		"error": "Failed to send. Please try again."
 	}
 }

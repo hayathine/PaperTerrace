@@ -1,10 +1,12 @@
 import type React from "react";
 import { useState } from "react";
+import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 
 type SubmitStatus = "idle" | "submitting" | "submitted" | "error";
 
 const RequestForm: React.FC = () => {
+	const { t } = useTranslation();
 	const [message, setMessage] = useState("");
 	const [status, setStatus] = useState<SubmitStatus>("idle");
 
@@ -29,13 +31,13 @@ const RequestForm: React.FC = () => {
 	};
 
 	return (
-		<div className="w-full max-w-sm mt-4 animate-fade-in-up">
+		<div className="w-full max-w-sm mt-4">
 			<div className="relative bg-white/70 backdrop-blur-sm border border-slate-200 rounded-xl p-3 shadow-md shadow-slate-100/50">
 				{/* ヘッダー */}
 				<div className="mb-2 flex items-center justify-between">
 					<div>
 						<h2 className="text-[13px] font-bold text-slate-800 leading-tight">
-							要望・ご意見を送る
+							{t("contact.title")}
 						</h2>
 					</div>
 					<span className="px-1.5 py-0.5 bg-orange-50 text-orange-500 text-[9px] font-black uppercase tracking-wider rounded border border-orange-100">
@@ -46,14 +48,14 @@ const RequestForm: React.FC = () => {
 				{status === "submitted" ? (
 					<div className="flex flex-col items-center justify-center py-3 space-y-1">
 						<p className="text-xs font-bold text-slate-700">
-							ありがとうございます！
+							{t("contact.success")}
 						</p>
 						<button
 							type="button"
 							onClick={() => setStatus("idle")}
 							className="text-[10px] text-orange-500 hover:underline"
 						>
-							もう一度
+							{t("contact.retry")}
 						</button>
 					</div>
 				) : (
@@ -64,13 +66,13 @@ const RequestForm: React.FC = () => {
 							value={message}
 							onChange={(e) => setMessage(e.target.value)}
 							rows={2}
-							placeholder="機能要望やご意見をお気軽にどうぞ..."
+							placeholder={t("contact.placeholder")}
 							className="w-full px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent transition-all resize-none"
 						/>
 
 						{status === "error" && (
 							<p className="text-[10px] text-rose-500 font-medium">
-								送信に失敗しました。再試行してください。
+								{t("contact.error")}
 							</p>
 						)}
 
@@ -83,7 +85,7 @@ const RequestForm: React.FC = () => {
 								{status === "submitting" ? (
 									<>
 										<div className="w-3 h-3 border-2 border-white/40 border-t-white rounded-full animate-spin" />
-										<span>送信中</span>
+										<span>{t("contact.submitting")}</span>
 									</>
 								) : (
 									<>
@@ -100,7 +102,7 @@ const RequestForm: React.FC = () => {
 												d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"
 											/>
 										</svg>
-										<span>送信する</span>
+										<span>{t("contact.submit")}</span>
 									</>
 								)}
 							</button>

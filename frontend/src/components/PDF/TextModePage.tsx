@@ -380,7 +380,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 					: children;
 			return (
 				<h1
-					className="text-2xl font-bold text-slate-800 leading-snug tracking-tight mt-2 mb-6 pb-4 border-b-2 border-slate-300"
+					className="text-2xl font-bold text-slate-800 leading-snug tracking-tight mt-2 mb-6 pb-4 border-b-2 border-slate-300 break-words"
 					{...rest}
 				>
 					{content}
@@ -398,7 +398,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 					: children;
 			return (
 				<h2
-					className={`text-base font-bold mt-8 mb-3 pb-1 border-b ${
+					className={`text-base font-bold mt-8 mb-3 pb-1 border-b break-words ${
 						isKnown
 							? "text-orange-700 border-orange-200"
 							: "text-slate-700 border-slate-200"
@@ -418,7 +418,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 					: children;
 			return (
 				<h3
-					className="text-sm font-bold text-slate-700 mt-6 mb-2 pl-2 border-l-2 border-slate-300"
+					className="text-sm font-bold text-slate-700 mt-6 mb-2 pl-2 border-l-2 border-slate-300 break-words"
 					{...rest}
 				>
 					{content}
@@ -434,7 +434,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 					: children;
 			return (
 				<h4
-					className="text-sm font-semibold text-slate-600 mt-4 mb-1.5 italic"
+					className="text-sm font-semibold text-slate-600 mt-4 mb-1.5 italic break-words"
 					{...rest}
 				>
 					{content}
@@ -448,8 +448,8 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	return (
 		<div
 			id={`text-page-${page.page_num}`}
-			className="relative shadow-sm bg-white border border-slate-200 group mx-auto w-full"
-			style={{ userSelect: "auto" }}
+			className="relative shadow-sm bg-white border border-slate-200 group mx-auto w-full max-w-full rounded-xl overflow-hidden"
+			style={{ userSelect: "auto", maxWidth: "100%" }}
 		>
 			{/* Header */}
 			<div className="bg-slate-50 border-b border-slate-200 px-4 py-1.5 flex justify-between items-center select-none">
@@ -459,10 +459,10 @@ const TextModePage: React.FC<TextModePageProps> = ({
 			</div>
 
 			{/* Markdown Content */}
-			<div className="px-3 py-4 sm:px-6 sm:py-5 md:px-10 md:py-8 selection:bg-orange-600/30">
+			<div className="px-3 py-4 sm:px-6 sm:py-5 md:px-10 md:py-8 selection:bg-orange-600/30 overflow-x-hidden">
 				{processedMarkdown ? (
 					<MarkdownContent
-						className="prose prose-slate max-w-none prose-p:my-3 prose-p:leading-7 prose-li:my-1 prose-li:leading-7 prose-img:mx-auto [&_.katex]:text-base [&_.katex]:font-normal [&_.katex-display]:my-4 [&_.math-display]:block [&_.katex-display]:overflow-x-auto [&_.katex-display]:max-w-full prose-pre:overflow-x-auto"
+						className="prose prose-slate max-w-none prose-p:my-3 prose-p:leading-7 prose-li:my-1 prose-li:leading-7 prose-img:mx-auto prose-img:max-w-full [&_.katex]:text-base [&_.katex]:font-normal [&_.katex-display]:my-4 [&_.math-display]:block [&_.katex-display]:overflow-x-auto [&_.katex-display]:max-w-full prose-pre:overflow-x-auto prose-pre:max-w-full break-words"
 						components={mdComponents}
 					>
 						{processedMarkdown}
