@@ -56,6 +56,9 @@ class InferenceServiceClient:
 
         self.timeout = int(os.getenv("INFERENCE_SERVICE_TIMEOUT", "60"))
         self.max_retries = int(os.getenv("INFERENCE_SERVICE_RETRIES", "2"))
+        self.fallback_threshold = float(
+            os.getenv("TRANSLATION_FALLBACK_THRESHOLD", "0.5")
+        )
 
         # 回路ブレーカー設定
         self.failure_count = 0
@@ -364,7 +367,7 @@ class InferenceServiceClient:
     async def translate_text(
         self, text: str, target_lang: str = "ja", paper_context: str | None = None
     ) -> tuple[str, str | None]:
-        """単一テキストの翻訳"""
+        """単一テキストの翻訳（M2M100 -> Qwen fallback付）"""
         request_data = TranslationRequest(
             text=text, target_lang=target_lang, paper_context=paper_context
         )
@@ -383,25 +386,35 @@ class InferenceServiceClient:
             if response.get("success"):
                 translation = response.get("translation", "")
                 model = response.get("model", "m2m100")
+                confidence = response.get("confidence", 1.0)
+
                 log.debug(
                     "translate",
                     "M2M100翻訳完了",
                     model=model,
+                    confidence=confidence,
                     processing_time=response.get("processing_time", 0),
                 )
 
-                # フォールバック判定 (確信度がない場合はとりあえずm2m100の結果を信じる)
-                # 仮にバックエンド側でM2M100側の推論結果に conf が含まれていない場合も考慮
-                # ここではレスポンスに model 情報が入り、必要ならqwenで再実行する設計にするが、
-                # 今回はServiceB側でフォールバックを行わない構成にしたため、クライアント側でオーケストレーションする
-                # ただし、現状のM2M100翻訳エンドポイントのレスポンススキーマに conf がないので
-                # M2M100エンドポイントからはm2m100の翻訳結果が返るだけとなる。(TranslationResponse)
-                # もしQwenを使いたい場合は、呼び出し元が別途指定するなどが必要。
-                # 現行の仕様を極力壊さずにするため、基本はm2m100の結果を返すが、
-                # paper_context が指定されていてQwenを使いたい場合などは、別途ハンドリングが必要か。
-                # ★今回は暫定的に、m2m100を先に呼び、特定条件(※現在APIレスポンスにconfがないため取得できない)
-                # または常にm2m100を返すようにする。将来的にQwenを明示的に呼ぶメソッドを追加する。
-                # とりあえず、従来の translation 処理は m2m100 を呼ぶようにする。
+                # フォールバック判定
+                if confidence <= self.fallback_threshold and self.qwen_base_url:
+                    log.info(
+                        "translate_fallback",
+                        "確信度が低いため Qwen にフォールバックします",
+                        confidence=confidence,
+                        threshold=self.fallback_threshold,
+                    )
+                    try:
+                        qwen_translation, qwen_model = await self.translate_with_qwen(
+                            text, target_lang, paper_context
+                        )
+                        return qwen_translation, qwen_model
+                    except Exception as e:
+                        log.warning(
+                            "translate_fallback_failed",
+                            "Qwenへのフォールバックに失敗しました。M2M100の結果を使用します。",
+                            error=str(e),
+                        )
 
                 return translation, model
             else:
@@ -410,7 +423,6 @@ class InferenceServiceClient:
 
         except Exception as e:
             log.error("translate", "翻訳エラー", error=str(e))
-
             raise
 
     async def translate_with_qwen(

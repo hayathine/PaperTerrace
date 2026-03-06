@@ -329,11 +329,20 @@ class SQLiteStorage(StorageInterface):
         self.db_path = db_path
         log.info("init", "SQLiteStorage initialized", db_path=self.db_path)
 
-    def _get_connection(self) -> sqlite3.Connection:
-        """Get a database connection with row factory."""
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
-        return conn
+    def _get_connection(self):
+        """Get a database connection with row factory (context manager)."""
+        from contextlib import contextmanager
+
+        @contextmanager
+        def get_conn():
+            conn = sqlite3.connect(self.db_path)
+            conn.row_factory = sqlite3.Row
+            try:
+                yield conn
+            finally:
+                conn.close()
+
+        return get_conn()
 
     def init_tables(self) -> None:
         """Legacy method retained for interface compatibility (now handled by Alembic)."""
@@ -354,6 +363,14 @@ class SQLiteStorage(StorageInterface):
         visibility: str = "private",
     ) -> str:
         """Save a paper to storage."""
+        # Sanitize for NUL bytes (consistency with CloudSQL)
+        if ocr_text:
+            ocr_text = ocr_text.replace("\0", "")
+        if html_content:
+            html_content = html_content.replace("\0", "")
+        if layout_json:
+            layout_json = layout_json.replace("\0", "")
+
         now = datetime.now().isoformat()
         with self._get_connection() as conn:
             conn.execute(
@@ -389,17 +406,22 @@ class SQLiteStorage(StorageInterface):
                 "SELECT * FROM papers WHERE paper_id = ?", (paper_id,)
             ).fetchone()
             if row:
-                data = dict(row)
-                # Parse tags JSON
-                if data.get("tags"):
-                    import json
-
-                    try:
-                        data["tags"] = json.loads(data["tags"])
-                    except json.JSONDecodeError:
-                        data["tags"] = []
-                return data
+                return self._parse_paper_row(dict(row))
             return None
+
+    def _parse_paper_row(self, data: dict) -> dict:
+        """Parse JSON fields in paper row."""
+        import json
+
+        # Parse tags JSON
+        if data.get("tags"):
+            try:
+                data["tags"] = json.loads(data["tags"])
+            except json.JSONDecodeError:
+                data["tags"] = []
+        else:
+            data["tags"] = []
+        return data
 
     def get_paper_by_hash(self, file_hash: str) -> dict | None:
         """Get a paper by file hash."""
@@ -407,7 +429,9 @@ class SQLiteStorage(StorageInterface):
             row = conn.execute(
                 "SELECT * FROM papers WHERE file_hash = ?", (file_hash,)
             ).fetchone()
-            return dict(row) if row else None
+            if row:
+                return self._parse_paper_row(dict(row))
+            return None
 
     def list_papers(self, limit: int = 50) -> list[dict]:
         """List recent papers."""
@@ -427,7 +451,6 @@ class SQLiteStorage(StorageInterface):
                 "UPDATE papers SET html_content = ?, updated_at = ? WHERE paper_id = ?",
                 (html_content, now, paper_id),
             )
-            conn.commit()
             conn.commit()
             return cursor.rowcount > 0
 

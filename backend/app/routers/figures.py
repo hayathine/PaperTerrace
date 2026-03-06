@@ -34,8 +34,9 @@ async def get_paper_figures(paper_id: str, user: OptionalUser = None):
         log.error(
             "get_figures", "Failed to get figures", error=str(e), paper_id=paper_id
         )
-
-        return JSONResponse({"error": str(e)}, status_code=500)
+        app_env = os.getenv("APP_ENV", "production")
+        error_msg = str(e) if app_env == "development" else "Failed to retrieve figures"
+        return JSONResponse({"error": error_msg}, status_code=500)
 
 
 async def _fetch_image_bytes(image_url: str) -> bytes | None:
@@ -129,4 +130,6 @@ async def explain_figure(
             figure_id=figure_id,
         )
 
-        return JSONResponse({"error": str(e)}, status_code=500)
+        app_env = os.getenv("APP_ENV", "production")
+        error_msg = str(e) if app_env == "development" else "Failed to analyze figure"
+        return JSONResponse({"error": error_msg}, status_code=500)

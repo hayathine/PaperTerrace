@@ -191,5 +191,7 @@ async def analyze_layout_lazy(
         raise
     except Exception as e:
         log.error("layout_lazy", "Unexpected error", error=str(e), exc_info=True)
-
-        raise HTTPException(status_code=500, detail=f"Layout analysis failed: {str(e)}")
+        # Use a generic message for internal server errors to avoid exposing technical details
+        raise HTTPException(
+            status_code=500, detail="Layout analysis failed due to an internal error."
+        )

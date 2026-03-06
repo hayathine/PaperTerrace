@@ -56,31 +56,31 @@ class PDFOCRService:
             user_plan=user_plan,
         )
 
-        # 1. Cache handling
-        cached_result = await self._handle_cache(file_hash)
-        if cached_result:
-            storage_type = os.getenv("STORAGE_TYPE", "local").upper()
+        tmp_path = None
+        try:
+            # 1. Cache handling
+            cached_result = await self._handle_cache(file_hash)
+            if cached_result:
+                storage_type = os.getenv("STORAGE_TYPE", "local").upper()
+                log.info(
+                    "cache_hit",
+                    "Using cached OCR",
+                    filename=filename,
+                    storage_type=storage_type,
+                    file_hash=file_hash,
+                )
+
+                for page in cached_result:
+                    yield page
+                return
+
             log.info(
-                "cache_hit",
-                "Using cached OCR",
+                "cache_miss",
+                "No cache found, starting AI OCR",
                 filename=filename,
-                storage_type=storage_type,
                 file_hash=file_hash,
             )
 
-            for page in cached_result:
-                yield page
-            return
-
-        log.info(
-            "cache_miss",
-            "No cache found, starting AI OCR",
-            filename=filename,
-            file_hash=file_hash,
-        )
-
-        tmp_path = None
-        try:
             log.debug("temp_file_create", "Creating temp file", file_hash=file_hash)
 
             # Save PDF to temporary file for libraries that need a path (like Camelot)
@@ -158,7 +158,13 @@ class PDFOCRService:
 
             log.error("extract_failed", "Full traceback", error=str(e), exc_info=True)
 
-            yield (0, 0, f"ERROR_API_FAILED: {str(e)}", True, file_hash, None, None)
+            app_env = os.getenv("APP_ENV", "production")
+            error_msg = (
+                f"ERROR_API_FAILED: {str(e)}"
+                if app_env == "development"
+                else "ERROR_API_FAILED: Internal Server Error during OCR"
+            )
+            yield (0, 0, error_msg, True, file_hash, None, None)
         finally:
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)

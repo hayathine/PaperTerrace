@@ -203,9 +203,17 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             )
             mw_log.error("request", traceback.format_exc())
 
+            # Hide detailed error message from end users in production
+            app_env = os.getenv("APP_ENV", "production")
+            error_msg = (
+                str(e)
+                if app_env == "development"
+                else "An unexpected error occurred. Please try again later."
+            )
+
             return JSONResponse(
                 status_code=500,
-                content={"error": "Internal Server Error", "message": str(e)},
+                content={"error": "Internal Server Error", "message": error_msg},
             )
 
 
@@ -224,8 +232,17 @@ async def global_exception_handler(request: Request, exc: Exception):
 
     mw_log.error("exception", traceback.format_exc())
 
+    # Hide detailed error message from end users in production
+    app_env = os.getenv("APP_ENV", "production")
+    error_msg = (
+        str(exc)
+        if app_env == "development"
+        else "An unexpected error occurred. Please try again later."
+    )
+
     return JSONResponse(
-        status_code=500, content={"error": "Internal Server Error", "message": str(exc)}
+        status_code=500,
+        content={"error": "Internal Server Error", "message": error_msg},
     )
 
 
@@ -244,8 +261,12 @@ async def init_db_manual():
             "message": "Storage provider does not support init_tables",
         }
     except Exception as e:
+        app_env = os.getenv("APP_ENV", "production")
+        error_msg = (
+            str(e) if app_env == "development" else "Failed to initialize database"
+        )
         return JSONResponse(
-            status_code=500, content={"status": "error", "message": str(e)}
+            status_code=500, content={"status": "error", "message": error_msg}
         )
 
 

@@ -9,6 +9,8 @@ originRequest:
 ingress:
   - hostname: tunnel.paperterrace.page
     service: http://backend.paperterrace.svc.cluster.local:8080
+  - hostname: glitchtip.paperterrace.page
+    service: http://glitchtip.paperterrace.svc.cluster.local:8000
   - service: http_status:404
 loglevel: info
 no-autoupdate: true

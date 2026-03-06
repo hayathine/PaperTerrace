@@ -37,7 +37,7 @@ class TranslationService:
 
     async def translate(
         self, text: str, target_lang: str = "ja", paper_context: str = ""
-    ) -> tuple[str, str]:
+    ) -> tuple[str, str, float]:
         """指定された推論タイプに基づいて翻訳を実行"""
 
         from .utils import get_lang_name
@@ -56,7 +56,7 @@ class TranslationService:
                     paper_context=paper_context or "No specific context available.",
                     lang_name=lang_full_name,
                 )
-                return llm_result, "Qwen"
+                return llm_result, "Qwen", 1.0
             except Exception as e:
                 logger.error(f"Qwen3 translation failed: {e}")
                 raise
@@ -90,18 +90,18 @@ class TranslationService:
                     paper_context=paper_context or "No specific context available.",
                     lang_name=lang_full_name,
                 )
-                return llm_result, "Qwen"
+                return llm_result, "Qwen", 1.0
             except Exception as e:
                 # Qwen3 が失敗した場合、m2m100の結果をそのまま返す
                 logger.warning(
                     f"Qwen3翻訳失敗 (conf={conf:.3f})、m2m100の結果を使用します: {e}"
                 )
 
-        return translation, model
+        return translation, model, conf
 
     async def translate_batch(
         self, texts: list[str], target_lang: str = "ja", paper_context: str = ""
-    ) -> tuple[list[str], list[str]]:
+    ) -> tuple[list[str], list[str], list[float]]:
         """バッチ翻訳の統合実行"""
         from .utils import get_lang_name
 
@@ -111,6 +111,7 @@ class TranslationService:
         if self.inference_type == "qwen":
             final_translations = []
             final_models = []
+            final_confidences = []
             for text in texts:
                 try:
                     translation = await self.llamacpp.translate_with_llamacpp(
@@ -120,16 +121,19 @@ class TranslationService:
                     )
                     final_translations.append(translation)
                     final_models.append("Qwen")
+                    final_confidences.append(1.0)
                 except Exception as e:
                     logger.warning(f"Qwen3 batch translation failed: {e}")
                     final_translations.append("")
                     final_models.append("failed")
-            return final_translations, final_models
+                    final_confidences.append(0.0)
+            return final_translations, final_models, final_confidences
 
         # 1. M2M100バッチ翻訳
         results = await self.m2m100.translate_batch(texts, target_lang)
         final_translations = []
         final_models = []
+        final_confidences = []
 
         for i, res in enumerate(results):
             translation = res["translation"]
@@ -163,8 +167,9 @@ class TranslationService:
 
             final_translations.append(translation)
             final_models.append(model)
+            final_confidences.append(conf)
 
-        return final_translations, final_models
+        return final_translations, final_models, final_confidences
 
     async def cleanup(self):
         if self.m2m100:

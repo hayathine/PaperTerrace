@@ -240,11 +240,17 @@ if INFERENCE_TYPE in ["all", "layout"]:
 
         except Exception as e:
             logger.exception("Layout image analysis failed")
+            app_env = os.getenv("APP_ENV", "production")
+            error_msg = (
+                str(e)
+                if app_env == "development"
+                else "Internal error during layout analysis"
+            )
             return {
                 "success": False,
                 "results": [],
                 "processing_time": time.time() - start_time,
-                "message": str(e),
+                "message": error_msg,
             }
 
         finally:
@@ -350,11 +356,17 @@ if INFERENCE_TYPE in ["all", "layout"]:
 
         except Exception as e:
             logger.exception("Batch layout analysis failed")
+            app_env = os.getenv("APP_ENV", "production")
+            error_msg = (
+                str(e)
+                if app_env == "development"
+                else "Internal error during batch layout analysis"
+            )
             return {
                 "success": False,
                 "results": [],
                 "processing_time": time.time() - start_time,
-                "message": str(e),
+                "message": error_msg,
             }
 
     # --------------------------------------------------
@@ -379,11 +391,17 @@ if INFERENCE_TYPE in ["all", "layout"]:
 
         except Exception as e:
             logger.exception("Layout analysis failed")
+            app_env = os.getenv("APP_ENV", "production")
+            error_msg = (
+                str(e)
+                if app_env == "development"
+                else "Internal error during layout analysis"
+            )
             return LayoutAnalysisResponse(
                 success=False,
                 results=[],
                 processing_time=time.time() - start_time,
-                message=str(e),
+                message=error_msg,
             )
 
 
@@ -402,7 +420,7 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
         start_time = time.time()
 
         try:
-            translation, model = await translation_service.translate(
+            translation, model, confidence = await translation_service.translate(
                 req.text, req.target_lang, paper_context=req.paper_context or ""
             )
 
@@ -410,14 +428,21 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
                 success=True,
                 translation=translation,
                 model=model,
+                confidence=confidence,
                 processing_time=time.time() - start_time,
             )
 
         except Exception as e:
             logger.exception("Translation failed")
+            app_env = os.getenv("APP_ENV", "production")
+            error_msg = (
+                str(e)
+                if app_env == "development"
+                else "Internal error during translation"
+            )
             return TranslationResponse(
                 success=False,
                 translation="",
                 processing_time=time.time() - start_time,
-                message=str(e),
+                message=error_msg,
             )

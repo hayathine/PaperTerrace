@@ -300,10 +300,9 @@ async def analyze_pdf_json(
 
     except Exception as e:
         log.error("analyze_json", "Unexpected error", error=str(e), exc_info=True)
-
-        return JSONResponse(
-            {"error": f"Internal Server Error: {str(e)}"}, status_code=500
-        )
+        app_env = os.getenv("APP_ENV", "production")
+        error_msg = str(e) if app_env == "development" else "Internal Server Error"
+        return JSONResponse({"error": error_msg}, status_code=500)
 
 
 @router.post("/analyze-paper/{paper_id}")

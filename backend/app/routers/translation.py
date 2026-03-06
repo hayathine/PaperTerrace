@@ -501,13 +501,19 @@ async def explain(
             "explain", "Gemini fallback translation failed", error=str(e), lemma=lemma
         )
 
+        app_env = os.getenv("APP_ENV", "production")
         # 最終的にエラーの場合
+        error_msg = (
+            f"Translation failed: {str(e)}"
+            if app_env == "development"
+            else "Translation failed"
+        )
         if not is_htmx:
             return JSONResponse(
                 {
                     "word": original_word,
                     "lemma": lemma,
-                    "translation": f"Translation failed: {str(e)}",
+                    "translation": error_msg,
                     "source": "Error",
                     "element_id": element_id,
                 },
@@ -517,7 +523,7 @@ async def explain(
             build_dict_card_html(
                 original_word,
                 lemma,
-                f"Translation failed: {str(e)}",
+                error_msg,
                 "Error",
                 lang,
                 paper_id,
@@ -626,12 +632,18 @@ async def explain_deep(
         log.error(
             "explain_deep", "Gemini translation failed", error=str(e), lemma=lemma
         )
+        app_env = os.getenv("APP_ENV", "production")
+        error_msg = (
+            "Translation failed"
+            if app_env != "development"
+            else f"Translation failed: {str(e)}"
+        )
         if not is_htmx:
             return JSONResponse(
                 {
                     "word": original_word,
                     "lemma": lemma,
-                    "translation": "Translation failed",
+                    "translation": error_msg,
                     "source": "Error",
                     "element_id": element_id,
                 },
@@ -641,7 +653,7 @@ async def explain_deep(
             build_dict_card_html(
                 original_word,
                 lemma,
-                "Translation failed",
+                error_msg,
                 "Error",
                 lang,
                 paper_id,

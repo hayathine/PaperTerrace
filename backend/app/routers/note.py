@@ -89,13 +89,19 @@ async def update_note(note_id: str, request: NoteRequest, user: OptionalUser = N
         )
         return JSONResponse(jsonable_encoder(updated))
     except Exception as e:
-        return JSONResponse({"error": str(e)}, status_code=500)
+        import os
+
+        app_env = os.getenv("APP_ENV", "production")
+        error_msg = str(e) if app_env == "development" else "Failed to update note"
+        return JSONResponse({"error": error_msg}, status_code=500)
 
 
 @router.delete("/note/{note_id}")
 async def delete_note(note_id: str, user: OptionalUser, paper_id: str | None = None):
     user_id = user.uid if user else None
-    deleted = sidebar_note_service.delete_note(note_id, user_id=user_id, paper_id=paper_id)
+    deleted = sidebar_note_service.delete_note(
+        note_id, user_id=user_id, paper_id=paper_id
+    )
     return JSONResponse({"deleted": deleted})
 
 
