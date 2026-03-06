@@ -18,6 +18,7 @@ CLAUDE.md
 *.md
 config.ts
 !frontend/src/config.ts
+**/backend/app/static/user_uploads
 # C extensions
 *.so
 # local-files/

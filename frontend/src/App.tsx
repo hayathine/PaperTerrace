@@ -106,9 +106,6 @@ function App() {
 		fetchConfig();
 	}, []);
 
-	// Developer settings
-	const SHOW_DEV_TOOLS = appEnv === "development";
-
 	useEffect(() => {
 		if (appEnv === "development") {
 			document.title = `PaperTerrace (Dev) - ${t("tagline", "Read papers casually, like sitting on a terrace")}`;
@@ -716,36 +713,6 @@ function App() {
                   cursor-pointer
                 "
 							/>
-
-							{SHOW_DEV_TOOLS && (
-								<div className="mt-4 pt-4 border-t border-slate-100">
-									<button
-										type="button"
-										onClick={() => {
-											fetch(`${API_URL}/test.pdf`)
-												.then((res) => res.blob())
-												.then((blob) => {
-													const file = new File([blob], "test.pdf", {
-														type: "application/pdf",
-													});
-													setUploadFile(file);
-													setCurrentPaperId(null);
-												})
-												.catch((e) =>
-													log.error(
-														"load_test_pdf",
-														"Failed to load test PDF",
-														{ error: e },
-													),
-												);
-										}}
-										id="dev-load-pdf-btn"
-										className="w-full py-1 px-3 bg-orange-50 hover:bg-orange-100 text-orange-600 text-xs rounded border border-orange-200 transition-colors"
-									>
-										{t("viewer.loading_test")}
-									</button>
-								</div>
-							)}
 						</div>
 					</div>
 				</div>

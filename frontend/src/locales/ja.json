@@ -68,7 +68,7 @@
 		"uploading_pdf": "PDFをアップロード中...",
 		"processing_pdf": "PDFを解析中...",
 		"select_pdf": "PDFを選択してください",
-		"loading_test": "[DEV] テスト用PDFを読み込む",
+
 		"page": "ページ",
 		"toolbar": {
 			"text_mode": "テキストモード",
