@@ -171,6 +171,18 @@ const Dictionary: React.FC<DictionaryProps> = ({
 							lang: i18n.language,
 						}),
 					});
+				} else if (activeSubTab === "explanation" && context) {
+					// Use context-aware explanation for the explanation tab
+					res = await fetch(`${API_URL}/api/explain/context`, {
+						method: "POST",
+						headers: { ...headers, "Content-Type": "application/json" },
+						body: JSON.stringify({
+							word: term,
+							context: context,
+							session_id: sessionId,
+							lang: i18n.language,
+						}),
+					});
 				} else {
 					const queryParams = new URLSearchParams({
 						lang: i18n.language,

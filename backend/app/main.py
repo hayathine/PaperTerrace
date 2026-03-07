@@ -41,15 +41,9 @@ mw_log = ServiceLogger("Middleware")
 # Load environment variables from secrets directory
 load_dotenv("../local-files/secrets/.env")
 
-# Firebase Config for Frontend
-FIREBASE_CONFIG = {
-    "apiKey": os.getenv("FIREBASE_API_KEY"),
-    "authDomain": os.getenv("FIREBASE_AUTH_DOMAIN"),
-    "projectId": os.getenv("FIREBASE_PROJECT_ID"),
-    "storageBucket": os.getenv("FIREBASE_STORAGE_BUCKET"),
-    "messagingSenderId": os.getenv("FIREBASE_MESSAGING_SENDER_ID"),
-    "appId": os.getenv("FIREBASE_APP_ID"),
-    "measurementId": os.getenv("FIREBASE_MEASUREMENT_ID"),
+# Neon Auth Config for Frontend
+NEON_AUTH_CONFIG = {
+    "authUrl": os.getenv("NEON_AUTH_URL"),
 }
 
 
@@ -65,16 +59,10 @@ async def lifespan(app: FastAPI):
     async def _prewarm_models():
         try:
             from app.domain.services.local_translator import get_local_translator
-            from app.domain.services.nlp_service import NLPService
 
             # Prewarm ServiceB (推論サービス)
             lt = get_local_translator()
             await lt.prewarm()
-
-            # Prewarm NLP (spaCy) - internal buffers
-            NLPService.lemmatize("warmup")
-            log.info("prewarm", "Pre-warmed NLP (spaCy)")
-
         except Exception as e:
             log.warning("prewarm", "Failed to pre-warm models", error=str(e))
 
@@ -413,6 +401,19 @@ async def health_check():
         "version": "1.0.0",
     }
 
+    # Check Maintenance Mode
+    maintenance_mode = os.getenv("MAINTENANCE_MODE", "false").lower() == "true"
+    if maintenance_mode:
+        return JSONResponse(
+            status_code=503,
+            content={
+                "status": "maintenance",
+                "message": "システムメンテナンス中です。しばらくお待ちください。",
+                "timestamp": datetime.now().isoformat(),
+                "version": "1.0.0",
+            },
+        )
+
     # Return 503 if unhealthy, unless we are in a testing environment
     is_testing = (
         os.getenv("ENV") == "testing" or os.getenv("PYTEST_CURRENT_TEST") is not None
@@ -427,7 +428,7 @@ async def get_config():
     """Returns configuration for the frontend."""
     return JSONResponse(
         content={
-            "firebase_config": FIREBASE_CONFIG,
+            "neon_auth": NEON_AUTH_CONFIG,
             "app_env": os.getenv("APP_ENV", "production"),
         }
     )

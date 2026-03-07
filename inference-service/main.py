@@ -24,6 +24,8 @@ from common.logger import configure_logging, logger
 from common.schemas.inference import (
     LayoutAnalysisRequest,
     LayoutAnalysisResponse,
+    TokenizeRequest,
+    TokenizeResponse,
     TranslationRequest,
     TranslationResponse,
 )
@@ -420,8 +422,11 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
         start_time = time.time()
 
         try:
-            translation, model, confidence = await translation_service.translate(
-                req.text, req.target_lang, paper_context=req.paper_context or ""
+            translation, model, confidence, lemma = await translation_service.translate(
+                req.text,
+                req.target_lang,
+                paper_context=req.paper_context or "",
+                original_text=req.original_text,
             )
 
             return TranslationResponse(
@@ -429,6 +434,7 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
                 translation=translation,
                 model=model,
                 confidence=confidence,
+                lemma=lemma,
                 processing_time=time.time() - start_time,
             )
 
@@ -445,4 +451,27 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
                 translation="",
                 processing_time=time.time() - start_time,
                 message=error_msg,
+            )
+
+    @app.post("/api/v1/tokenize", response_model=TokenizeResponse)
+    @limiter.limit(os.getenv("RATE_LIMIT_TOKENIZE", "300/minute"))
+    async def tokenize_text_api(request: Request, req: TokenizeRequest):
+        await ensure_initialized()
+        from services.translation.nlp import NLPService
+
+        start_time = time.time()
+        try:
+            tokens = NLPService.tokenize(req.text)
+            return TokenizeResponse(
+                success=True,
+                tokens=tokens,
+                processing_time=time.time() - start_time,
+            )
+        except Exception as e:
+            logger.exception("Tokenization failed")
+            return TokenizeResponse(
+                success=False,
+                tokens=[],
+                processing_time=time.time() - start_time,
+                message=str(e),
             )

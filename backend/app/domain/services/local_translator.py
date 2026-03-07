@@ -59,13 +59,17 @@ class LocalTranslator:
             log.warning("prewarm", "ServiceB warmup failed", error=str(e))
 
     async def translate_async(
-        self, text: str, tgt_lang: str = "ja", paper_context: str | None = None
-    ) -> tuple[str, str | None]:
+        self,
+        text: str,
+        tgt_lang: str = "ja",
+        paper_context: str | None = None,
+        original_text: str | None = None,
+    ) -> tuple[str, str | None, str | None]:
         """
-        非同期翻訳。Returns (translated_text, model_name) tuple.
+        非同期翻訳。Returns (translated_text, model_name, lemma) tuple.
         """
         if not text.strip():
-            return "", None
+            return "", None, None
 
         custom_url = os.getenv(
             "CUSTOM_TRANSLATION_URL",
@@ -83,12 +87,14 @@ class LocalTranslator:
             )
 
             translation = await self._translate_via_custom(text, tgt_lang, custom_url)
-            return translation, "custom"
+            return translation, "custom", text
         else:
             log.info(
                 "translate_async", "Using ServiceB (Inference Service) for translation"
             )
-            return await self._translate_via_service_b(text, tgt_lang, paper_context)
+            return await self._translate_via_service_b(
+                text, tgt_lang, paper_context, original_text=original_text
+            )
 
     async def _translate_via_custom(self, text: str, tgt_lang: str, url: str) -> str:
         try:
@@ -165,8 +171,12 @@ class LocalTranslator:
             return text
 
     async def _translate_via_service_b(
-        self, text: str, tgt_lang: str, paper_context: str | None = None
-    ) -> tuple[str, str | None]:
+        self,
+        text: str,
+        tgt_lang: str,
+        paper_context: str | None = None,
+        original_text: str | None = None,
+    ) -> tuple[str, str | None, str | None]:
         try:
             log.info(
                 "translate_async",
@@ -175,15 +185,10 @@ class LocalTranslator:
             )
 
             client = await get_inference_client()
-            # translate_text returns (translation, model) tuple
-            result = await client.translate_text(
-                text, tgt_lang, paper_context=paper_context
+            # translate_text returns (translation, model, lemma) tuple
+            translation, model, lemma = await client.translate_text(
+                text, tgt_lang, paper_context=paper_context, original_text=original_text
             )
-
-            if isinstance(result, tuple):
-                translation, model = result
-            else:
-                translation, model = result, None
 
             log.info(
                 "translate_async",
@@ -191,7 +196,7 @@ class LocalTranslator:
                 result_preview=f"{str(translation)[:50]}...",
             )
 
-            return translation, model
+            return translation, model, lemma
 
         except CircuitBreakerError as e:
             log.error("translate_async", "Circuit breaker error", error=str(e))
@@ -206,7 +211,7 @@ class LocalTranslator:
         except Exception as e:
             log.error("translate_async", "Unexpected error", error=str(e))
 
-            return text, None
+            return text, None, text
 
     def translate(
         self, text: str, src_lang: str = "en", tgt_lang: str = "ja"

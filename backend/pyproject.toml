@@ -22,8 +22,6 @@ dependencies = [
     "alembic>=1.18.3",
     "psycopg2-binary>=2.9.11",
     # NLP & ML
-    "spacy>=3.8.11",
-    "en-core-web-sm",
     "Pillow>=11.0.0",
     # PDF Processing
     "pdfplumber>=0.11.9",
@@ -36,6 +34,7 @@ dependencies = [
     "redis>=7.2.0",
     "dspy>=2.5.26",
     "pymupdf4llm>=0.3.4",
+    "python-jose[cryptography]>=3.5.0",
 ]
 
 [dependency-groups]
@@ -61,9 +60,6 @@ pythonVersion = "3.12"
 [tool.ty.environment]
 python = ".venv"
 root = [".", "./app"]
-
-[tool.uv.sources]
-en-core-web-sm = { url = "https://github.com/explosion/spacy-models/releases/download/en_core_web_sm-3.8.0/en_core_web_sm-3.8.0-py3-none-any.whl" }
 
 [tool.pytest.ini_options]
 addopts = "--testmon"

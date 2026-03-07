@@ -36,13 +36,29 @@ class TranslationService:
             await self.llamacpp.initialize()
 
     async def translate(
-        self, text: str, target_lang: str = "ja", paper_context: str = ""
-    ) -> tuple[str, str, float]:
+        self,
+        text: str,
+        target_lang: str = "ja",
+        paper_context: str = "",
+        original_text: str | None = None,
+    ) -> tuple[str, str, float, str]:
         """指定された推論タイプに基づいて翻訳を実行"""
 
+        from .nlp import NLPService
         from .utils import get_lang_name
 
         lang_full_name = get_lang_name(target_lang)
+        raw_input = original_text or text
+
+        # 単語か文かを判定し、単語ならレマ化（原形への修正）を行う
+        lemma = raw_input
+        if NLPService.is_single_word(raw_input):
+            lemma = NLPService.lemmatize(raw_input)
+            logger.info(f"単語を検知: '{raw_input}' -> レマ化: '{lemma}'")
+        else:
+            logger.info(f"文章を検知: '{raw_input[:30]}...' (そのまま翻訳)")
+
+        input_text = lemma
 
         # Qwen 単独モードの場合
         if self.inference_type == "qwen":
@@ -52,11 +68,11 @@ class TranslationService:
                 )
             try:
                 llm_result = await self.llamacpp.translate_with_llamacpp(
-                    original_word=text,
+                    original_word=input_text,
                     paper_context=paper_context or "No specific context available.",
                     lang_name=lang_full_name,
                 )
-                return llm_result, "Qwen", 1.0
+                return llm_result, "Qwen", 1.0, lemma
             except Exception as e:
                 logger.error(f"Qwen3 translation failed: {e}")
                 raise
@@ -66,13 +82,13 @@ class TranslationService:
             raise ValueError("M2M100 service is not initialized")
 
         # 1. M2M100翻訳
-        res = await self.m2m100.translate(text, target_lang)
+        res = await self.m2m100.translate(input_text, target_lang)
         translation = res["translation"]
         conf = res["conf"]
         model = res.get("model", "m2m100")
 
         logger.info(
-            f"M2M100翻訳結果: {text[:30]}... -> {translation[:30]}... (conf={conf:.3f}, target={target_lang}, model={model})"
+            f"M2M100翻訳結果: {input_text[:30]}... -> {translation[:30]}... (conf={conf:.3f}, target={target_lang}, model={model})"
         )
 
         # 2. 確信度によるフォールバック (translation モードのみ)
@@ -86,33 +102,42 @@ class TranslationService:
             )
             try:
                 llm_result = await self.llamacpp.translate_with_llamacpp(
-                    original_word=text,
+                    original_word=input_text,
                     paper_context=paper_context or "No specific context available.",
                     lang_name=lang_full_name,
                 )
-                return llm_result, "Qwen", 1.0
+                return llm_result, "Qwen", 1.0, lemma
             except Exception as e:
                 # Qwen3 が失敗した場合、m2m100の結果をそのまま返す
                 logger.warning(
                     f"Qwen3翻訳失敗 (conf={conf:.3f})、m2m100の結果を使用します: {e}"
                 )
 
-        return translation, model, conf
+        return translation, model, conf, lemma
 
     async def translate_batch(
         self, texts: list[str], target_lang: str = "ja", paper_context: str = ""
-    ) -> tuple[list[str], list[str], list[float]]:
+    ) -> tuple[list[str], list[str], list[float], list[str]]:
         """バッチ翻訳の統合実行"""
+        from .nlp import NLPService
         from .utils import get_lang_name
 
         lang_full_name = get_lang_name(target_lang)
+
+        # 各テキストを判定し、単語ならレマ化
+        input_texts = []
+        for t in texts:
+            if NLPService.is_single_word(t):
+                input_texts.append(NLPService.lemmatize(t))
+            else:
+                input_texts.append(t)
 
         # Qwen 単独モードの場合
         if self.inference_type == "qwen":
             final_translations = []
             final_models = []
             final_confidences = []
-            for text in texts:
+            for text in input_texts:
                 try:
                     translation = await self.llamacpp.translate_with_llamacpp(
                         original_word=text,
@@ -127,10 +152,10 @@ class TranslationService:
                     final_translations.append("")
                     final_models.append("failed")
                     final_confidences.append(0.0)
-            return final_translations, final_models, final_confidences
+            return final_translations, final_models, final_confidences, input_texts
 
         # 1. M2M100バッチ翻訳
-        results = await self.m2m100.translate_batch(texts, target_lang)
+        results = await self.m2m100.translate_batch(input_texts, target_lang)
         final_translations = []
         final_models = []
         final_confidences = []
@@ -141,7 +166,7 @@ class TranslationService:
             model = res.get("model", "m2m100")
 
             logger.info(
-                f"M2M100バッチ翻訳[{i}]: {texts[i][:30]}... -> {translation[:30]}... (conf={conf:.3f})"
+                f"M2M100バッチ翻訳[{i}]: {input_texts[i][:30]}... -> {translation[:30]}... (conf={conf:.3f})"
             )
 
             if (
@@ -154,7 +179,7 @@ class TranslationService:
                 )
                 try:
                     translation = await self.llamacpp.translate_with_llamacpp(
-                        original_word=texts[i],
+                        original_word=input_texts[i],
                         paper_context=paper_context or "No specific context available.",
                         lang_name=lang_full_name,
                     )
@@ -169,7 +194,7 @@ class TranslationService:
             final_models.append(model)
             final_confidences.append(conf)
 
-        return final_translations, final_models, final_confidences
+        return final_translations, final_models, final_confidences, input_texts
 
     async def cleanup(self):
         if self.m2m100:

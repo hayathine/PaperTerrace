@@ -11,11 +11,13 @@ import type { SelectedFigure } from "./components/PDF/types";
 import SearchBar from "./components/Search/SearchBar";
 import Sidebar from "./components/Sidebar/Sidebar";
 import GlobalLoading from "./components/UI/GlobalLoading";
+import ServiceOutage from "./components/UI/ServiceOutage";
 import UploadScreen from "./components/Upload/UploadScreen";
 import { useAuth } from "./contexts/AuthContext";
 import { useLoading } from "./contexts/LoadingContext";
 import { useSyncStatus } from "./db/sync";
 import { useScrollTracking } from "./hooks/useScrollTracking";
+import { useServiceHealth } from "./hooks/useServiceHealth";
 import { syncTrajectory } from "./lib/recommendation";
 
 const log = createLogger("App");
@@ -24,6 +26,12 @@ function App() {
 	const { user, logout, token } = useAuth();
 	const { t } = useTranslation();
 	const { startLoading, stopLoading } = useLoading();
+	const {
+		isHealthy,
+		isMaintenance,
+		message: healthMessage,
+		reportFailure,
+	} = useServiceHealth();
 	const [uploadFile, setUploadFile] = useState<File | null>(null);
 
 	const [currentPaperId, setCurrentPaperId] = useState<string | null>(null);
@@ -110,6 +118,7 @@ function App() {
 				}
 			} catch (err) {
 				log.error("fetch_config", "Failed to fetch config", { error: err });
+				reportFailure(503);
 			}
 		};
 		fetchConfig();
@@ -141,7 +150,7 @@ function App() {
 				}
 			} catch (err) {
 				log.error("fetch_papers", "Failed to fetch papers", { error: err });
-
+				reportFailure(503);
 				setUploadedPapers([]);
 			}
 		};
@@ -370,7 +379,7 @@ function App() {
 		coords: { page: number; x: number; y: number },
 	) => {
 		const truncated =
-			text.length > 40 ? text.substring(0, 37).trim() + "..." : text;
+			text.length > 40 ? `${text.substring(0, 37).trim()}...` : text;
 		const quoted = `> ${text}\n\n`;
 
 		setSelectedWord(truncated);
@@ -772,48 +781,54 @@ function App() {
 								</span>
 							</button>
 						)}
-						<div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
-							<button
-								type="button"
-								onClick={() =>
-									startModeTransition(() => setPdfMode("plaintext"))
-								}
-								className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2 ${
-									pdfMode === "plaintext"
-										? "bg-white text-orange-600 shadow-sm"
-										: "text-slate-400 hover:text-slate-600"
-								} ${isModeTransitionPending ? "opacity-60" : ""}`}
-							>
-								<span className="text-xs">📝</span>
-								{t("viewer.toolbar.text_mode")}
-							</button>
-							<button
-								type="button"
-								onClick={() => startModeTransition(() => setPdfMode("text"))}
-								className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2 ${
-									pdfMode === "text"
-										? "bg-white text-orange-600 shadow-sm"
-										: "text-slate-400 hover:text-slate-600"
-								} ${isModeTransitionPending ? "opacity-60" : ""}`}
-							>
-								<span className="text-xs">📄</span>
-								{t("viewer.toolbar.click_mode")}
-							</button>
-						</div>
-						<div
-							className="ml-3 flex items-center gap-2"
-							title={`Sync: ${syncStatus}`}
-						>
-							<div
-								className={`w-2 h-2 rounded-full ${
-									syncStatus === "synced"
-										? "bg-green-500"
-										: syncStatus === "pending"
-											? "bg-amber-500 animate-pulse"
-											: "bg-red-500"
-								}`}
-							/>
-						</div>
+						{(uploadFile || currentPaperId) && (
+							<>
+								<div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+									<button
+										type="button"
+										onClick={() =>
+											startModeTransition(() => setPdfMode("plaintext"))
+										}
+										className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2 ${
+											pdfMode === "plaintext"
+												? "bg-white text-orange-600 shadow-sm"
+												: "text-slate-400 hover:text-slate-600"
+										} ${isModeTransitionPending ? "opacity-60" : ""}`}
+									>
+										<span className="text-xs">📝</span>
+										{t("viewer.toolbar.text_mode")}
+									</button>
+									<button
+										type="button"
+										onClick={() =>
+											startModeTransition(() => setPdfMode("text"))
+										}
+										className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2 ${
+											pdfMode === "text"
+												? "bg-white text-orange-600 shadow-sm"
+												: "text-slate-400 hover:text-slate-600"
+										} ${isModeTransitionPending ? "opacity-60" : ""}`}
+									>
+										<span className="text-xs">📄</span>
+										{t("viewer.toolbar.click_mode")}
+									</button>
+								</div>
+								<div
+									className="ml-3 flex items-center gap-2"
+									title={`Sync: ${syncStatus}`}
+								>
+									<div
+										className={`w-2 h-2 rounded-full ${
+											syncStatus === "synced"
+												? "bg-green-500"
+												: syncStatus === "pending"
+													? "bg-amber-500 animate-pulse"
+													: "bg-red-500"
+										}`}
+									/>
+								</div>
+							</>
+						)}
 						<div className="flex-1" />
 						{uploadFile && (
 							<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-4 truncate max-w-[150px] sm:max-w-xs">
@@ -1022,6 +1037,12 @@ function App() {
 					onPrevMatch={handlePrevMatch}
 				/>
 				<GlobalLoading />
+				{!isHealthy && (
+					<ServiceOutage
+						isMaintenance={isMaintenance}
+						message={healthMessage}
+					/>
+				)}
 			</div>
 		</ErrorBoundary>
 	);

@@ -1,5 +1,6 @@
 import json
 import os
+from datetime import datetime
 from typing import Any
 
 import redis
@@ -46,6 +47,15 @@ def get_redis_client():
     return _redis_client
 
 
+class DateTimeEncoder(json.JSONEncoder):
+    """Custom JSON encoder to handle datetime objects."""
+
+    def default(self, obj):
+        if isinstance(obj, datetime):
+            return obj.isoformat()
+        return super().default(obj)
+
+
 class RedisService:
     """Redis cache service with in-memory fallback."""
 
@@ -68,7 +78,7 @@ class RedisService:
     def set(self, key: str, value: Any, expire: int | None = None) -> bool:
         """Set a value in cache."""
         if isinstance(value, (dict, list)):
-            value_str = json.dumps(value)
+            value_str = json.dumps(value, cls=DateTimeEncoder)
         else:
             value_str = str(value)
 

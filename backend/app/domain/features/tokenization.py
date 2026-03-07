@@ -4,7 +4,6 @@ import re
 # Use the same executor if possible, or create a new one
 from concurrent.futures import ThreadPoolExecutor
 
-from app.domain.services.nlp_service import NLPService
 from app.providers import get_storage_provider
 from common.logger import ServiceLogger
 from common.utils.text import clean_text_for_tokenization
@@ -19,9 +18,10 @@ executor = ThreadPoolExecutor(max_workers=4)
 
 class TokenizationService:
     def __init__(self):
-        self.nlp_service = NLPService()
+        from app.providers.inference_client import get_inference_client
+
+        self.get_inference_client = get_inference_client
         self.word_analysis = WordAnalysisService()
-        self.nlp = self.nlp_service.get_nlp()
         self.redis = self.word_analysis.redis
 
     async def tokenize_stream(
@@ -45,17 +45,22 @@ class TokenizationService:
                 continue
 
             unique_id = f"{id_prefix}-{i}"
-            doc = await loop.run_in_executor(executor, self.nlp, p_text)
+
+            # Use Inference Service for tokenization
+            client = await self.get_inference_client()
+            tokens = await client.tokenize_text(p_text, lang=lang)
             p_tokens_html = []
 
-            for j, token in enumerate(doc):
-                whitespace = token.whitespace_
+            for j, token in enumerate(tokens):
+                text = token["text"]
+                lemma = token["lemma"]
+                whitespace = token["ws"]
+                is_punct = token.get("is_punct", False)
+                is_space = token.get("is_space", False)
 
-                if token.is_punct or token.is_space:
-                    p_tokens_html.append(f"<span>{token.text}</span>{whitespace}")
+                if is_punct or is_space:
+                    p_tokens_html.append(f"<span>{text}</span>{whitespace}")
                     continue
-
-                lemma = token.lemma_.lower()
 
                 # Cache and Dictionary Check
                 if lemma not in self.word_analysis.word_cache:
@@ -103,7 +108,7 @@ class TokenizationService:
                     f'" hx-get="/explain/{lemma}?lang={lang}{paper_param}&element_id={token_id}" hx-trigger="click" '
                     f'hx-vals=\'js:{{context: (document.getElementById("{token_id}").closest(".paragraph-container, p") || document.getElementById("{token_id}").parentElement)?.innerText?.slice(0, 800) || ""}}\' '
                     f'hx-indicator="#dict-loading" '
-                    f'hx-target="#dict-stack" hx-swap="afterbegin">{token.text}</span>{whitespace}'
+                    f'hx-target="#dict-stack" hx-swap="afterbegin">{text}</span>{whitespace}'
                 )
 
             html_content = "".join(p_tokens_html)

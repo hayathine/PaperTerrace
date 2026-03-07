@@ -7,7 +7,7 @@ from typing import Annotated
 
 from fastapi import Depends, Header, HTTPException, Request, status
 
-from app.auth.firebase import FirebaseAuth, FirebaseAuthError, get_firebase_auth
+from app.auth.neon_auth import NeonAuth, NeonAuthError, get_neon_auth
 from common.logger import ServiceLogger
 
 log = ServiceLogger("AuthDep")
@@ -34,7 +34,7 @@ class AuthenticatedUser:
 async def get_current_user(
     request: Request,
     authorization: Annotated[str | None, Header()] = None,
-    firebase_auth: FirebaseAuth = Depends(get_firebase_auth),
+    neon_auth: NeonAuth = Depends(get_neon_auth),
 ) -> AuthenticatedUser:
     """
     Dependency to get the current authenticated user.
@@ -81,7 +81,7 @@ async def get_current_user(
     token = parts[1]
 
     try:
-        decoded_token = firebase_auth.verify_token(token)
+        decoded_token = await neon_auth.verify_token(token)
         user = AuthenticatedUser(decoded_token)
         log.info(
             "get_current_user",
@@ -92,7 +92,7 @@ async def get_current_user(
         )
         return user
 
-    except FirebaseAuthError as e:
+    except NeonAuthError as e:
         log.warning("get_current_user", "Authentication failed", error=str(e))
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -104,7 +104,7 @@ async def get_current_user(
 async def get_optional_user(
     request: Request,
     authorization: Annotated[str | None, Header()] = None,
-    firebase_auth: FirebaseAuth = Depends(get_firebase_auth),
+    neon_auth: NeonAuth = Depends(get_neon_auth),
 ) -> AuthenticatedUser | None:
     """
     Dependency to optionally get the current user.
@@ -135,9 +135,9 @@ async def get_optional_user(
     token = parts[1]
 
     try:
-        decoded_token = firebase_auth.verify_token(token)
+        decoded_token = await neon_auth.verify_token(token)
         return AuthenticatedUser(decoded_token)
-    except FirebaseAuthError:
+    except NeonAuthError:
         return None
 
 

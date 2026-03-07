@@ -1,7 +1,5 @@
 from concurrent.futures import ThreadPoolExecutor
 
-from app.domain.services.nlp_service import NLPService
-
 # 共通設定 (Legacy executor for backwards consistency if needed by external callers)
 executor = ThreadPoolExecutor(max_workers=4)
 
@@ -19,7 +17,6 @@ class EnglishAnalysisService:
         from app.domain.features.word_analysis import WordAnalysisService
         from app.domain.services.pdf_ocr_service import PDFOCRService
 
-        self.nlp_service = NLPService()
         self.word_analysis = WordAnalysisService()
         self.tokenization = TokenizationService()
 
@@ -30,10 +27,6 @@ class EnglishAnalysisService:
         # Maintain public properties if they were used outside
         self.word_cache = self.word_analysis.word_cache
         self.translation_cache = self.word_analysis.translation_cache
-
-    def lemmatize(self, text: str) -> str:
-        """Get lemma for text using NLP service."""
-        return self.nlp_service.lemmatize(text)
 
     async def tokenize_stream(self, *args, **kwargs):
         """Processes text paragraph by paragraph and yields interactive HTML."""

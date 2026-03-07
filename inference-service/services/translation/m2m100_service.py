@@ -33,14 +33,21 @@ class M2M100TranslationService:
         self.ct2_compute_type = os.getenv("CT2_COMPUTE_TYPE", "int8")
 
         # 翻訳パラメータ (単語翻訳用に最適化)
-        self.beam_size = int(os.getenv("TRANSLATION_BEAM_SIZE", "2"))
+        self.beam_size = int(os.getenv("TRANSLATION_BEAM_SIZE", "5"))
         self.repetition_penalty = float(
-            os.getenv("TRANSLATION_REPETITION_PENALTY", "1.1")
+            os.getenv("TRANSLATION_REPETITION_PENALTY", "1.0")
         )
         self.no_repeat_ngram_size = int(
-            os.getenv("TRANSLATION_NO_REPEAT_NGRAM_SIZE", "3")
+            os.getenv("TRANSLATION_NO_REPEAT_NGRAM_SIZE", "0")
         )
-        self.max_decoding_length = int(os.getenv("TRANSLATION_MAX_LENGTH", "256"))
+        self.max_decoding_length = int(os.getenv("TRANSLATION_MAX_LENGTH", "1024"))
+
+        logger.info(
+            f"M2M100 parameters: beam_size={self.beam_size}, "
+            f"repetition_penalty={self.repetition_penalty}, "
+            f"no_repeat_ngram_size={self.no_repeat_ngram_size}, "
+            f"max_decoding_length={self.max_decoding_length}"
+        )
 
     async def initialize(self):
         """モデルの初期化"""

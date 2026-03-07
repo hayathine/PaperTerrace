@@ -43,12 +43,21 @@ Provide a concise translation in {lang_name} (1-3 words). Output ONLY the transl
 # Used in: common/dspy/signatures.py (DeepExplanation)
 # フロントエンド表示: Dictionary.tsx (文脈を含めた詳細解説として表示)
 DICT_EXPLAIN_GEMINI_PROMPT = """
-How is the word "{target_word}" used in the following context?
-Please explain it concisely in {lang_name}, taking the context into account.
+TASK: Explain the following word or phrase in the context of the academic paper provided.
+
+INSTRUCTIONS:
+1. Provide a concise but insightful explanation in {lang_name}.
+2. Do NOT just translate the word. Focus on its specific meaning, role, or technical significance within this paper.
+3. If it is a technical term, explain the underlying concept briefly.
+4. If it refers to a methodology or result, explain its importance.
 
 {summary_context}
-Context:
+
+[Context]
 {context}
+
+[Target Word/Phrase]
+{target_word}
 """
 
 # Used in: backend/app/domain/features/word_analysis.py

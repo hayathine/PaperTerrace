@@ -163,5 +163,12 @@
 		"success": "Thank you!",
 		"retry": "Once more",
 		"error": "Failed to send. Please try again."
+	},
+	"outage": {
+		"maintenance_title": "System Maintenance",
+		"outage_title": "Service Unavailable",
+		"maintenance_message": "We're currently performing some improvements. We'll be back shortly.",
+		"outage_message": "Our servers are currently over capacity or unreachable. Please try again in a few minutes.",
+		"retry_button": "Retry Connection"
 	}
 }

@@ -17,6 +17,7 @@ class LayoutAnalysisResponse(BaseModel):
 
 class TranslationRequest(BaseModel):
     text: str
+    original_text: Optional[str] = None
     target_lang: str = "ja"
     paper_context: Optional[str] = None
 
@@ -27,6 +28,7 @@ class TranslationResponse(BaseModel):
     processing_time: float
     confidence: Optional[float] = None
     model: Optional[str] = None
+    lemma: Optional[str] = None
     message: Optional[str] = None
 
 
@@ -41,4 +43,17 @@ class TranslationBatchResponse(BaseModel):
     processing_time: float
     confidences: Optional[List[float]] = None
     models: Optional[List[str]] = None
+    lemmas: Optional[List[str]] = None
+    message: Optional[str] = None
+
+
+class TokenizeRequest(BaseModel):
+    text: str
+    lang: str = "en"
+
+
+class TokenizeResponse(BaseModel):
+    success: bool
+    tokens: List[Any]  # List of dicts with text, lemma, ws
+    processing_time: float
     message: Optional[str] = None

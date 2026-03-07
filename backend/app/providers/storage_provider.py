@@ -1153,7 +1153,7 @@ def get_storage_provider() -> StorageInterface:
 
     Set STORAGE_PROVIDER environment variable:
     - "sqlite" (default): Use local SQLite
-    - "cloudsql": Use Cloud SQL (requires GCP setup)
+    - "cloudsql", "postgresql", "neon": Use PostgreSQL (Cloud SQL, Neon, etc.)
     """
     global _storage_provider_instance
 
@@ -1164,16 +1164,16 @@ def get_storage_provider() -> StorageInterface:
     default_provider = "cloudsql" if database_url else "sqlite"
     provider_type = os.getenv("STORAGE_PROVIDER", default_provider).lower()
 
-    if provider_type == "cloudsql":
+    if provider_type in ["cloudsql", "postgresql", "neon"]:
         try:
-            from .cloud_sql_storage import CloudSQLStorage
+            from .postgresql_storage import PostgreSQLStorage
 
-            _storage_provider_instance = CloudSQLStorage()
+            _storage_provider_instance = PostgreSQLStorage()
         except ImportError as e:
-            log.error("init", "Failed to import CloudSQLStorage", error=str(e))
+            log.error("init", "Failed to import PostgreSQLStorage", error=str(e))
 
             raise RuntimeError(
-                "CloudSQLStorage requires 'psycopg2' and 'cloud_sql_storage.py'"
+                "PostgreSQLStorage requires 'psycopg2' and 'postgresql_storage.py'"
             ) from e
     else:
         _storage_provider_instance = SQLiteStorage()

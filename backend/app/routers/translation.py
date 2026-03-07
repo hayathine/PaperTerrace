@@ -13,7 +13,6 @@ from pydantic import BaseModel
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.domain.services import local_translator
 from app.domain.services.analysis_service import EnglishAnalysisService
-from app.logic import executor
 from app.providers import get_ai_provider, get_storage_provider
 from app.providers.inference_client import (
     CircuitBreakerError,
@@ -194,16 +193,15 @@ async def explain(
         "explain", "Word lookup", word=word, element_id=element_id, paper_id=paper_id
     )
 
-    loop = asyncio.get_event_loop()
     is_htmx = req.headers.get("HX-Request") == "true"
 
-    # 0. Lemmatize input
+    # 0. Clean input
     clean_input = word.replace("\n", " ").strip(r" .,;!?(){}[\]\"'")
     if not clean_input:
         clean_input = word.strip()
 
-    lemma = await loop.run_in_executor(executor, service.lemmatize, clean_input)
     original_word = word
+    lemma = clean_input  # Initial assumption, will be updated by ServiceB if needed
 
     # 1. Cache Check (Bypass if low confidence to enforce context-aware Qwen translation)
     use_llamacpp = f_conf is not None and f_conf <= 0.5
@@ -277,9 +275,14 @@ async def explain(
 
             client = await get_inference_client()
 
-            local_translation, _model = await client.translate_with_qwen(
-                original_word, lang, paper_context=paper_context_str
+            local_translation, _model, res_lemma = await client.translate_with_qwen(
+                clean_input,
+                lang,
+                paper_context=paper_context_str,
+                original_text=original_word,
             )
+            if res_lemma:
+                lemma = res_lemma
 
             if local_translation:
                 if not is_htmx:
@@ -335,9 +338,14 @@ async def explain(
         translator = local_translator.get_local_translator()
         if translator._initialized:
             try:
-                local_translation, _model = await translator.translate_async(
-                    lemma, lang, paper_context=paper_context_str
+                local_translation, _model, res_lemma = await translator.translate_async(
+                    clean_input,
+                    lang,
+                    paper_context=paper_context_str,
+                    original_text=original_word,
                 )
+                if res_lemma:
+                    lemma = res_lemma
                 log.info(
                     "explain",
                     "ServiceB translation result",
@@ -547,15 +555,13 @@ async def explain_deep(
 
     is_htmx = req.headers.get("HX-Request") == "true"
     start_time = asyncio.get_event_loop().time()
-    # 0. Lemmatize input
+    # 0. Clean input
     clean_input = word.replace("\n", " ").strip(r" .,;!?(){}[\]\"'")
     if not clean_input:
         clean_input = word.strip()
 
-    lemma = await asyncio.get_event_loop().run_in_executor(
-        executor, service.lemmatize, clean_input
-    )
     original_word = word
+    lemma = clean_input  # Initial assumption
 
     # Stage 3: Gemini translation
     try:
@@ -578,13 +584,14 @@ async def explain_deep(
         # DSPy version
         setup_dspy()
         trans_mod = TranslationModule()
+        # Single words might need different prompt, but for now use context aware phrase translation
         res, trace_id = trace_dspy_call(
             "TranslationModule",
             "ContextAwareTranslation",
             trans_mod,
             {
                 "paper_context": paper_context,
-                "target_text": lemma,
+                "target_text": original_word,
                 "lang_name": lang_name,
             },
             context=TraceContext(paper_id=paper_id),

@@ -121,7 +121,7 @@ class SimpleTranslationModule(dspy.Module):
 class DeepExplanationModule(dspy.Module):
     def __init__(self):
         super().__init__()
-        self.explain = dspy.Predict(DeepExplanation)
+        self.explain = dspy.ChainOfThought(DeepExplanation)
 
     def forward(
         self, summary_context: str, context: str, target_word: str, lang_name: str

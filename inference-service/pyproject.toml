@@ -32,6 +32,7 @@ translation = [
     "sentencepiece>=0.2.0",
     "llama-cpp-python>=0.3.16",
     "dspy-ai>=2.4.9",
+    "spacy>=3.8.11",
 ]
 dev = [
     "pyright>=1.1.408",

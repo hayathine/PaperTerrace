@@ -1,13 +1,3 @@
-import { setUserId } from "firebase/analytics";
-import {
-	signOut as firebaseSignOut,
-	getIdToken,
-	getRedirectResult,
-	onAuthStateChanged,
-	signInWithPopup,
-	signInWithRedirect,
-	type User,
-} from "firebase/auth";
 import type React from "react";
 import {
 	createContext,
@@ -16,24 +6,16 @@ import {
 	useEffect,
 	useState,
 } from "react";
-import { API_URL } from "@/config";
-import {
-	analytics,
-	auth,
-	githubProvider,
-	googleProvider,
-} from "@/lib/firebase";
+import { authClient } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("Auth");
 
 interface AuthContextType {
-	user: User | null;
+	user: any | null;
 	loading: boolean;
 	signInWithGoogle: () => Promise<void>;
 	signInWithGithub: () => Promise<void>;
-	signInWithGoogleRedirect: () => Promise<void>;
-	signInWithGithubRedirect: () => Promise<void>;
 	loginAsGuest: () => void;
 	logout: () => Promise<void>;
 	token: string | null;
@@ -52,152 +34,52 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 	children,
 }) => {
-	const [user, setUser] = useState<User | null>(null);
+	const [user, setUser] = useState<any | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [token, setToken] = useState<string | null>(null);
 	const [isGuest, setIsGuest] = useState(true);
 
-	const syncWithBackend = useCallback(async (idToken: string) => {
-		try {
-			const response = await fetch(`${API_URL}/api/auth/register`, {
-				method: "POST",
-				headers: {
-					Authorization: `Bearer ${idToken}`,
-					"Content-Type": "application/json",
-				},
-			});
-			if (!response.ok) {
-				log.warn("sync_with_backend", "Backend sync returned non-OK status", {
-					status: response.status,
-				});
-			}
-		} catch (error) {
-			log.error("sync_with_backend", "Failed to sync user with backend", {
-				error,
-			});
-		}
-	}, []);
-
-	const getToken = useCallback(
-		async (forceRefresh = false): Promise<string | null> => {
-			if (!auth.currentUser) return null;
-			try {
-				const idToken = await getIdToken(auth.currentUser, forceRefresh);
-				setToken(idToken);
-				return idToken;
-			} catch (error) {
-				log.error("get_token", "Error getting token", { error });
-
-				return null;
-			}
-		},
-		[],
-	);
+	// Note: Neon Auth / Better Auth handles sessions primarily via cookies.
+	// We use their client state management here.
+	const { data: session, isPending } = authClient.useSession();
 
 	useEffect(() => {
-		// Handle redirect results
-		getRedirectResult(auth)
-			.then((result) => {
-				if (result?.user) {
-					log.info("redirect_login", "Logged in via redirect", {
-						email: result.user.email,
-					});
-				}
-			})
-			.catch((error) => {
-				log.error("redirect_login", "Error handling redirect result", {
-					error,
-				});
-			});
-
-		const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-			if (currentUser) {
-				try {
-					const idToken = await currentUser.getIdToken();
-					setToken(idToken);
-					setIsGuest(false);
-					// Link Firebase Auth UID to GA4 for BigQuery correlation
-					if (analytics) {
-						setUserId(analytics, currentUser.uid);
-					}
-					await syncWithBackend(idToken);
-				} catch (error) {
-					log.error("auth_state_change", "Error in auth state change", {
-						error,
-					});
-				}
-			} else {
+		if (!isPending) {
+			if (session) {
+				setUser(session.user);
+				setIsGuest(false);
+				// In a real app, you might want to extract a CSRF token or session token
+				// if not using HTTP-only cookies for the API.
 				setToken(null);
+			} else {
+				setUser(null);
 				setIsGuest(true);
-				// Clear GA4 user ID on logout
-				if (analytics) {
-					setUserId(analytics, null);
-				}
+				setToken(null);
 			}
-			setUser(currentUser);
 			setLoading(false);
-		});
+		}
+	}, [session, isPending]);
 
-		// Set up token refresh interval (every 50 minutes)
-		const refreshInterval = setInterval(
-			() => {
-				if (auth.currentUser) {
-					getToken(true);
-				}
-			},
-			50 * 60 * 1000,
-		);
-
-		return () => {
-			unsubscribe();
-			clearInterval(refreshInterval);
-		};
-	}, [syncWithBackend, getToken]);
+	const getToken = useCallback(async (): Promise<string | null> => {
+		// For Neon Auth, the backend usually verifies the Session Cookie.
+		// If we need a Bearer token, we'd get it from the session.
+		return null;
+	}, []);
 
 	const signInWithGoogle = async () => {
 		try {
-			await signInWithPopup(auth, googleProvider);
+			await authClient.signIn.social({ provider: "google" });
 		} catch (error) {
 			log.error("sign_in_google", "Error signing in with Google", { error });
-
-			throw error;
-		}
-	};
-
-	const signInWithGoogleRedirect = async () => {
-		try {
-			await signInWithRedirect(auth, googleProvider);
-		} catch (error) {
-			log.error(
-				"sign_in_google_redirect",
-				"Error signing in with Google Redirect",
-				{ error },
-			);
-
 			throw error;
 		}
 	};
 
 	const signInWithGithub = async () => {
 		try {
-			await signInWithPopup(auth, githubProvider);
+			await authClient.signIn.social({ provider: "github" });
 		} catch (error) {
 			log.error("sign_in_github", "Error signing in with Github", { error });
-
-			throw error;
-		}
-	};
-
-	const signInWithGithubRedirect = async () => {
-		try {
-			await signInWithRedirect(auth, githubProvider);
-		} catch (error) {
-			log.error(
-				"sign_in_github_redirect",
-				"Error signing in with Github Redirect",
-				{ error },
-			);
-
 			throw error;
 		}
 	};
@@ -208,13 +90,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 
 	const logout = async () => {
 		try {
-			await firebaseSignOut(auth);
+			await authClient.signOut();
 			setUser(null);
 			setToken(null);
 			setIsGuest(true);
 		} catch (error) {
 			log.error("logout", "Error signing out", { error });
-
 			throw error;
 		}
 	};
@@ -226,8 +107,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 				loading,
 				signInWithGoogle,
 				signInWithGithub,
-				signInWithGoogleRedirect,
-				signInWithGithubRedirect,
 				loginAsGuest,
 				logout,
 				token,

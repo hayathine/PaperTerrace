@@ -13,6 +13,7 @@ import httpx
 from common.logger import ServiceLogger
 from common.schemas.inference import (
     LayoutAnalysisRequest,
+    TokenizeRequest,
     TranslationRequest,
 )
 
@@ -365,11 +366,18 @@ class InferenceServiceClient:
                 yield i, [[] for _ in batch]
 
     async def translate_text(
-        self, text: str, target_lang: str = "ja", paper_context: str | None = None
-    ) -> tuple[str, str | None]:
+        self,
+        text: str,
+        target_lang: str = "ja",
+        paper_context: str | None = None,
+        original_text: str | None = None,
+    ) -> tuple[str, str | None, str | None]:
         """単一テキストの翻訳（M2M100 -> Qwen fallback付）"""
         request_data = TranslationRequest(
-            text=text, target_lang=target_lang, paper_context=paper_context
+            text=text,
+            original_text=original_text,
+            target_lang=target_lang,
+            paper_context=paper_context,
         )
 
         try:
@@ -387,12 +395,14 @@ class InferenceServiceClient:
                 translation = response.get("translation", "")
                 model = response.get("model", "m2m100")
                 confidence = response.get("confidence", 1.0)
+                lemma = response.get("lemma")
 
                 log.debug(
                     "translate",
                     "M2M100翻訳完了",
                     model=model,
                     confidence=confidence,
+                    lemma=lemma,
                     processing_time=response.get("processing_time", 0),
                 )
 
@@ -405,10 +415,12 @@ class InferenceServiceClient:
                         threshold=self.fallback_threshold,
                     )
                     try:
-                        qwen_translation, qwen_model = await self.translate_with_qwen(
-                            text, target_lang, paper_context
+                        return await self.translate_with_qwen(
+                            text,
+                            target_lang,
+                            paper_context,
+                            original_text=original_text,
                         )
-                        return qwen_translation, qwen_model
                     except Exception as e:
                         log.warning(
                             "translate_fallback_failed",
@@ -416,7 +428,7 @@ class InferenceServiceClient:
                             error=str(e),
                         )
 
-                return translation, model
+                return translation, model, lemma
             else:
                 error_msg = response.get("message", "不明なエラー")
                 raise InferenceServiceError(f"翻訳失敗: {error_msg}")
@@ -426,11 +438,17 @@ class InferenceServiceClient:
             raise
 
     async def translate_with_qwen(
-        self, text: str, target_lang: str = "ja", paper_context: str | None = None
-    ) -> tuple[str, str | None]:
+        self,
+        text: str,
+        target_lang: str = "ja",
+        paper_context: str | None = None,
+        original_text: str | None = None,
+    ) -> tuple[str, str | None, str | None]:
         """Qwenによる翻訳（明示的呼び出し）"""
+        # Qwen uses original_text (original form) if available, fallback to text (lemma)
+        qwen_input = original_text or text
         request_data = TranslationRequest(
-            text=text, target_lang=target_lang, paper_context=paper_context
+            text=qwen_input, target_lang=target_lang, paper_context=paper_context
         )
 
         try:
@@ -446,12 +464,36 @@ class InferenceServiceClient:
             if response.get("success"):
                 translation = response.get("translation", "")
                 model = response.get("model", "qwen")
-                return translation, model
+                lemma = response.get("lemma")
+                return translation, model, lemma
             else:
                 error_msg = response.get("message", "不明なエラー")
                 raise InferenceServiceError(f"Qwen翻訳失敗: {error_msg}")
         except Exception as e:
             log.error("translate_qwen", "Qwen翻訳エラー", error=str(e))
+            raise
+
+    async def tokenize_text(self, text: str, lang: str = "en") -> list[dict[str, Any]]:
+        """テキストをトークナイズ（ServiceBを使用）"""
+        request_data = TokenizeRequest(text=text, lang=lang)
+
+        try:
+            log.debug("tokenize", "トークナイズリクエスト", text_preview=text[:50])
+
+            response = await self._make_request_with_retry(
+                self.m2m100_base_url,
+                "POST",
+                "/api/v1/tokenize",
+                json=request_data.model_dump(),
+            )
+
+            if response.get("success"):
+                return response.get("tokens", [])
+            else:
+                error_msg = response.get("message", "不明なエラー")
+                raise InferenceServiceError(f"トークナイズ失敗: {error_msg}")
+        except Exception as e:
+            log.error("tokenize", "トークナイズエラー", error=str(e))
             raise
 
     async def health_check(self) -> dict[str, Any]:
