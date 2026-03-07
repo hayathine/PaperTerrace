@@ -4,7 +4,6 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("useServiceHealth");
 
-const POLL_INTERVAL_HEALTHY = 60000;
 const POLL_INTERVAL_UNHEALTHY = 10000;
 
 interface HealthStatus {

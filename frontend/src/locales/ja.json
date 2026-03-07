@@ -4,6 +4,11 @@
 		"preparing": "準備中...",
 		"loading_description": "少々お待ちください...",
 		"error": "エラー",
+		"error_boundary": {
+			"title": "予期しないエラーが発生しました",
+			"description": "問題が報告されました。ページを再読み込みするか、しばらく時間をおいてからお試しください。",
+			"reload": "ページを再読み込み"
+		},
 		"save": "保存",
 		"cancel": "キャンセル",
 		"delete": "削除",

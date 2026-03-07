@@ -61,12 +61,26 @@ class InferenceServiceClient:
             os.getenv("TRANSLATION_FALLBACK_THRESHOLD", "0.5")
         )
 
+        # 無効化フラグ
+        self.is_disabled = (
+            os.getenv("INFERENCE_SERVICE_DISABLED", "false").lower() == "true"
+        )
+
         # 回路ブレーカー設定
         self.failure_count = 0
         self.last_failure_time = None
         self.circuit_open = False
         self.failure_threshold = 5
         self.recovery_timeout = 60  # 1分
+
+        # SSL検証設定
+        verify_env = os.getenv("INFERENCE_VERIFY_SSL", "true").lower()
+        if verify_env == "false":
+            self.verify_ssl = False
+        elif os.path.isfile(verify_env):
+            self.verify_ssl = verify_env
+        else:
+            self.verify_ssl = True
 
         # HTTPクライアント - HTTP/2有効化、接続プール最適化
         self.client = httpx.AsyncClient(
@@ -77,6 +91,7 @@ class InferenceServiceClient:
                 keepalive_expiry=30.0,
             ),
             http2=True,
+            verify=self.verify_ssl,
         )
 
     async def __aenter__(self):
@@ -123,6 +138,14 @@ class InferenceServiceClient:
         self, base_url: str, method: str, endpoint: str, **kwargs
     ) -> dict[str, Any]:
         """リトライ機能付きリクエスト"""
+        if self.is_disabled:
+            log.warning(
+                "request_disabled", "推論サービスが環境変数により無効化されています"
+            )
+            raise InferenceServiceDownError(
+                "Inference service is disabled by configuration"
+            )
+
         self._check_circuit_breaker()
 
         last_exception = None
@@ -138,15 +161,28 @@ class InferenceServiceClient:
 
             except httpx.HTTPError as e:
                 last_exception = e
+
+                # SSLエラーや接続エラーの場合はリトライせずに即座に失敗させる（ハング防止）
+                error_str = str(e).lower()
+                is_ssl_error = "ssl" in error_str or "cert" in error_str
+                is_conn_error = isinstance(
+                    e, (httpx.ConnectError, httpx.ConnectTimeout)
+                )
+
                 log.warning(
                     "request",
                     "推論サービスリクエスト失敗",
                     attempt=attempt + 1,
                     max_retries=self.max_retries + 1,
                     error=str(e),
+                    is_fatal=is_ssl_error or is_conn_error,
                 )
 
-                if attempt < self.max_retries:
+                if (
+                    attempt < self.max_retries
+                    and not is_ssl_error
+                    and not is_conn_error
+                ):
                     # 指数バックオフ
                     wait_time = 2**attempt
                     await asyncio.sleep(wait_time)

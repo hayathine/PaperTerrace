@@ -6,6 +6,7 @@ Contains FastAPI routers for different API endpoints.
 from app.routers.analysis import router as analysis_router
 from app.routers.auth import router as auth_router
 from app.routers.chat import router as chat_router
+from app.routers.client_errors import router as client_errors_router
 from app.routers.contact import router as contact_router
 from app.routers.dspy import router as dspy_router
 from app.routers.feedback import router as feedback_router
@@ -35,4 +36,5 @@ __all__ = [
     "dspy_router",
     "contact_router",
     "recommendation_router",
+    "client_errors_router",
 ]

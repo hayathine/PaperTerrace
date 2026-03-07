@@ -14,6 +14,7 @@ import pymupdf4llm
 from app.crud import get_ocr_from_db, save_ocr_to_db
 from app.providers import get_ai_provider
 from app.providers.image_storage import get_page_images, save_page_image
+from app.providers.inference_client import get_inference_client
 from app.utils import _get_file_hash
 from common.logger import ServiceLogger
 from common.utils.bbox import scale_bbox
@@ -44,12 +45,12 @@ class PDFOCRService:
     async def extract_text_streaming(
         self, file_bytes: bytes, filename: str = "unknown.pdf", user_plan: str = "free"
     ) -> AsyncGenerator:
-        """Processes PDF pages one by one and streams results."""
+        """Processes PDF pages in chunks for efficiency while streaming results."""
         file_hash = _get_file_hash(file_bytes)
 
         log.info(
             "extract_start",
-            "Starting OCR extraction",
+            "Starting OCR extraction (Batched & Persistent File)",
             filename=filename,
             file_hash=file_hash,
             file_size=len(file_bytes),
@@ -57,6 +58,7 @@ class PDFOCRService:
         )
 
         tmp_path = None
+        fitz_doc = None
         try:
             # 1. Cache handling
             cached_result = await self._handle_cache(file_hash)
@@ -69,7 +71,6 @@ class PDFOCRService:
                     storage_type=storage_type,
                     file_hash=file_hash,
                 )
-
                 for page in cached_result:
                     yield page
                 return
@@ -81,16 +82,17 @@ class PDFOCRService:
                 file_hash=file_hash,
             )
 
-            log.debug("temp_file_create", "Creating temp file", file_hash=file_hash)
+            # Open PDF with PyMuPDF once (Keep it open)
+            fitz_doc = fitz.open(stream=file_bytes, filetype="pdf")
+            total_pages = len(fitz_doc)
 
-            # Save PDF to temporary file for libraries that need a path (like Camelot)
+            # Save to temporary file only if absolutely needed for other libs
+            # We'll use it for pdfplumber and potentially other fallbacks
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                 tmp.write(file_bytes)
                 tmp_path = tmp.name
-            log.debug("temp_file_created", "Temp file created", tmp_path=tmp_path)
 
-            with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
-                total_pages = len(pdf.pages)
+            with pdfplumber.open(tmp_path) as pdf:
                 log.info(
                     "pdf_opened",
                     "PDF opened successfully",
@@ -102,37 +104,77 @@ class PDFOCRService:
                 all_text_parts = []
                 all_layout_parts = []
 
-                for page_num in range(total_pages):
-                    log.debug(
-                        "page_start",
-                        "Processing page",
-                        page_num=page_num + 1,
-                        total_pages=total_pages,
+                # --- Chunked Processing (Batch AI + Persistent File) ---
+                CHUNK_SIZE = int(os.getenv("OCR_CHUNK_SIZE", "5"))
+                for chunk_start in range(0, total_pages, CHUNK_SIZE):
+                    chunk_end = min(chunk_start + CHUNK_SIZE, total_pages)
+                    log.info(
+                        "chunk_start",
+                        "Processing chunk",
+                        chunk=f"{chunk_start + 1}-{chunk_end}",
+                        total=total_pages,
                     )
 
-                    async for result in self._process_page_incremental(
-                        pdf.pages[page_num],
-                        page_num,
-                        total_pages,
-                        file_hash,
-                        pdf_path=tmp_path,
-                    ):
-                        # result is (page_num+1, total_pages, page_text, is_last, file_hash, img_url, layout_data)
-                        if (
-                            result[5] is not None
-                        ):  # Final result per page (img_url valid)
-                            page_text = result[2]
-                            layout_data = result[6]
-                            all_text_parts.append(page_text)
-                            all_layout_parts.append(layout_data)
-                            log.info(
-                                "page_complete",
-                                "Page processed",
-                                page_num=page_num + 1,
-                                text_length=len(page_text),
-                            )
+                    # Step A: Prefetch Phase 1 & 2 for all pages in chunk
+                    # Rendering and native text extraction in Service A
+                    prefetched_pages = []
+                    for page_idx in range(chunk_start, chunk_end):
+                        page_data = await self._prepare_page_phases_1_2(
+                            pdf.pages[page_idx],
+                            page_idx,
+                            total_pages,
+                            file_hash,
+                        )
+                        prefetched_pages.append(page_data)
 
-                        yield result
+                    # Step B: Batch Layout Analysis for the whole chunk
+                    log.debug(
+                        "batch_layout_start",
+                        "Requesting batch layout analysis",
+                        count=len(prefetched_pages),
+                    )
+                    batch_images = [p["img_bytes"] for p in prefetched_pages]
+
+                    try:
+                        inference_client = await get_inference_client()
+                        batch_layout_results = (
+                            await inference_client.analyze_images_batch(batch_images)
+                        )
+                    except Exception as e:
+                        log.warning(
+                            "batch_layout_failed",
+                            "Batch layout failed, falling back to empty",
+                            error=str(e),
+                        )
+                        batch_layout_results = [[] for _ in prefetched_pages]
+
+                    # Step C: Finalize each page (Phase 3) and yield sequentially
+                    for i, page_idx in enumerate(range(chunk_start, chunk_end)):
+                        page_data = prefetched_pages[i]
+                        layout_blocks = batch_layout_results[i]
+
+                        # Yield Phase 1 (Initial UI update)
+                        yield page_data["phase1_result"]
+
+                        # Process Phase 3 (Markdown & Figures)
+                        # We use the open fitz_doc here sequentially
+                        final_result = await self._finalize_page_phase_3(
+                            page_data,
+                            layout_blocks,
+                            fitz_doc,
+                            page_idx,
+                            total_pages,
+                            file_hash,
+                            pdf_path=tmp_path,
+                        )
+
+                        # Accumulate results for Finalize phase
+                        page_text = final_result[2]
+                        layout_data = final_result[6]
+                        all_text_parts.append(page_text)
+                        all_layout_parts.append(layout_data)
+
+                        yield final_result
 
             # 2. Finalize and save to DB
             log.info(
@@ -153,22 +195,17 @@ class PDFOCRService:
                 "OCR streaming failed",
                 error=str(e),
                 file_hash=file_hash,
-                error_type=type(e).__name__,
+                exc_info=True,
             )
-
-            log.error("extract_failed", "Full traceback", error=str(e), exc_info=True)
-
-            app_env = os.getenv("APP_ENV", "production")
-            error_msg = (
-                f"ERROR_API_FAILED: {str(e)}"
-                if app_env == "development"
-                else "ERROR_API_FAILED: Internal Server Error during OCR"
-            )
-            yield (0, 0, error_msg, True, file_hash, None, None)
+            error_msg = str(e)
+            if os.getenv("APP_ENV") == "production":
+                error_msg = "Internal Server Error during OCR"
+            yield (0, 0, f"ERROR_API_FAILED: {error_msg}", True, file_hash, None, None)
         finally:
+            if fitz_doc:
+                fitz_doc.close()
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
-                log.debug("temp_file_cleanup", "Temp file removed", tmp_path=tmp_path)
 
     async def _handle_cache(self, file_hash: str) -> list | None:
         """Check if OCR is cached and return formatted pages if so."""
@@ -238,47 +275,35 @@ class PDFOCRService:
 
         return pages
 
-    async def _process_page_incremental(
-        self, page, page_idx, total_pages, file_hash, pdf_path: str | None = None
-    ):
-        """Process a single page in 3 phases: Text, Image, Analysis."""
+    async def _prepare_page_phases_1_2(
+        self, page, page_idx, total_pages, file_hash
+    ) -> dict:
+        """Execute Phase 1 & 2: Native text extraction and image rendering."""
         page_num = page_idx + 1
         is_last = page_idx == total_pages - 1
-
-        # We use a standard zoom for coordinates (72 dpi -> 300 dpi)
         resolution = 300
         zoom = resolution / 72.0
 
-        # Phase 1: Native Text & Links (ULTRA FAST)
-        log.debug(
-            "_process_page_incremental",
-            "Phase 1 - Extraction text/links",
-            page_num=page_num,
-        )
+        log.debug("_prepare_page_phases_1_2", "Phase 1 & 2 start", page_num=page_num)
 
-        # Some PDFs have malformed font dictionaries that cause pdfminer to raise
-        # PDFSyntaxError ("Invalid dictionary construct"). Catch it here so the page
-        # can still be rendered as an image even when text extraction fails.
+        # Phase 1: Native Text & Links
         try:
             native_words = page.extract_words(
                 use_text_flow=True, x_tolerance=1, y_tolerance=3
             )
-            page_text = page.extract_text()
+            page_text = page.extract_text() or ""
         except Exception as e:
             log.warning(
-                "_process_page_incremental",
-                "Text extraction failed for page, falling back to image-only",
+                "_prepare_page_phases_1_2",
+                "Text extraction failed",
                 page_num=page_num,
                 error=str(e),
-                error_type=type(e).__name__,
             )
             native_words = []
             page_text = ""
 
         links = self._extract_links(page, zoom)
 
-        # Create initial layout data (coordinates only)
-        # pdfplumber page.width/height is in points (72dpi), scale it to zoom
         layout_data = {
             "width": float(page.width) * zoom,
             "height": float(page.height) * zoom,
@@ -298,13 +323,17 @@ class PDFOCRService:
             "figures": [],
         }
 
-        yield (page_num, total_pages, page_text, is_last, file_hash, None, layout_data)
-
-        # Phase 2: Page Image (FAST)
-        log.debug(
-            "_process_page_incremental", "Phase 2 - Rendering image", page_num=page_num
+        phase1_result = (
+            page_num,
+            total_pages,
+            page_text,
+            is_last,
+            file_hash,
+            None,
+            layout_data,
         )
 
+        # Phase 2: Page Image
         page_img = page.to_image(resolution=resolution, antialias=True)
         img_pil = page_img.original.convert("RGB")
 
@@ -315,24 +344,11 @@ class PDFOCRService:
         page_image_b64 = base64.b64encode(img_bytes).decode("utf-8")
         image_url = save_page_image(file_hash, page_num, page_image_b64)
 
-        # Update layout data using actual image dimensions to ensure alignment
+        # Update layout data coordinates with actual image scale
         scale_x = img_pil.width / float(page.width)
         scale_y = img_pil.height / float(page.height)
-
-        log.debug(
-            "_process_page_incremental",
-            "Scaling factors and dimensions",
-            page_num=page_num,
-            scale_x=scale_x,
-            scale_y=scale_y,
-            img_size=f"{img_pil.width}x{img_pil.height}",
-            page_size=f"{page.width}x{page.height}",
-        )
-
         layout_data["width"] = float(img_pil.width)
         layout_data["height"] = float(img_pil.height)
-
-        # Re-scale words with precise factors
         layout_data["words"] = [
             {
                 "word": w["text"],
@@ -343,36 +359,56 @@ class PDFOCRService:
             for w in native_words
         ]
 
-        # Phase 3: Layout analysis and Markdown generation
+        return {
+            "page_num": page_num,
+            "page": page,
+            "zoom": zoom,
+            "img_pil": img_pil,
+            "img_bytes": img_bytes,
+            "image_url": image_url,
+            "layout_data": layout_data,
+            "phase1_result": phase1_result,
+        }
+
+    async def _finalize_page_phase_3(
+        self,
+        page_data: dict,
+        layout_blocks: list,
+        fitz_doc: fitz.Document,
+        page_idx: int,
+        total_pages: int,
+        file_hash: str,
+        pdf_path: str | None = None,
+    ) -> tuple:
+        """Execute Phase 3: Layout refinement, Markdown generation, and Figure cropping."""
+        page_num = page_data["page_num"]
+        layout_data = page_data["layout_data"]
+        img_pil = page_data["img_pil"]
+        image_url = page_data["image_url"]
+        zoom = page_data["zoom"]
+        is_last = page_idx == total_pages - 1
+
+        log.debug("_finalize_page_phase_3", "Phase 3 start", page_num=page_num)
+
         try:
-            from app.domain.services.paddle_layout_service import get_layout_service
-
-            layout_svc = get_layout_service()
-            layout_blocks = await layout_svc.detect_layout_from_image_async(img_bytes)
-            log.info(
-                "_process_page_incremental",
-                "Layout blocks detected",
-                page_num=page_num,
-                block_count=len(layout_blocks),
-            )
-
             if pdf_path:
-                # pymupdf4llm による高精度 Markdown 生成
-                # Figure/Table の bbox 領域（画像px座標）を PDF ポイント座標へ変換して収集。
+                # 1. Figure/Table Bbox collection
                 figure_table_bboxes_pt = []
                 for block in layout_blocks:
                     class_name = block.get("class_name", "").lower()
-                    is_visual = class_name in [
-                        "figure",
-                        "picture",
-                        "chart",
-                        "table",
-                        "algorithm",
-                        "formula",
-                        "equation",
-                    ]
-                    is_caption = "caption" in class_name
-                    if is_visual and not is_caption:
+                    if (
+                        class_name
+                        in [
+                            "figure",
+                            "picture",
+                            "chart",
+                            "table",
+                            "algorithm",
+                            "formula",
+                            "equation",
+                        ]
+                        and "caption" not in class_name
+                    ):
                         bbox = block.get("bbox", {})
                         if isinstance(bbox, dict):
                             figure_table_bboxes_pt.append(
@@ -384,133 +420,73 @@ class PDFOCRService:
                                 ]
                             )
 
-                # fitz.Document はスレッドアンセーフなためページごとに開いて閉じる
-                def _extract_md(path: str, idx: int, exclude_bboxes_pt: list) -> str:
-                    doc = fitz.open(path)
-                    try:
-                        page_obj = doc[idx]
-                        page_area = page_obj.rect.width * page_obj.rect.height
-
-                        all_exclude = list(exclude_bboxes_pt)
-
-                        # ベクターグラフィック（グラフ・チャート等）の除外。
-                        # ページ面積の 1% 以上の描画パスを図表由来とみなす。
-                        # 水平線・下線など細長い要素はアスペクト比でスキップ。
-                        for drawing in page_obj.get_drawings():
-                            rect = drawing["rect"]
-                            area = rect.width * rect.height
-                            aspect = (
-                                rect.width / rect.height if rect.height > 0 else 999
-                            )
-                            if area > page_area * 0.01 and aspect < 20:
-                                all_exclude.append([rect.x0, rect.y0, rect.x1, rect.y1])
-
-                        if all_exclude:
-                            for bbox_pt in all_exclude:
-                                page_obj.add_redact_annot(fitz.Rect(*bbox_pt))
-                            page_obj.apply_redactions()
-
-                        return pymupdf4llm.to_markdown(
-                            doc,
-                            pages=[idx],
-                            show_progress=False,
-                            write_images=False,
-                        )
-                    finally:
-                        doc.close()
-
+                # 2. Markdown extraction (sequential in executor using existing fitz_doc)
                 loop = asyncio.get_running_loop()
                 raw_md = await loop.run_in_executor(
-                    None, _extract_md, pdf_path, page_idx, figure_table_bboxes_pt
+                    None,
+                    self._extract_markdown_sequential,
+                    fitz_doc,
+                    page_idx,
+                    figure_table_bboxes_pt,
                 )
 
-                # pymupdf4llm が挿入した画像参照（![...](...)）を除去
                 page_text = re.sub(r"!\[.*?\]\(.*?\)", "", raw_md).strip()
-
-                # --- 数式後処理 -----------------------------------------------
-                # 1. pymupdf4llm の [char] 上付き記法を ^{char} に変換
-                #    例: Π[∗] → Π^{∗}, [x,m] → ^{x,m}
-                #    純粋な数字列 [1],[12] は引用文献の可能性が高いため変換しない
                 page_text = convert_superscript_brackets(page_text)
 
-                # 2. レイアウト解析で equation と判定されたブロックを $$...$$ に置換
-                #    layout_data["words"] からブロック内の単語を取得し、
-                #    pymupdf4llm の対応段落を LaTeX ブロックで置換する
-                for block in layout_blocks:
-                    class_name = block.get("class_name", "").lower()
-                    if not ("equation" in class_name or "formula" in class_name):
-                        continue
-                    bbox = block.get("bbox", {})
-                    if isinstance(bbox, dict):
-                        bx1 = bbox.get("x_min", 0)
-                        by1 = bbox.get("y_min", 0)
-                        bx2 = bbox.get("x_max", 0)
-                        by2 = bbox.get("y_max", 0)
-                    else:
-                        bx1, by1, bx2, by2 = bbox
-                    margin = 5
-                    # ブロック内の OCR 単語を収集
-                    eq_words = [
-                        w["word"]
-                        for w in layout_data["words"]
-                        if (bx1 - margin)
-                        <= (w["bbox"][0] + w["bbox"][2]) / 2
-                        <= (bx2 + margin)
-                        and (by1 - margin)
-                        <= (w["bbox"][1] + w["bbox"][3]) / 2
-                        <= (by2 + margin)
-                    ]
-                    if not eq_words:
-                        continue
-                    eq_raw = " ".join(eq_words)
-                    latex_block = wrap_equation_block(eq_raw)
-                    page_text, replaced = replace_equation_paragraph(
-                        page_text, eq_words, latex_block
-                    )
-                    if not replaced:
-                        # 対応段落が見つからない場合はページ末尾に追記
-                        page_text += f"\n\n{latex_block}\n\n"
-                # --------------------------------------------------------------
-
-                # レイアウト解析で検出した Figure/Table の BBox プレースホルダーをページ末尾に追記
-                # フロントエンドの TextModePage で遅延ローディング図画像として利用される
+                # 3. Post-process layout blocks (equations, figures)
                 figure_refs = []
-                eq_count = 0
                 fig_idx = 0
                 for block in layout_blocks:
                     class_name = block.get("class_name", "").lower()
-
-                    # Handle BBox Extraction
                     bbox = block.get("bbox", {})
-                    if isinstance(bbox, dict):
-                        bx1, by1, bx2, by2 = (
+                    bx1, by1, bx2, by2 = (
+                        (
                             bbox.get("x_min", 0),
                             bbox.get("y_min", 0),
                             bbox.get("x_max", 0),
                             bbox.get("y_max", 0),
                         )
-                    else:
-                        bx1, by1, bx2, by2 = bbox
+                        if isinstance(bbox, dict)
+                        else bbox
+                    )
                     bbox_list = [bx1, by1, bx2, by2]
 
-                    # Equations are now also treated as figures for border/extraction consistency
+                    # Equation handling
+                    if "equation" in class_name or "formula" in class_name:
+                        margin = 5
+                        eq_words = [
+                            w["word"]
+                            for w in layout_data["words"]
+                            if (bx1 - margin)
+                            <= (w["bbox"][0] + w["bbox"][2]) / 2
+                            <= (bx2 + margin)
+                            and (by1 - margin)
+                            <= (w["bbox"][1] + w["bbox"][3]) / 2
+                            <= (by2 + margin)
+                        ]
+                        if eq_words:
+                            latex_block = wrap_equation_block(" ".join(eq_words))
+                            page_text, replaced = replace_equation_paragraph(
+                                page_text, eq_words, latex_block
+                            )
+                            if not replaced:
+                                page_text += f"\n\n{latex_block}\n\n"
 
-                    is_figure = class_name in [
-                        "figure",
-                        "picture",
-                        "chart",
-                        "table",
-                        "algorithm",
-                        "formula",
-                        "equation",
-                    ]
-                    is_caption = "caption" in class_name
-
-                    if is_figure and not is_caption:
+                    # Figure cropping and metadata
+                    if (
+                        class_name
+                        in [
+                            "figure",
+                            "picture",
+                            "chart",
+                            "table",
+                            "algorithm",
+                            "formula",
+                            "equation",
+                        ]
+                        and "caption" not in class_name
+                    ):
                         figure_refs.append(f"\n\n![Figure]({bbox_list})\n")
-
-                        # Issue 2: Immediate Figure/Table Frame Support
-                        # Crop the figure now so it can be viewed immediately without lazy-loading
                         try:
                             margin = 5
                             crop_box = (
@@ -526,11 +502,9 @@ class PDFOCRService:
                                 crop_b64 = base64.b64encode(buf.getvalue()).decode(
                                     "utf-8"
                                 )
-
                                 img_name = f"p{page_num}_{class_name.replace(' ', '_')}_{fig_idx}"
                                 fig_url = save_page_image(file_hash, img_name, crop_b64)
                                 fig_idx += 1
-
                                 layout_data["figures"].append(
                                     {
                                         "page_num": page_num,
@@ -541,26 +515,16 @@ class PDFOCRService:
                                 )
                         except Exception as crop_err:
                             log.warning(
-                                "_process_page_incremental",
-                                "Failed to crop visual element",
+                                "_finalize_page_phase_3",
+                                "Crop failed",
                                 class_name=class_name,
                                 error=str(crop_err),
                             )
 
                 if figure_refs:
                     page_text += "".join(figure_refs)
-
-                log.info(
-                    "_process_page_incremental",
-                    "pymupdf4llm markdown generated",
-                    page_num=page_num,
-                    text_length=len(page_text),
-                    figure_count=len(figure_refs),
-                    equation_count=eq_count,
-                )
-
             else:
-                # pdf_path が取得できない場合は既存方式にフォールバック
+                # Fallback implementation
                 from app.domain.services.markdown_builder import (
                     generate_markdown_from_layout,
                 )
@@ -568,47 +532,18 @@ class PDFOCRService:
                 page_text = generate_markdown_from_layout(
                     layout_data["words"], layout_blocks
                 )
-                log.info(
-                    "_process_page_incremental",
-                    "Fallback markdown (generate_markdown_from_layout)",
-                    page_num=page_num,
-                )
 
         except Exception as e:
             log.error(
-                "_process_page_incremental",
-                "Markdown generation failed",
+                "_finalize_page_phase_3",
+                "Failed to finalize page",
                 page_num=page_num,
                 error=str(e),
+                exc_info=True,
             )
-            # Fallback to plain text if layout service fails
+            page_text = page_data["phase1_result"][2]  # Use Phase 1 text as fallback
 
-            pass
-
-        # Debug: Verify words are correctly populated
-        log.info(
-            "_process_page_incremental",
-            "Phase 2 complete",
-            page_num=page_num,
-            native_word_count=len(native_words),
-            layout_word_count=len(layout_data["words"]),
-            width=layout_data["width"],
-            height=layout_data["height"],
-            markdown_length=len(page_text),
-        )
-
-        if layout_data["words"]:
-            sample_word = layout_data["words"][0]
-            log.debug(
-                "_process_page_incremental",
-                "Sample word",
-                page_num=page_num,
-                sample=sample_word,
-            )
-
-        # Phase 2 yield with synchronized layout and image
-        # Phase 3 (AI Analysis for figures) is now deferred to lazy loading
-        yield (
+        return (
             page_num,
             total_pages,
             page_text,
@@ -616,6 +551,35 @@ class PDFOCRService:
             file_hash,
             image_url,
             layout_data,
+        )
+
+    def _extract_markdown_sequential(
+        self, doc: fitz.Document, idx: int, exclude_bboxes_pt: list
+    ) -> str:
+        """Helper to run PyMuPDF4LLM extraction on a shared document object."""
+        # Note: Do not doc.close() here as it is shared across pages.
+        # Apply redactions to the specific page
+        page_obj = doc[idx]
+        page_area = page_obj.rect.width * page_obj.rect.height
+
+        all_exclude = list(exclude_bboxes_pt)
+        for drawing in page_obj.get_drawings():
+            rect = drawing["rect"]
+            area = rect.width * rect.height
+            aspect = rect.width / rect.height if rect.height > 0 else 999
+            if area > page_area * 0.01 and aspect < 20:
+                all_exclude.append([rect.x0, rect.y0, rect.x1, rect.y1])
+
+        if all_exclude:
+            for bbox_pt in all_exclude:
+                page_obj.add_redact_annot(fitz.Rect(*bbox_pt))
+            page_obj.apply_redactions()
+
+        return pymupdf4llm.to_markdown(
+            doc,
+            pages=[idx],
+            show_progress=False,
+            write_images=False,
         )
 
     def _extract_links(self, page, zoom):  # TODO: `linkify-it-py`を検討

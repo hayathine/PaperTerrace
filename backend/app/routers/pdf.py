@@ -52,9 +52,7 @@ async def update_session_context(
         # Redis のセッションコンテキストも更新
         paper = storage.get_paper(paper_id)
         if paper and paper.get("ocr_text"):
-            redis_service.set(
-                f"session:{session_id}", paper["ocr_text"], expire=3600
-            )
+            redis_service.set(f"session:{session_id}", paper["ocr_text"], expire=3600)
         log.info(
             "session_context",
             "Session context updated",
@@ -531,16 +529,6 @@ async def stream(task_id: str):
                             page_payload["figures"] = layout_data.get("figures", [])
 
                             # Debug: Log what we're sending to frontend
-                            log.info(
-                                "stream",
-                                f"Page {page_num} payload sent to frontend",
-                                task_id=task_id,
-                                page_num=page_num,
-                                words=len(page_payload["words"]),
-                                figures=len(page_payload["figures"]),
-                                width=page_payload["width"],
-                                height=page_payload["height"],
-                            )
 
                             # Collect figures if present
                             if "figures" in layout_data:
@@ -561,12 +549,6 @@ async def stream(task_id: str):
                     await asyncio.sleep(0.01)
 
                 # End of OCR
-                log.info(
-                    "stream",
-                    "OCR complete",
-                    task_id=task_id,
-                    pages_processed=page_count,
-                )
 
                 # Send coordinates ready event (Phase 2 completion)
                 yield f"event: message\ndata: {json.dumps({'type': 'coordinates_ready', 'page_count': page_count})}\n\n"
@@ -675,7 +657,7 @@ async def stream(task_id: str):
                     if paper_data.get("layout_json"):
                         try:
                             layout_list = json.loads(paper_data["layout_json"])
-                            log.info(
+                            log.debug(
                                 "stream",
                                 "Loaded layout_list from DB",
                                 task_id=task_id,
@@ -697,12 +679,6 @@ async def stream(task_id: str):
 
                     if paper_data.get("ocr_text"):
                         pages_text = paper_data["ocr_text"].split("\n\n---\n\n")
-                        log.info(
-                            "stream",
-                            "Loaded pages text from DB",
-                            task_id=task_id,
-                            pages=len(pages_text),
-                        )
 
                 f_hash = data.get("file_hash")
                 log.info(
@@ -738,7 +714,7 @@ async def stream(task_id: str):
                             page_payload["words"] = layout_list[i].get("words", [])
                             page_payload["figures"] = layout_list[i].get("figures", [])
 
-                            log.info(
+                            log.debug(
                                 "stream",
                                 f"Page {i + 1} loaded from cache",
                                 task_id=task_id,

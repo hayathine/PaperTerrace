@@ -651,7 +651,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 					<div
 						role="toolbar"
 						aria-label="Selection menu"
-						className="absolute z-60 flex gap-1 bg-white border border-slate-200 text-slate-900 p-1.5 rounded-lg shadow-xl transform -translate-x-1/2"
+						className="absolute z-60 flex gap-1 bg-white border border-slate-200 text-slate-900 p-1.5 rounded-lg shadow-xl transform -translate-x-1/2 gpu-accelerated"
 						style={{
 							left: `${selectionMenu.x}%`,
 							top: `${selectionMenu.y}%`,

@@ -9,39 +9,38 @@ interface Props {
 
 interface State {
 	hasError: boolean;
-	error: Error | null;
 }
 
 class ErrorBoundary extends Component<Props, State> {
 	public state: State = {
 		hasError: false,
-		error: null,
 	};
 
-	public static getDerivedStateFromError(error: Error): State {
-		return { hasError: true, error };
+	public static getDerivedStateFromError(_error: Error): State {
+		return { hasError: true };
 	}
 
 	public componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-		log.error("component_did_catch", "Uncaught error", { error, errorInfo });
+		log.error("component_did_catch", error.message, { error, errorInfo });
 	}
 
 	public render() {
 		if (this.state.hasError) {
 			return (
-				<div className="p-10 bg-red-50 border-2 border-red-200 rounded-xl m-10">
-					<h2 className="text-2xl font-bold text-red-700 mb-4">
-						Something went wrong.
+				<div className="flex flex-col items-center justify-center min-h-[300px] p-10 m-10 bg-stone-50 border border-stone-200 rounded-xl text-center">
+					<div className="text-4xl mb-4">🌿</div>
+					<h2 className="text-xl font-semibold text-stone-700 mb-2">
+						予期しないエラーが発生しました
 					</h2>
-					<pre className="p-4 bg-white border border-red-100 rounded text-red-600 overflow-auto max-h-96">
-						{this.state.error?.stack}
-					</pre>
+					<p className="text-stone-500 text-sm mb-6 max-w-sm">
+						問題が報告されました。ページを再読み込みするか、しばらく時間をおいてからお試しください。
+					</p>
 					<button
 						type="button"
 						onClick={() => window.location.reload()}
-						className="mt-6 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+						className="px-5 py-2 bg-stone-700 text-white text-sm rounded-lg hover:bg-stone-800 transition-colors"
 					>
-						Reload Page
+						ページを再読み込み
 					</button>
 				</div>
 			);

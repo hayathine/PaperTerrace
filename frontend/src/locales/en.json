@@ -4,6 +4,11 @@
 		"preparing": "Preparing...",
 		"loading_description": "Please wait a moment...",
 		"error": "Error",
+		"error_boundary": {
+			"title": "Something went wrong",
+			"description": "The issue has been reported. Please reload the page or try again later.",
+			"reload": "Reload Page"
+		},
 		"save": "Save",
 		"cancel": "Cancel",
 		"delete": "Delete",

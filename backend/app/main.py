@@ -19,6 +19,7 @@ from app.routers import (
     analysis_router,
     auth_router,
     chat_router,
+    client_errors_router,
     contact_router,
     dspy_router,
     feedback_router,
@@ -66,7 +67,6 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             log.warning("prewarm", "Failed to pre-warm models", error=str(e))
 
-    log.info("startup", "Starting up...")
     try:
         # Run Alembic migrations
         from alembic import command
@@ -75,12 +75,9 @@ async def lifespan(app: FastAPI):
         alembic_cfg = Config("alembic.ini")
         # Ensure alembic uses the correct directory if we're not in root (though usually we are)
         command.upgrade(alembic_cfg, "head")
-        log.info("migration", "Database migrations applied successfully")
 
         # Pre-warm models before server starts (Blocking)
-        log.info("prewarm", "Pre-warming models before accepting requests...")
         await _prewarm_models()
-        log.info("prewarm", "All models loaded. Server is ready.")
     except Exception as e:
         # If tables already exist, we might get a DuplicateTable error.
         # We log and continue so the app can still run.
@@ -97,8 +94,6 @@ async def lifespan(app: FastAPI):
             # For now, let's allow the app to try to run.
 
     yield
-
-    log.info("shutdown", "Shutting down...")
 
 
 # Create FastAPI app with lifespan
@@ -151,11 +146,11 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
-        is_health_check = request.url.path == "/api/health"
-        log_method = mw_log.debug if is_health_check else mw_log.info
+        if request.url.path in ["/api/health", "/health"]:
+            return await call_next(request)
 
         # Log request start
-        log_method(
+        mw_log.info(
             "request",
             "started",
             method=request.method,
@@ -169,7 +164,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             duration = time.time() - start_time
 
             # Log request completion
-            log_method(
+            mw_log.info(
                 "request",
                 "completed",
                 method=request.method,
@@ -301,6 +296,7 @@ app.include_router(feedback_router, prefix="/api")
 app.include_router(dspy_router, prefix="/api")
 app.include_router(contact_router, prefix="/api")
 app.include_router(recommendation_router, prefix="/api")
+app.include_router(client_errors_router, prefix="/api")
 
 
 # ============================================================================

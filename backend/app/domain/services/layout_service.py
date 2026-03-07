@@ -24,8 +24,13 @@ class LayoutAnalysisService:
         self.inference_service_url = os.getenv(
             "INFERENCE_SERVICE_URL", "http://paperterrace-inference:8080"
         )
+        self.is_disabled = (
+            os.getenv("INFERENCE_SERVICE_DISABLED", "false").lower() == "true"
+        )
+        self.verify_ssl = os.getenv("INFERENCE_VERIFY_SSL", "true").lower() == "true"
+
         logger.info(
-            f"Initialized LayoutAnalysisService with URL: {self.inference_service_url}"
+            f"Initialized LayoutAnalysisService with URL: {self.inference_service_url} (Disabled: {self.is_disabled})"
         )
 
     async def analyze_image(self, image_path: str | Path) -> List[LayoutItem]:
@@ -42,11 +47,19 @@ class LayoutAnalysisService:
         List[LayoutItem]
             検出されたレイアウト要素
         """
+        if self.is_disabled:
+            logger.warning(
+                f"LayoutAnalysisService is disabled, skipping call for image: {image_path}"
+            )
+            return []
+
         url = f"{self.inference_service_url.rstrip('/')}/api/v1/analyze-image"
         logger.info(f"Calling inference service: {url} with image: {image_path}")
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(
+                timeout=30.0, verify=self.verify_ssl
+            ) as client:
                 with open(image_path, "rb") as f:
                     files = {"file": (os.path.basename(image_path), f, "image/png")}
                     response = await client.post(url, files=files)

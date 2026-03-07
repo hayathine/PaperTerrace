@@ -49,10 +49,6 @@ class PaddleLayoutService:
         import pdfplumber
 
         try:
-            log.info(
-                "detect_layout_async", "Starting layout analysis", pdf_path=pdf_path
-            )
-
             # ページ指定がない場合は全ページ数を取得
             target_pages = pages
             if target_pages is None:
@@ -61,11 +57,6 @@ class PaddleLayoutService:
                         total_pages = len(pdf.pages)
                         target_pages = list(range(total_pages))
                         target_pages = list(range(total_pages))
-                        log.info(
-                            "detect_layout_async",
-                            "Total pages detected",
-                            total_pages=total_pages,
-                        )
 
                 except Exception as e:
                     log.error(
@@ -85,19 +76,12 @@ class PaddleLayoutService:
 
                 for i in range(0, len(target_pages), CHUNK_SIZE):
                     chunk = target_pages[i : i + CHUNK_SIZE]
-                    log.info("detect_layout_async", "Scheduling chunk", chunk=chunk)
 
                     # 各チャンクを並列タスクとして登録
                     tasks.append(client.analyze_layout(pdf_path, chunk))
 
                 # 全チャンクを並列実行
                 if tasks:
-                    log.info(
-                        "detect_layout_async",
-                        "Executing chunks in parallel",
-                        chunk_count=len(tasks),
-                    )
-
                     # return_exceptions=Trueで一部失敗しても全体を止めない
                     chunk_results_list = await asyncio.gather(
                         *tasks, return_exceptions=True
@@ -126,12 +110,6 @@ class PaddleLayoutService:
             else:
                 # ページリストがない場合（互換性）
                 all_results = await client.analyze_layout(pdf_path, None)
-
-            log.info(
-                "detect_layout_async",
-                "Layout analysis completed",
-                elements_detected=len(all_results),
-            )
 
             return all_results
 
@@ -170,20 +148,8 @@ class PaddleLayoutService:
             形式: [{"bbox": {"x_min": ..., "y_min": ..., "x_max": ..., "y_max": ...}, "class_name": ..., "score": ...}, ...]
         """
         try:
-            log.info(
-                "detect_layout_from_image_async",
-                "Starting layout analysis for image",
-                image_size=len(image_bytes),
-            )
-
             client = await get_inference_client()
             results = await client.analyze_image_async(image_bytes)
-
-            log.info(
-                "detect_layout_from_image_async",
-                "Layout analysis completed",
-                elements_detected=len(results),
-            )
 
             return results
 

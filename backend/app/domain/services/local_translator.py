@@ -80,18 +80,9 @@ class LocalTranslator:
         use_custom = os.getenv("USE_CUSTOM_TRANSLATION", "false").lower() == "true"
 
         if use_custom and custom_url:
-            log.info(
-                "translate_async",
-                "Using Custom Translation Backend",
-                custom_url=custom_url,
-            )
-
             translation = await self._translate_via_custom(text, tgt_lang, custom_url)
             return translation, "custom", text
         else:
-            log.info(
-                "translate_async", "Using ServiceB (Inference Service) for translation"
-            )
             return await self._translate_via_service_b(
                 text, tgt_lang, paper_context, original_text=original_text
             )
@@ -160,9 +151,6 @@ class LocalTranslator:
                     )
                     return response.text.strip()
 
-                log.warning(
-                    "translate_async", "No translation found in custom response"
-                )
                 return text
 
         except Exception as e:
@@ -178,7 +166,7 @@ class LocalTranslator:
         original_text: str | None = None,
     ) -> tuple[str, str | None, str | None]:
         try:
-            log.info(
+            log.debug(
                 "translate_async",
                 "Translating via ServiceB",
                 text_preview=f"{text[:50]}...",
@@ -190,7 +178,7 @@ class LocalTranslator:
                 text, tgt_lang, paper_context=paper_context, original_text=original_text
             )
 
-            log.info(
+            log.debug(
                 "translate_async",
                 "ServiceB Translation result",
                 result_preview=f"{str(translation)[:50]}...",

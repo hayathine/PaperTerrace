@@ -1,7 +1,8 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import type { Components } from "react-markdown";
 import { API_URL } from "../../config";
+import { useIntersectionObserver } from "../../hooks/useIntersectionObserver";
 import MarkdownContent from "../Common/MarkdownContent";
 import type { Figure, PageWithLines } from "./types";
 
@@ -167,6 +168,13 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	searchTerm,
 }) => {
 	const { t } = useTranslation();
+
+	// Intersection Observer: delay heavy Markdown rendering until page is near viewport
+	const containerRef = useRef<HTMLDivElement>(null);
+	const isVisible = useIntersectionObserver(containerRef, {
+		rootMargin: "400px",
+	});
+
 	const [selectionMenu, setSelectionMenu] = React.useState<{
 		x: number;
 		y: number;
@@ -453,6 +461,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 
 	return (
 		<div
+			ref={containerRef}
 			id={`text-page-${page.page_num}`}
 			className="text-page-container relative shadow-sm bg-white border border-slate-200 group mx-auto w-full max-w-full rounded-xl overflow-hidden"
 			style={{ userSelect: "auto", maxWidth: "100%" }}
@@ -464,28 +473,33 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				</span>
 			</div>
 
-			{/* Markdown Content */}
-			<div className="px-3 py-4 sm:px-6 sm:py-5 md:px-10 md:py-8 selection:bg-orange-600/30 overflow-x-hidden">
-				{processedMarkdown ? (
-					<MarkdownContent
-						className="prose prose-slate max-w-none prose-p:my-3 prose-p:leading-7 prose-li:my-1 prose-li:leading-7 prose-img:mx-auto prose-img:max-w-full [&_.katex]:text-base [&_.katex]:font-normal [&_.katex-display]:my-4 [&_.math-display]:block [&_.katex-display]:overflow-x-auto [&_.katex-display]:max-w-full prose-pre:overflow-x-auto prose-pre:max-w-full break-words"
-						components={mdComponents}
-					>
-						{processedMarkdown}
-					</MarkdownContent>
-				) : (
-					<p className="text-slate-400 italic text-sm">
-						No content available for this page.
-					</p>
-				)}
-			</div>
+			{/* Markdown Content - lazy render when off-screen to save React/browser work */}
+			{isVisible ? (
+				<div className="px-3 py-4 sm:px-6 sm:py-5 md:px-10 md:py-8 selection:bg-orange-600/30 overflow-x-hidden">
+					{processedMarkdown ? (
+						<MarkdownContent
+							className="prose prose-slate max-w-none prose-p:my-3 prose-p:leading-7 prose-li:my-1 prose-li:leading-7 prose-img:mx-auto prose-img:max-w-full [&_.katex]:text-base [&_.katex]:font-normal [&_.katex-display]:my-4 [&_.math-display]:block [&_.katex-display]:overflow-x-auto [&_.katex-display]:max-w-full prose-pre:overflow-x-auto prose-pre:max-w-full break-words"
+							components={mdComponents}
+						>
+							{processedMarkdown}
+						</MarkdownContent>
+					) : (
+						<p className="text-slate-400 italic text-sm">
+							No content available for this page.
+						</p>
+					)}
+				</div>
+			) : (
+				// Placeholder to maintain scroll height while off-screen (content-visibility handles the rest)
+				<div aria-hidden="true" style={{ minHeight: "900px" }} />
+			)}
 
 			{/* Selection Menu */}
 			{selectionMenu && (
 				<div
 					role="toolbar"
 					aria-label="Selection menu"
-					className="selection-menu absolute z-50 flex gap-1 bg-white border border-slate-200 text-slate-900 p-1.5 rounded-lg shadow-xl overflow-hidden transform -translate-x-1/2"
+					className="selection-menu absolute z-50 flex gap-1 bg-white border border-slate-200 text-slate-900 p-1.5 rounded-lg shadow-xl overflow-hidden transform -translate-x-1/2 gpu-accelerated"
 					style={{
 						left: `${selectionMenu.x}%`,
 						top: `${selectionMenu.y}%`,

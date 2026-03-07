@@ -1,3 +1,5 @@
+import { API_URL } from "@/config";
+
 type LogLevel = "debug" | "info" | "warn" | "error";
 
 const LOG_LEVELS: Record<LogLevel, number> = {
@@ -10,6 +12,36 @@ const LOG_LEVELS: Record<LogLevel, number> = {
 // 本番: warn以上のみ, 開発: debug以上すべて
 const CURRENT_LEVEL: LogLevel = import.meta.env.PROD ? "warn" : "debug";
 
+async function reportErrorToServer(
+	component: string,
+	operation: string,
+	message: string,
+	ctx?: object,
+): Promise<void> {
+	try {
+		const errorObj =
+			ctx && "error" in ctx ? (ctx as { error: unknown }).error : undefined;
+		const isError = errorObj instanceof Error;
+
+		await fetch(`${API_URL}/api/client-errors`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			credentials: "include",
+			body: JSON.stringify({
+				message,
+				component,
+				operation,
+				error_name: isError ? errorObj.name : undefined,
+				stack: isError ? errorObj.stack : undefined,
+				context: ctx,
+				url: typeof window !== "undefined" ? window.location.href : undefined,
+			}),
+		});
+	} catch {
+		// サーバー送信失敗はサイレントに無視する（無限ループ回避）
+	}
+}
+
 export function createLogger(component: string) {
 	const log = (
 		level: LogLevel,
@@ -20,9 +52,13 @@ export function createLogger(component: string) {
 		if (LOG_LEVELS[level] < LOG_LEVELS[CURRENT_LEVEL]) return;
 		const prefix = `[${component}.${operation}]`;
 		const args = ctx ? [prefix, message, ctx] : [prefix, message];
-		// console[level] may not be typed as expected if level is dynamic string in some environments
-		// But in modern TS/Browser it's fine.
-		(console as any)[level](...args);
+		(console as unknown as Record<string, (...a: unknown[]) => void>)[level](
+			...args,
+		);
+
+		if (level === "error") {
+			reportErrorToServer(component, operation, message, ctx);
+		}
 	};
 
 	return {
