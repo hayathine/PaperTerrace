@@ -34,7 +34,13 @@ interface TextModePageProps {
 		text: string,
 		coords: { page: number; x: number; y: number },
 	) => void;
-	onAskAI?: (prompt: string, imageUrl?: string, coords?: any) => void;
+	onAskAI?: (
+		prompt: string,
+		imageUrl?: string,
+		coords?: any,
+		originalText?: string,
+		contextText?: string,
+	) => void;
 	searchTerm?: string;
 }
 
@@ -504,6 +510,27 @@ const TextModePage: React.FC<TextModePageProps> = ({
 						<span>文A</span> {t("menu.translate", "Translate")}
 					</button>
 
+					{onAskAI && (
+						<button
+							type="button"
+							onClick={(e) => {
+								e.stopPropagation();
+								const prompt = `以下の文章を、文脈（${selectionMenu.context}）の中での役割をふまえつつ、わかりやすく解説してください。\n\n対象の文章: "${selectionMenu.text}"`;
+								onAskAI(
+									prompt,
+									undefined,
+									selectionMenu.coords,
+									selectionMenu.text,
+									selectionMenu.context,
+								);
+								setSelectionMenu(null);
+							}}
+							className="px-4 py-2.5 sm:py-2 hover:bg-slate-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-100 min-h-[44px] sm:min-h-0"
+						>
+							<span>💡</span> {t("menu.explain", "Explain")}
+						</button>
+					)}
+
 					<button
 						type="button"
 						onClick={(e) => {
@@ -512,25 +539,10 @@ const TextModePage: React.FC<TextModePageProps> = ({
 								onTextSelect(selectionMenu.text, selectionMenu.coords);
 							setSelectionMenu(null);
 						}}
-						className={`px-4 py-2.5 sm:py-2 hover:bg-slate-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors min-h-[44px] sm:min-h-0 ${onAskAI ? "border-r border-slate-700" : ""}`}
+						className="px-4 py-2.5 sm:py-2 hover:bg-slate-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors rounded-r-lg min-h-[44px] sm:min-h-0"
 					>
-						<span>📝</span> {t("menu.note", "Note")}
+						<span>📝</span> {t("menu.note", "Comment")}
 					</button>
-
-					{onAskAI && (
-						<button
-							type="button"
-							onClick={(e) => {
-								e.stopPropagation();
-								const prompt = `以下の文章を、文脈（${selectionMenu.context}）の中での役割をふまえつつ、わかりやすく解説してください。\n\n対象の文章: "${selectionMenu.text}"`;
-								onAskAI(prompt);
-								setSelectionMenu(null);
-							}}
-							className="px-4 py-2.5 sm:py-2 hover:bg-slate-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors rounded-r-lg min-h-[44px] sm:min-h-0"
-						>
-							<span>💡</span> {t("menu.explain", "Explain")}
-						</button>
-					)}
 
 					{/* Triangle arrow */}
 					<div className="absolute left-1/2 top-0 w-2 h-2 bg-white border-l border-t border-slate-200 transform -translate-x-1/2 -translate-y-1/2 rotate-45 pointer-events-none" />

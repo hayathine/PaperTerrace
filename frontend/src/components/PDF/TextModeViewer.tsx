@@ -13,7 +13,13 @@ interface TextModeViewerProps {
 		text: string,
 		coords: { page: number; x: number; y: number },
 	) => void;
-	onAskAI?: (prompt: string, imageUrl?: string, coords?: any) => void;
+	onAskAI?: (
+		prompt: string,
+		imageUrl?: string,
+		coords?: any,
+		originalText?: string,
+		contextText?: string,
+	) => void;
 	searchTerm?: string;
 }
 

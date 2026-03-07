@@ -202,12 +202,20 @@ tasks:
       - echo "✅ Build artifacts cleaned!"
 
   clean:data:
-    desc: "DANGER: Clear all papers, database records, and Redis cache"
+    desc: "DANGER: Clear all papers, database records, and Redis cache (Local)"
     cmds:
-      - echo "🧹 Clearing ALL application data..."
+      - echo "🧹 Clearing ALL local application data..."
       - uv run --directory backend env PYTHONPATH=.:.. python3 scripts/manual_clear_cache.py
       - rm -rf backend/app/static/paper_images/* 2>/dev/null || true
-      - echo "✅ Application data cleared!"
+      - echo "✅ Local application data cleared!"
+
+  k3s:db:clear:
+    desc: "DANGER: Clear all application data in Kubernetes (k3s)"
+    cmds:
+      - echo "🧹 Clearing data in {{.NAMESPACE}}..."
+      - |
+        kubectl exec -n {{.NAMESPACE}} deployment/backend -- python3 scripts/manual_clear_cache.py
+      - echo "✅ Application data cleared in {{.NAMESPACE}}!"
 
   # ============================================================================
   # Production Tasks
@@ -280,7 +288,13 @@ tasks:
     desc: "Run migrations directly from inside the running backend pod (k8s only)"
     cmds:
       - echo "🔄 Running migrations inside backend pod..."
-      - kubectl exec -n {{.NAMESPACE}} deployment/backend -- uv run --directory backend alembic upgrade head
+      - kubectl exec -n {{.NAMESPACE}} deployment/backend -- alembic upgrade head
+
+  k3s:glitchtip:migrate:
+    desc: "Run GlitchTip migrations in k3s"
+    cmds:
+      - echo "🔄 Running GlitchTip migrations..."
+      - kubectl exec -n {{.NAMESPACE}} deployment/glitchtip-web -- python3 manage.py migrate
 
   # ============================================================================
   # Staging Environment Tasks

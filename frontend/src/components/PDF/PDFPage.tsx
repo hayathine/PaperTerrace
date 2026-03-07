@@ -37,7 +37,13 @@ interface PDFPageProps {
 		width: number;
 		height: number;
 	}) => void;
-	onAskAI?: (prompt: string, imageUrl?: string, coords?: any) => void;
+	onAskAI?: (
+		prompt: string,
+		imageUrl?: string,
+		coords?: any,
+		originalText?: string,
+		contextText?: string,
+	) => void;
 	onFigureSelect?: (figure: SelectedFigure) => void;
 	jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
 	// 検索関連props
@@ -644,6 +650,29 @@ const PDFPage: React.FC<PDFPageProps> = ({
 							<span>文A</span> {t("menu.translate")}
 						</button>
 
+						{onAskAI && (
+							<button
+								type="button"
+								onClick={(e) => {
+									e.stopPropagation();
+									const prompt = `以下の文章を、文脈（${selectionMenu.context}）の中での役割をふまえつつ、わかりやすく解説してください。\n\n対象の文章: "${selectionMenu.text}"`;
+									onAskAI(
+										prompt,
+										undefined,
+										selectionMenu.coords,
+										selectionMenu.text,
+										selectionMenu.context,
+									);
+									setSelectionMenu(null);
+									setSelectionStart(null);
+									setSelectionEnd(null);
+								}}
+								className="px-4 py-2 hover:bg-orange-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-100"
+							>
+								<span>💡</span> {t("menu.explain")}
+							</button>
+						)}
+
 						<button
 							type="button"
 							onClick={(e) => {
@@ -654,27 +683,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								setSelectionStart(null);
 								setSelectionEnd(null);
 							}}
-							className="px-4 py-2 hover:bg-orange-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors"
+							className="px-4 py-2 hover:bg-orange-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors rounded-r-lg"
 						>
 							<span>📝</span> {t("menu.note")}
 						</button>
-
-						{onAskAI && (
-							<button
-								type="button"
-								onClick={(e) => {
-									e.stopPropagation();
-									const prompt = `以下の文章を、文脈（${selectionMenu.context}）の中での役割をふまえつつ、わかりやすく解説してください。\n\n対象の文章: "${selectionMenu.text}"`;
-									onAskAI(prompt);
-									setSelectionMenu(null);
-									setSelectionStart(null);
-									setSelectionEnd(null);
-								}}
-								className="px-4 py-2 hover:bg-orange-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-l border-slate-100 rounded-r-lg"
-							>
-								<span>💡</span> {t("menu.explain")}
-							</button>
-						)}
 
 						{/* Triangle arrow */}
 						<div className="absolute left-1/2 top-0 w-2 h-2 bg-white border-l border-t border-slate-200 transform -translate-x-1/2 -translate-y-1/2 rotate-45"></div>

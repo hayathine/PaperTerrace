@@ -1,5 +1,5 @@
 import type React from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import { createLogger } from "@/lib/logger";
@@ -14,6 +14,7 @@ import GlobalLoading from "./components/UI/GlobalLoading";
 import UploadScreen from "./components/Upload/UploadScreen";
 import { useAuth } from "./contexts/AuthContext";
 import { useLoading } from "./contexts/LoadingContext";
+import { useSyncStatus } from "./db/sync";
 import { useScrollTracking } from "./hooks/useScrollTracking";
 import { syncTrajectory } from "./lib/recommendation";
 
@@ -46,6 +47,9 @@ function App() {
 		return newId;
 	});
 	const [activeTab, setActiveTab] = useState("chat");
+	const [dictSubTab, setDictSubTab] = useState<
+		"translation" | "explanation" | "figures"
+	>("translation");
 	const [selectedWord, setSelectedWord] = useState<string | undefined>(
 		undefined,
 	);
@@ -90,6 +94,11 @@ function App() {
 
 	const handleScroll = useScrollTracking(currentPaperId || uploadFile?.name);
 	const [appEnv, setAppEnv] = useState<string>("production");
+	const [pdfMode, setPdfMode] = useState<
+		"text" | "stamp" | "area" | "plaintext"
+	>("plaintext");
+	const [isModeTransitionPending, startModeTransition] = useTransition();
+	const syncStatus = useSyncStatus();
 
 	useEffect(() => {
 		const fetchConfig = async () => {
@@ -312,6 +321,7 @@ function App() {
 		setPendingChatPrompt(null);
 		setPendingFigureId(null);
 		setActiveTab("chat");
+		setDictSubTab("translation");
 	};
 
 	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -350,7 +360,8 @@ function App() {
 		setSelectedCoordinates(coords);
 		setSelectedConf(conf);
 		setSelectedImage(undefined);
-		setActiveTab("dict");
+		setActiveTab("notes");
+		setDictSubTab("translation");
 		setIsRightSidebarOpen(true);
 	};
 
@@ -358,13 +369,15 @@ function App() {
 		text: string,
 		coords: { page: number; x: number; y: number },
 	) => {
-		// When text is selected, we want to maybe open notes?
-		// Let's set selected context as the text
-		setSelectedWord(undefined);
-		setSelectedContext(text);
+		const truncated =
+			text.length > 40 ? text.substring(0, 37).trim() + "..." : text;
+		const quoted = `> ${text}\n\n`;
+
+		setSelectedWord(truncated);
+		setSelectedContext(quoted);
 		setSelectedImage(undefined); // Clear image
 		setSelectedCoordinates(coords);
-		setActiveTab("notes"); // Switch to notes for saving selection
+		setActiveTab("comments"); // Switch to comments for saving selection
 		setIsRightSidebarOpen(true);
 	};
 
@@ -372,11 +385,11 @@ function App() {
 		imageUrl: string,
 		coords: { page: number; x: number; y: number },
 	) => {
-		setSelectedWord(undefined);
-		setSelectedContext(undefined);
+		setSelectedWord(`Figure clipping (Page ${coords.page})`);
+		setSelectedContext("");
 		setSelectedImage(imageUrl);
 		setSelectedCoordinates(coords);
-		setActiveTab("notes");
+		setActiveTab("comments");
 		setIsRightSidebarOpen(true);
 	};
 
@@ -396,23 +409,37 @@ function App() {
 		setIsAnalyzing(status === "uploading" || status === "processing");
 	}, []);
 
-	const handleAskAI = (prompt: string, imageUrl?: string, coords?: any) => {
+	const handleAskAI = (
+		prompt: string,
+		imageUrl?: string,
+		coords?: any,
+		originalText?: string,
+		contextText?: string,
+	) => {
 		if (imageUrl) {
 			setSelectedWord(prompt);
 			setSelectedImage(imageUrl);
 			setSelectedCoordinates(coords);
-			setActiveTab("dict");
+			setActiveTab("notes");
+			setDictSubTab("figures");
 			setIsRightSidebarOpen(true);
 		} else {
-			setPendingChatPrompt(prompt);
-			setActiveTab("chat");
+			// If it's a text-based explanation, redirect to the explanation sub-tab of Dictionary
+			// Use the original raw text as the word so the card title is correct.
+			setSelectedWord(originalText || prompt);
+			setSelectedContext(contextText);
+			setSelectedImage(undefined);
+			setSelectedCoordinates(coords);
+			setActiveTab("notes");
+			setDictSubTab("explanation");
 			setIsRightSidebarOpen(true);
 		}
 	};
 
 	const handleFigureSelect = (figure: SelectedFigure) => {
 		setSelectedFigure(figure);
-		setActiveTab("dict");
+		setActiveTab("notes");
+		setDictSubTab("figures");
 		setIsRightSidebarOpen(true);
 	};
 
@@ -745,9 +772,48 @@ function App() {
 								</span>
 							</button>
 						)}
-						<span className="text-xs font-black uppercase tracking-[0.2em] text-slate-400">
-							{t("nav.reading_mode")}
-						</span>
+						<div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+							<button
+								type="button"
+								onClick={() =>
+									startModeTransition(() => setPdfMode("plaintext"))
+								}
+								className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2 ${
+									pdfMode === "plaintext"
+										? "bg-white text-orange-600 shadow-sm"
+										: "text-slate-400 hover:text-slate-600"
+								} ${isModeTransitionPending ? "opacity-60" : ""}`}
+							>
+								<span className="text-xs">📝</span>
+								{t("viewer.toolbar.text_mode")}
+							</button>
+							<button
+								type="button"
+								onClick={() => startModeTransition(() => setPdfMode("text"))}
+								className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2 ${
+									pdfMode === "text"
+										? "bg-white text-orange-600 shadow-sm"
+										: "text-slate-400 hover:text-slate-600"
+								} ${isModeTransitionPending ? "opacity-60" : ""}`}
+							>
+								<span className="text-xs">📄</span>
+								{t("viewer.toolbar.click_mode")}
+							</button>
+						</div>
+						<div
+							className="ml-3 flex items-center gap-2"
+							title={`Sync: ${syncStatus}`}
+						>
+							<div
+								className={`w-2 h-2 rounded-full ${
+									syncStatus === "synced"
+										? "bg-green-500"
+										: syncStatus === "pending"
+											? "bg-amber-500 animate-pulse"
+											: "bg-red-500"
+								}`}
+							/>
+						</div>
 						<div className="flex-1" />
 						{uploadFile && (
 							<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-4 truncate max-w-[150px] sm:max-w-xs">
@@ -808,6 +874,7 @@ function App() {
 										currentSearchMatch={currentSearchMatch}
 										evidence={activeEvidence}
 										appEnv={appEnv}
+										mode={pdfMode}
 									/>
 								</div>
 							) : (
@@ -868,6 +935,8 @@ function App() {
 								sessionId={sessionId}
 								activeTab={activeTab}
 								onTabChange={setActiveTab}
+								dictSubTab={dictSubTab}
+								onDictSubTabChange={setDictSubTab}
 								selectedWord={selectedWord}
 								context={selectedContext}
 								coordinates={selectedCoordinates}

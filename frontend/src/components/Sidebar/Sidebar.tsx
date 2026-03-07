@@ -10,6 +10,8 @@ interface SidebarProps {
 	sessionId: string;
 	activeTab: string;
 	onTabChange: (tab: string) => void;
+	dictSubTab?: "translation" | "explanation" | "figures";
+	onDictSubTabChange?: (tab: "translation" | "explanation" | "figures") => void;
 	selectedWord?: string;
 	context?: string;
 	coordinates?: { page: number; x: number; y: number };
@@ -31,6 +33,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 	sessionId,
 	activeTab,
 	onTabChange,
+	dictSubTab = "translation",
+	onDictSubTabChange,
 	selectedWord,
 	context,
 	coordinates,
@@ -187,6 +191,8 @@ const Sidebar: React.FC<SidebarProps> = ({
 					<Dictionary
 						sessionId={sessionId}
 						paperId={paperId}
+						subTab={dictSubTab}
+						onSubTabChange={onDictSubTabChange}
 						term={selectedWord}
 						context={context}
 						coordinates={coordinates}

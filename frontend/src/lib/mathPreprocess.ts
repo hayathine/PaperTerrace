@@ -9,36 +9,36 @@
 
 // 数式内で置換する Unicode → LaTeX コマンドのマッピング
 const MATH_UNICODE_MAP: Array<[RegExp, string]> = [
-	[/∆/g, "\\Delta"], // U+2206 INCREMENT (∆ ≠ Δ U+0394)
-	[/◦/g, "\\circ"], // U+25E6 WHITE BULLET (◦ ≠ ∘ U+2218 RING OPERATOR)
-	[/∇/g, "\\nabla"], // U+2207 NABLA
-	[/∈/g, "\\in"], // U+2208
-	[/∉/g, "\\notin"], // U+2209
-	[/⊆/g, "\\subseteq"], // U+2286
-	[/⊂/g, "\\subset"], // U+2282
-	[/∪/g, "\\cup"], // U+222A
-	[/∩/g, "\\cap"], // U+2229
-	[/≤/g, "\\leq"], // U+2264
-	[/≥/g, "\\geq"], // U+2265
-	[/≠/g, "\\neq"], // U+2260
-	[/≈/g, "\\approx"], // U+2248
-	[/∞/g, "\\infty"], // U+221E
-	[/→/g, "\\rightarrow"], // U+2192
-	[/←/g, "\\leftarrow"], // U+2190
-	[/↔/g, "\\leftrightarrow"], // U+2194
-	[/⇒/g, "\\Rightarrow"], // U+21D2
-	[/⇔/g, "\\Leftrightarrow"], // U+21D4
-	[/∀/g, "\\forall"], // U+2200
-	[/∃/g, "\\exists"], // U+2203
-	[/¬/g, "\\neg"], // U+00AC
-	[/∧/g, "\\land"], // U+2227
-	[/∨/g, "\\lor"], // U+2228
-	[/×/g, "\\times"], // U+00D7
-	[/÷/g, "\\div"], // U+00F7
-	[/±/g, "\\pm"], // U+00B1
-	[/∑/g, "\\sum"], // U+2211
-	[/∏/g, "\\prod"], // U+220F
-	[/∫/g, "\\int"], // U+222B
+	[/∆/g, "\\Delta "], // U+2206 INCREMENT (∆ ≠ Δ U+0394)
+	[/◦/g, "\\circ "], // U+25E6 WHITE BULLET (◦ ≠ ∘ U+2218 RING OPERATOR)
+	[/∇/g, "\\nabla "], // U+2207 NABLA
+	[/∈/g, "\\in "], // U+2208
+	[/∉/g, "\\notin "], // U+2209
+	[/⊆/g, "\\subseteq "], // U+2286
+	[/⊂/g, "\\subset "], // U+2282
+	[/∪/g, "\\cup "], // U+222A
+	[/∩/g, "\\cap "], // U+2229
+	[/≤/g, "\\leq "], // U+2264
+	[/≥/g, "\\geq "], // U+2265
+	[/≠/g, "\\neq "], // U+2260
+	[/≈/g, "\\approx "], // U+2248
+	[/∞/g, "\\infty "], // U+221E
+	[/→/g, "\\rightarrow "], // U+2192
+	[/←/g, "\\leftarrow "], // U+2190
+	[/↔/g, "\\leftrightarrow "], // U+2194
+	[/⇒/g, "\\Rightarrow "], // U+21D2
+	[/⇔/g, "\\Leftrightarrow "], // U+21D4
+	[/∀/g, "\\forall "], // U+2200
+	[/∃/g, "\\exists "], // U+2203
+	[/¬/g, "\\neg "], // U+00AC
+	[/∧/g, "\\land "], // U+2227
+	[/∨/g, "\\lor "], // U+2228
+	[/×/g, "\\times "], // U+00D7
+	[/÷/g, "\\div "], // U+00F7
+	[/±/g, "\\pm "], // U+00B1
+	[/∑/g, "\\sum "], // U+2211
+	[/∏/g, "\\prod "], // U+220F
+	[/∫/g, "\\int "], // U+222B
 ];
 
 /** 数式文字列内の Unicode 記号を LaTeX コマンドに置換する */

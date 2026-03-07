@@ -182,7 +182,7 @@ const NoteList: React.FC<NoteListProps> = ({
 				onUpdate={handleUpdateNote}
 				onCancelEdit={() => setEditingNote(null)}
 				coordinates={coordinates}
-				initialContent={selectedTerm ? "" : selectedContext}
+				initialContent={selectedContext}
 				initialTerm={selectedTerm}
 				initialImage={selectedImage}
 				editingNote={

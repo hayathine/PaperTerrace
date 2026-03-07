@@ -1,12 +1,5 @@
 import type React from "react";
-import {
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-	useTransition,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
 import { createLogger } from "@/lib/logger";
@@ -15,7 +8,6 @@ import { usePaperCache } from "../../db/hooks";
 // TODO (suspended): db import used by handleAreaSelect - restore when area mode re-enabled.
 // import { db } from "../../db";
 import { isDbAvailable } from "../../db/index";
-import { useSyncStatus } from "../../db/sync";
 import PDFPage from "./PDFPage";
 import TextModeViewer from "./TextModeViewer";
 import type { PageData, PageWithLines, SelectedFigure } from "./types";
@@ -47,7 +39,13 @@ interface PDFViewerProps {
 		status: "idle" | "uploading" | "processing" | "done" | "error",
 	) => void;
 	onPaperLoaded?: (paperId: string | null) => void;
-	onAskAI?: (prompt: string, imageUrl?: string, coords?: any) => void;
+	onAskAI?: (
+		prompt: string,
+		imageUrl?: string,
+		coords?: any,
+		originalText?: string,
+		contextText?: string,
+	) => void;
 	onFigureSelect?: (figure: SelectedFigure) => void;
 	paperId?: string | null;
 	// 検索関連props
@@ -58,6 +56,7 @@ interface PDFViewerProps {
 	currentSearchMatch?: { page: number; wordIndex: number } | null;
 	evidence?: any;
 	appEnv?: string;
+	mode?: "text" | "stamp" | "area" | "plaintext";
 }
 
 const PDFViewer: React.FC<PDFViewerProps> = ({
@@ -78,6 +77,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	currentSearchMatch,
 	evidence,
 	appEnv = "production",
+	mode: externalMode,
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token, isGuest } = useAuth();
@@ -88,7 +88,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		cachePaperImages,
 		deleteCorruptedCache,
 	} = usePaperCache();
-	const syncStatus = useSyncStatus();
+	// syncStatus lifted to App.tsx
 	const [pages, setPages] = useState<PageData[]>([]);
 	const [status, setStatus] = useState<
 		"idle" | "uploading" | "processing" | "done" | "error"
@@ -99,21 +99,15 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	const processingFileRef = useRef<File | null>(null);
 	const activeTaskIdRef = useRef<string | null>(null);
 
-	// const containerRef = useRef<HTMLDivElement>(null); // Unused now
-
-	// Stamp State
-	// Modes: 'plaintext' (default), 'text', 'stamp', 'area'
-	const [mode, setMode] = useState<"text" | "stamp" | "area" | "plaintext">(
+	// Use external mode if provided, otherwise fallback to internal (though App.tsx now provides it)
+	const [internalMode] = useState<"text" | "stamp" | "area" | "plaintext">(
 		"plaintext",
 	);
+	const mode = externalMode ?? internalMode;
+
 	// PDF ページグリッド（クリック/スタンプ/エリアモード用）の遅延マウント。
-	// 初回アクセス前はマウントせず初期ロードを軽量化する。一度マウントしたら
-	// CSS display トグルに切り替えて再マウントコストなしに高速切り替えを実現。
 	const [hasMountedPdfMode, setHasMountedPdfMode] = useState(false);
-	// モード切り替えを非緊急トランジションとして扱い UI ブロックを防ぐ。
-	// ツールバーボタンのアクティブ状態は即時反映し、重い再レンダリングは
-	// バックグラウンドで処理する。
-	const [isModeTransitionPending, startModeTransition] = useTransition();
+
 	// TODO (suspended): stamp state removed. Restore for stamp mode.
 
 	const pagesRef = useRef<PageData[]>([]);
@@ -1214,74 +1208,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			{/* Content Area - Show as soon as we have pages */}
 			{pages.length > 0 && (
 				<>
-					{/* Toolbar */}
-					<div className="sticky top-4 z-[60] flex justify-center mb-6">
-						<div className="bg-white p-1 rounded-lg shadow-sm border border-slate-200 flex items-center gap-0.5 sm:gap-1">
-							<div
-								className="px-2 flex items-center gap-2 border-r border-slate-100 mr-1"
-								title={`Sync: ${syncStatus}`}
-							>
-								<div
-									className={`w-2 h-2 rounded-full ${
-										syncStatus === "synced"
-											? "bg-green-500"
-											: syncStatus === "pending"
-												? "bg-amber-500 animate-pulse"
-												: "bg-red-500"
-									}`}
-								/>
-							</div>
-							<button
-								type="button"
-								onClick={() => startModeTransition(() => setMode("plaintext"))}
-								className={`px-2 sm:px-3 py-1.5 rounded-md flex items-center gap-1 sm:gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
-									mode === "plaintext"
-										? "bg-orange-600 text-white shadow-none"
-										: "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-								} ${isModeTransitionPending ? "opacity-60" : ""}`}
-							>
-								<span className="text-sm">📝</span>
-								<span className="hidden sm:inline">
-									{t("viewer.toolbar.text_mode")}
-								</span>
-							</button>
-
-							<button
-								type="button"
-								onClick={() => startModeTransition(() => setMode("text"))}
-								className={`px-2 sm:px-3 py-1.5 rounded-md flex items-center gap-1 sm:gap-2 text-[10px] font-bold uppercase tracking-wider transition-all duration-200 ${
-									mode === "text"
-										? "bg-orange-600 text-white shadow-none"
-										: "text-slate-500 hover:bg-slate-50 hover:text-slate-700"
-								} ${isModeTransitionPending ? "opacity-60" : ""}`}
-							>
-								<span className="text-sm">📄</span>
-								<span className="hidden sm:inline">
-									{t("viewer.toolbar.click_mode")}
-								</span>
-							</button>
-
-							{/* TODO: Crop mode (area) and Stamp mode are temporarily suspended.
-							     Restore the buttons below and the StampPalette / PDFPage props when re-enabling. */}
-							{/* <div className="w-[1px] h-4 bg-slate-200 mx-1 hidden sm:block" />
-							<button
-								type="button"
-								onClick={() => startModeTransition(() => setMode("area"))}
-							>
-								<span className="text-sm">✂️</span>
-								<span className="hidden sm:inline">{t("viewer.toolbar.area_mode")}</span>
-							</button>
-
-							<button
-								type="button"
-								onClick={() => startModeTransition(() => setMode("stamp"))}
-							>
-								<span className="text-sm">👍</span>
-								<span className="hidden sm:inline">{t("viewer.toolbar.stamp_mode")}</span>
-							</button> */}
-						</div>
-					</div>
-
 					{/* Content Area */}
 					{/* TextMode: 初期状態からマウント。CSS display で高速切り替え */}
 					<div className={mode === "plaintext" ? "block" : "hidden"}>

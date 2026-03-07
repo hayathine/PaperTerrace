@@ -46,6 +46,7 @@ COPY --chown=appuser:appuser backend/migrations ./migrations
 COPY --chown=appuser:appuser backend/app/ ./app/
 COPY --chown=appuser:appuser common/ ./common/
 COPY --chown=appuser:appuser redis_provider/ ./redis_provider/
+COPY --chown=appuser:appuser backend/scripts/ ./scripts/
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \

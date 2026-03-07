@@ -53,7 +53,7 @@
 	},
 	"sidebar": {
 		"tabs": {
-			"notes": "ノート",
+			"notes": "辞書",
 			"analysis": "分析",
 			"chat": "チャット",
 			"comments": "コメント",
@@ -68,7 +68,6 @@
 		"uploading_pdf": "PDFをアップロード中...",
 		"processing_pdf": "PDFを解析中...",
 		"select_pdf": "PDFを選択してください",
-
 		"page": "ページ",
 		"toolbar": {
 			"text_mode": "テキストモード",
@@ -85,7 +84,7 @@
 			"open_link": "リンクを開く",
 			"ask_ai": "AI解説",
 			"ask_in_chat": "チャットで質問",
-			"save_note": "ノートに保存",
+			"save_note": "コメントに保存",
 			"saved": "保存済み",
 			"jump": "場所へ移動"
 		}
@@ -111,14 +110,14 @@
 		"reproducibility": "再現性のリスク"
 	},
 	"notes": {
-		"title": "マイノート",
+		"title": "コメント",
 		"placeholder_term": "用語 / キーワード",
 		"placeholder_content": "メモを入力...",
-		"add": "ノートを追加",
-		"update": "ノートを更新",
+		"add": "コメントを追加",
+		"update": "コメントを更新",
 		"adding": "追加中...",
 		"updating": "更新中...",
-		"no_notes": "ノートがまだありません。上のフォームから追加してください。",
+		"no_notes": "コメントがまだありません。上のフォームから追加してください。",
 		"jump_to_page": "ページ {{page}} へ移動"
 	},
 	"stack": {
@@ -142,7 +141,7 @@
 	},
 	"menu": {
 		"translate": "翻訳",
-		"note": "ノート",
+		"note": "コメント",
 		"ask_ai": "AIに聞く",
 		"explain": "解説",
 		"close": "閉じる"

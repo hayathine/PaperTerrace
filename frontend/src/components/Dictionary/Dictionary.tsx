@@ -30,6 +30,8 @@ interface DictionaryProps {
 	imageUrl?: string;
 	onAskInChat?: () => void;
 	selectedFigure?: SelectedFigure | null;
+	subTab?: "translation" | "explanation" | "figures";
+	onSubTabChange?: (tab: "translation" | "explanation" | "figures") => void;
 }
 
 const Dictionary: React.FC<DictionaryProps> = ({
@@ -43,23 +45,43 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	imageUrl,
 	onAskInChat,
 	selectedFigure,
+	subTab = "translation",
+	onSubTabChange,
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token } = useAuth();
 
 	const [activeSubTab, setActiveSubTab] = useState<
 		"translation" | "explanation" | "figures"
-	>("translation");
+	>(subTab);
+
+	// Prop から activeSubTab を同期
+	useEffect(() => {
+		if (subTab) {
+			setActiveSubTab(subTab);
+		}
+	}, [subTab]);
+
+	// 内部変更を親に通知
+	const handleSubTabChange = (
+		tab: "translation" | "explanation" | "figures",
+	) => {
+		setActiveSubTab(tab);
+		onSubTabChange?.(tab);
+	};
 
 	// 図が選択されたら自動的に figures サブタブへ切り替え
 	useEffect(() => {
 		if (selectedFigure) {
-			setActiveSubTab("figures");
+			handleSubTabChange("figures");
 		}
 	}, [selectedFigure]);
 
-	// Maintain a list of entries instead of a single one
+	// Separate translation and explanation entries
 	const [entries, setEntries] = useState<DictionaryEntryWithCoords[]>([]);
+	const [explanationEntries, setExplanationEntries] = useState<
+		DictionaryEntryWithCoords[]
+	>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
 
@@ -78,6 +100,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 			if (!isProcessingFinished) {
 				setEntries([]);
+				setExplanationEntries([]);
 				setSavedItems(new Set());
 			}
 		}
@@ -98,11 +121,14 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 		if (isLink(term)) {
 			setEntries([]);
+			setExplanationEntries([]);
 			return;
 		}
 
-		// Ignore if the very last (top) entry is already this term
-		if (entries.length > 0 && entries[0].word === term) {
+		// Check if the term is already the last entry in the relevant tab
+		const targetEntries =
+			activeSubTab === "explanation" ? explanationEntries : entries;
+		if (targetEntries.length > 0 && targetEntries[0].word === term) {
 			return;
 		}
 
@@ -121,7 +147,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			};
 			if (imageUrl) tempEntry.image_url = imageUrl;
 
-			setEntries((prev) => {
+			const setter =
+				activeSubTab === "explanation" ? setExplanationEntries : setEntries;
+			setter((prev) => {
 				const filtered = prev.filter((e) => e.word !== term);
 				return [tempEntry, ...filtered];
 			});
@@ -167,7 +195,12 @@ const Dictionary: React.FC<DictionaryProps> = ({
 						const data: DictionaryEntryWithCoords = await res.json();
 						data.coords = coordinates; // Attach current coordinates
 						if (imageUrl) data.image_url = imageUrl;
-						setEntries((prev) => {
+
+						const setter =
+							activeSubTab === "explanation"
+								? setExplanationEntries
+								: setEntries;
+						setter((prev) => {
 							const filtered = prev.filter((e) => e.word !== data.word);
 							return [data, ...filtered];
 						});
@@ -176,7 +209,11 @@ const Dictionary: React.FC<DictionaryProps> = ({
 						setError(
 							`Could not explain "${term}". It may be a URL or special term.`,
 						);
-						setEntries((prev) =>
+						const setter =
+							activeSubTab === "explanation"
+								? setExplanationEntries
+								: setEntries;
+						setter((prev) =>
 							prev.filter((e) => e.word !== term || !e.is_analyzing),
 						);
 					}
@@ -185,7 +222,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					setError(
 						`Definition not found: ${res.status} ${errorText.substring(0, 50)}`,
 					);
-					setEntries((prev) =>
+					const setter =
+						activeSubTab === "explanation" ? setExplanationEntries : setEntries;
+					setter((prev) =>
 						prev.filter((e) => e.word !== term || !e.is_analyzing),
 					);
 				}
@@ -196,7 +235,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				});
 
 				setError(`Failed to fetch definition for "${term}".`);
-				setEntries((prev) =>
+				const setter =
+					activeSubTab === "explanation" ? setExplanationEntries : setEntries;
+				setter((prev) =>
 					prev.filter((e) => e.word !== term || !e.is_analyzing),
 				);
 			} finally {
@@ -205,7 +246,17 @@ const Dictionary: React.FC<DictionaryProps> = ({
 		};
 
 		fetchDefinition();
-	}, [term, token, imageUrl, sessionId, paperId, context, conf, i18n.language]); // Removed entries dependency to avoid loop, check inside setter or logic
+	}, [
+		term,
+		token,
+		imageUrl,
+		sessionId,
+		paperId,
+		context,
+		conf,
+		i18n.language,
+		activeSubTab,
+	]); // Removed entries dependency to avoid loop, check inside setter or logic
 
 	const [savedItems, setSavedItems] = useState<Set<string>>(new Set());
 
@@ -251,7 +302,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	const handleDeepTranslate = async (entry: DictionaryEntryWithCoords) => {
 		if (!entry) return;
 		// Mark specific entry as analyzing locally
-		setEntries((prev) =>
+		const setter =
+			activeSubTab === "explanation" ? setExplanationEntries : setEntries;
+		setter((prev) =>
 			prev.map((e) =>
 				e.word === entry.word ? { ...e, is_analyzing: true } : e,
 			),
@@ -287,7 +340,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			if (res.ok) {
 				const data: DictionaryEntryWithCoords = await res.json();
 				data.coords = entry.coords; // Preserve coordinates
-				setEntries((prev) =>
+				const setter =
+					activeSubTab === "explanation" ? setExplanationEntries : setEntries;
+				setter((prev) =>
 					prev.map((e) =>
 						e.word === entry.word ? { ...data, is_analyzing: false } : e,
 					),
@@ -295,7 +350,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			} else {
 				const errorText = await res.text();
 				setError(`Translation failed: ${res.status} ${errorText}`);
-				setEntries((prev) =>
+				const setter =
+					activeSubTab === "explanation" ? setExplanationEntries : setEntries;
+				setter((prev) =>
 					prev.map((e) =>
 						e.word === entry.word ? { ...e, is_analyzing: false } : e,
 					),
@@ -308,7 +365,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			});
 
 			setError("Translation failed.");
-			setEntries((prev) =>
+			const setter =
+				activeSubTab === "explanation" ? setExplanationEntries : setEntries;
+			setter((prev) =>
 				prev.map((e) =>
 					e.word === entry.word ? { ...e, is_analyzing: false } : e,
 				),
@@ -356,8 +415,11 @@ const Dictionary: React.FC<DictionaryProps> = ({
 		term &&
 		(/^(https?:\/\/|\/\/|www\.)/i.test(term) || term.includes("doi.org/"));
 
+	const activeEntries =
+		activeSubTab === "explanation" ? explanationEntries : entries;
+
 	let content: React.ReactNode;
-	if (entries.length === 0 && !loading && !error) {
+	if (activeEntries.length === 0 && !loading && !error) {
 		if (isUrl) {
 			content = (
 				<div className="flex flex-col items-center justify-center h-full p-8 text-slate-300">
@@ -433,7 +495,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	} else {
 		content = (
 			<div className="p-4 flex-1 overflow-y-auto">
-				{loading && entries.length === 0 && (
+				{loading && activeEntries.length === 0 && (
 					<div className="flex flex-col items-center justify-center py-12 animate-in fade-in duration-500">
 						<div className="relative w-12 h-12 mb-4">
 							<div className="absolute inset-0 rounded-full border-4 border-orange-100"></div>
@@ -455,7 +517,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				)}
 
 				<div className="space-y-4">
-					{entries.map((entry, index) => (
+					{activeEntries.map((entry, index) => (
 						<div
 							key={`${entry.word}-${index}`}
 							className={`bg-white p-3 sm:p-4 rounded-xl border border-slate-100 shadow-sm animate-fade-in group transition-all hover:shadow-md relative overflow-hidden ${entry.is_analyzing ? "opacity-90" : ""}`}
@@ -636,7 +698,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			<div className="flex px-4 pt-2 border-b border-slate-100 bg-white sticky top-0 z-20 shrink-0">
 				<button
 					type="button"
-					onClick={() => setActiveSubTab("translation")}
+					onClick={() => handleSubTabChange("translation")}
 					className={`pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all ${
 						activeSubTab === "translation"
 							? "text-orange-600 border-orange-600"
@@ -648,18 +710,19 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				</button>
 				<button
 					type="button"
-					onClick={() => setActiveSubTab("explanation")}
+					onClick={() => handleSubTabChange("explanation")}
 					className={`ml-6 pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all ${
 						activeSubTab === "explanation"
 							? "text-orange-600 border-orange-600"
 							: "text-slate-400 hover:text-slate-600 border-transparent"
 					}`}
 				>
-					{t("sidebar.tabs.explanation")}
+					{t("sidebar.tabs.explanation")}{" "}
+					{explanationEntries.length > 0 && `(${explanationEntries.length})`}
 				</button>
 				<button
 					type="button"
-					onClick={() => setActiveSubTab("figures")}
+					onClick={() => handleSubTabChange("figures")}
 					className={`ml-6 pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all ${
 						activeSubTab === "figures"
 							? "text-orange-600 border-orange-600"
