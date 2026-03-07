@@ -67,7 +67,7 @@ MATH_UNICODE_LATEX: dict[str, str] = {
     "∗": "*",
     "†": r"\dagger ",
     "‡": r"\ddagger ",
-    "√": r"\sqrt",
+    "√": r"\sqrt ",
     # Blackboard bold
     "ℝ": r"\mathbb{R}",
     "ℤ": r"\mathbb{Z}",
@@ -151,7 +151,8 @@ def convert_superscript_brackets(text: str) -> str:
     def _replace(m: re.Match) -> str:
         inner = m.group(1)
         # 純粋な数字のみ（引用 [1], [23] 等）は変換しない
-        if re.fullmatch(r"\d+", inner):
+        # 純粋な数字やカンマ区切りの数字（引用 [1], [12, 13] 等）は変換しない
+        if re.fullmatch(r"[\d, ]+", inner):
             return m.group(0)
         # 空白を含む長い括弧表現は通常の文章表現の可能性があるため除外
         if " " in inner and len(inner) > 6:

@@ -166,9 +166,6 @@ class M2M100TranslationService:
                 score = results[0].scores[0] if results[0].scores else 0.0
                 conf = math.exp(score)
                 translation = self._postprocess_output(output_tokens, tgt_code)
-                logger.info(
-                    f"M2M100翻訳結果: {text[:50]}... -> {translation[:50]}... (conf={conf:.3f}, m2m100_code={tgt_code}, target={target_lang})"
-                )
                 return {"translation": translation, "conf": conf, "model": "M2M100"}
             else:
                 logger.warning(f"M2M100翻訳結果が空です: {text} (target={tgt_code})")

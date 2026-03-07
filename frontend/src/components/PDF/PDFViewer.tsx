@@ -999,7 +999,27 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								);
 							}
 
-							// Optional: Background check with server to ensure consistency.
+							// セッション→論文マッピングをバックエンドに通知
+							if (sessionId) {
+								const fd = new FormData();
+								fd.append("session_id", sessionId);
+								fd.append("paper_id", id);
+								fetch(`${API_URL}/api/session-context`, {
+									method: "POST",
+									headers: token
+										? { Authorization: `Bearer ${token}` }
+										: undefined,
+									body: fd,
+								}).catch((err) =>
+									log.warn(
+										"session_context",
+										"Failed to sync session context",
+										{
+											error: err,
+										},
+									),
+								);
+							}
 							return;
 						}
 					} catch (e) {
@@ -1081,6 +1101,27 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								);
 							}
 
+							// セッション→論文マッピングをバックエンドに通知
+							if (sessionId) {
+								const fd = new FormData();
+								fd.append("session_id", sessionId);
+								fd.append("paper_id", id);
+								fetch(`${API_URL}/api/session-context`, {
+									method: "POST",
+									headers: token
+										? { Authorization: `Bearer ${token}` }
+										: undefined,
+									body: fd,
+								}).catch((err) =>
+									log.warn(
+										"session_context",
+										"Failed to sync session context",
+										{
+											error: err,
+										},
+									),
+								);
+							}
 							return; // Success! No need to stream.
 						}
 					} catch (parseErr) {

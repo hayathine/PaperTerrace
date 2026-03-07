@@ -8,6 +8,7 @@ import { LoadingProvider } from "./contexts/LoadingContext";
 import { initDB } from "./db/index";
 import "./index.css";
 import "./lib/i18n";
+import { performanceMonitor } from "./lib/performance";
 
 if (GLITCHTIP_DSN) {
 	Sentry.init({
@@ -25,6 +26,9 @@ if (GLITCHTIP_DSN) {
 
 // Initialize IndexedDB early; failures are non-fatal (caching is disabled).
 initDB();
+
+// Initialize Web Vitals performance monitoring
+performanceMonitor.init();
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
 	<React.StrictMode>

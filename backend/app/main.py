@@ -178,14 +178,24 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 duration_ms=round(duration * 1000, 2),
             )
             return response
-        except Exception as e:
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit, GeneratorExit)):
+                raise
+
             duration = time.time() - start_time
+
+            # Handle ExceptionGroup/BaseExceptionGroup specifically for better logging
+            error_msg_detail = str(e)
+            if hasattr(e, "exceptions"):
+                sub_errors = [str(se) for se in getattr(e, "exceptions")]
+                error_msg_detail = f"{type(e).__name__}: {'; '.join(sub_errors)}"
+
             mw_log.error(
                 "request",
                 "failed",
                 method=request.method,
                 path=request.url.path,
-                error=str(e),
+                error=error_msg_detail,
                 error_type=type(e).__name__,
                 duration_ms=round(duration * 1000, 2),
             )
@@ -194,7 +204,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             # Hide detailed error message from end users in production
             app_env = os.getenv("APP_ENV", "production")
             error_msg = (
-                str(e)
+                error_msg_detail
                 if app_env == "development"
                 else "An unexpected error occurred. Please try again later."
             )
@@ -211,11 +221,18 @@ app.add_middleware(LoggingMiddleware)
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
+    # Handle ExceptionGroup specifically for better logging
+    error_msg_detail = str(exc)
+    if hasattr(exc, "exceptions"):
+        sub_errors = [str(se) for se in getattr(exc, "exceptions")]
+        error_msg_detail = f"{type(exc).__name__}: {'; '.join(sub_errors)}"
+
     mw_log.error(
         "exception",
         "Global exception",
         method=request.method,
         path=request.url.path,
+        error=error_msg_detail,
     )
 
     mw_log.error("exception", traceback.format_exc())
@@ -223,7 +240,7 @@ async def global_exception_handler(request: Request, exc: Exception):
     # Hide detailed error message from end users in production
     app_env = os.getenv("APP_ENV", "production")
     error_msg = (
-        str(exc)
+        error_msg_detail
         if app_env == "development"
         else "An unexpected error occurred. Please try again later."
     )

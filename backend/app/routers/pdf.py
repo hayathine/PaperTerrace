@@ -41,6 +41,38 @@ redis_service = RedisService()
 img_storage = get_image_storage()
 
 
+@router.post("/session-context")
+async def update_session_context(
+    session_id: str = Form(...),
+    paper_id: str = Form(...),
+):
+    """セッション→論文マッピングを更新する（キャッシュ表示時用）。"""
+    try:
+        storage.save_session_context(session_id, paper_id)
+        # Redis のセッションコンテキストも更新
+        paper = storage.get_paper(paper_id)
+        if paper and paper.get("ocr_text"):
+            redis_service.set(
+                f"session:{session_id}", paper["ocr_text"], expire=3600
+            )
+        log.info(
+            "session_context",
+            "Session context updated",
+            session_id=session_id,
+            paper_id=paper_id,
+        )
+        return JSONResponse({"ok": True})
+    except Exception as e:
+        log.warning(
+            "session_context",
+            "Failed to update session context",
+            session_id=session_id,
+            paper_id=paper_id,
+            error=str(e),
+        )
+        return JSONResponse({"ok": False}, status_code=500)
+
+
 @router.post("/analyze-pdf")
 async def analyze_pdf(
     background_tasks: BackgroundTasks,
@@ -747,6 +779,19 @@ async def stream(task_id: str):
                         "Restored session context",
                         s_id=s_id,
                     )
+
+                # DBのセッション→論文マッピングも更新（レビュー等が正しい論文を参照するため）
+                if session_id and paper_id:
+                    try:
+                        storage.save_session_context(session_id, paper_id)
+                    except Exception as e:
+                        log.warning(
+                            "stream",
+                            "Failed to save session context for cached paper",
+                            session_id=session_id,
+                            paper_id=paper_id,
+                            error=str(e),
+                        )
 
                 else:
                     log.warning(

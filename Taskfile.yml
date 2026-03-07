@@ -141,6 +141,11 @@ tasks:
     cmds:
       - uv run --directory backend env PYTHONPATH=.:.. pytest -n auto || [ $? -eq 5 ]
 
+  test:common:
+    desc: "Run common utilities tests"
+    cmds:
+      - uv run --directory backend env PYTHONPATH=.:.. pytest ../common/tests || [ $? -eq 5 ]
+
   test:inference:
     desc: "Run inference service tests"
     cmds:
@@ -164,6 +169,7 @@ tasks:
   test:
     desc: "Run affected tests for all components (Optimized)"
     cmds:
+      - task: test:common
       - task: test:backend
       - task: test:inference
       - task: test:redis
@@ -172,6 +178,7 @@ tasks:
   test:all:
     desc: "Run all tests for all components"
     cmds:
+      - uv run --directory backend env PYTHONPATH=.:.. pytest ../common/tests
       - uv run --directory backend env PYTHONPATH=.:.. pytest -n auto
       - uv run --directory inference-service env PYTHONPATH=.:.. pytest -n auto
       - uv run --directory redis_provider env PYTHONPATH=.:.. pytest -o "addopts="

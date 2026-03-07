@@ -20,6 +20,7 @@ interface SummaryProps {
 	sessionId: string;
 	paperId?: string | null;
 	isAnalyzing?: boolean;
+	isActive?: boolean;
 }
 
 type Mode = "summary" | "critique" | "discover";
@@ -28,6 +29,7 @@ const Summary: React.FC<SummaryProps> = ({
 	sessionId,
 	paperId,
 	isAnalyzing = false,
+	isActive = false,
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token } = useAuth();
@@ -183,12 +185,12 @@ const Summary: React.FC<SummaryProps> = ({
 		if (isAnalyzing) return;
 
 		// Fetch when: analysis just finished, or initial load (not analyzing)
-		// Only fetch if not already in state. (Initial load will be handled by the direct useEffect above if cached)
-		if (sessionId && paperId && (wasAnalyzing || !summaryData)) {
+		// Only fetch if not already in state and the tab is ACTIVE.
+		if (isActive && sessionId && paperId && (wasAnalyzing || !summaryData)) {
 			// If we just finished analyzing, or we have no data and it's not and we are not analyzing
 			handleSummarize(false);
 		}
-	}, [sessionId, paperId, isAnalyzing, summaryData, handleSummarize]);
+	}, [sessionId, paperId, isAnalyzing, summaryData, handleSummarize, isActive]);
 
 	const handleGenerateRecommendations = async () => {
 		setRecommendationLoading(true);

@@ -16,6 +16,44 @@
 	}
 }
 
+/* Performance: content-visibility for off-screen page containers */
+.pdf-page-container {
+	content-visibility: auto;
+	contain-intrinsic-size: auto 800px;
+	contain: layout style paint;
+}
+
+.text-page-container {
+	content-visibility: auto;
+	contain-intrinsic-size: auto 1200px;
+	contain: layout style;
+}
+
+/* Performance: replace infinite pulse with static highlight for evidence */
+.evidence-highlight-static {
+	background: rgba(16, 185, 129, 0.2);
+	border: 2px solid rgba(16, 185, 129, 0.4);
+	border-radius: 0.125rem;
+	pointer-events: none;
+}
+
+/* Performance: GPU acceleration for overlays */
+.gpu-accelerated {
+	will-change: transform;
+	transform: translateZ(0);
+}
+
+/* Reduce motion for users who prefer it */
+@media (prefers-reduced-motion: reduce) {
+	.animate-spin,
+	.animate-pulse,
+	.animate-bounce-subtle,
+	.animate-stamp-pop,
+	.animate-fade-in-up {
+		animation: none !important;
+	}
+}
+
 /* PDF Text Layer - transparent text overlay for native search/selection */
 .pdf-page-viewport {
 	container-type: size;

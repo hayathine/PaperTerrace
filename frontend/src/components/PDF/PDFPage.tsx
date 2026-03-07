@@ -1,8 +1,15 @@
 import { useLiveQuery } from "dexie-react-hooks";
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useTranslation } from "react-i18next";
 import { createLogger } from "@/lib/logger";
 import { db } from "../../db";
+import { useIntersectionObserver } from "../../hooks/useIntersectionObserver";
 import StampOverlay from "../Stamps/StampOverlay";
 import type { Stamp } from "../Stamps/types";
 import BoxOverlay from "./BoxOverlay";
@@ -78,6 +85,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
 }) => {
 	const { t } = useTranslation();
 	const { width, height, words, figures, image_url, page_num } = page;
+
+	// Intersection Observer: only render overlays when page is near viewport
+	const pageRef = useRef<HTMLElement>(null);
+	const isVisible = useIntersectionObserver(pageRef);
 
 	// Check for cached image in IndexedDB
 	const cachedImage = useLiveQuery(async () => {
@@ -229,9 +240,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
 	return (
 		<section
+			ref={pageRef}
 			aria-label={`${t("viewer.page")} ${page.page_num}`}
 			id={`page-${page.page_num}`}
-			className="relative mb-8 shadow-2xl rounded-xl overflow-hidden bg-white transition-all duration-300 border border-slate-200/50 mx-auto"
+			className="pdf-page-container relative mb-8 shadow-2xl rounded-xl overflow-hidden bg-white transition-all duration-300 border border-slate-200/50 mx-auto"
 			style={{ maxWidth: "100%" }}
 			onMouseUp={handleMouseUp}
 		>
@@ -282,46 +294,48 @@ const PDFPage: React.FC<PDFPageProps> = ({
 					</div>
 				)}
 
-				{/* Figure/Table Overlays (Overwrites text layer) */}
-				<div className="absolute inset-0 w-full h-full z-30 pointer-events-none">
-					{figures &&
-						figures.length > 0 &&
-						figures.map((fig, idx) => {
-							if (!fig || !fig.bbox || fig.bbox.length < 4) return null;
-							const [x1, y1, x2, y2] = fig.bbox;
-							if (
-								(x1 === 0 && y1 === 0 && x2 === 0 && y2 === 0) ||
-								!fig.image_url
-							)
-								return null;
+				{/* Figure/Table Overlays - only render when page is visible */}
+				{isVisible && (
+					<div className="absolute inset-0 w-full h-full z-30 pointer-events-none">
+						{figures &&
+							figures.length > 0 &&
+							figures.map((fig, idx) => {
+								if (!fig || !fig.bbox || fig.bbox.length < 4) return null;
+								const [x1, y1, x2, y2] = fig.bbox;
+								if (
+									(x1 === 0 && y1 === 0 && x2 === 0 && y2 === 0) ||
+									!fig.image_url
+								)
+									return null;
 
-							const label = (fig.label || "").toLowerCase();
+								const label = (fig.label || "").toLowerCase();
 
-							// Interactive targets in click mode (matches inference-service TARGET_CLASSES)
-							const isInteractiveType = [
-								"table",
-								"figure",
-								"picture",
-								"formula",
-								"chart",
-								"algorithm",
-								"equation",
-							].includes(label);
+								// Interactive targets in click mode (matches inference-service TARGET_CLASSES)
+								const isInteractiveType = [
+									"table",
+									"figure",
+									"picture",
+									"formula",
+									"chart",
+									"algorithm",
+									"equation",
+								].includes(label);
 
-							// Skip non-interactive text elements that block text interaction
-							if (!isInteractiveType) return null;
+								// Production: skip non-interactive elements for clean UI (Req 3.4)
+								// Development: show all elements with debug borders/confidence
+								if (!isInteractiveType && !isDev) return null;
 
-							const pageWidth = width || 1;
-							const pageHeight = height || 1;
+								const pageWidth = width || 1;
+								const pageHeight = height || 1;
 
-							const style = {
-								left: `${(x1 / pageWidth) * 100}%`,
-								top: `${(y1 / pageHeight) * 100}%`,
-								width: `${((x2 - x1) / pageWidth) * 100}%`,
-								height: `${((y2 - y1) / pageHeight) * 100}%`,
-							};
+								const style = {
+									left: `${(x1 / pageWidth) * 100}%`,
+									top: `${(y1 / pageHeight) * 100}%`,
+									width: `${((x2 - x1) / pageWidth) * 100}%`,
+									height: `${((y2 - y1) / pageHeight) * 100}%`,
+								};
 
-							/*
+								/*
 							log.debug("render_figure", "Rendering figure", {
 								idx,
 								label: fig.label,
@@ -330,70 +344,79 @@ const PDFPage: React.FC<PDFPageProps> = ({
 							});
 							*/
 
-							// group-data-[click-mode]/viewer バリアントで親コンテナの data 属性に連動。
-							// isClickMode prop なしでモード変化を CSS で表現し、再レンダーを防止。
-							return (
-								<div
-									key={`fig-img-${idx}`}
-									className={`absolute group pointer-events-none group-data-[click-mode]/viewer:pointer-events-auto group-data-[click-mode]/viewer:rounded-sm ${
-										isDev
-											? "group-data-[click-mode]/viewer:border-2 group-data-[click-mode]/viewer:border-orange-300/60"
-											: ""
-									}`}
-									style={style}
-								>
-									<img
-										src={fig.image_url}
-										className="hidden group-data-[click-mode]/viewer:block w-full h-full object-fill"
-										alt={fig.label}
-									/>
-									{/* クリックモード時のみ表示するインタラクティブ要素。
-									    子要素はすべて absolute なのでラッパー div はレイアウトに影響しない。 */}
-									<div className="hidden group-data-[click-mode]/viewer:block">
-										{/* 確信度バッジ (isDev=true のみ) */}
-										{isDev && fig.conf !== undefined && (
-											<div className="absolute top-0 left-0 bg-black/70 text-white text-[10px] px-1 py-0.5 rounded-br z-[9999] pointer-events-none">
-												Score: {(fig.conf * 100).toFixed(1)}%
-											</div>
-										)}
-
-										{/* Ask AI button shown on hover */}
-										<div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-[9999]">
-											<button
-												type="button"
-												className="bg-orange-600 text-white text-xs px-3 py-1.5 rounded-md shadow shadow-orange-500/30 hover:bg-orange-700 hover:shadow-orange-600/40 transition-all font-medium flex items-center gap-1.5 cursor-pointer transform hover:scale-105 active:scale-95"
-												onClick={(e) => {
-													e.stopPropagation();
-													if (onFigureSelect) {
-														onFigureSelect({
-															id: fig.id,
-															image_url: fig.image_url,
-															label: fig.label,
-															caption: fig.caption,
-															page_number: page_num,
-															conf: fig.conf,
-														});
-													}
-												}}
-												title={t("menu.ask_ai")}
-											>
-												<span className="text-xs">✨</span>
-												{t("menu.ask_ai")}
-											</button>
-										</div>
-
-										{/* Transparent overlay to grab clicks on the rest of the image to prevent text selection underneath */}
-										<button
-											type="button"
-											aria-label="Selection overlay"
-											className="absolute inset-0 w-full h-full z-40 bg-transparent"
-											onClick={(e) => e.stopPropagation()}
+								// group-data-[click-mode]/viewer バリアントで親コンテナの data 属性に連動。
+								// isClickMode prop なしでモード変化を CSS で表現し、再レンダーを防止。
+								return (
+									<div
+										key={`fig-img-${idx}`}
+										className={`absolute group pointer-events-none ${
+											isInteractiveType
+												? "group-data-[click-mode]/viewer:pointer-events-auto"
+												: ""
+										} group-data-[click-mode]/viewer:rounded-sm ${
+											isDev
+												? "group-data-[click-mode]/viewer:border-2 group-data-[click-mode]/viewer:border-orange-300/60"
+												: ""
+										}`}
+										style={style}
+									>
+										<img
+											src={fig.image_url}
+											className="hidden group-data-[click-mode]/viewer:block w-full h-full object-fill"
+											alt={fig.label}
 										/>
+										{/* クリックモード時のみ表示するインタラクティブ要素。
+									    子要素はすべて absolute なのでラッパー div はレイアウトに影響しない。 */}
+										<div className="hidden group-data-[click-mode]/viewer:block">
+											{/* 確信度バッジ (isDev=true のみ) */}
+											{isDev && fig.conf !== undefined && (
+												<div className="absolute top-0 left-0 bg-black/70 text-white text-[10px] px-1 py-0.5 rounded-br z-[9999] pointer-events-none">
+													Score: {(fig.conf * 100).toFixed(1)}%
+												</div>
+											)}
+
+											{/* Ask AI button + overlay: interactive elements only (Req 6.5) */}
+											{isInteractiveType && (
+												<>
+													<div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-[9999]">
+														<button
+															type="button"
+															className="bg-orange-600 text-white text-xs px-3 py-1.5 rounded-md shadow shadow-orange-500/30 hover:bg-orange-700 hover:shadow-orange-600/40 transition-all font-medium flex items-center gap-1.5 cursor-pointer transform hover:scale-105 active:scale-95"
+															onClick={(e) => {
+																e.stopPropagation();
+																if (onFigureSelect) {
+																	onFigureSelect({
+																		id: fig.id,
+																		image_url: fig.image_url,
+																		label: fig.label,
+																		caption: fig.caption,
+																		page_number: page_num,
+																		conf: fig.conf,
+																	});
+																}
+															}}
+															title={t("menu.ask_ai")}
+														>
+															<span className="text-xs">✨</span>
+															{t("menu.ask_ai")}
+														</button>
+													</div>
+
+													{/* Transparent overlay to prevent text selection underneath */}
+													<button
+														type="button"
+														aria-label="Selection overlay"
+														className="absolute inset-0 w-full h-full z-40 bg-transparent"
+														onClick={(e) => e.stopPropagation()}
+													/>
+												</>
+											)}
+										</div>
 									</div>
-								</div>
-							);
-						})}
-				</div>
+								);
+							})}
+					</div>
+				)}
 
 				{/* Stamp Overlay */}
 				<StampOverlay
@@ -419,11 +442,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
 					}}
 				/>
 
-				{/* Evidence Highlights */}
+				{/* Evidence Highlights (static to reduce CPU/GPU load) */}
 				{evidenceHighlights.map((highlight, idx) => (
 					<div
 						key={`evidence-${idx}`}
-						className="absolute bg-emerald-400/30 border-2 border-emerald-500/50 rounded-sm z-30 pointer-events-none animate-[pulse_2s_infinite]"
+						className="absolute evidence-highlight-static z-30"
 						style={{
 							left: `${highlight.x * 100}%`,
 							top: `${highlight.y * 100}%`,
@@ -433,147 +456,152 @@ const PDFPage: React.FC<PDFPageProps> = ({
 					/>
 				))}
 
-				{/* Word Overlays */}
-				<div className="absolute inset-0 w-full h-full z-40 pointer-events-none">
-					{words &&
-						words.length > 0 &&
-						words.map((w, idx) => {
-							if (!w || !w.bbox || w.bbox.length < 4) return null;
-							const [x1, y1, x2, y2] = w.bbox;
-							const w_width = x2 - x1;
-							const w_height = y2 - y1;
+				{/* Word Overlays - only render when page is visible */}
+				{isVisible && (
+					<div className="absolute inset-0 w-full h-full z-40 pointer-events-none">
+						{words &&
+							words.length > 0 &&
+							words.map((w, idx) => {
+								if (!w || !w.bbox || w.bbox.length < 4) return null;
+								const [x1, y1, x2, y2] = w.bbox;
+								const w_width = x2 - x1;
+								const w_height = y2 - y1;
 
-							const pageWidth = width || 1;
-							const pageHeight = height || 1;
+								const pageWidth = width || 1;
+								const pageHeight = height || 1;
 
-							const left = (x1 / pageWidth) * 100;
-							const top = (y1 / pageHeight) * 100;
-							const styleW = (w_width / pageWidth) * 100;
-							const styleH = (w_height / pageHeight) * 100;
+								const left = (x1 / pageWidth) * 100;
+								const top = (y1 / pageHeight) * 100;
+								const styleW = (w_width / pageWidth) * 100;
+								const styleH = (w_height / pageHeight) * 100;
 
-							const isSelected =
-								selectionStart !== null &&
-								selectionEnd !== null &&
-								((idx >= selectionStart && idx <= selectionEnd) ||
-									(idx >= selectionEnd && idx <= selectionStart));
+								const isSelected =
+									selectionStart !== null &&
+									selectionEnd !== null &&
+									((idx >= selectionStart && idx <= selectionEnd) ||
+										(idx >= selectionEnd && idx <= selectionStart));
 
-							const centerX = (x1 + x2) / 2 / pageWidth;
-							const centerY = (y1 + y2) / 2 / pageHeight;
-							const cleanWord = (w.word || "").replace(
-								/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g,
-								"",
-							);
-							const isJumpHighlight =
-								jumpTarget &&
-								jumpTarget.page === page_num &&
-								((jumpTarget.term &&
-									(cleanWord
-										.toLowerCase()
-										.includes(jumpTarget.term.toLowerCase()) ||
-										jumpTarget.term
+								const centerX = (x1 + x2) / 2 / pageWidth;
+								const centerY = (y1 + y2) / 2 / pageHeight;
+								const cleanWord = (w.word || "").replace(
+									/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g,
+									"",
+								);
+								const isJumpHighlight =
+									jumpTarget &&
+									jumpTarget.page === page_num &&
+									((jumpTarget.term &&
+										(cleanWord
 											.toLowerCase()
-											.includes(cleanWord.toLowerCase())) &&
-									Math.abs(centerX - jumpTarget.x) < 0.1 &&
-									Math.abs(centerY - jumpTarget.y) < 0.05) ||
-									(Math.abs(centerX - jumpTarget.x) < 0.005 &&
-										Math.abs(centerY - jumpTarget.y) < 0.005));
+											.includes(jumpTarget.term.toLowerCase()) ||
+											jumpTarget.term
+												.toLowerCase()
+												.includes(cleanWord.toLowerCase())) &&
+										Math.abs(centerX - jumpTarget.x) < 0.1 &&
+										Math.abs(centerY - jumpTarget.y) < 0.05) ||
+										(Math.abs(centerX - jumpTarget.x) < 0.005 &&
+											Math.abs(centerY - jumpTarget.y) < 0.005));
 
-							// 検索マッチングのハイライト
-							const isSearchMatch =
-								searchTerm &&
-								searchTerm.length >= 2 &&
-								w.word.toLowerCase().includes(searchTerm.toLowerCase());
+								// 検索マッチングのハイライト
+								const isSearchMatch =
+									searchTerm &&
+									searchTerm.length >= 2 &&
+									w.word.toLowerCase().includes(searchTerm.toLowerCase());
 
-							// 現在フォーカスされている検索マッチかどうか
-							const isCurrentSearchMatch =
-								currentSearchMatch &&
-								currentSearchMatch.page === page_num &&
-								currentSearchMatch.wordIndex === idx;
+								// 現在フォーカスされている検索マッチかどうか
+								const isCurrentSearchMatch =
+									currentSearchMatch &&
+									currentSearchMatch.page === page_num &&
+									currentSearchMatch.wordIndex === idx;
 
-							return (
-								<button
-									key={`${idx}`}
-									type="button"
-									id={isCurrentSearchMatch ? "current-search-match" : undefined}
-									className={`absolute rounded-sm group text-layer-word pointer-events-none group-data-[click-mode]/viewer:cursor-pointer group-data-[click-mode]/viewer:pointer-events-auto
+								return (
+									<button
+										key={`${idx}`}
+										type="button"
+										id={
+											isCurrentSearchMatch ? "current-search-match" : undefined
+										}
+										className={`absolute rounded-sm group text-layer-word pointer-events-none group-data-[click-mode]/viewer:cursor-pointer group-data-[click-mode]/viewer:pointer-events-auto
 										${!isStampMode && !isSelected && !isJumpHighlight && !isSearchMatch ? "" : ""}
 										${isSelected ? "bg-orange-500/30 border border-orange-500/50" : ""}
 										${isJumpHighlight ? "bg-yellow-400/60 z-20" : ""}
 										${isSearchMatch && !isCurrentSearchMatch ? "bg-amber-300/50 border border-amber-400" : ""}
 										${isCurrentSearchMatch ? "bg-orange-500/60 border-2 border-orange-600 shadow-[0_0_15px_rgba(249,115,22,0.6)] z-30 ring-2 ring-orange-400" : ""}`}
-									style={{
-										left: `${left}%`,
-										top: `${top}%`,
-										width: `${styleW}%`,
-										height: `${styleH}%`,
-										fontSize: `${styleH}cqh`,
-										background:
-											isSelected ||
-											isJumpHighlight ||
-											isSearchMatch ||
-											isCurrentSearchMatch
-												? undefined
-												: "none",
-										border:
-											isSelected || isSearchMatch || isCurrentSearchMatch
-												? undefined
-												: "none",
-										padding: 0,
-										font: "inherit",
-										color: "transparent",
-										textAlign: "left",
-										userSelect: "none", // Prevent accidental browser text selection interaction with overlay text content itself
-									}}
-									onMouseDown={(e) => {
-										if (isStampMode || isAreaMode) return;
-										if (!e.currentTarget.closest("[data-click-mode]")) return;
-										e.preventDefault();
-										e.stopPropagation();
-										setIsDragging(true);
-										setSelectionStart(idx);
-										setSelectionEnd(idx);
-										setSelectionMenu(null); // Hide menu on new select start
-									}}
-									onMouseEnter={() => {
-										if (isDragging && selectionStart !== null) {
-											setSelectionEnd(idx);
-										}
-									}}
-									onClick={(e) => {
-										e.stopPropagation(); // Stop propagation to document
-										if (!isStampMode && !isAreaMode && onWordClick) {
+										style={{
+											left: `${left}%`,
+											top: `${top}%`,
+											width: `${styleW}%`,
+											height: `${styleH}%`,
+											fontSize: `${styleH}cqh`,
+											background:
+												isSelected ||
+												isJumpHighlight ||
+												isSearchMatch ||
+												isCurrentSearchMatch
+													? undefined
+													: "none",
+											border:
+												isSelected || isSearchMatch || isCurrentSearchMatch
+													? undefined
+													: "none",
+											padding: 0,
+											font: "inherit",
+											color: "transparent",
+											textAlign: "left",
+											userSelect: "none", // Prevent accidental browser text selection interaction with overlay text content itself
+										}}
+										onMouseDown={(e) => {
+											if (isStampMode || isAreaMode) return;
 											if (!e.currentTarget.closest("[data-click-mode]")) return;
-											if (selectionStart === selectionEnd && !selectionMenu) {
-												const start = Math.max(0, idx - 20);
-												const end = Math.min(words.length, idx + 20);
-												const context = words
-													.slice(start, end)
-													.map((w) => w.word)
-													.join(" ");
-
-												const wordCenterX = (x1 + x2) / 2 / pageWidth;
-												const wordCenterY = (y1 + y2) / 2 / pageHeight;
-
-												onWordClick(
-													cleanWord,
-													context,
-													{
-														page: page_num,
-														x: wordCenterX,
-														y: wordCenterY,
-													},
-													w.conf,
-												);
+											e.preventDefault();
+											e.stopPropagation();
+											setIsDragging(true);
+											setSelectionStart(idx);
+											setSelectionEnd(idx);
+											setSelectionMenu(null); // Hide menu on new select start
+										}}
+										onMouseEnter={() => {
+											if (isDragging && selectionStart !== null) {
+												setSelectionEnd(idx);
 											}
-										}
-									}}
-									title={w.word}
-								>
-									{/* Text is hidden to prevent doubling effect with background image */}
-								</button>
-							);
-						})}
-				</div>
+										}}
+										onClick={(e) => {
+											e.stopPropagation(); // Stop propagation to document
+											if (!isStampMode && !isAreaMode && onWordClick) {
+												if (!e.currentTarget.closest("[data-click-mode]"))
+													return;
+												if (selectionStart === selectionEnd && !selectionMenu) {
+													const start = Math.max(0, idx - 20);
+													const end = Math.min(words.length, idx + 20);
+													const context = words
+														.slice(start, end)
+														.map((w) => w.word)
+														.join(" ");
+
+													const wordCenterX = (x1 + x2) / 2 / pageWidth;
+													const wordCenterY = (y1 + y2) / 2 / pageHeight;
+
+													onWordClick(
+														cleanWord,
+														context,
+														{
+															page: page_num,
+															x: wordCenterX,
+															y: wordCenterY,
+														},
+														w.conf,
+													);
+												}
+											}
+										}}
+										title={w.word}
+									>
+										{/* Text is hidden to prevent doubling effect with background image */}
+									</button>
+								);
+							})}
+					</div>
+				)}
 
 				{/* Note: Original figure click labels removed from z-20 as we now use z-30 images */}
 

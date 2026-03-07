@@ -591,7 +591,7 @@ async def explain_deep(
             trans_mod,
             {
                 "paper_context": paper_context,
-                "target_text": original_word,
+                "target_word": original_word,
                 "lang_name": lang_name,
             },
             context=TraceContext(paper_id=paper_id),

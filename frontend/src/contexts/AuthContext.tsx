@@ -16,6 +16,8 @@ interface AuthContextType {
 	loading: boolean;
 	signInWithGoogle: () => Promise<void>;
 	signInWithGithub: () => Promise<void>;
+	signInWithGoogleRedirect: () => Promise<void>;
+	signInWithGithubRedirect: () => Promise<void>;
 	loginAsGuest: () => void;
 	logout: () => Promise<void>;
 	token: string | null;
@@ -106,7 +108,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 				user,
 				loading,
 				signInWithGoogle,
+				signInWithGoogleRedirect: signInWithGoogle,
 				signInWithGithub,
+				signInWithGithubRedirect: signInWithGithub,
 				loginAsGuest,
 				logout,
 				token,

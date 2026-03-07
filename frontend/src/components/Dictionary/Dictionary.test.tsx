@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import React from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import Dictionary from "./Dictionary";
 
@@ -94,6 +95,20 @@ describe("Dictionary Component", () => {
 	});
 
 	it("switches to explanation tab", async () => {
+		const TestWrapper = () => {
+			const [tab, setTab] = React.useState<
+				"translation" | "explanation" | "figures"
+			>("translation");
+			return (
+				<Dictionary
+					{...defaultProps}
+					term="hello"
+					subTab={tab}
+					onSubTabChange={setTab}
+				/>
+			);
+		};
+
 		// Mock initial fetch for translation
 		(global.fetch as any).mockResolvedValue({
 			ok: true,
@@ -105,7 +120,7 @@ describe("Dictionary Component", () => {
 			}),
 		});
 
-		render(<Dictionary {...defaultProps} term="hello" />);
+		render(<TestWrapper />);
 
 		await waitFor(() => {
 			expect(screen.getByText("Hello translation")).toBeDefined();
@@ -148,12 +163,23 @@ describe("Dictionary Component", () => {
 		});
 	});
 
-	it("shows figure insight when figures tab is selected", () => {
-		render(<Dictionary {...defaultProps} />);
+	it("shows figure insight when figures tab is selected", async () => {
+		const TestWrapper = () => {
+			const [tab, setTab] = React.useState<
+				"translation" | "explanation" | "figures"
+			>("translation");
+			return (
+				<Dictionary {...defaultProps} subTab={tab} onSubTabChange={setTab} />
+			);
+		};
+
+		render(<TestWrapper />);
 
 		const figuresTab = screen.getByText(/sidebar.tabs.figures/);
 		fireEvent.click(figuresTab);
 
-		expect(screen.getByText("Figure Insight")).toBeDefined();
+		await waitFor(() => {
+			expect(screen.getByText("Figure Insight")).toBeDefined();
+		});
 	});
 });

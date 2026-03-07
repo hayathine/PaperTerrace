@@ -22,5 +22,20 @@ export default {
 			},
 		},
 	},
-	plugins: [require("@tailwindcss/typography")],
+	plugins: [
+		require("@tailwindcss/typography"),
+		({ addUtilities }) => {
+			addUtilities({
+				".content-visibility-auto": {
+					"content-visibility": "auto",
+				},
+				".contain-content": {
+					contain: "content",
+				},
+				".contain-layout-paint": {
+					contain: "layout paint",
+				},
+			});
+		},
+	],
 };

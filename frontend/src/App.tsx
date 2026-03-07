@@ -23,7 +23,7 @@ import { syncTrajectory } from "./lib/recommendation";
 const log = createLogger("App");
 
 function App() {
-	const { user, logout, token } = useAuth();
+	const { user, isGuest, logout, token } = useAuth();
 	const { t } = useTranslation();
 	const { startLoading, stopLoading } = useLoading();
 	const {
@@ -31,7 +31,7 @@ function App() {
 		isMaintenance,
 		message: healthMessage,
 		reportFailure,
-	} = useServiceHealth();
+	} = useServiceHealth(!isGuest);
 	const [uploadFile, setUploadFile] = useState<File | null>(null);
 
 	const [currentPaperId, setCurrentPaperId] = useState<string | null>(null);
@@ -133,13 +133,15 @@ function App() {
 	}, [t, appEnv]);
 
 	useEffect(() => {
+		if (!user) {
+			setUploadedPapers([]);
+			return;
+		}
+
 		const fetchPapers = async () => {
 			try {
-				const headers: Record<string, string> = {};
-				if (user) {
-					const idToken = await user.getIdToken();
-					headers.Authorization = `Bearer ${idToken}`;
-				}
+				const idToken = await user.getIdToken();
+				const headers = { Authorization: `Bearer ${idToken}` };
 
 				const res = await fetch(`${API_URL}/api/papers`, { headers });
 				const data = await res.json();

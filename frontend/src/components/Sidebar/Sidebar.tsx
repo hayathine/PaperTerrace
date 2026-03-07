@@ -211,6 +211,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 						sessionId={sessionId}
 						isAnalyzing={isAnalyzing}
 						paperId={paperId}
+						isActive={activeTab === "analysis"}
 					/>
 				</div>
 

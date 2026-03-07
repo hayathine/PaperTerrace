@@ -454,7 +454,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	return (
 		<div
 			id={`text-page-${page.page_num}`}
-			className="relative shadow-sm bg-white border border-slate-200 group mx-auto w-full max-w-full rounded-xl overflow-hidden"
+			className="text-page-container relative shadow-sm bg-white border border-slate-200 group mx-auto w-full max-w-full rounded-xl overflow-hidden"
 			style={{ userSelect: "auto", maxWidth: "100%" }}
 		>
 			{/* Header */}

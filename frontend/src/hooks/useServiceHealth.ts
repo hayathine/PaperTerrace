@@ -1,16 +1,21 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { API_URL } from "@/config";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("useServiceHealth");
+
+const POLL_INTERVAL_HEALTHY = 60000;
+const POLL_INTERVAL_UNHEALTHY = 10000;
 
 interface HealthStatus {
 	status: "healthy" | "unhealthy" | "maintenance" | "unknown";
 	message?: string;
 }
 
-export const useServiceHealth = () => {
+export const useServiceHealth = (enabled = true) => {
 	const [health, setHealth] = useState<HealthStatus>({ status: "healthy" });
+	const healthRef = useRef(health);
+	healthRef.current = health;
 
 	const checkHealth = useCallback(async () => {
 		try {
@@ -43,22 +48,21 @@ export const useServiceHealth = () => {
 		}
 	}, []);
 
-	// Initial check and periodic check if unhealthy
+	// Initial check + periodic polling (skip for guest users)
 	useEffect(() => {
+		if (!enabled) return;
+
 		checkHealth();
 
-		const interval = setInterval(
-			() => {
-				// Only poll frequently if we are currently unhealthy or maintenance
-				if (health.status !== "healthy") {
-					checkHealth();
-				}
-			},
-			health.status === "healthy" ? 60000 : 10000,
-		); // 60s if healthy, 10s if unhealthy
+		const interval = setInterval(() => {
+			const isHealthy = healthRef.current.status === "healthy";
+			if (!isHealthy) {
+				checkHealth();
+			}
+		}, POLL_INTERVAL_UNHEALTHY);
 
 		return () => clearInterval(interval);
-	}, [checkHealth, health.status]);
+	}, [checkHealth, enabled]);
 
 	// Global response interceptor simulation:
 	// If any fetch fails with 503/504, we immediately trigger a health check
