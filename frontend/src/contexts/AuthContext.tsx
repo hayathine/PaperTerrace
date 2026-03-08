@@ -6,7 +6,7 @@ import {
 	useEffect,
 	useState,
 } from "react";
-import { authClient } from "@/lib/auth";
+import { authClient, getNeonJWT } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("Auth");
@@ -50,24 +50,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 			if (session) {
 				setUser(session.user);
 				setIsGuest(false);
-				// In Better Auth (Neon Auth), the session token is in session.session.token
-				if ("session" in session && session.session.token) {
-					setToken(session.session.token);
-				} else {
-					setToken(null);
-				}
+				// session.session.token は opaque token のため、JWT を別途取得する
+				getNeonJWT()
+					.then((jwt) => {
+						setToken(jwt);
+					})
+					.catch(() => {
+						setToken(null);
+					})
+					.finally(() => {
+						setLoading(false);
+					});
 			} else {
 				setUser(null);
 				setIsGuest(true);
 				setToken(null);
+				setLoading(false);
 			}
-			setLoading(false);
 		}
 	}, [session, isPending]);
 
 	const getToken = useCallback(async (): Promise<string | null> => {
-		return token;
-	}, [token]);
+		return getNeonJWT();
+	}, []);
 
 	const signInWithGoogle = async () => {
 		try {

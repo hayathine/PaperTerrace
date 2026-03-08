@@ -1,3 +1,5 @@
+import re
+
 import dspy
 
 from common.prompts import (
@@ -46,6 +48,17 @@ def clean_prompt_for_dspy(prompt_str: str) -> str:
     cleaned = cleaned.replace(
         "{paper_context}",
         "Use the provided academic paper context (surrounding sentences and/or paper summary) for accurate translation.",
+    )
+
+    # DSPyは自身の構造化出力フォーマット（フィールドマーカー）を使用するため、
+    # プロンプト内のJSON出力形式の指示を除去する。
+    # これがあると LLM が "Output ONLY valid JSON" に従い、
+    # DSPy のパーサが期待するフォーマットと衝突して例外が発生する。
+    cleaned = re.sub(
+        r"Please output in the following JSON format.*?Output ONLY valid JSON\.",
+        "Output each field according to the instructions.",
+        cleaned,
+        flags=re.DOTALL,
     )
 
     # Core Promptを結合して、安定した品質のベースラインとする

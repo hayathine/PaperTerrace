@@ -1,6 +1,6 @@
 import { render, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { authClient } from "@/lib/auth";
+import { authClient, getNeonJWT } from "@/lib/auth";
 import { AuthProvider, useAuth } from "./AuthContext";
 
 // Mock the authClient
@@ -12,6 +12,7 @@ vi.mock("@/lib/auth", () => ({
 			social: vi.fn(),
 		},
 	},
+	getNeonJWT: vi.fn(),
 }));
 
 // Test component to consume the context
@@ -48,6 +49,7 @@ describe("AuthContext", () => {
 			data: null,
 			isPending: false,
 		});
+		(getNeonJWT as any).mockResolvedValue(null);
 
 		const { getByTestId } = render(
 			<AuthProvider>
@@ -72,6 +74,7 @@ describe("AuthContext", () => {
 			data: mockSession,
 			isPending: false,
 		});
+		(getNeonJWT as any).mockResolvedValue("mock-token-123");
 
 		const { getByTestId } = render(
 			<AuthProvider>
@@ -107,7 +110,9 @@ describe("AuthContext", () => {
 			);
 		};
 
-		const { getByText, getByTestId } = render(
+		(getNeonJWT as any).mockResolvedValue("token");
+
+		const { findByText, getByTestId } = render(
 			<AuthProvider>
 				<TestComponent />
 				<LogoutButton />
@@ -115,7 +120,7 @@ describe("AuthContext", () => {
 		);
 
 		// Trigger logout
-		const button = getByText("Logout");
+		const button = await findByText("Logout");
 		button.click();
 
 		await waitFor(() => {

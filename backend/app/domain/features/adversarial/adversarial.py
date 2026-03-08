@@ -149,7 +149,12 @@ class AdversarialReviewService:
                     ):
                         raw_response = last_turn["response"][0].get("text", "")
                     elif "response" in last_turn:
-                        raw_response = str(last_turn["response"])
+                        resp = last_turn["response"]
+                        # LiteLLM ModelResponse オブジェクトからテキストを抽出
+                        if hasattr(resp, "choices") and resp.choices:
+                            raw_response = resp.choices[0].message.content or ""
+                        else:
+                            raw_response = str(resp)
             except Exception:
                 logger.warning("Failed to recover raw response from DSPy history")
 

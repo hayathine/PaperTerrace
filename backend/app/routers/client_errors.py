@@ -50,9 +50,9 @@ async def report_client_error(
     log.warning(
         "report",
         "Client error received",
-        component=req.component,
-        operation=req.operation,
-        message=req.message[:200],
+        client_component=req.component,
+        client_operation=req.operation,
+        client_message=req.message[:200],
     )
 
     repo = ClientErrorRepository()

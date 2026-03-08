@@ -10,6 +10,7 @@ infrastructure/k8s/
 .testmondata
 .testmondata*
 *.txt
+prompt_optimization/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

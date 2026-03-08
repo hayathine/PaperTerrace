@@ -112,6 +112,7 @@ async def get_optional_user(
     # 1. Trusted Proxy Check
     user_id = getattr(request.state, "user_id", None)
     if user_id and not user_id.startswith("guest_"):
+        log.debug("get_optional_user", "Authenticated via trusted proxy", user_id=user_id)
         decoded_token = {
             "uid": user_id,
             "email": request.headers.get("X-User-Email", ""),
@@ -126,10 +127,12 @@ async def get_optional_user(
 
     # 2. Direct Authentication
     if not authorization:
+        log.debug("get_optional_user", "No authorization header, treating as guest")
         return None
 
     parts = authorization.split()
     if len(parts) != 2 or parts[0].lower() != "bearer":
+        log.warning("get_optional_user", "Malformed authorization header")
         return None
 
     token = parts[1]
@@ -137,7 +140,8 @@ async def get_optional_user(
     try:
         decoded_token = await neon_auth.verify_token(token)
         return AuthenticatedUser(decoded_token)
-    except NeonAuthError:
+    except NeonAuthError as e:
+        log.warning("get_optional_user", "Token verification failed", error=str(e))
         return None
 
 

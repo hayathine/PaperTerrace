@@ -3,9 +3,6 @@ from concurrent.futures import ThreadPoolExecutor
 
 from app.providers import RedisService, get_ai_provider
 from app.providers.dictionary_provider import get_dictionary_provider
-from common.dspy.config import setup_dspy
-from common.dspy.modules import WordTranslationModule
-from common.dspy.trace import trace_dspy_call
 from common.logger import ServiceLogger
 from common.utils.text import truncate_context
 
@@ -33,10 +30,12 @@ class WordAnalysisService:
     ) -> dict | None:
         # 3.5 Local Machine Translation (M2M100) - ServiceB経由
         try:
-            # translate_async は (translated_text, model_name) のタプルを返す
-            local_translation, _model = await self.local_translator.translate_async(
-                lemma, tgt_lang=lang
-            )
+            # translate_async は (translated_text, model_name, lemma) のタプルを返す
+            (
+                local_translation,
+                _model,
+                _lemma,
+            ) = await self.local_translator.translate_async(lemma, tgt_lang=lang)
             if (
                 local_translation and local_translation != lemma
             ):  # 翻訳が成功し、元の単語と異なる場合
@@ -76,6 +75,10 @@ class WordAnalysisService:
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
         try:
+            from common.dspy.config import setup_dspy
+            from common.dspy.modules import WordTranslationModule
+            from common.dspy.trace import trace_dspy_call
+
             setup_dspy()
             trans_mod = WordTranslationModule()
             res, trace_id = trace_dspy_call(

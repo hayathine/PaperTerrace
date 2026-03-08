@@ -94,61 +94,6 @@ describe("Dictionary Component", () => {
 		expect(screen.getByText("Local-MT")).toBeDefined();
 	});
 
-	it("switches to explanation tab", async () => {
-		const TestWrapper = () => {
-			const [tab, setTab] = React.useState<
-				"translation" | "explanation" | "figures"
-			>("translation");
-			return (
-				<Dictionary
-					{...defaultProps}
-					term="hello"
-					subTab={tab}
-					onSubTabChange={setTab}
-				/>
-			);
-		};
-
-		// Mock initial fetch for translation
-		(global.fetch as any).mockResolvedValue({
-			ok: true,
-			headers: { get: () => "application/json" },
-			json: async () => ({
-				word: "hello",
-				translation: "Hello translation",
-				source: "Local-MT",
-			}),
-		});
-
-		render(<TestWrapper />);
-
-		await waitFor(() => {
-			expect(screen.getByText("Hello translation")).toBeDefined();
-		});
-
-		// Mock fetch for explanation
-		(global.fetch as any).mockResolvedValue({
-			ok: true,
-			headers: { get: () => "application/json" },
-			json: async () => ({
-				word: "hello",
-				translation: "Deep explanation",
-				source: "Gemini",
-			}),
-		});
-
-		// Find Explanation tab and click
-		const explanationTab = screen.getByText(/sidebar.tabs.explanation/);
-		fireEvent.click(explanationTab);
-
-		// Wait for explanation result
-		await waitFor(() => {
-			expect(screen.getByText("Deep explanation")).toBeDefined();
-		});
-
-		expect(screen.getByText("Gemini")).toBeDefined();
-	});
-
 	it("handles fetch error gracefully", async () => {
 		(global.fetch as any).mockResolvedValue({
 			ok: false,

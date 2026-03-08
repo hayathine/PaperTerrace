@@ -31,7 +31,7 @@ function App() {
 		isMaintenance,
 		message: healthMessage,
 		reportFailure,
-	} = useServiceHealth(!isGuest);
+	} = useServiceHealth(!isGuest && !!API_URL);
 	const [uploadFile, setUploadFile] = useState<File | null>(null);
 
 	const [currentPaperId, setCurrentPaperId] = useState<string | null>(null);

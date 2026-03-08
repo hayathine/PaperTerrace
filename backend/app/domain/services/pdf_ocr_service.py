@@ -459,7 +459,8 @@ class PDFOCRService:
                         ]
                         and "caption" not in class_name
                     ):
-                        figure_refs.append(f"\n\n![{class_name}]({bbox_list})\n")
+                        bbox_md = f"[{bx1},{by1},{bx2},{by2}]"
+                        figure_refs.append(f"\n\n![{class_name}]({bbox_md})\n")
                         try:
                             margin = 5
                             crop_box = (
