@@ -30,6 +30,7 @@ log = structlog.get_logger("GA4Sync")
 
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "gen-lang-client-0800253336")
 GA4_DATASET_ID = os.getenv("GA4_DATASET_ID", "")  # e.g., "analytics_123456789"
+BQ_LOCATION_ANALYTICS = os.getenv("BQ_LOCATION_ANALYTICS", "asia-northeast2")
 DATABASE_URL = os.getenv("DATABASE_URL", "")
 
 
@@ -425,7 +426,7 @@ def main():
     )
 
     # Initialize clients
-    bq_client = bigquery.Client(project=GCP_PROJECT_ID)
+    bq_client = bigquery.Client(project=GCP_PROJECT_ID, location=BQ_LOCATION_ANALYTICS)
     engine = get_engine()
     Session = sessionmaker(bind=engine)
 

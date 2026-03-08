@@ -22,7 +22,7 @@ def create_dataset_and_tables(project_id: str, dataset_id: str):
     # Create dataset
     dataset_ref = f"{project_id}.{dataset_id}"
     dataset = bigquery.Dataset(dataset_ref)
-    dataset.location = "asia-northeast1"
+    dataset.location = os.getenv("BQ_LOCATION_LOGS", "asia-northeast1")
     dataset.description = "PaperTerrace behavioral logs"
 
     try:

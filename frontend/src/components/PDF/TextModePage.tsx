@@ -329,9 +329,46 @@ const TextModePage: React.FC<TextModePageProps> = ({
 			);
 		};
 
-		// Markdown テーブル: テキストモードでは図表として処理済みのため、
-		// 変換されなかった生テーブルはレイアウト崩れを防ぐため非表示にする。
-		comps.table = () => null;
+		// Markdown テーブル: スクロール可能なラッパーでレスポンシブ表示する
+		comps.table = ({ children, ...rest }) => (
+			<div className="overflow-x-auto my-4 rounded border border-slate-200">
+				<table className="min-w-full text-sm border-collapse" {...rest}>
+					{children}
+				</table>
+			</div>
+		);
+		comps.thead = ({ children, ...rest }) => (
+			<thead className="bg-slate-50 text-slate-700 font-semibold" {...rest}>
+				{children}
+			</thead>
+		);
+		comps.tbody = ({ children, ...rest }) => (
+			<tbody className="divide-y divide-slate-100" {...rest}>
+				{children}
+			</tbody>
+		);
+		comps.tr = ({ children, ...rest }) => (
+			<tr className="hover:bg-slate-50 transition-colors" {...rest}>
+				{children}
+			</tr>
+		);
+		comps.th = ({ children, ...rest }) => (
+			<th
+				className="px-3 py-2 text-left border-b border-slate-200 whitespace-nowrap"
+				{...rest}
+			>
+				{searchTerm && searchTerm.length >= 2
+					? highlightText(children, searchTerm)
+					: children}
+			</th>
+		);
+		comps.td = ({ children, ...rest }) => (
+			<td className="px-3 py-2 align-top" {...rest}>
+				{searchTerm && searchTerm.length >= 2
+					? highlightText(children, searchTerm)
+					: children}
+			</td>
+		);
 
 		// Markdown リンク: 新規タブで開く（同タブ遷移防止）
 		comps.a = ({ href, children }) => (
@@ -346,19 +383,13 @@ const TextModePage: React.FC<TextModePageProps> = ({
 			</a>
 		);
 
-		// 検索ハイライト: テキスト要素をラップ
+		// 検索ハイライト: テキスト要素をラップ（td/th はテーブルコンポーネント内で処理済み）
 		if (searchTerm && searchTerm.length >= 2) {
 			comps.p = ({ children, ...rest }) => (
 				<p {...rest}>{highlightText(children, searchTerm)}</p>
 			);
 			comps.li = ({ children, ...rest }) => (
 				<li {...rest}>{highlightText(children, searchTerm)}</li>
-			);
-			comps.td = ({ children, ...rest }) => (
-				<td {...rest}>{highlightText(children, searchTerm)}</td>
-			);
-			comps.th = ({ children, ...rest }) => (
-				<th {...rest}>{highlightText(children, searchTerm)}</th>
 			);
 		}
 

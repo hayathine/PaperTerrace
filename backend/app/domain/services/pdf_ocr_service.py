@@ -25,6 +25,33 @@ from .language_service import LanguageService
 log = ServiceLogger("OCR")
 
 
+def _fix_indentation_artifacts(text: str) -> str:
+    """
+    2段組みPDFから生じるインデントアーティファクトを修正する。
+
+    pymupdf4llmが2段組みレイアウトを処理する際、右カラムのテキストが
+    大きなインデントとして抽出され、Markdownのコードブロックとして
+    誤レンダリングされる問題を解決する。
+    """
+    lines = text.split("\n")
+    result = []
+    for line in lines:
+        # 4スペース以上のインデントがある行（Markdownコードブロックの条件）
+        if len(line) > 4 and line.startswith("    ") and not line.startswith("        "):
+            stripped = line.lstrip()
+            # Markdownの構造要素（見出し、引用、リスト、コードフェンス等）は変更しない
+            if stripped and stripped[0] not in "#>-*+|`":
+                # コードらしき記号の割合を検査
+                code_chars = sum(1 for c in stripped if c in "{}()[];=><!/\\@$%^&")
+                ratio = code_chars / max(len(stripped), 1)
+                # コード記号が10%未満なら自然言語テキストとみなしインデントを除去
+                if ratio < 0.10:
+                    result.append(stripped)
+                    continue
+        result.append(line)
+    return "\n".join(result)
+
+
 class PDFOCRService:
     """
     PDF OCR Service
@@ -427,9 +454,28 @@ class PDFOCRService:
 
                 page_text = re.sub(r"!\[.*?\]\(.*?\)", "", raw_md).strip()
 
+                # 2段組みレイアウトによるインデントアーティファクトを修正
+                page_text = _fix_indentation_artifacts(page_text)
+
                 # 3. Post-process layout blocks (equations, figures)
-                figure_refs = []
+                # y座標を保持して後で本文中の適切な位置に挿入するため、リストで管理する
+                figures_with_y: list[tuple[float, str]] = []
                 fig_idx = 0
+
+                # ページ高さをレイアウト座標系で取得（y座標の正規化に使用）
+                page_height_layout = max(
+                    (
+                        block.get("bbox", {}).get("y_max", 0)
+                        if isinstance(block.get("bbox"), dict)
+                        else (
+                            block.get("bbox", [0, 0, 0, 0])[3]
+                            if len(block.get("bbox", [])) > 3
+                            else 0
+                        )
+                    )
+                    for block in layout_blocks
+                ) if layout_blocks else 1
+
                 for block in layout_blocks:
                     class_name = block.get("class_name", "").lower()
                     bbox = block.get("bbox", {})
@@ -459,8 +505,10 @@ class PDFOCRService:
                         ]
                         and "caption" not in class_name
                     ):
-                        bbox_md = f"[{bx1},{by1},{bx2},{by2}]"
-                        figure_refs.append(f"\n\n![{class_name}]({bbox_md})\n")
+                        # URL内に角括弧を使わずカンマ区切りのみにする（Markdownパーサーの誤認識を防止）
+                        bbox_md = f"{bx1},{by1},{bx2},{by2}"
+                        figure_ref = f"![{class_name}]({bbox_md})"
+                        figures_with_y.append((by1, figure_ref))
                         try:
                             margin = 5
                             crop_box = (
@@ -495,8 +543,25 @@ class PDFOCRService:
                                 error=str(crop_err),
                             )
 
-                if figure_refs:
-                    page_text += "".join(figure_refs)
+                # 図・表をy座標に基づいて本文中の適切な位置に挿入する
+                if figures_with_y:
+                    paragraphs = [p for p in page_text.split("\n\n") if p.strip()]
+                    if not paragraphs:
+                        page_text = "\n\n".join(
+                            ref for _, ref in sorted(figures_with_y, key=lambda x: x[0])
+                        )
+                    else:
+                        total_height = max(page_height_layout, 1)
+                        offset = 0
+                        for by1_val, ref in sorted(figures_with_y, key=lambda x: x[0]):
+                            y_frac = by1_val / total_height
+                            insert_idx = min(
+                                int(y_frac * len(paragraphs)) + offset,
+                                len(paragraphs),
+                            )
+                            paragraphs.insert(insert_idx, ref)
+                            offset += 1
+                        page_text = "\n\n".join(paragraphs)
             else:
                 # Fallback implementation
                 from app.domain.services.markdown_builder import (
