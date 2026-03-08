@@ -3,7 +3,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.tsx";
 import ErrorBoundary from "./components/Error/ErrorBoundary";
-import { GLITCHTIP_DSN } from "./config";
+import { GLITCHTIP_DSN, SENTRY_TUNNEL } from "./config";
 import { AuthProvider } from "./contexts/AuthContext";
 import { LoadingProvider } from "./contexts/LoadingContext";
 import { initDB } from "./db/index";
@@ -14,6 +14,7 @@ import { performanceMonitor } from "./lib/performance";
 if (GLITCHTIP_DSN) {
 	Sentry.init({
 		dsn: GLITCHTIP_DSN,
+		tunnel: SENTRY_TUNNEL,
 		integrations: [
 			Sentry.browserTracingIntegration(),
 			Sentry.replayIntegration(),

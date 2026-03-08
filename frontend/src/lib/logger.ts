@@ -57,6 +57,27 @@ export function createLogger(component: string) {
 		);
 
 		if (level === "error") {
+			const errorObj =
+				ctx && "error" in ctx ? (ctx as { error: unknown }).error : undefined;
+			if (errorObj instanceof Error) {
+				import("@sentry/react").then((Sentry) => {
+					Sentry.withScope((scope) => {
+						scope.setTag("component", component);
+						scope.setTag("operation", operation);
+						if (ctx) scope.setExtra("context", ctx);
+						Sentry.captureException(errorObj);
+					});
+				});
+			} else {
+				import("@sentry/react").then((Sentry) => {
+					Sentry.withScope((scope) => {
+						scope.setTag("component", component);
+						scope.setTag("operation", operation);
+						if (ctx) scope.setExtra("context", ctx);
+						Sentry.captureMessage(message, "error");
+					});
+				});
+			}
 			reportErrorToServer(component, operation, message, ctx);
 		}
 	};

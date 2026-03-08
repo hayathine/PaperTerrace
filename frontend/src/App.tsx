@@ -783,6 +783,17 @@ function App() {
 								</span>
 							</button>
 						)}
+						{import.meta.env.MODE === "development" && (
+							<button
+								type="button"
+								onClick={() => {
+									throw new Error("Sentry Test Error: Break the world");
+								}}
+								className="mr-4 px-3 py-2 rounded-md bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-all shadow-sm"
+							>
+								Break the world
+							</button>
+						)}
 						{(uploadFile || currentPaperId) && (
 							<>
 								<div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">

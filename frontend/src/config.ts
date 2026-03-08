@@ -30,3 +30,6 @@ function resolveApiUrl(): string {
 
 export const API_URL = resolveApiUrl();
 export const GLITCHTIP_DSN = import.meta.env.VITE_GLITCHTIP_DSN || "";
+export const SENTRY_TUNNEL = API_URL
+	? `${API_URL}/api/monitoring/envelope`
+	: "";

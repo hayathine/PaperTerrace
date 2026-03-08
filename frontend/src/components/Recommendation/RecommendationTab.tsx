@@ -127,31 +127,6 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({ sessionId }) => {
 						</div>
 					) : response ? (
 						<div className="space-y-6">
-							<div className="bg-orange-50 border border-orange-100 rounded-xl p-4">
-								<h4 className="text-sm font-bold text-orange-900 mb-2">
-									{t(
-										"recommendation.reasoning_title",
-										"Recommendation Reasoning",
-									)}
-								</h4>
-								<MarkdownContent className="prose prose-xs max-w-none text-xs text-orange-700 leading-relaxed mb-3">
-									{response.reasoning}
-								</MarkdownContent>
-								<div className="flex flex-wrap gap-2">
-									<span className="px-2 py-1 bg-white shadow-sm border border-orange-100 rounded-md text-xs font-bold text-orange-600 uppercase tracking-wider">
-										Skill Level: {response.knowledge_level}
-									</span>
-									{response.search_queries.slice(0, 2).map((q, idx) => (
-										<span
-											key={idx}
-											className="px-2 py-1 bg-white shadow-sm border border-orange-100 rounded-md text-xs font-bold text-slate-500"
-										>
-											🔍 {q}
-										</span>
-									))}
-								</div>
-							</div>
-
 							<div className="space-y-3">
 								<h4 className="text-sm font-bold border-b border-slate-200 pb-2 text-slate-700">
 									{t(
@@ -210,16 +185,16 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({ sessionId }) => {
 												</span>
 											)}
 										</div>
+										<FeedbackSection
+											compact
+											sessionId={sessionId}
+											targetType="recommendation"
+											targetId={paper.title}
+										/>
 									</div>
 								))}
 							</div>
 
-							{/* Feedback UI */}
-							<FeedbackSection
-								sessionId={sessionId}
-								targetType="recommendation"
-								targetId={Array.from(clickedPapers)[0]}
-							/>
 							<div className="pb-8 flex justify-center">
 								<button
 									type="button"
