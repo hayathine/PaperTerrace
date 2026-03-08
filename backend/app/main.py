@@ -33,6 +33,7 @@ from app.routers import (
     upload_router,
     users_router,
 )
+from app.core.config import get_neon_auth_url
 from common.logger import ServiceLogger, configure_logging
 
 log = ServiceLogger("Main")
@@ -44,7 +45,7 @@ load_dotenv("../local-files/secrets/.env")
 
 # Neon Auth Config for Frontend
 NEON_AUTH_CONFIG = {
-    "authUrl": os.getenv("NEON_AUTH_URL"),
+    "authUrl": get_neon_auth_url(),
 }
 
 

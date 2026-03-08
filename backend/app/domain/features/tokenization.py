@@ -35,7 +35,7 @@ class TokenizationService:
     ):
         """Processes text paragraph by paragraph and yields interactive HTML."""
         paragraphs = re.split(r"\n{2,}", text.replace("\r\n", "\n"))
-        loop = asyncio.get_event_loop()
+        loop = asyncio.get_running_loop()
         all_html_parts: dict[str, str] = {}
         unknown_words = set()
 

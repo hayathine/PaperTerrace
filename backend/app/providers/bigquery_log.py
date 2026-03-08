@@ -9,6 +9,7 @@ import threading
 
 from google.cloud import bigquery
 
+from app.core.config import get_bq_log_dataset
 from common.logger import ServiceLogger
 
 log = ServiceLogger("BigQueryLog")
@@ -30,7 +31,7 @@ class BigQueryLogClient:
 
     def __init__(self):
         self.project_id = os.getenv("GCP_PROJECT_ID", "gen-lang-client-0800253336")
-        self.dataset_id = os.getenv("BQ_LOG_DATASET", "paperterrace_logs_dev")
+        self.dataset_id = get_bq_log_dataset()
         self.client = bigquery.Client(project=self.project_id)
         log.info(
             "init",

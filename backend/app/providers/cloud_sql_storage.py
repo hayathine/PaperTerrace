@@ -11,6 +11,7 @@ import psycopg2
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 
+from app.core.config import get_database_url
 from common.logger import ServiceLogger
 
 from .storage_provider import StorageInterface
@@ -27,7 +28,7 @@ class CloudSQLStorage(StorageInterface):
     """
 
     def __init__(self):
-        self.db_url = os.getenv("DATABASE_URL")
+        self.db_url = get_database_url()
         self.db_user = os.getenv("DB_USER")
         self.db_password = os.getenv("DB_PASSWORD")
         self.db_name = os.getenv("DB_NAME")

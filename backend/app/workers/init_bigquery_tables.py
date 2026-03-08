@@ -85,11 +85,10 @@ def main():
 
     project_id = os.getenv("GCP_PROJECT_ID", "gen-lang-client-0800253336")
 
-    dataset_map = {
-        "prod": "paperterrace_logs",
-        "dev": "paperterrace_logs_dev",
-    }
-    dataset_id = os.getenv("BQ_LOG_DATASET", dataset_map[args.env])
+    if args.env == "prod":
+        dataset_id = os.getenv("BQ_LOG_DATASET", "paperterrace_logs")
+    else:
+        dataset_id = os.getenv("BQ_LOG_DATASET_DEV", "paperterrace_logs_dev")
 
     print(f"Initializing BigQuery tables for {args.env} environment")
     print(f"  Project: {project_id}")

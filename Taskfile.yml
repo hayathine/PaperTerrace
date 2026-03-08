@@ -522,7 +522,13 @@ tasks:
     desc: "Deploy frontend to Cloudflare Pages"
     cmds:
       - echo "Building frontend for {{.ENV}}..."
-      - npm run build -w frontend
+      - |
+        if [ "{{.ENV}}" = "main" ]; then
+          export VITE_NEON_AUTH_URL="${VITE_NEON_AUTH_URL}"
+        else
+          export VITE_NEON_AUTH_URL="${VITE_NEON_AUTH_URL_DEV}"
+        fi
+        npm run build -w frontend
       - echo "Deploying to Cloudflare Pages project {{if eq .ENV "main"}}paperterrace{{else}}paperterrace-dev{{end}}..."
       - npx wrangler pages deploy frontend/dist --project-name {{if eq .ENV "main"}}paperterrace{{else}}paperterrace-dev{{end}} --branch {{if eq .ENV "main"}}main{{else}}dev{{end}}
 

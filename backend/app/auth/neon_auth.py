@@ -3,7 +3,6 @@ Neon Auth module.
 Provides JWT verification using Neon Auth JWKS.
 """
 
-import os
 import time
 from functools import lru_cache
 from typing import Any, Dict
@@ -11,6 +10,7 @@ from typing import Any, Dict
 import httpx
 from jose import jwt
 
+from app.core.config import get_neon_auth_jwks_url, get_neon_auth_url
 from common.logger import ServiceLogger
 
 log = ServiceLogger("NeonAuth")
@@ -36,11 +36,11 @@ class NeonAuth:
         return cls._instance
 
     def __init__(self):
-        self.jwks_url = os.getenv("NEON_AUTH_JWKS_URL")
-        self.auth_url = os.getenv("NEON_AUTH_URL")
+        self.jwks_url = get_neon_auth_jwks_url()
+        self.auth_url = get_neon_auth_url()
 
         if not self.jwks_url:
-            log.warning("init", "NEON_AUTH_JWKS_URL is not set")
+            log.warning("init", "NEON_AUTH_JWKS_URL (or _DEV) is not set")
 
     async def _get_jwks(self) -> Dict[str, Any]:
         """Fetch JWKS from Neon Auth or return cached version."""
