@@ -101,6 +101,40 @@ def build_engagement_query(dataset: str, target_date: str) -> str:
     """
 
 
+def build_scroll_depth_query(dataset: str, target_date: str) -> str:
+    """Build BigQuery SQL for daily max scroll depth aggregation.
+
+    Args:
+        dataset: Full BigQuery dataset path (e.g., project.dataset)
+        target_date: Date string in YYYYMMDD format
+    """
+    return f"""
+    SELECT
+        user_pseudo_id,
+        (SELECT value.string_value
+         FROM UNNEST(event_params)
+         WHERE key = 'user_id'
+         LIMIT 1) AS firebase_uid,
+        event_date,
+        MAX(
+            CAST(
+                (SELECT value.int_value
+                 FROM UNNEST(event_params)
+                 WHERE key = 'threshold_percent'
+                 LIMIT 1) AS INT64
+            )
+        ) AS max_scroll_depth
+    FROM
+        `{dataset}.events_{target_date}`
+    WHERE
+        event_name = 'scroll_depth'
+    GROUP BY
+        user_pseudo_id, firebase_uid, event_date
+    HAVING
+        max_scroll_depth IS NOT NULL
+    """
+
+
 def build_page_views_query(dataset: str, target_date: str) -> str:
     """Build BigQuery SQL for individual page view events.
 
@@ -217,6 +251,60 @@ def sync_engagement(
     db_session.commit()
     log.info(
         "engagement_synced", msg=f"Synced {count} engagement records", date=target_date
+    )
+    return count
+
+
+def sync_scroll_depth(
+    bq_client: bigquery.Client,
+    db_session,
+    dataset: str,
+    target_date: str,
+) -> int:
+    """Sync daily max scroll depth from BigQuery to CloudSQL user_engagements.
+
+    Returns:
+        Number of rows updated.
+    """
+    query = build_scroll_depth_query(dataset, target_date)
+    log.info(
+        "scroll_depth_query", msg="Fetching scroll depth data", date=target_date
+    )
+
+    try:
+        results = bq_client.query(query).result()
+    except Exception as e:
+        log.error("scroll_depth_query_failed", msg=str(e), date=target_date)
+        return 0
+
+    count = 0
+    for row in results:
+        db_session.execute(
+            text("""
+                UPDATE user_engagements
+                SET max_scroll_depth = GREATEST(
+                    COALESCE(max_scroll_depth, 0),
+                    :depth
+                ),
+                synced_at = NOW()
+                WHERE user_pseudo_id = :pseudo_id
+                  AND event_date = :event_date
+            """),
+            {
+                "pseudo_id": row.user_pseudo_id,
+                "depth": int(row.max_scroll_depth or 0),
+                "event_date": datetime.strptime(row.event_date, "%Y%m%d").date()
+                if isinstance(row.event_date, str)
+                else row.event_date,
+            },
+        )
+        count += 1
+
+    db_session.commit()
+    log.info(
+        "scroll_depth_synced",
+        msg=f"Updated {count} scroll depth records",
+        date=target_date,
     )
     return count
 
@@ -343,6 +431,7 @@ def main():
 
     total_engagements = 0
     total_page_views = 0
+    total_scroll_depth = 0
 
     for target_date in dates:
         log.info("sync_date", msg=f"Processing date: {target_date}")
@@ -350,8 +439,10 @@ def main():
         try:
             eng_count = sync_engagement(bq_client, session, dataset, target_date)
             pv_count = sync_page_views(bq_client, session, dataset, target_date)
+            sd_count = sync_scroll_depth(bq_client, session, dataset, target_date)
             total_engagements += eng_count
             total_page_views += pv_count
+            total_scroll_depth += sd_count
         except Exception as e:
             session.rollback()
             log.error("sync_failed", msg=str(e), date=target_date)
@@ -363,6 +454,7 @@ def main():
         msg="GA4 sync completed",
         total_engagements=total_engagements,
         total_page_views=total_page_views,
+        total_scroll_depth=total_scroll_depth,
         dates_processed=len(dates),
     )
 
