@@ -113,8 +113,9 @@ describe("Dictionary Component", () => {
 	it("shows figure insight when figures tab is selected", async () => {
 		const TestWrapper = () => {
 			const [tab, setTab] = React.useState<
-				"translation" | "explanation" | "figures"
+				"translation" | "explanation" | "figures" | "history"
 			>("translation");
+
 			return (
 				<Dictionary {...defaultProps} subTab={tab} onSubTabChange={setTab} />
 			);

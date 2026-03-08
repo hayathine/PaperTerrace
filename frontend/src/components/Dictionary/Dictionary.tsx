@@ -111,9 +111,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 	// サブタブのみが変わった場合（term 変化なし）にフェッチが走らないよう前回値を追跡する
 	const prevTermRef = React.useRef<string | undefined>(undefined);
-	const prevSubTabRef = React.useRef<"translation" | "explanation" | "figures">(
-		"translation",
-	);
+	const prevSubTabRef = React.useRef<
+		"translation" | "explanation" | "figures" | "history"
+	>("translation");
 
 	useEffect(() => {
 		const termChanged = prevTermRef.current !== term;
