@@ -18,9 +18,6 @@ from app.providers.inference_client import get_inference_client
 from app.utils import _get_file_hash
 from common.logger import ServiceLogger
 from common.utils.bbox import scale_bbox
-from common.utils.math_latex import (
-    convert_superscript_brackets,
-)
 
 from .figure_service import FigureService
 from .language_service import LanguageService
@@ -429,7 +426,6 @@ class PDFOCRService:
                 )
 
                 page_text = re.sub(r"!\[.*?\]\(.*?\)", "", raw_md).strip()
-                page_text = convert_superscript_brackets(page_text)
 
                 # 3. Post-process layout blocks (equations, figures)
                 figure_refs = []

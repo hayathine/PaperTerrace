@@ -45,11 +45,16 @@ spec:
                   key: GCS_BUCKET_NAME
             - name: GOOGLE_APPLICATION_CREDENTIALS
               value: "/secrets/sa-key.json"
-            - name: FIREBASE_PROJECT_ID
+            - name: NEON_AUTH_URL
               valueFrom:
                 secretKeyRef:
                   name: paperterrace-secrets
-                  key: FIREBASE_PROJECT_ID
+                  key: NEON_AUTH_URL
+            - name: NEON_AUTH_JWKS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: paperterrace-secrets
+                  key: NEON_AUTH_JWKS_URL
             - name: STORAGE_PROVIDER
               value: {{ .Values.backend.env.storageProvider | quote }}
             - name: GEMINI_API_KEY
