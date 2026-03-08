@@ -1,6 +1,4 @@
-import { logEvent } from "firebase/analytics";
 import { useCallback, useEffect, useRef } from "react";
-import { analytics } from "@/lib/firebase";
 
 export const useScrollTracking = (
 	paperIdentifier: string | null | undefined,
@@ -14,7 +12,7 @@ export const useScrollTracking = (
 
 	const handleScroll = useCallback(
 		(e: React.UIEvent<HTMLDivElement>) => {
-			if (!analytics || !paperIdentifier) return;
+			if (!paperIdentifier) return;
 
 			const target = e.currentTarget;
 			const scrollBottom = target.scrollTop + target.clientHeight;
@@ -35,10 +33,13 @@ export const useScrollTracking = (
 				) {
 					trackedThresholds.current.add(threshold);
 
+					// Analytics removed: Firebase is no longer used
+					/*
 					logEvent(analytics, "scroll", {
 						percent_scrolled: threshold,
 						paper_id: paperIdentifier,
 					});
+					*/
 				}
 			}
 		},

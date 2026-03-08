@@ -96,8 +96,22 @@ const Dictionary: React.FC<DictionaryProps> = ({
 		prevPaperIdRef.current = paperId;
 	}, [paperId]);
 
+	// サブタブのみが変わった場合（term 変化なし）にフェッチが走らないよう前回値を追跡する
+	const prevTermRef = React.useRef<string | undefined>(undefined);
+	const prevSubTabRef = React.useRef<"translation" | "explanation" | "figures">(
+		"translation",
+	);
+
 	useEffect(() => {
+		const termChanged = prevTermRef.current !== term;
+		const subTabChanged = prevSubTabRef.current !== currentSubTab;
+		prevTermRef.current = term;
+		prevSubTabRef.current = currentSubTab;
+
 		if (!term) return;
+
+		// サブタブの手動切り替えだけではフェッチしない（term が変わった時のみフェッチ）
+		if (subTabChanged && !termChanged) return;
 
 		const isLink = (s: string) => {
 			const clean = s.trim();
@@ -207,9 +221,10 @@ const Dictionary: React.FC<DictionaryProps> = ({
 						});
 					} else {
 						// Probably returned HTML or something else
-						setError(
-							`Could not explain "${term}". It may be a URL or special term.`,
-						);
+						log.warn("fetch_definition", "Non-JSON response for term", {
+							term,
+						});
+						setError(t("viewer.dictionary.error_unavailable"));
 						const setter =
 							currentSubTab === "explanation"
 								? setExplanationEntries
@@ -220,9 +235,12 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					}
 				} else {
 					const errorText = await res.text();
-					setError(
-						`Definition not found: ${res.status} ${errorText.substring(0, 50)}`,
-					);
+					log.error("fetch_definition", "Definition not found", {
+						status: res.status,
+						error: errorText,
+						term,
+					});
+					setError(t("viewer.dictionary.error_unavailable"));
 					const setter =
 						currentSubTab === "explanation"
 							? setExplanationEntries
@@ -237,7 +255,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					term,
 				});
 
-				setError(`Failed to fetch definition for "${term}".`);
+				setError(t("viewer.dictionary.error_unavailable"));
 				const setter =
 					currentSubTab === "explanation" ? setExplanationEntries : setEntries;
 				setter((prev) =>
@@ -352,7 +370,12 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				);
 			} else {
 				const errorText = await res.text();
-				setError(`Translation failed: ${res.status} ${errorText}`);
+				log.error("deep_translate", "Translation failed with status", {
+					status: res.status,
+					error: errorText,
+					term: entry.word,
+				});
+				setError(t("viewer.dictionary.error_translation_unavailable"));
 				const setter =
 					currentSubTab === "explanation" ? setExplanationEntries : setEntries;
 				setter((prev) =>
@@ -367,7 +390,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				term: entry.word,
 			});
 
-			setError("Translation failed.");
+			setError(t("viewer.dictionary.error_translation_unavailable"));
 			const setter =
 				currentSubTab === "explanation" ? setExplanationEntries : setEntries;
 			setter((prev) =>

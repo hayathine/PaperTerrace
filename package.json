@@ -21,5 +21,8 @@
     "minimatch": "^9.0.5",
     "glob": "^10.4.5",
     "rimraf": "^5.0.10"
+  },
+  "dependencies": {
+    "@sentry/browser": "^10.42.0"
   }
 }

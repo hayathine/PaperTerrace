@@ -91,7 +91,9 @@
 			"ask_in_chat": "Ask in Chat",
 			"save_note": "Save Comment",
 			"saved": "Saved",
-			"jump": "Jump to Location"
+			"jump": "Jump to Location",
+			"error_unavailable": "This feature is currently unavailable.",
+			"error_translation_unavailable": "Translation is currently unavailable."
 		}
 	},
 	"summary": {

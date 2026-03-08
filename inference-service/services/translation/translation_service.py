@@ -87,10 +87,6 @@ class TranslationService:
         conf = res["conf"]
         model = res.get("model", "m2m100")
 
-        logger.info(
-            f"M2M100翻訳結果: {input_text[:30]}... -> {translation[:30]}... (conf={conf:.3f}, target={target_lang}, model={model})"
-        )
-
         # 2. 確信度によるフォールバック (translation モードのみ)
         if (
             conf <= self.fallback_threshold

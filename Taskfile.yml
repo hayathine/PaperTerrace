@@ -4,6 +4,9 @@ version: "3"
 
 dotenv: ["local-files/secrets/.env"]
 
+env:
+  KUBECONFIG: "{{.TASKFILE_DIR}}/.kube/config"
+
 vars:
   PROJECT_ID: '{{.PROJECT_ID | default "gen-lang-client-0800253336"}}'
   REGION: '{{.REGION | default "asia-northeast1"}}'

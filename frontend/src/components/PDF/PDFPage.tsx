@@ -296,7 +296,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
 				{/* Figure/Table Overlays - only render when page is visible */}
 				{isVisible && (
-					<div className="absolute inset-0 w-full h-full z-30 pointer-events-none">
+					<div className="absolute inset-0 w-full h-full z-50 pointer-events-none">
 						{figures &&
 							figures.length > 0 &&
 							figures.map((fig, idx) => {
@@ -351,7 +351,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 										key={`fig-img-${idx}`}
 										className={`absolute group pointer-events-none ${
 											isInteractiveType
-												? "group-data-[click-mode]/viewer:pointer-events-auto"
+												? "group-data-[click-mode]/viewer:pointer-events-auto group-data-[click-mode]/viewer:hover:ring-2 group-data-[click-mode]/viewer:hover:ring-orange-500/60 group-data-[click-mode]/viewer:hover:ring-inset"
 												: ""
 										} group-data-[click-mode]/viewer:rounded-sm ${
 											isDev
