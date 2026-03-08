@@ -53,6 +53,16 @@ def create_dataset_and_tables(project_id: str, dataset_id: str):
                 type_=bigquery.TimePartitioningType.DAY,
                 field="created_at",
             )
+        elif table_name == "user_engagements":
+            table.time_partitioning = bigquery.TimePartitioning(
+                type_=bigquery.TimePartitioningType.DAY,
+                field="event_date",
+            )
+        elif table_name == "page_view_logs":
+            table.time_partitioning = bigquery.TimePartitioning(
+                type_=bigquery.TimePartitioningType.DAY,
+                field="event_date",
+            )
 
         try:
             client.create_table(table, exists_ok=True)

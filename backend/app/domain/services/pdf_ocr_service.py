@@ -505,9 +505,20 @@ class PDFOCRService:
                         ]
                         and "caption" not in class_name
                     ):
-                        # URL内に角括弧を使わずカンマ区切りのみにする（Markdownパーサーの誤認識を防止）
+                        # ページ境界・縦線の誤検知フィルタ（極端なアスペクト比を除外）
+                        width = bx2 - bx1
+                        height = by2 - by1
+                        if height > 0:
+                            aspect = width / height
+                        else:
+                            aspect = 999
+                        # 幅が10px未満 or アスペクト比が0.05未満（ほぼ垂直線）は除外
+                        if width < 10 or aspect < 0.05:
+                            continue
+
+                        # URLにangle bracketsを付けてスペース・特殊文字を含むURLを安全に表現
                         bbox_md = f"{bx1},{by1},{bx2},{by2}"
-                        figure_ref = f"![{class_name}]({bbox_md})"
+                        figure_ref = f"![{class_name}](<{bbox_md}>)"
                         figures_with_y.append((by1, figure_ref))
                         try:
                             margin = 5

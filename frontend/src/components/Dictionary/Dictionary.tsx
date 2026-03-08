@@ -19,6 +19,14 @@ import type { SelectedFigure } from "../PDF/types";
 
 const log = createLogger("Dictionary");
 
+interface SavedNote {
+	note_id: string;
+	term: string;
+	note: string;
+	page_number?: number;
+	created_at?: string;
+}
+
 interface DictionaryProps {
 	term?: string;
 	sessionId: string;
@@ -30,8 +38,10 @@ interface DictionaryProps {
 	imageUrl?: string;
 	onAskInChat?: () => void;
 	selectedFigure?: SelectedFigure | null;
-	subTab?: "translation" | "explanation" | "figures";
-	onSubTabChange?: (tab: "translation" | "explanation" | "figures") => void;
+	subTab?: "translation" | "explanation" | "figures" | "history";
+	onSubTabChange?: (
+		tab: "translation" | "explanation" | "figures" | "history",
+	) => void;
 }
 
 const Dictionary: React.FC<DictionaryProps> = ({
@@ -57,10 +67,13 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 	// 内部変更を親に通知
 	const handleSubTabChange = (
-		tab: "translation" | "explanation" | "figures",
+		tab: "translation" | "explanation" | "figures" | "history",
 	) => {
 		onSubTabChange?.(tab);
 	};
+
+	// 保存済み用語一覧（historyタブ用）
+	const [savedNotes, setSavedNotes] = useState<SavedNote[]>([]);
 
 	// 図が選択されたら自動的に figures サブタブへ切り替え (Parent logic in App.tsx handles this)
 	// but we keep a local check for robustness if needed, however it's better to let App.tsx handle it.
@@ -296,6 +309,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				if (data.notes) {
 					const terms = data.notes.map((n: any) => n.term);
 					setSavedItems(new Set(terms));
+					// termがあるもの（辞書保存）のみ用語一覧に格納
+					const termNotes = data.notes.filter((n: any) => n.term);
+					setSavedNotes(termNotes);
 				}
 			}
 		} catch (e) {
@@ -718,14 +734,72 @@ const Dictionary: React.FC<DictionaryProps> = ({
 		);
 	}
 
+	const historyContent = (
+		<div className="p-3 flex-1 overflow-y-auto">
+			{savedNotes.length === 0 ? (
+				<div className="flex flex-col items-center justify-center h-full p-8 text-slate-300">
+					<div className="bg-slate-50 p-4 rounded-xl mb-4">
+						<svg
+							className="w-8 h-8 opacity-50"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth={2}
+								d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"
+							/>
+						</svg>
+					</div>
+					<p className="text-xs font-bold uppercase tracking-wider">
+						{t("viewer.dictionary.history_empty")}
+					</p>
+					<p className="text-[10px] mt-2 text-center">
+						{t("viewer.dictionary.history_hint")}
+					</p>
+				</div>
+			) : (
+				<div className="space-y-2">
+					{savedNotes.map((note) => (
+						<button
+							key={note.note_id}
+							type="button"
+							onClick={() => {
+								handleSubTabChange("translation");
+								onSubTabChange?.("translation");
+							}}
+							className="w-full text-left bg-white border border-slate-100 rounded-xl p-3 hover:shadow-md hover:border-orange-200 transition-all group"
+						>
+							<div className="flex items-start justify-between gap-2">
+								<span className="text-sm font-bold text-slate-800 group-hover:text-orange-600 transition-colors truncate">
+									{note.term}
+								</span>
+								{note.page_number != null && (
+									<span className="text-[9px] bg-slate-100 text-slate-500 px-1.5 py-0.5 rounded-full shrink-0">
+										p.{note.page_number}
+									</span>
+								)}
+							</div>
+							<p className="text-[11px] text-slate-500 mt-1 line-clamp-2 leading-relaxed">
+								{note.note}
+							</p>
+						</button>
+					))}
+				</div>
+			)}
+		</div>
+	);
+
 	return (
 		<div className="flex flex-col h-full overflow-hidden bg-white">
 			{/* Sub-tab Navigation */}
-			<div className="flex px-4 pt-2 border-b border-slate-100 bg-white sticky top-0 z-20 shrink-0">
+			<div className="flex px-4 pt-2 border-b border-slate-100 bg-white sticky top-0 z-20 shrink-0 overflow-x-auto">
 				<button
 					type="button"
 					onClick={() => handleSubTabChange("translation")}
-					className={`pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all ${
+					className={`pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all shrink-0 ${
 						currentSubTab === "translation"
 							? "text-orange-600 border-orange-600"
 							: "text-slate-400 hover:text-slate-600 border-transparent"
@@ -737,7 +811,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				<button
 					type="button"
 					onClick={() => handleSubTabChange("explanation")}
-					className={`ml-6 pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all ${
+					className={`ml-6 pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all shrink-0 ${
 						currentSubTab === "explanation"
 							? "text-orange-600 border-orange-600"
 							: "text-slate-400 hover:text-slate-600 border-transparent"
@@ -749,7 +823,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				<button
 					type="button"
 					onClick={() => handleSubTabChange("figures")}
-					className={`ml-6 pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all ${
+					className={`ml-6 pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all shrink-0 ${
 						currentSubTab === "figures"
 							? "text-orange-600 border-orange-600"
 							: "text-slate-400 hover:text-slate-600 border-transparent"
@@ -757,11 +831,25 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				>
 					{t("sidebar.tabs.figures")}
 				</button>
+				<button
+					type="button"
+					onClick={() => handleSubTabChange("history")}
+					className={`ml-6 pb-2 px-1 text-xs font-bold border-b-2 uppercase tracking-wider transition-all shrink-0 ${
+						currentSubTab === "history"
+							? "text-orange-600 border-orange-600"
+							: "text-slate-400 hover:text-slate-600 border-transparent"
+					}`}
+				>
+					{t("sidebar.tabs.history")}{" "}
+					{savedNotes.length > 0 && `(${savedNotes.length})`}
+				</button>
 			</div>
 
 			<div className="flex-1 overflow-y-auto">
 				{currentSubTab === "translation" || currentSubTab === "explanation" ? (
 					content
+				) : currentSubTab === "history" ? (
+					historyContent
 				) : (
 					<div className="p-4">
 						<FigureInsight

@@ -65,6 +65,7 @@
 			"figures": "図解",
 			"translation": "翻訳",
 			"explanation": "解説",
+			"history": "用語一覧",
 			"discover": "見つける"
 		}
 	},
@@ -93,7 +94,9 @@
 			"saved": "保存済み",
 			"jump": "場所へ移動",
 			"error_unavailable": "現在この機能はご利用いただけません。",
-			"error_translation_unavailable": "翻訳機能は現在ご利用いただけません。"
+			"error_translation_unavailable": "翻訳機能は現在ご利用いただけません。",
+			"history_empty": "保存済み用語なし",
+			"history_hint": "単語を辞書に保存すると用語一覧に表示されます。"
 		}
 	},
 	"summary": {

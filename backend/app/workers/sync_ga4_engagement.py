@@ -1,8 +1,9 @@
 """
-GA4 BigQuery → CloudSQL Sync Job
+GA4 BigQuery → BigQuery Sync Job
 
-Fetches user engagement and page view data from GA4's BigQuery export
-and syncs it to CloudSQL. Designed to run as a Kubernetes CronJob.
+GA4 のエクスポートデータから日次エンゲージメント・ページビューを集計し、
+paperterrace_logs データセット（asia-northeast1）に書き込む。
+Kubernetes CronJob として実行されることを想定。
 
 Usage:
     python -m app.workers.sync_ga4_engagement [--date YYYYMMDD] [--days N]
@@ -16,8 +17,9 @@ from datetime import date, datetime, timedelta
 import structlog
 from dotenv import load_dotenv
 from google.cloud import bigquery
-from sqlalchemy import create_engine, text
-from sqlalchemy.orm import sessionmaker
+
+from app.models.bigquery.schemas import PageViewLogData, UserEngagementData
+from app.providers.bigquery_log import BigQueryLogClient
 
 # Load env for local dev
 load_dotenv("../local-files/secrets/.env")
@@ -29,43 +31,17 @@ log = structlog.get_logger("GA4Sync")
 # ============================================================================
 
 GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "gen-lang-client-0800253336")
-GA4_DATASET_ID = os.getenv("GA4_DATASET_ID", "")  # e.g., "analytics_123456789"
+GA4_DATASET_ID = os.getenv("GA4_DATASET_ID", "")
 BQ_LOCATION_ANALYTICS = os.getenv("BQ_LOCATION_ANALYTICS", "asia-northeast2")
-DATABASE_URL = os.getenv("DATABASE_URL", "")
-
-
-def get_engine():
-    """Create SQLAlchemy engine from DATABASE_URL."""
-    url = DATABASE_URL
-    if not url:
-        user = os.getenv("DB_USER")
-        password = os.getenv("DB_PASSWORD")
-        host = os.getenv("DB_HOST")
-        dbname = os.getenv("DB_NAME")
-        if all([user, password, host, dbname]):
-            url = f"postgresql://{user}:{password}@{host}/{dbname}"
-        else:
-            log.error("config", msg="DATABASE_URL not configured")
-            sys.exit(1)
-
-    if url.startswith("postgres://"):
-        url = url.replace("postgres://", "postgresql://", 1)
-
-    return create_engine(url)
 
 
 # ============================================================================
-# BigQuery Queries
+# BigQuery Queries (GA4 → 集計)
 # ============================================================================
 
 
 def build_engagement_query(dataset: str, target_date: str) -> str:
-    """Build BigQuery SQL for daily user engagement aggregation.
-
-    Args:
-        dataset: Full BigQuery dataset path (e.g., project.dataset)
-        target_date: Date string in YYYYMMDD format
-    """
+    """日次エンゲージメント集計クエリ（エンゲージメント時間・PV・セッション・スクロール深度を一括取得）。"""
     return f"""
     SELECT
         user_pseudo_id,
@@ -74,7 +50,6 @@ def build_engagement_query(dataset: str, target_date: str) -> str:
          WHERE key = 'user_id'
          LIMIT 1) AS firebase_uid,
         event_date,
-        -- Total engagement time (ms → seconds)
         SUM(
             IFNULL(
                 (SELECT value.int_value
@@ -84,15 +59,23 @@ def build_engagement_query(dataset: str, target_date: str) -> str:
                 0
             )
         ) / 1000.0 AS total_engagement_seconds,
-        -- Page view count
         COUNTIF(event_name = 'page_view') AS page_views,
-        -- Distinct session count
         COUNT(DISTINCT
             (SELECT value.int_value
              FROM UNNEST(event_params)
              WHERE key = 'ga_session_id'
              LIMIT 1)
-        ) AS session_count
+        ) AS session_count,
+        MAX(
+            CASE WHEN event_name = 'scroll_depth' THEN
+                CAST(
+                    (SELECT value.int_value
+                     FROM UNNEST(event_params)
+                     WHERE key = 'threshold_percent'
+                     LIMIT 1) AS INT64
+                )
+            END
+        ) AS max_scroll_depth
     FROM
         `{dataset}.events_{target_date}`
     GROUP BY
@@ -102,47 +85,8 @@ def build_engagement_query(dataset: str, target_date: str) -> str:
     """
 
 
-def build_scroll_depth_query(dataset: str, target_date: str) -> str:
-    """Build BigQuery SQL for daily max scroll depth aggregation.
-
-    Args:
-        dataset: Full BigQuery dataset path (e.g., project.dataset)
-        target_date: Date string in YYYYMMDD format
-    """
-    return f"""
-    SELECT
-        user_pseudo_id,
-        (SELECT value.string_value
-         FROM UNNEST(event_params)
-         WHERE key = 'user_id'
-         LIMIT 1) AS firebase_uid,
-        event_date,
-        MAX(
-            CAST(
-                (SELECT value.int_value
-                 FROM UNNEST(event_params)
-                 WHERE key = 'threshold_percent'
-                 LIMIT 1) AS INT64
-            )
-        ) AS max_scroll_depth
-    FROM
-        `{dataset}.events_{target_date}`
-    WHERE
-        event_name = 'scroll_depth'
-    GROUP BY
-        user_pseudo_id, firebase_uid, event_date
-    HAVING
-        max_scroll_depth IS NOT NULL
-    """
-
-
 def build_page_views_query(dataset: str, target_date: str) -> str:
-    """Build BigQuery SQL for individual page view events.
-
-    Args:
-        dataset: Full BigQuery dataset path (e.g., project.dataset)
-        target_date: Date string in YYYYMMDD format
-    """
+    """個別ページビューイベント取得クエリ。"""
     return f"""
     SELECT
         user_pseudo_id,
@@ -156,7 +100,6 @@ def build_page_views_query(dataset: str, target_date: str) -> str:
              WHERE key = 'ga_session_id'
              LIMIT 1) AS STRING
         ) AS ga_session_id,
-        -- Convert event_timestamp (microseconds) to datetime
         TIMESTAMP_MICROS(event_timestamp) AS event_timestamp,
         (SELECT value.string_value
          FROM UNNEST(event_params)
@@ -170,7 +113,6 @@ def build_page_views_query(dataset: str, target_date: str) -> str:
          FROM UNNEST(event_params)
          WHERE key = 'page_referrer'
          LIMIT 1) AS page_referrer,
-        -- Engagement time on this page view (ms → seconds)
         IFNULL(
             (SELECT value.int_value
              FROM UNNEST(event_params)
@@ -178,7 +120,6 @@ def build_page_views_query(dataset: str, target_date: str) -> str:
              LIMIT 1),
             0
         ) / 1000.0 AS engagement_time_seconds,
-        -- Whether this is a landing page
         (SELECT value.int_value
          FROM UNNEST(event_params)
          WHERE key = 'entrances'
@@ -199,178 +140,126 @@ def build_page_views_query(dataset: str, target_date: str) -> str:
 
 
 def sync_engagement(
-    bq_client: bigquery.Client,
-    db_session,
+    ga4_client: bigquery.Client,
+    bq_log: BigQueryLogClient,
     dataset: str,
     target_date: str,
 ) -> int:
-    """Sync daily engagement data from BigQuery to CloudSQL.
+    """GA4 から日次エンゲージメントを集計して BigQuery に書き込む。
+
+    Args:
+        ga4_client: GA4 データセット用 BigQuery クライアント（asia-northeast2）。
+        bq_log: ログ用 BigQueryLogClient（asia-northeast1）。
+        dataset: GA4 データセットパス（project.dataset）。
+        target_date: YYYYMMDD 形式の日付文字列。
 
     Returns:
-        Number of rows upserted.
+        書き込んだ行数。
     """
     query = build_engagement_query(dataset, target_date)
     log.info("engagement_query", msg="Fetching engagement data", date=target_date)
 
     try:
-        results = bq_client.query(query).result()
+        results = ga4_client.query(query).result()
     except Exception as e:
         log.error("engagement_query_failed", msg=str(e), date=target_date)
         return 0
 
-    count = 0
-    for row in results:
-        db_session.execute(
-            text("""
-                INSERT INTO user_engagements
-                    (user_pseudo_id, firebase_uid, event_date,
-                     total_engagement_seconds, page_views, session_count, synced_at)
-                VALUES
-                    (:pseudo_id, :uid, :event_date,
-                     :seconds, :views, :sessions, NOW())
-                ON CONFLICT ON CONSTRAINT uq_user_engagement_pseudo_date
-                DO UPDATE SET
-                    firebase_uid = COALESCE(EXCLUDED.firebase_uid, user_engagements.firebase_uid),
-                    total_engagement_seconds = EXCLUDED.total_engagement_seconds,
-                    page_views = EXCLUDED.page_views,
-                    session_count = EXCLUDED.session_count,
-                    synced_at = NOW()
-            """),
-            {
-                "pseudo_id": row.user_pseudo_id,
-                "uid": row.firebase_uid,
-                "event_date": datetime.strptime(row.event_date, "%Y%m%d").date()
-                if isinstance(row.event_date, str)
-                else row.event_date,
-                "seconds": float(row.total_engagement_seconds or 0),
-                "views": int(row.page_views or 0),
-                "sessions": int(row.session_count or 0),
-            },
-        )
-        count += 1
-
-    db_session.commit()
-    log.info(
-        "engagement_synced", msg=f"Synced {count} engagement records", date=target_date
-    )
-    return count
-
-
-def sync_scroll_depth(
-    bq_client: bigquery.Client,
-    db_session,
-    dataset: str,
-    target_date: str,
-) -> int:
-    """Sync daily max scroll depth from BigQuery to CloudSQL user_engagements.
-
-    Returns:
-        Number of rows updated.
-    """
-    query = build_scroll_depth_query(dataset, target_date)
-    log.info(
-        "scroll_depth_query", msg="Fetching scroll depth data", date=target_date
-    )
-
-    try:
-        results = bq_client.query(query).result()
-    except Exception as e:
-        log.error("scroll_depth_query_failed", msg=str(e), date=target_date)
+    rows = list(results)
+    if not rows:
+        log.info("engagement_empty", msg="No engagement data", date=target_date)
         return 0
 
-    count = 0
-    for row in results:
-        db_session.execute(
-            text("""
-                UPDATE user_engagements
-                SET max_scroll_depth = GREATEST(
-                    COALESCE(max_scroll_depth, 0),
-                    :depth
-                ),
-                synced_at = NOW()
-                WHERE user_pseudo_id = :pseudo_id
-                  AND event_date = :event_date
-            """),
-            {
-                "pseudo_id": row.user_pseudo_id,
-                "depth": int(row.max_scroll_depth or 0),
-                "event_date": datetime.strptime(row.event_date, "%Y%m%d").date()
-                if isinstance(row.event_date, str)
-                else row.event_date,
-            },
-        )
-        count += 1
-
-    db_session.commit()
-    log.info(
-        "scroll_depth_synced",
-        msg=f"Updated {count} scroll depth records",
-        date=target_date,
+    # 既存データを削除してから再挿入（冪等性確保）
+    table_ref = bq_log.table_ref("user_engagements")
+    bq_log.execute_dml(
+        f"DELETE FROM `{table_ref}` WHERE event_date = '{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}'"
     )
-    return count
+
+    records = [
+        UserEngagementData(
+            user_pseudo_id=row.user_pseudo_id,
+            firebase_uid=row.firebase_uid,
+            event_date=f"{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}",
+            total_engagement_seconds=float(row.total_engagement_seconds or 0),
+            page_views=int(row.page_views or 0),
+            session_count=int(row.session_count or 0),
+            max_scroll_depth=int(row.max_scroll_depth) if row.max_scroll_depth is not None else None,
+        ).to_bq_row()
+        for row in rows
+    ]
+
+    try:
+        bq_log.streaming_insert("user_engagements", records)
+    except Exception as e:
+        log.error("engagement_insert_failed", msg=str(e), date=target_date)
+        return 0
+
+    log.info("engagement_synced", msg=f"Synced {len(records)} engagement records", date=target_date)
+    return len(records)
 
 
 def sync_page_views(
-    bq_client: bigquery.Client,
-    db_session,
+    ga4_client: bigquery.Client,
+    bq_log: BigQueryLogClient,
     dataset: str,
     target_date: str,
 ) -> int:
-    """Sync page view events from BigQuery to CloudSQL.
+    """GA4 からページビューイベントを取得して BigQuery に書き込む。
+
+    Args:
+        ga4_client: GA4 データセット用 BigQuery クライアント（asia-northeast2）。
+        bq_log: ログ用 BigQueryLogClient（asia-northeast1）。
+        dataset: GA4 データセットパス（project.dataset）。
+        target_date: YYYYMMDD 形式の日付文字列。
 
     Returns:
-        Number of rows inserted.
+        書き込んだ行数。
     """
     query = build_page_views_query(dataset, target_date)
     log.info("page_views_query", msg="Fetching page view data", date=target_date)
 
     try:
-        results = bq_client.query(query).result()
+        results = ga4_client.query(query).result()
     except Exception as e:
         log.error("page_views_query_failed", msg=str(e), date=target_date)
         return 0
 
-    # Delete existing page views for this date to avoid duplicates
-    db_session.execute(
-        text("DELETE FROM page_view_logs WHERE event_date = :event_date"),
-        {"event_date": target_date},
+    rows = list(results)
+    if not rows:
+        log.info("page_views_empty", msg="No page view data", date=target_date)
+        return 0
+
+    # 既存データを削除してから再挿入（冪等性確保）
+    table_ref = bq_log.table_ref("page_view_logs")
+    bq_log.execute_dml(
+        f"DELETE FROM `{table_ref}` WHERE event_date = '{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}'"
     )
 
-    count = 0
-    for row in results:
-        db_session.execute(
-            text("""
-                INSERT INTO page_view_logs
-                    (user_pseudo_id, firebase_uid, ga_session_id,
-                     event_timestamp, page_location, page_title,
-                     page_referrer, engagement_time_seconds,
-                     is_entrance, event_date, synced_at)
-                VALUES
-                    (:pseudo_id, :uid, :session_id,
-                     :timestamp, :location, :title,
-                     :referrer, :engagement,
-                     :entrance, :event_date, NOW())
-            """),
-            {
-                "pseudo_id": row.user_pseudo_id,
-                "uid": row.firebase_uid,
-                "session_id": row.ga_session_id,
-                "timestamp": row.event_timestamp,
-                "location": row.page_location,
-                "title": row.page_title,
-                "referrer": row.page_referrer,
-                "engagement": float(row.engagement_time_seconds or 0),
-                "entrance": row.is_entrance,
-                "event_date": row.event_date,
-            },
-        )
-        count += 1
+    records = [
+        PageViewLogData(
+            user_pseudo_id=row.user_pseudo_id,
+            firebase_uid=row.firebase_uid,
+            ga_session_id=row.ga_session_id,
+            event_timestamp=row.event_timestamp.isoformat() if row.event_timestamp else None,
+            page_location=row.page_location,
+            page_title=row.page_title,
+            page_referrer=row.page_referrer,
+            engagement_time_seconds=float(row.engagement_time_seconds or 0),
+            is_entrance=row.is_entrance,
+            event_date=f"{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}",
+        ).to_bq_row()
+        for row in rows
+    ]
 
-    db_session.commit()
-    log.info(
-        "page_views_synced", msg=f"Synced {count} page view records", date=target_date
-    )
-    return count
+    try:
+        bq_log.streaming_insert("page_view_logs", records)
+    except Exception as e:
+        log.error("page_views_insert_failed", msg=str(e), date=target_date)
+        return 0
+
+    log.info("page_views_synced", msg=f"Synced {len(records)} page view records", date=target_date)
+    return len(records)
 
 
 # ============================================================================
@@ -380,7 +269,7 @@ def sync_page_views(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Sync GA4 data from BigQuery to CloudSQL"
+        description="Sync GA4 data from BigQuery (analytics) to BigQuery (logs)"
     )
     parser.add_argument(
         "--date",
@@ -395,23 +284,18 @@ def main():
     )
     args = parser.parse_args()
 
-    # Validate configuration
     if not GA4_DATASET_ID:
         log.error(
             "config",
-            msg="GA4_DATASET_ID not set. "
-            "Set it to your BigQuery dataset (e.g., 'analytics_123456789'). "
-            "Enable GA4 → BigQuery linking in GA4 Admin first.",
+            msg="GA4_DATASET_ID not set. Set it to your BigQuery dataset (e.g., 'analytics_521765405').",
         )
         sys.exit(1)
 
     dataset = f"{GCP_PROJECT_ID}.{GA4_DATASET_ID}"
 
-    # Determine target date(s)
     if args.date:
         base_date = datetime.strptime(args.date, "%Y%m%d").date()
     else:
-        # Default: yesterday (GA4 daily export is available the next day)
         base_date = date.today() - timedelta(days=1)
 
     dates = [
@@ -420,42 +304,34 @@ def main():
 
     log.info(
         "start",
-        msg="Starting GA4 → CloudSQL sync",
+        msg="Starting GA4 → BigQuery sync",
         dataset=dataset,
         dates=dates,
     )
 
-    # Initialize clients
-    bq_client = bigquery.Client(project=GCP_PROJECT_ID, location=BQ_LOCATION_ANALYTICS)
-    engine = get_engine()
-    Session = sessionmaker(bind=engine)
+    # GA4 読み取り用クライアント（asia-northeast2）
+    ga4_client = bigquery.Client(project=GCP_PROJECT_ID, location=BQ_LOCATION_ANALYTICS)
+    # ログ書き込み用クライアント（asia-northeast1）
+    bq_log = BigQueryLogClient.get_instance()
 
     total_engagements = 0
     total_page_views = 0
-    total_scroll_depth = 0
 
     for target_date in dates:
         log.info("sync_date", msg=f"Processing date: {target_date}")
-        session = Session()
         try:
-            eng_count = sync_engagement(bq_client, session, dataset, target_date)
-            pv_count = sync_page_views(bq_client, session, dataset, target_date)
-            sd_count = sync_scroll_depth(bq_client, session, dataset, target_date)
+            eng_count = sync_engagement(ga4_client, bq_log, dataset, target_date)
+            pv_count = sync_page_views(ga4_client, bq_log, dataset, target_date)
             total_engagements += eng_count
             total_page_views += pv_count
-            total_scroll_depth += sd_count
         except Exception as e:
-            session.rollback()
             log.error("sync_failed", msg=str(e), date=target_date)
-        finally:
-            session.close()
 
     log.info(
         "complete",
         msg="GA4 sync completed",
         total_engagements=total_engagements,
         total_page_views=total_page_views,
-        total_scroll_depth=total_scroll_depth,
         dates_processed=len(dates),
     )
 

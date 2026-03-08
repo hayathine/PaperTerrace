@@ -16,7 +16,6 @@ dependencies = [
     "google-genai>=1.60.0",
     "google-cloud-storage>=3.8.0",
     "google-cloud-bigquery>=3.25.0",
-    "firebase-admin>=6.0.0",
     # Database
     "sqlalchemy>=2.0.46",
     "alembic>=1.18.3",

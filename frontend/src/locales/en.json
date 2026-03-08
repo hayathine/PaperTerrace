@@ -65,6 +65,7 @@
 			"figures": "Figures",
 			"translation": "Translation",
 			"explanation": "Explanation",
+			"history": "Word List",
 			"discover": "Discover"
 		}
 	},
@@ -93,7 +94,9 @@
 			"saved": "Saved",
 			"jump": "Jump to Location",
 			"error_unavailable": "This feature is currently unavailable.",
-			"error_translation_unavailable": "Translation is currently unavailable."
+			"error_translation_unavailable": "Translation is currently unavailable.",
+			"history_empty": "No saved terms",
+			"history_hint": "Save words to the dictionary to see them here."
 		}
 	},
 	"summary": {

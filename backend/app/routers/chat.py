@@ -60,7 +60,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         history_key = (
             f"chat:{user_id}:{request.paper_id if request.paper_id else 'global'}"
         )
-        expire = 30 * 24 * 3600  # 30 days for registered users
+        expire = 7 * 24 * 3600  # 7 days for registered users
     else:
         history_key = f"chat:{request.session_id}:{request.paper_id if request.paper_id else 'global'}"
         expire = 3600  # 1 hour for guests (sliding window)
@@ -148,6 +148,13 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
     if context:
         redis_service.expire(f"session:{request.session_id}", 3600)
 
+    # PostgreSQL に永続保存（登録ユーザー + paper_id がある場合のみ）
+    if is_registered and paper_id:
+        try:
+            storage.save_chat_history(user_id, paper_id, history)
+        except Exception as e:
+            log.warning("chat", "Failed to persist chat history to DB", error=str(e))
+
     return JSONResponse(
         {
             "response": response_text,
@@ -173,6 +180,16 @@ async def get_chat_history(
         history_key = f"chat:{session_id}:{paper_id if paper_id else 'global'}"
 
     history = redis_service.get(history_key) or []
+
+    # Redis にない場合、登録ユーザーは PostgreSQL からフォールバック
+    if not history and is_registered and paper_id:
+        try:
+            history = storage.get_chat_history(user_id, paper_id)
+            if history:
+                # Redis に復元（7日TTL）
+                redis_service.set(history_key, json.dumps(history), expire=7 * 24 * 3600)
+        except Exception as e:
+            log.warning("chat_history", "Failed to fetch chat history from DB", error=str(e))
 
     return JSONResponse({"history": history})
 

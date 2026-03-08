@@ -98,13 +98,15 @@ describe("NoteList Component", () => {
 		const addButton = screen.getByText("Add Mock Note");
 		fireEvent.click(addButton);
 
-		expect(fetch).toHaveBeenCalledWith(
-			expect.stringContaining("/api/note"),
-			expect.objectContaining({
-				method: "POST",
-				body: expect.stringContaining("New Term"),
-			}),
-		);
+		await waitFor(() => {
+			expect(fetch).toHaveBeenCalledWith(
+				expect.stringContaining("/api/note"),
+				expect.objectContaining({
+					method: "POST",
+					body: expect.stringContaining("New Term"),
+				}),
+			);
+		});
 	});
 
 	it("calls DELETE when deleting a note", async () => {
@@ -125,11 +127,13 @@ describe("NoteList Component", () => {
 		const deleteButton = screen.getByText("Delete");
 		fireEvent.click(deleteButton);
 
-		expect(fetch).toHaveBeenCalledWith(
-			expect.stringContaining("/api/note/1"),
-			expect.objectContaining({
-				method: "DELETE",
-			}),
-		);
+		await waitFor(() => {
+			expect(fetch).toHaveBeenCalledWith(
+				expect.stringContaining("/api/note/1"),
+				expect.objectContaining({
+					method: "DELETE",
+				}),
+			);
+		});
 	});
 });

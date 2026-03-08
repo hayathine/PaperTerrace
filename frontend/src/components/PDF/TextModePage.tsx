@@ -277,15 +277,24 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	// --- コンテンツ: content が空なら lines フォールバック ---
 	// バックエンドが bbox ベースで ![label](bbox) マーカーを生成するため追加処理不要。
 	const processedMarkdown = useMemo(() => {
+		let content = "";
 		if (page.content && page.content.trim().length > 0) {
-			return page.content;
-		}
-		if (page.lines && page.lines.length > 0) {
-			return page.lines
+			content = page.content;
+		} else if (page.lines && page.lines.length > 0) {
+			content = page.lines
 				.map((line) => line.words.map((w) => w.word).join(" "))
 				.join("\n");
 		}
-		return "";
+		if (!content) return "";
+
+		// 旧形式 ![label]([x, y, x, y]) → 新形式 ![label](<x,y,x,y>) に正規化する。
+		// URLにスペースを含む旧キャッシュデータはMarkdownパーサーが画像として認識できないため。
+		content = content.replace(
+			/!\[([^\]]*)\]\(\[?([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)\]?\)/g,
+			(_, label, x1, y1, x2, y2) => `![${label}](<${x1},${y1},${x2},${y2}>)`,
+		);
+
+		return content;
 	}, [page.content, page.lines]);
 
 	// --- react-markdown の components カスタマイズ ---

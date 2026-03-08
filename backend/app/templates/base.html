@@ -20,17 +20,6 @@
       src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
       onload="renderMathInElement(document.body)"
     ></script>
-    <!-- Firebase Config from Backend -->
-    <script id="firebase-config" type="application/json">
-      {{ firebase_config | tojson | safe }}
-    </script>
-    <script>
-      window.firebaseConfig = JSON.parse(
-        document.getElementById("firebase-config").textContent,
-      );
-    </script>
-    <!-- Firebase Auth -->
-    <script type="module" src="/static/js/auth.js"></script>
     <script src="/static/js/stamps.js"></script>
     <style>
       @import url("https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap");

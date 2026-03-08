@@ -85,11 +85,12 @@ PAPER_TEXT: {paper_text}
 
 {keyword_focus}
 
-IMPORTANT: You MUST respond ENTIRELY in {lang_name} language only. However, for the Key Words section, output technical keywords in English.
+IMPORTANT: You MUST respond ENTIRELY in {lang_name} language only. However, for the Key Words section, output technical keywords in English. 
+Keep the total output concise (aim for under 1000 tokens).
 
 Output Format (use 5 sections with ## markdown headers, all in {lang_name}):
 1. Overview section: 1-2 sentences summarizing the main theme
-2. Key Contributions section: 2-4 bullet points
+2. Key Contributions section: 2-4 clear bullet points
 3. Methodology section: Concise explanation of methods used
 4. Conclusion section: Key findings and implications
 5. Key Words section: 5-10 technical keywords (MUST be in English)
@@ -178,7 +179,9 @@ AGENT_ADVERSARIAL_CRITIQUE_PROMPT = """You are a rigorous reviewer. Analyze the 
 [Paper Text]
 {text}
 
-Please output in the following JSON format in {lang_name}:
+Please output in the following JSON format in {lang_name}.
+IMPORTANT: Limit each category (hidden_assumptions, unverified_conditions, etc.) to a maximum of 3 most significant items. Keep descriptions concise to ensure the total response is under 1000 tokens.
+
 {{
   "hidden_assumptions": [
     {{"assumption": "Hidden assumption", "risk": "Why it is a problem", "severity": "high/medium/low"}}
@@ -192,7 +195,7 @@ Please output in the following JSON format in {lang_name}:
   "methodology_concerns": [
     {{"concern": "Methodological concern", "suggestion": "Suggestion for improvement", "severity": "high/medium/low"}}
   ],
-  "overall_assessment": "Overall assessment (2-3 sentences)"
+  "overall_assessment": "Short overall assessment (2-3 sentences)"
 }}
 
 Be constructive but critical. Output ONLY valid JSON.
@@ -244,13 +247,13 @@ IMPORTANT: You MUST respond ENTIRELY in {lang_name} language only. However, for 
 # Instructions
 - Analyze the entire PDF including text, figures, tables, and equations.
 - Pay attention to visual elements and their captions.
-- Extract key information comprehensively.
+- Extract key information comprehensively but concisely.
 - Write everything in {lang_name} language, including all section headers (except English keywords).
 
 # Output Format
 Provide 5 sections with ## markdown headers, ALL written in {lang_name}:
 1. Overview section: 1-2 sentences summarizing the main theme
-2. Key Contributions section: 2-4 bullet points
+2. Key Contributions section: 2-4 clear bullet points
 3. Methodology section: Concise explanation of methods used
 4. Conclusion section: Key findings and implications
 5. Key Words section: 5-10 technical keywords (MUST be in English)
@@ -263,7 +266,9 @@ For example, if {lang_name} is Japanese, use headers like "## 概要", "## 主�
 # フロントエンド表示: Summary.tsx (PDF直接解析時の「レビュー」タブに表示)
 ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT = """You are a rigorous reviewer. Analyze the attached PDF paper from a critical perspective and identify potential issues.
 
-Please output in the following JSON format in {lang_name}:
+Please output in the following JSON format in {lang_name}.
+IMPORTANT: Limit each category (hidden_assumptions, unverified_conditions, etc.) to a maximum of 3 most significant items. Keep descriptions concise to ensure the total response is under 1000 tokens.
+
 {{
   "hidden_assumptions": [
     {{"assumption": "Hidden assumption", "risk": "Why it is a problem", "severity": "high/medium/low"}}
@@ -277,7 +282,7 @@ Please output in the following JSON format in {lang_name}:
   "methodology_concerns": [
     {{"concern": "Methodological concern", "suggestion": "Suggestion for improvement", "severity": "high/medium/low"}}
   ],
-  "overall_assessment": "Overall assessment (2-3 sentences)"
+  "overall_assessment": "Short overall assessment (2-3 sentences)"
 }}
 
 Be constructive but critical. Analyze figures and tables as well. Output ONLY valid JSON.

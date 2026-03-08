@@ -323,6 +323,40 @@ class CloudSQLStorage(StorageInterface):
             conn.commit()
             return cur.rowcount > 0
 
+    # ===== Chat History methods =====
+
+    def save_chat_history(self, user_id: str, paper_id: str, messages: list) -> None:
+        """登録ユーザーのチャット履歴をPostgreSQLに永続保存する。"""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    INSERT INTO chat_histories (user_id, paper_id, messages, updated_at)
+                    VALUES (%s, %s, %s, %s)
+                    ON CONFLICT (user_id, paper_id) DO UPDATE SET
+                        messages = EXCLUDED.messages,
+                        updated_at = EXCLUDED.updated_at
+                    """,
+                    (user_id, paper_id, json.dumps(messages, ensure_ascii=False), datetime.now()),
+                )
+            conn.commit()
+
+    def get_chat_history(self, user_id: str, paper_id: str) -> list:
+        """登録ユーザーのチャット履歴をPostgreSQLから取得する。"""
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT messages FROM chat_histories WHERE user_id = %s AND paper_id = %s",
+                    (user_id, paper_id),
+                )
+                row = cur.fetchone()
+                if row:
+                    try:
+                        return json.loads(row[0])
+                    except Exception:
+                        return []
+                return []
+
     # ===== Stamp methods =====
 
     def add_paper_stamp(

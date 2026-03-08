@@ -10,8 +10,10 @@ interface SidebarProps {
 	sessionId: string;
 	activeTab: string;
 	onTabChange: (tab: string) => void;
-	dictSubTab?: "translation" | "explanation" | "figures";
-	onDictSubTabChange?: (tab: "translation" | "explanation" | "figures") => void;
+	dictSubTab?: "translation" | "explanation" | "figures" | "history";
+	onDictSubTabChange?: (
+		tab: "translation" | "explanation" | "figures" | "history",
+	) => void;
 	selectedWord?: string;
 	context?: string;
 	coordinates?: { page: number; x: number; y: number };

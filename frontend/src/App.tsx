@@ -56,7 +56,7 @@ function App() {
 	});
 	const [activeTab, setActiveTab] = useState("chat");
 	const [dictSubTab, setDictSubTab] = useState<
-		"translation" | "explanation" | "figures"
+		"translation" | "explanation" | "figures" | "history"
 	>("translation");
 	const [selectedWord, setSelectedWord] = useState<string | undefined>(
 		undefined,

@@ -14,7 +14,7 @@ log = ServiceLogger("AuthDep")
 
 
 class AuthenticatedUser:
-    """Represents an authenticated user from Firebase."""
+    """認証済みユーザーを表すクラス（Neon Auth）。"""
 
     def __init__(self, decoded_token: dict):
         self.uid: str = decoded_token.get("uid", "")
@@ -22,9 +22,7 @@ class AuthenticatedUser:
         self.email_verified: bool = decoded_token.get("email_verified", False)
         self.name: str = decoded_token.get("name", "")
         self.picture: str = decoded_token.get("picture", "")
-        self.provider: str = decoded_token.get("firebase", {}).get(
-            "sign_in_provider", ""
-        )
+        self.provider: str = decoded_token.get("provider", "")
         self._raw_token = decoded_token
 
     def __repr__(self):
@@ -53,9 +51,7 @@ async def get_current_user(
             "name": request.headers.get("X-User-Name", ""),
             "picture": request.headers.get("X-User-Picture", ""),
             "email_verified": request.headers.get("X-User-Email-Verified") == "true",
-            "firebase": {
-                "sign_in_provider": request.headers.get("X-User-Provider", "")
-            },
+            "provider": request.headers.get("X-User-Provider", ""),
         }
         return AuthenticatedUser(decoded_token)
 
@@ -119,9 +115,7 @@ async def get_optional_user(
             "name": request.headers.get("X-User-Name", ""),
             "picture": request.headers.get("X-User-Picture", ""),
             "email_verified": request.headers.get("X-User-Email-Verified") == "true",
-            "firebase": {
-                "sign_in_provider": request.headers.get("X-User-Provider", "")
-            },
+            "provider": request.headers.get("X-User-Provider", ""),
         }
         return AuthenticatedUser(decoded_token)
 
