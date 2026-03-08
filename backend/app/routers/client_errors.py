@@ -55,5 +55,8 @@ async def report_client_error(
         client_message=req.message[:200],
     )
 
-    repo = ClientErrorRepository()
-    repo.create(error)
+    try:
+        repo = ClientErrorRepository()
+        repo.create(error)
+    except Exception as e:
+        log.error("report", f"Failed to initialize or write client error: {e}")
