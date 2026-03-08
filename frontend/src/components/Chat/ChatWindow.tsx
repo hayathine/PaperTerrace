@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { v4 as uuidv4 } from "uuid";
 import { API_URL } from "@/config";
 import { createLogger } from "@/lib/logger";
+import { useAuth } from "../../contexts/AuthContext";
 import { useLoading } from "../../contexts/LoadingContext";
 import InputArea from "./InputArea";
 import MessageList from "./MessageList";
@@ -32,6 +33,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 	onEvidenceClick,
 }) => {
 	const { t, i18n } = useTranslation();
+	const { token } = useAuth();
 	const { startLoading, stopLoading } = useLoading();
 	const [messages, setMessages] = useState<Message[]>(initialMessages);
 
@@ -51,7 +53,10 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 				url.searchParams.append("session_id", sessionId);
 				url.searchParams.append("paper_id", paperId);
 
-				const res = await fetch(url.toString());
+				const headers: HeadersInit = {};
+				if (token) headers.Authorization = `Bearer ${token}`;
+
+				const res = await fetch(url.toString(), { headers });
 				if (res.ok) {
 					const data = await res.json();
 					if (data.history && Array.isArray(data.history)) {
@@ -109,11 +114,14 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 		startLoading(t("common.loading"));
 
 		try {
+			const headers: HeadersInit = {
+				"Content-Type": "application/json",
+			};
+			if (token) headers.Authorization = `Bearer ${token}`;
+
 			const response = await fetch(`${API_URL}/api/chat`, {
 				method: "POST",
-				headers: {
-					"Content-Type": "application/json",
-				},
+				headers,
 				body: JSON.stringify({
 					message: text,
 					session_id: sessionId,

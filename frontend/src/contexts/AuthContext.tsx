@@ -50,9 +50,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 			if (session) {
 				setUser(session.user);
 				setIsGuest(false);
-				// In a real app, you might want to extract a CSRF token or session token
-				// if not using HTTP-only cookies for the API.
-				setToken(null);
+				// In Better Auth (Neon Auth), the session token is in session.session.token
+				if ("session" in session && session.session.token) {
+					setToken(session.session.token);
+				} else {
+					setToken(null);
+				}
 			} else {
 				setUser(null);
 				setIsGuest(true);
@@ -63,10 +66,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 	}, [session, isPending]);
 
 	const getToken = useCallback(async (): Promise<string | null> => {
-		// For Neon Auth, the backend usually verifies the Session Cookie.
-		// If we need a Bearer token, we'd get it from the session.
-		return null;
-	}, []);
+		return token;
+	}, [token]);
 
 	const signInWithGoogle = async () => {
 		try {

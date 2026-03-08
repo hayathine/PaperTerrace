@@ -20,8 +20,6 @@ from common.logger import ServiceLogger
 from common.utils.bbox import scale_bbox
 from common.utils.math_latex import (
     convert_superscript_brackets,
-    replace_equation_paragraph,
-    wrap_equation_block,
 )
 
 from .figure_service import FigureService
@@ -451,28 +449,7 @@ class PDFOCRService:
                     )
                     bbox_list = [bx1, by1, bx2, by2]
 
-                    # Equation handling
-                    if "equation" in class_name or "formula" in class_name:
-                        margin = 5
-                        eq_words = [
-                            w["word"]
-                            for w in layout_data["words"]
-                            if (bx1 - margin)
-                            <= (w["bbox"][0] + w["bbox"][2]) / 2
-                            <= (bx2 + margin)
-                            and (by1 - margin)
-                            <= (w["bbox"][1] + w["bbox"][3]) / 2
-                            <= (by2 + margin)
-                        ]
-                        if eq_words:
-                            latex_block = wrap_equation_block(" ".join(eq_words))
-                            page_text, replaced = replace_equation_paragraph(
-                                page_text, eq_words, latex_block
-                            )
-                            if not replaced:
-                                page_text += f"\n\n{latex_block}\n\n"
-
-                    # Figure cropping and metadata
+                    # Figure/Table/Formula cropping and metadata
                     if (
                         class_name
                         in [
@@ -486,7 +463,7 @@ class PDFOCRService:
                         ]
                         and "caption" not in class_name
                     ):
-                        figure_refs.append(f"\n\n![Figure]({bbox_list})\n")
+                        figure_refs.append(f"\n\n![{class_name}]({bbox_list})\n")
                         try:
                             margin = 5
                             crop_box = (

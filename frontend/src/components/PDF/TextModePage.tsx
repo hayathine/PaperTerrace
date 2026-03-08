@@ -275,11 +275,11 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	}, [selectionMenu]);
 
 	// --- コンテンツ: content が空なら lines フォールバック ---
-	const markdownText = useMemo(() => {
+	// バックエンドが bbox ベースで ![label](bbox) マーカーを生成するため追加処理不要。
+	const processedMarkdown = useMemo(() => {
 		if (page.content && page.content.trim().length > 0) {
 			return page.content;
 		}
-		// フォールバック: lines のワードを結合
 		if (page.lines && page.lines.length > 0) {
 			return page.lines
 				.map((line) => line.words.map((w) => w.word).join(" "))
@@ -287,30 +287,6 @@ const TextModePage: React.FC<TextModePageProps> = ({
 		}
 		return "";
 	}, [page.content, page.lines]);
-
-	// --- Markdown 前処理: 表ブロック → 表画像マーカー置換 ---
-	// バックエンドが生成する "| col | col |" 形式の Markdown 表を、
-	// page.figures の label='table' 実画像に差し替えることで視覚的な表を表示する。
-	const processedMarkdown = useMemo(() => {
-		if (!markdownText) return markdownText;
-
-		const tableFigures = (page.figures ?? [])
-			.filter((f) => (f.label ?? "").toLowerCase() === "table")
-			.sort((a, b) => a.bbox[1] - b.bbox[1]);
-
-		if (tableFigures.length === 0) return markdownText;
-
-		let tableIdx = 0;
-		return markdownText.replace(/((?:\|[^\n]*\n?)+)/g, (match) => {
-			if (tableIdx < tableFigures.length) {
-				const fig = tableFigures[tableIdx++];
-				const [x1, y1, x2, y2] = fig.bbox;
-				return `\n![Table]([${x1}, ${y1}, ${x2}, ${y2}])\n`;
-			}
-			// 対応する figure がない場合は元のテキストを維持
-			return match;
-		});
-	}, [markdownText, page.figures]);
 
 	// --- react-markdown の components カスタマイズ ---
 	const mdComponents: Components = useMemo(() => {

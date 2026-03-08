@@ -103,15 +103,10 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	);
 
 	useEffect(() => {
-		const termChanged = prevTermRef.current !== term;
-		const subTabChanged = prevSubTabRef.current !== currentSubTab;
 		prevTermRef.current = term;
 		prevSubTabRef.current = currentSubTab;
 
 		if (!term) return;
-
-		// サブタブの手動切り替えだけではフェッチしない（term が変わった時のみフェッチ）
-		if (subTabChanged && !termChanged) return;
 
 		const isLink = (s: string) => {
 			const clean = s.trim();

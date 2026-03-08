@@ -92,8 +92,12 @@ const Summary: React.FC<SummaryProps> = ({
 				if (paperId) formData.append("paper_id", paperId);
 				if (force) formData.append("force", "true");
 
+				const headers: HeadersInit = {};
+				if (token) headers.Authorization = `Bearer ${token}`;
+
 				const res = await fetch(`${API_URL}/api/summarize`, {
 					method: "POST",
+					headers,
 					body: formData,
 				});
 				if (!res.ok) {
@@ -154,8 +158,12 @@ const Summary: React.FC<SummaryProps> = ({
 			const formData = new FormData();
 			formData.append("session_id", sessionId);
 			formData.append("lang", i18n.language);
+			const headers: HeadersInit = {};
+			if (token) headers.Authorization = `Bearer ${token}`;
+
 			const res = await fetch(`${API_URL}/api/critique`, {
 				method: "POST",
+				headers,
 				body: formData,
 			});
 

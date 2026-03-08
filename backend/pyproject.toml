@@ -63,3 +63,4 @@ root = [".", "./app"]
 
 [tool.pytest.ini_options]
 addopts = "--testmon"
+asyncio_mode = "auto"

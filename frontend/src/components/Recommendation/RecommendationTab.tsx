@@ -8,7 +8,6 @@ import {
 	type RecommendationGenerateResponse,
 } from "@/lib/recommendation";
 import FeedbackSection from "../Common/FeedbackSection";
-import MarkdownContent from "../Common/MarkdownContent";
 
 const log = createLogger("Recommendation");
 

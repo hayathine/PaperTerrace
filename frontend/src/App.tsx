@@ -133,15 +133,14 @@ function App() {
 	}, [t, appEnv]);
 
 	useEffect(() => {
-		if (!user) {
+		if (!user || !token) {
 			setUploadedPapers([]);
 			return;
 		}
 
 		const fetchPapers = async () => {
 			try {
-				const idToken = await user.getIdToken();
-				const headers = { Authorization: `Bearer ${idToken}` };
+				const headers = { Authorization: `Bearer ${token}` };
 
 				const res = await fetch(`${API_URL}/api/papers`, { headers });
 				const data = await res.json();
@@ -158,7 +157,7 @@ function App() {
 		};
 
 		fetchPapers();
-	}, [user]);
+	}, [user, token]);
 
 	const { loginAsGuest: handleLoginAsGuest } = useAuth();
 
@@ -298,7 +297,10 @@ function App() {
 			Array.isArray(uploadedPapers) &&
 			!uploadedPapers.some((p) => p?.paper_id === paperId)
 		) {
-			fetch(`${API_URL}/api/papers`)
+			const headers: HeadersInit = {};
+			if (token) headers.Authorization = `Bearer ${token}`;
+
+			fetch(`${API_URL}/api/papers`, { headers })
 				.then((res) => res.json())
 				.then((data) => {
 					if (data && Array.isArray(data.papers)) {

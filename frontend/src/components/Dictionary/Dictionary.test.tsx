@@ -159,7 +159,9 @@ describe("Dictionary Component", () => {
 		render(<Dictionary {...defaultProps} term="unknown-word" />);
 
 		await waitFor(() => {
-			expect(screen.getByText(/Definition not found/)).toBeDefined();
+			expect(
+				screen.getByText(/viewer\.dictionary\.error_unavailable/),
+			).toBeDefined();
 		});
 	});
 

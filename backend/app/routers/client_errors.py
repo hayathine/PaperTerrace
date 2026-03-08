@@ -47,7 +47,7 @@ async def report_client_error(
         user_agent=user_agent,
     )
 
-    log.warn(
+    log.warning(
         "report",
         "Client error received",
         component=req.component,
