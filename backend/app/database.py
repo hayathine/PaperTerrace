@@ -47,3 +47,25 @@ def get_db_context():
         yield db
     finally:
         db.close()
+
+
+def get_orm_storage():
+    """
+    FastAPI Depends 用: リクエストスコープの ORMStorageAdapter を返す。
+
+    使い方:
+        from fastapi import Depends
+        from app.database import get_orm_storage
+        from app.providers.orm_storage import ORMStorageAdapter
+
+        @router.get("/example")
+        async def example(storage: ORMStorageAdapter = Depends(get_orm_storage)):
+            ...
+    """
+    from app.providers.orm_storage import ORMStorageAdapter
+
+    db = SessionLocal()
+    try:
+        yield ORMStorageAdapter(db)
+    finally:
+        db.close()

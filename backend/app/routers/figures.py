@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.auth import OptionalUser
+from app.core.config import is_production
 from app.crud import get_storage_provider
 from app.domain.features.figure_insight import FigureInsightService
 from common.logger import ServiceLogger
@@ -34,8 +35,12 @@ async def get_paper_figures(paper_id: str, user: OptionalUser = None):
         log.error(
             "get_figures", "Failed to get figures", error=str(e), paper_id=paper_id
         )
-        app_env = os.getenv("APP_ENV", "production")
-        error_msg = str(e) if app_env == "development" else "Failed to retrieve figures"
+
+        error_msg = (
+            str(e)
+            if not is_production()
+            else "An error occurred while fetching figures."
+        )
         return JSONResponse({"error": error_msg}, status_code=500)
 
 
@@ -130,6 +135,9 @@ async def explain_figure(
             figure_id=figure_id,
         )
 
-        app_env = os.getenv("APP_ENV", "production")
-        error_msg = str(e) if app_env == "development" else "Failed to analyze figure"
+        error_msg = (
+            str(e)
+            if not is_production()
+            else "An error occurred while explaining the figure."
+        )
         return JSONResponse({"error": error_msg}, status_code=500)

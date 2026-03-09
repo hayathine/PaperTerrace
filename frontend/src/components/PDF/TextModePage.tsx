@@ -1,4 +1,4 @@
-import React, { useMemo, useRef } from "react";
+import React, { useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import type { Components } from "react-markdown";
 import { API_URL } from "../../config";
@@ -182,6 +182,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 		context: string;
 		coords: any;
 	} | null>(null);
+	const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
 	// --- テキスト選択メニュー ---
 	React.useEffect(() => {
@@ -312,11 +313,21 @@ const TextModePage: React.FC<TextModePageProps> = ({
 						const imgSrc = figure.image_url.startsWith("http")
 							? figure.image_url
 							: `${API_URL}${figure.image_url}`;
+
+						const isEquation =
+							figure.label?.toLowerCase() === "equation" ||
+							(typeof alt === "string" &&
+								alt.toLowerCase().includes("equation"));
+
 						return (
 							<img
 								src={imgSrc}
 								alt={alt || figure.label || "Figure"}
-								className="max-w-full h-auto mx-auto my-4 rounded shadow-sm border border-slate-200"
+								onClick={() => setZoomedImage(imgSrc)}
+								className={`
+									mx-auto my-4 rounded shadow-sm border border-slate-200 object-contain cursor-zoom-in hover:brightness-[0.98] transition-all
+									${isEquation ? "max-h-24 w-auto max-w-[90%]" : "max-h-80 h-auto max-w-[min(100%,800px)]"}
+								`.trim()}
 								loading="lazy"
 								{...rest}
 							/>
@@ -327,11 +338,18 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				}
 			}
 			// 通常の画像
+			const isEquationGeneric =
+				typeof alt === "string" && alt.toLowerCase().includes("equation");
+
 			return (
 				<img
 					src={src}
 					alt={alt}
-					className="max-w-full h-auto mx-auto my-4 rounded shadow-sm"
+					onClick={() => src && setZoomedImage(src)}
+					className={`
+						mx-auto my-4 rounded shadow-sm object-contain cursor-zoom-in hover:brightness-[0.98] transition-all
+						${isEquationGeneric ? "max-h-24 w-auto max-w-[90%]" : "max-w-[min(100%,800px)] max-h-80 h-auto"}
+					`.trim()}
 					loading="lazy"
 					{...rest}
 				/>
@@ -576,6 +594,49 @@ const TextModePage: React.FC<TextModePageProps> = ({
 
 					{/* Triangle arrow */}
 					<div className="absolute left-1/2 top-0 w-2 h-2 bg-white border-l border-t border-slate-200 transform -translate-x-1/2 -translate-y-1/2 rotate-45 pointer-events-none" />
+				</div>
+			)}
+
+			{/* Zoom Modal */}
+			{zoomedImage && (
+				<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 overflow-hidden animate-fade-in">
+					<button
+						type="button"
+						className="absolute inset-0 w-full h-full bg-black/80 cursor-pointer border-none"
+						onClick={() => setZoomedImage(null)}
+						aria-label="Close zoom backdrop"
+					/>
+					<button
+						type="button"
+						className="absolute top-6 right-6 text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-all z-[110]"
+						onClick={() => setZoomedImage(null)}
+						aria-label="Close zoom"
+					>
+						<svg
+							className="w-8 h-8"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth="2"
+								d="M6 18L18 6M6 6l12 12"
+							/>
+						</svg>
+					</button>
+					<div
+						role="dialog"
+						aria-modal="true"
+						className="relative max-w-5xl w-full max-h-full flex items-center justify-center pointer-events-none"
+					>
+						<img
+							src={zoomedImage}
+							alt="Zoomed figure"
+							className="max-w-full max-h-[90vh] object-contain shadow-2xl rounded-lg pointer-events-auto cursor-default"
+						/>
+					</div>
 				</div>
 			)}
 		</div>

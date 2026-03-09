@@ -1143,17 +1143,19 @@ class SQLiteStorage(StorageInterface):
         return True
 
 
-# Singleton instance cache
+# Singleton instance cache (SQLite のみ。PostgreSQL は ORM アダプター経由)
 _storage_provider_instance: StorageInterface | None = None
 
 
 def get_storage_provider() -> StorageInterface:
     """
-    Factory function to get the configured storage provider (singleton).
+    ストレージプロバイダーを返すファクトリ関数（シングルトン）。
 
-    Set STORAGE_PROVIDER environment variable:
-    - "sqlite" (default): Use local SQLite
-    - "cloudsql", "postgresql", "neon": Use PostgreSQL (Cloud SQL, Neon, etc.)
+    PostgreSQL 環境では ORMStorageAdapter を返す。
+    SQLite 環境 (ローカル開発) では SQLiteStorage を返す。
+
+    DATABASE_URL または DB_USER/DB_HOST 等の環境変数が設定されている場合は
+    PostgreSQL モードになる。
     """
     global _storage_provider_instance
 
@@ -1161,21 +1163,20 @@ def get_storage_provider() -> StorageInterface:
         return _storage_provider_instance
 
     database_url = os.getenv("DATABASE_URL")
-    default_provider = "cloudsql" if database_url else "sqlite"
+    default_provider = "orm" if database_url else "sqlite"
     provider_type = os.getenv("STORAGE_PROVIDER", default_provider).lower()
 
-    if provider_type in ["cloudsql", "postgresql", "neon"]:
-        try:
-            from .postgresql_storage import PostgreSQLStorage
+    if provider_type in ["cloudsql", "postgresql", "neon", "orm"]:
+        from app.database import SessionLocal
+        from app.providers.orm_storage import ORMStorageAdapter
 
-            _storage_provider_instance = PostgreSQLStorage()
-        except ImportError as e:
-            log.error("init", "Failed to import PostgreSQLStorage", error=str(e))
-
-            raise RuntimeError(
-                "PostgreSQLStorage requires 'psycopg2' and 'postgresql_storage.py'"
-            ) from e
+        # シングルトン用の永続セッション
+        # （本番では FastAPI の Depends(get_db) 経由を推奨）
+        _db = SessionLocal()
+        _storage_provider_instance = ORMStorageAdapter(_db)
+        log.info("init", "ORMStorageAdapter initialized (PostgreSQL/ORM mode)")
     else:
         _storage_provider_instance = SQLiteStorage()
+        log.info("init", "SQLiteStorage initialized")
 
     return _storage_provider_instance

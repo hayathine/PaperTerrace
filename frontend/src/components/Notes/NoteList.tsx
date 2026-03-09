@@ -86,88 +86,96 @@ const NoteList: React.FC<NoteListProps> = ({
 		};
 	}, [sessionId, paperId, fetchNotes]);
 
-	const handleAddNote = async (
-		term: string,
-		noteContent: string,
-		coords?: { page: number; x: number; y: number },
-		imageUrl?: string,
-	) => {
-		try {
-			const headers: HeadersInit = { "Content-Type": "application/json" };
-			if (token) headers.Authorization = `Bearer ${token}`;
+	const handleAddNote = useCallback(
+		async (
+			term: string,
+			noteContent: string,
+			coords?: { page: number; x: number; y: number },
+			imageUrl?: string,
+		) => {
+			try {
+				const headers: HeadersInit = { "Content-Type": "application/json" };
+				if (token) headers.Authorization = `Bearer ${token}`;
 
-			const res = await fetch(`${API_URL}/api/note`, {
-				method: "POST",
-				headers,
-				body: JSON.stringify({
-					session_id: sessionId,
-					paper_id: paperId,
-					term,
-					note: noteContent,
-					page_number: coords?.page,
-					x: coords?.x,
-					y: coords?.y,
-					image_url: imageUrl,
-				}),
-			});
-			if (res.ok) {
-				// Refresh list
-				fetchNotes();
-				window.dispatchEvent(new Event("notes-updated"));
+				const res = await fetch(`${API_URL}/api/note`, {
+					method: "POST",
+					headers,
+					body: JSON.stringify({
+						session_id: sessionId,
+						paper_id: paperId,
+						term,
+						note: noteContent,
+						page_number: coords?.page,
+						x: coords?.x,
+						y: coords?.y,
+						image_url: imageUrl,
+					}),
+				});
+				if (res.ok) {
+					fetchNotes();
+					window.dispatchEvent(new Event("notes-updated"));
+				}
+			} catch (e) {
+				log.error("add_note", "Failed to add note", { error: e });
 			}
-		} catch (e) {
-			log.error("add_note", "Failed to add note", { error: e });
-		}
-	};
+		},
+		[sessionId, paperId, token, fetchNotes],
+	);
 
-	const handleUpdateNote = async (
-		id: string,
-		term: string,
-		noteContent: string,
-		coords?: { page: number; x: number; y: number },
-		imageUrl?: string,
-	) => {
-		try {
-			const headers: HeadersInit = { "Content-Type": "application/json" };
-			if (token) headers.Authorization = `Bearer ${token}`;
+	const handleUpdateNote = useCallback(
+		async (
+			id: string,
+			term: string,
+			noteContent: string,
+			coords?: { page: number; x: number; y: number },
+			imageUrl?: string,
+		) => {
+			try {
+				const headers: HeadersInit = { "Content-Type": "application/json" };
+				if (token) headers.Authorization = `Bearer ${token}`;
 
-			const res = await fetch(`${API_URL}/api/note/${id}`, {
-				method: "PUT",
-				headers,
-				body: JSON.stringify({
-					session_id: sessionId,
-					paper_id: paperId,
-					term,
-					note: noteContent,
-					page_number: coords?.page,
-					x: coords?.x,
-					y: coords?.y,
-					image_url: imageUrl,
-				}),
-			});
+				const res = await fetch(`${API_URL}/api/note/${id}`, {
+					method: "PUT",
+					headers,
+					body: JSON.stringify({
+						session_id: sessionId,
+						paper_id: paperId,
+						term,
+						note: noteContent,
+						page_number: coords?.page,
+						x: coords?.x,
+						y: coords?.y,
+						image_url: imageUrl,
+					}),
+				});
 
-			if (res.ok) {
-				fetchNotes();
-				setEditingNote(null);
-				window.dispatchEvent(new Event("notes-updated"));
+				if (res.ok) {
+					fetchNotes();
+					setEditingNote(null);
+					window.dispatchEvent(new Event("notes-updated"));
+				}
+			} catch (e) {
+				log.error("update_note", "Failed to update note", { error: e });
 			}
-		} catch (e) {
-			log.error("update_note", "Failed to update note", { error: e });
-		}
-	};
+		},
+		[sessionId, paperId, token, fetchNotes],
+	);
 
-	const handleDeleteNote = async (id: string) => {
-		try {
-			const headers: HeadersInit = {};
-			if (token) headers.Authorization = `Bearer ${token}`;
+	const handleDeleteNote = useCallback(
+		async (id: string) => {
+			try {
+				const headers: HeadersInit = {};
+				if (token) headers.Authorization = `Bearer ${token}`;
 
-			await fetch(`${API_URL}/api/note/${id}`, { method: "DELETE", headers });
-			setNotes((prev) => prev.filter((n) => n.note_id !== id));
-			window.dispatchEvent(new Event("notes-updated"));
-		} catch (e) {
-			log.error("delete_note", "Failed to delete note", { error: e });
-		}
-	};
+				await fetch(`${API_URL}/api/note/${id}`, { method: "DELETE", headers });
+				setNotes((prev) => prev.filter((n) => n.note_id !== id));
+				window.dispatchEvent(new Event("notes-updated"));
+			} catch (e) {
+				log.error("delete_note", "Failed to delete note", { error: e });
+			}
+		},
+		[token],
+	);
 
 	return (
 		<div className="flex flex-col h-full p-4 overflow-hidden">

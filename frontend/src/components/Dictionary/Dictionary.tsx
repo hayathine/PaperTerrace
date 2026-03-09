@@ -336,88 +336,74 @@ const Dictionary: React.FC<DictionaryProps> = ({
 		};
 	}, [sessionId, paperId, fetchSavedNotes]);
 
-	const handleDeepTranslate = async (entry: DictionaryEntryWithCoords) => {
-		if (!entry) return;
-		// Mark specific entry as analyzing locally
-		const setter =
-			currentSubTab === "explanation" ? setExplanationEntries : setEntries;
-		setter((prev) =>
-			prev.map((e) =>
-				e.word === entry.word ? { ...e, is_analyzing: true } : e,
-			),
-		);
-		setLoading(true);
-		setError(null);
-
-		try {
-			const headers: HeadersInit = { "Content-Type": "application/json" };
-			if (token) headers.Authorization = `Bearer ${token}`;
-
-			let res: Response;
-			if (context) {
-				// Use context-aware explanation
-				res = await fetch(`${API_URL}/api/explain/context`, {
-					method: "POST",
-					headers,
-					body: JSON.stringify({
-						word: entry.word,
-						context: context,
-						session_id: sessionId,
-						lang: i18n.language,
-					}),
-				});
-			} else {
-				// Use simple explanation (with paper summary context from backend)
-				res = await fetch(
-					`${API_URL}/api/explain-deep/${encodeURIComponent(entry.word)}?lang=${i18n.language}&paper_id=${paperId || ""}`,
-					{ headers },
-				);
-			}
-
-			if (res.ok) {
-				const data: DictionaryEntryWithCoords = await res.json();
-				data.coords = entry.coords; // Preserve coordinates
-				const setter =
-					currentSubTab === "explanation" ? setExplanationEntries : setEntries;
+	const handleDeepTranslate = useCallback(
+		async (entry: DictionaryEntryWithCoords) => {
+			if (!entry) return;
+			const setter =
+				currentSubTab === "explanation" ? setExplanationEntries : setEntries;
+			const updateEntry = (updates: Partial<DictionaryEntryWithCoords>) =>
 				setter((prev) =>
-					prev.map((e) =>
-						e.word === entry.word ? { ...data, is_analyzing: false } : e,
-					),
+					prev.map((e) => (e.word === entry.word ? { ...e, ...updates } : e)),
 				);
-			} else {
-				const errorText = await res.text();
-				log.error("deep_translate", "Translation failed with status", {
-					status: res.status,
-					error: errorText,
+
+			updateEntry({ is_analyzing: true });
+			setLoading(true);
+			setError(null);
+
+			try {
+				const headers: HeadersInit = { "Content-Type": "application/json" };
+				if (token) headers.Authorization = `Bearer ${token}`;
+
+				let res: Response;
+				if (context) {
+					res = await fetch(`${API_URL}/api/explain/context`, {
+						method: "POST",
+						headers,
+						body: JSON.stringify({
+							word: entry.word,
+							context: context,
+							session_id: sessionId,
+							lang: i18n.language,
+						}),
+					});
+				} else {
+					res = await fetch(
+						`${API_URL}/api/explain-deep/${encodeURIComponent(entry.word)}?lang=${i18n.language}&paper_id=${paperId || ""}`,
+						{ headers },
+					);
+				}
+
+				if (res.ok) {
+					const data: DictionaryEntryWithCoords = await res.json();
+					data.coords = entry.coords;
+					setter((prev) =>
+						prev.map((e) =>
+							e.word === entry.word ? { ...data, is_analyzing: false } : e,
+						),
+					);
+				} else {
+					const errorText = await res.text();
+					log.error("deep_translate", "Translation failed with status", {
+						status: res.status,
+						error: errorText,
+						term: entry.word,
+					});
+					setError(t("viewer.dictionary.error_translation_unavailable"));
+					updateEntry({ is_analyzing: false });
+				}
+			} catch (e) {
+				log.error("deep_translate", "Translation failed", {
+					error: e,
 					term: entry.word,
 				});
 				setError(t("viewer.dictionary.error_translation_unavailable"));
-				const setter =
-					currentSubTab === "explanation" ? setExplanationEntries : setEntries;
-				setter((prev) =>
-					prev.map((e) =>
-						e.word === entry.word ? { ...e, is_analyzing: false } : e,
-					),
-				);
+				updateEntry({ is_analyzing: false });
+			} finally {
+				setLoading(false);
 			}
-		} catch (e) {
-			log.error("deep_translate", "Translation failed", {
-				error: e,
-				term: entry.word,
-			});
-
-			setError(t("viewer.dictionary.error_translation_unavailable"));
-			const setter =
-				currentSubTab === "explanation" ? setExplanationEntries : setEntries;
-			setter((prev) =>
-				prev.map((e) =>
-					e.word === entry.word ? { ...e, is_analyzing: false } : e,
-				),
-			);
-		} finally {
-			setLoading(false);
-		}
-	};
+		},
+		[currentSubTab, context, sessionId, paperId, token, i18n.language, t],
+	);
 
 	const handleSaveToNote = async (entry: DictionaryEntryWithCoords) => {
 		if (!entry) return;

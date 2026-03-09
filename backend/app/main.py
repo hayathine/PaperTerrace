@@ -15,6 +15,7 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
+from app.core.config import get_neon_auth_url, is_production
 from app.routers import (
     analysis_router,
     auth_router,
@@ -33,7 +34,6 @@ from app.routers import (
     upload_router,
     users_router,
 )
-from app.core.config import get_neon_auth_url
 from common.logger import ServiceLogger, configure_logging
 
 log = ServiceLogger("Main")
@@ -198,10 +198,9 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             mw_log.error("request", traceback.format_exc())
 
             # Hide detailed error message from end users in production
-            app_env = os.getenv("APP_ENV", "production")
             error_msg = (
                 error_msg_detail
-                if app_env == "development"
+                if not is_production()
                 else "An unexpected error occurred. Please try again later."
             )
 
@@ -234,10 +233,9 @@ async def global_exception_handler(request: Request, exc: Exception):
     mw_log.error("exception", traceback.format_exc())
 
     # Hide detailed error message from end users in production
-    app_env = os.getenv("APP_ENV", "production")
     error_msg = (
         error_msg_detail
-        if app_env == "development"
+        if not is_production()
         else "An unexpected error occurred. Please try again later."
     )
 

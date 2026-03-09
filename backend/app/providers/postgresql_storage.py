@@ -8,6 +8,7 @@ from contextlib import contextmanager
 from datetime import datetime
 
 import psycopg2
+import psycopg2.pool
 from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 
@@ -37,6 +38,8 @@ class PostgreSQLStorage(StorageInterface):
         self.host = os.getenv("DB_HOST", "127.0.0.1")
         self.port = os.getenv("DB_PORT", "5432")
         self.instance_connection_name = os.getenv("CLOUDSQL_CONNECTION_NAME")
+        self._pool: psycopg2.pool.ThreadedConnectionPool | None = None
+        self._init_pool()
 
         log.info(
             "init",
@@ -46,49 +49,112 @@ class PostgreSQLStorage(StorageInterface):
             has_url=self.db_url is not None,
         )
 
+    def _build_dsn(self) -> str | None:
+        """接続用 DSN 文字列を構築する。"""
+        if self.db_url:
+            dsn = self.db_url
+            if dsn.startswith("postgresql+psycopg2://"):
+                dsn = dsn.replace("postgresql+psycopg2://", "postgresql://", 1)
+            return dsn
+        return None
+
+    def _init_pool(self) -> None:
+        """接続プールを初期化する。"""
+        dsn = self._build_dsn()
+        try:
+            if dsn:
+                self._pool = psycopg2.pool.ThreadedConnectionPool(
+                    minconn=2,
+                    maxconn=10,
+                    dsn=dsn,
+                )
+            elif self.instance_connection_name and self.host.startswith("/cloudsql"):
+                self._pool = psycopg2.pool.ThreadedConnectionPool(
+                    minconn=2,
+                    maxconn=10,
+                    user=self.db_user,
+                    password=self.db_password,
+                    database=self.db_name,
+                    host=self.host,
+                )
+            else:
+                self._pool = psycopg2.pool.ThreadedConnectionPool(
+                    minconn=2,
+                    maxconn=10,
+                    user=self.db_user,
+                    password=self.db_password,
+                    database=self.db_name,
+                    host=self.host,
+                    port=self.port,
+                )
+        except Exception as e:
+            log.error("init_pool", "Failed to initialize connection pool", error=str(e))
+            self._pool = None
+
     def _get_connection(self):
         """
-        PostgreSQL接続を取得する。
+        接続プールから PostgreSQL 接続を取得するコンテキストマネージャを返す。
+        プールが利用不可の場合は都度接続にフォールバックする。
         """
 
         @contextmanager
         def get_conn():
-            conn = None
-            try:
-                if self.db_url:
-                    # Use provided connection string
-                    # psycopg2 doesn't support 'postgresql+psycopg2://', so we strip '+psycopg2'
-                    dsn = self.db_url
-                    if dsn.startswith("postgresql+psycopg2://"):
-                        dsn = dsn.replace("postgresql+psycopg2://", "postgresql://", 1)
-                    conn = psycopg2.connect(dsn)
-                # Unixソケット経由で接続 (e.g. Cloud SQL Proxy)
-                elif self.instance_connection_name and self.host.startswith(
-                    "/cloudsql"
-                ):
-                    conn = psycopg2.connect(
-                        user=self.db_user,
-                        password=self.db_password,
-                        database=self.db_name,
-                        host=self.host,  # /cloudsql/PROJECT:REGION:INSTANCE
-                    )
-                else:
-                    # ローカル環境: TCP接続
-                    conn = psycopg2.connect(
-                        user=self.db_user,
-                        password=self.db_password,
-                        database=self.db_name,
-                        host=self.host,
-                        port=self.port,
-                    )
-                yield conn
-            except Exception as e:
-                log.error("connection", "Database connection error", error=str(e))
-                raise
-
-            finally:
-                if conn:
-                    conn.close()
+            if self._pool:
+                conn = None
+                try:
+                    conn = self._pool.getconn()
+                    conn.autocommit = False
+                    yield conn
+                except psycopg2.OperationalError:
+                    # 接続が切断されている場合はプールを再初期化して再試行
+                    if conn:
+                        try:
+                            self._pool.putconn(conn, close=True)
+                        except Exception:
+                            pass
+                        conn = None
+                    self._init_pool()
+                    if self._pool:
+                        conn = self._pool.getconn()
+                        yield conn
+                    else:
+                        raise
+                except Exception:
+                    if conn:
+                        conn.rollback()
+                    raise
+                finally:
+                    if conn and self._pool:
+                        self._pool.putconn(conn)
+            else:
+                # フォールバック: 都度接続
+                conn = None
+                try:
+                    dsn = self._build_dsn()
+                    if dsn:
+                        conn = psycopg2.connect(dsn)
+                    elif self.instance_connection_name and self.host.startswith("/cloudsql"):
+                        conn = psycopg2.connect(
+                            user=self.db_user,
+                            password=self.db_password,
+                            database=self.db_name,
+                            host=self.host,
+                        )
+                    else:
+                        conn = psycopg2.connect(
+                            user=self.db_user,
+                            password=self.db_password,
+                            database=self.db_name,
+                            host=self.host,
+                            port=self.port,
+                        )
+                    yield conn
+                except Exception as e:
+                    log.error("connection", "Database connection error", error=str(e))
+                    raise
+                finally:
+                    if conn:
+                        conn.close()
 
         return get_conn()
 
@@ -198,7 +264,6 @@ class PostgreSQLStorage(StorageInterface):
                     "UPDATE papers SET html_content = %s, updated_at = %s WHERE paper_id = %s",
                     (html_content, now, paper_id),
                 )
-                conn.commit()
                 conn.commit()
                 return cur.rowcount > 0
 
@@ -689,29 +754,23 @@ class PostgreSQLStorage(StorageInterface):
         with self._get_connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(
-                    "SELECT COUNT(*) FROM papers WHERE owner_id = %s", (user_id,)
-                )
-                total = cur.fetchone()[0]
-                cur.execute(
-                    "SELECT COUNT(*) FROM papers WHERE owner_id = %s AND visibility = 'public'",
+                    """
+                    SELECT
+                        COUNT(*) AS paper_count,
+                        COUNT(*) FILTER (WHERE visibility = 'public') AS public_paper_count,
+                        COALESCE(SUM(view_count), 0) AS total_views,
+                        COALESCE(SUM(like_count), 0) AS total_likes
+                    FROM papers
+                    WHERE owner_id = %s
+                    """,
                     (user_id,),
                 )
-                public = cur.fetchone()[0]
-                cur.execute(
-                    "SELECT COALESCE(SUM(view_count), 0) FROM papers WHERE owner_id = %s",
-                    (user_id,),
-                )
-                views = cur.fetchone()[0]
-                cur.execute(
-                    "SELECT COALESCE(SUM(like_count), 0) FROM papers WHERE owner_id = %s",
-                    (user_id,),
-                )
-                likes = cur.fetchone()[0]
+                row = cur.fetchone()
                 return {
-                    "paper_count": total,
-                    "public_paper_count": public,
-                    "total_views": views,
-                    "total_likes": likes,
+                    "paper_count": row[0],
+                    "public_paper_count": row[1],
+                    "total_views": row[2],
+                    "total_likes": row[3],
                 }
 
     def save_session_context(self, session_id: str, paper_id: str) -> None:
@@ -748,16 +807,19 @@ class PostgreSQLStorage(StorageInterface):
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
-                    "SELECT COUNT(*) FROM papers WHERE owner_id = %s", (user_id,)
-                )
-                total = cur.fetchone()["count"]
-                cur.execute(
-                    """SELECT * FROM papers WHERE owner_id = %s 
-                       ORDER BY created_at DESC LIMIT %s OFFSET %s""",
+                    """
+                    SELECT *, COUNT(*) OVER() AS _total_count
+                    FROM papers WHERE owner_id = %s
+                    ORDER BY created_at DESC LIMIT %s OFFSET %s
+                    """,
                     (user_id, per_page, offset),
                 )
                 rows = cur.fetchall()
-                return [dict(row) for row in rows], total
+                total = rows[0]["_total_count"] if rows else 0
+                return [
+                    {k: v for k, v in dict(row).items() if k != "_total_count"}
+                    for row in rows
+                ], total
 
     def get_user_public_papers(
         self, user_id: str, page: int = 1, per_page: int = 20
@@ -766,17 +828,19 @@ class PostgreSQLStorage(StorageInterface):
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute(
-                    "SELECT COUNT(*) FROM papers WHERE owner_id = %s AND visibility = 'public'",
-                    (user_id,),
-                )
-                total = cur.fetchone()["count"]
-                cur.execute(
-                    """SELECT * FROM papers WHERE owner_id = %s AND visibility = 'public'
-                       ORDER BY created_at DESC LIMIT %s OFFSET %s""",
+                    """
+                    SELECT *, COUNT(*) OVER() AS _total_count
+                    FROM papers WHERE owner_id = %s AND visibility = 'public'
+                    ORDER BY created_at DESC LIMIT %s OFFSET %s
+                    """,
                     (user_id, per_page, offset),
                 )
                 rows = cur.fetchall()
-                return [dict(row) for row in rows], total
+                total = rows[0]["_total_count"] if rows else 0
+                return [
+                    {k: v for k, v in dict(row).items() if k != "_total_count"}
+                    for row in rows
+                ], total
 
     def get_public_papers(
         self, page: int = 1, per_page: int = 20, sort: str = "recent"
@@ -790,15 +854,20 @@ class PostgreSQLStorage(StorageInterface):
 
         with self._get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("SELECT COUNT(*) FROM papers WHERE visibility = 'public'")
-                total = cur.fetchone()["count"]
                 cur.execute(
-                    f"""SELECT * FROM papers WHERE visibility = 'public'
-                       ORDER BY {order_by} LIMIT %s OFFSET %s""",
+                    f"""
+                    SELECT *, COUNT(*) OVER() AS _total_count
+                    FROM papers WHERE visibility = 'public'
+                    ORDER BY {order_by} LIMIT %s OFFSET %s
+                    """,
                     (per_page, offset),
                 )
                 rows = cur.fetchall()
-                return [dict(row) for row in rows], total
+                total = rows[0]["_total_count"] if rows else 0
+                return [
+                    {k: v for k, v in dict(row).items() if k != "_total_count"}
+                    for row in rows
+                ], total
 
     def search_public_papers(
         self, query: str, page: int = 1, per_page: int = 20

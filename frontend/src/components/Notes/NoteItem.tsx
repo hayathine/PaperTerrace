@@ -1,4 +1,4 @@
-import type React from "react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import CopyButton from "../Common/CopyButton";
 import MarkdownContent from "../Common/MarkdownContent";
@@ -10,7 +10,7 @@ interface NoteItemProps {
 	onJump?: (page: number, x: number, y: number, term?: string) => void;
 }
 
-const NoteItem: React.FC<NoteItemProps> = ({ note, onDelete, onJump }) => {
+const NoteItem: React.FC<NoteItemProps> = memo(({ note, onDelete, onJump }) => {
 	const { t } = useTranslation();
 	return (
 		<div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm overflow-hidden group mb-3 hover:shadow-md transition-all">
@@ -83,6 +83,6 @@ const NoteItem: React.FC<NoteItemProps> = ({ note, onDelete, onJump }) => {
 			)}
 		</div>
 	);
-};
+});
 
 export default NoteItem;

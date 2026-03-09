@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { v4 as uuidv4 } from "uuid";
 import { API_URL } from "@/config";
@@ -100,68 +100,71 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 		}
 	}, [initialPrompt, onInitialPromptSent]);
 
-	const handleSendMessage = async (text: string, figureId?: string) => {
-		// Add user message immediately
-		const userMsg: Message = {
-			id: uuidv4(),
-			role: "user",
-			content: text,
-			timestamp: Date.now(),
-		};
-
-		setMessages((prev) => [...prev, userMsg]);
-		setIsLoading(true);
-		startLoading(t("common.loading"));
-
-		try {
-			const headers: HeadersInit = {
-				"Content-Type": "application/json",
+	const handleSendMessage = useCallback(
+		async (text: string, figureId?: string) => {
+			// Add user message immediately
+			const userMsg: Message = {
+				id: uuidv4(),
+				role: "user",
+				content: text,
+				timestamp: Date.now(),
 			};
-			if (token) headers.Authorization = `Bearer ${token}`;
 
-			const response = await fetch(`${API_URL}/api/chat`, {
-				method: "POST",
-				headers,
-				body: JSON.stringify({
-					message: text,
-					session_id: sessionId,
-					paper_id: paperId,
-					figure_id: figureId,
-					lang: i18n.language,
-				}),
-			});
+			setMessages((prev) => [...prev, userMsg]);
+			setIsLoading(true);
+			startLoading(t("common.loading"));
 
-			if (!response.ok) {
-				throw new Error("Failed to send message");
+			try {
+				const headers: HeadersInit = {
+					"Content-Type": "application/json",
+				};
+				if (token) headers.Authorization = `Bearer ${token}`;
+
+				const response = await fetch(`${API_URL}/api/chat`, {
+					method: "POST",
+					headers,
+					body: JSON.stringify({
+						message: text,
+						session_id: sessionId,
+						paper_id: paperId,
+						figure_id: figureId,
+						lang: i18n.language,
+					}),
+				});
+
+				if (!response.ok) {
+					throw new Error("Failed to send message");
+				}
+
+				const data = await response.json();
+
+				const aiMsg: Message = {
+					id: uuidv4(),
+					role: "assistant",
+					content: data.response,
+					timestamp: Date.now(),
+					grounding: data.grounding,
+					traceId: data.trace_id,
+				};
+
+				setMessages((prev) => [...prev, aiMsg]);
+			} catch (error) {
+				log.error("send_message", "Chat error", { error });
+
+				const errorMsg: Message = {
+					id: uuidv4(),
+					role: "assistant",
+					content: t("chat.error_retry"),
+					timestamp: Date.now(),
+				};
+				setMessages((prev) => [...prev, errorMsg]);
+			} finally {
+				setIsLoading(false);
+				stopLoading();
 			}
-
-			const data = await response.json();
-
-			const aiMsg: Message = {
-				id: uuidv4(),
-				role: "assistant",
-				content: data.response,
-				timestamp: Date.now(),
-				grounding: data.grounding,
-				traceId: data.trace_id,
-			};
-
-			setMessages((prev) => [...prev, aiMsg]);
-		} catch (error) {
-			log.error("send_message", "Chat error", { error });
-
-			const errorMsg: Message = {
-				id: uuidv4(),
-				role: "assistant",
-				content: t("chat.error_retry"),
-				timestamp: Date.now(),
-			};
-			setMessages((prev) => [...prev, errorMsg]);
-		} finally {
-			setIsLoading(false);
-			stopLoading();
-		}
-	};
+		},
+		[sessionId, paperId, token, i18n.language, startLoading, stopLoading, t],
+	);
 
 	return (
 		<div className="flex flex-col h-full w-full bg-white md:border-l border-gray-200">

@@ -36,31 +36,26 @@ layout_analysis_service = LayoutAnalysisService()
 
 def _get_context(session_id: str) -> str | None:
     """Get paper context from cache or DB fallback."""
-    # 1. Try DB first for analysis reliability and to prevent Redis OOM with large blobs.
-    # Higher reliability by always ensuring we have the full document.
+    # 1. Redis キャッシュを優先して確認（DB クエリを省略）
+    context = redis_service.get(f"session:{session_id}")
+    if context:
+        log.debug("get_context", "Cache HIT", session_id=session_id)
+        redis_service.expire(f"session:{session_id}", 3600)
+        return context
+
+    # 2. DB から取得（キャッシュミス時のフォールバック）
     paper_id = storage.get_session_paper_id(session_id)
     resolved_paper_id = paper_id or session_id
 
-    # Try DB persistence
     paper = storage.get_paper(resolved_paper_id)
     if paper and paper.get("ocr_text"):
-        context = paper["ocr_text"]
         log.debug(
             "get_context",
             "Fetched FULL context from DB",
             paper_id=resolved_paper_id,
         )
+        return paper["ocr_text"]
 
-        return context
-
-    # 2. Fallback to session cache (recent context)
-    context = redis_service.get(f"session:{session_id}")
-    if context:
-        log.debug("get_context", "Cache HIT", session_id=session_id)
-
-        redis_service.expire(f"session:{session_id}", 3600)
-
-        return context
     return None
 
 

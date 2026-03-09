@@ -199,33 +199,28 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		}
 	}, [mode, hasMountedPdfMode]);
 
-	// 検索マッチング処理
-	useEffect(() => {
-		if (!searchTerm || searchTerm.length < 2 || !onSearchMatchesUpdate) {
-			if (onSearchMatchesUpdate) {
-				onSearchMatchesUpdate([]);
-			}
-			return;
-		}
-
+	// 検索マッチング処理（計算は useMemo で、副作用のみ useEffect で）
+	const searchMatches = useMemo(() => {
+		if (!searchTerm || searchTerm.length < 2) return [];
 		const lowerSearchTerm = searchTerm.toLowerCase();
 		const matches: Array<{ page: number; wordIndex: number }> = [];
-
 		pages.forEach((page) => {
 			if (page.words) {
 				page.words.forEach((word, wordIndex) => {
 					if (word.word.toLowerCase().includes(lowerSearchTerm)) {
-						matches.push({
-							page: page.page_num,
-							wordIndex,
-						});
+						matches.push({ page: page.page_num, wordIndex });
 					}
 				});
 			}
 		});
+		return matches;
+	}, [searchTerm, pages]);
 
-		onSearchMatchesUpdate(matches);
-	}, [searchTerm, pages, onSearchMatchesUpdate]);
+	useEffect(() => {
+		if (onSearchMatchesUpdate) {
+			onSearchMatchesUpdate(searchMatches);
+		}
+	}, [searchMatches, onSearchMatchesUpdate]);
 
 	// 現在の検索マッチ位置へスクロール
 	useEffect(() => {

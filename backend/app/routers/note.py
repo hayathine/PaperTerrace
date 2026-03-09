@@ -9,6 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.auth import OptionalUser
+from app.core.config import is_production
 from app.domain.features import SidebarNoteService
 from app.providers import get_storage_provider
 
@@ -89,10 +90,11 @@ async def update_note(note_id: str, request: NoteRequest, user: OptionalUser = N
         )
         return JSONResponse(jsonable_encoder(updated))
     except Exception as e:
-        import os
-
-        app_env = os.getenv("APP_ENV", "production")
-        error_msg = str(e) if app_env == "development" else "Failed to update note"
+        error_msg = (
+            str(e)
+            if not is_production()
+            else "An error occurred while saving the note."
+        )
         return JSONResponse({"error": error_msg}, status_code=500)
 
 

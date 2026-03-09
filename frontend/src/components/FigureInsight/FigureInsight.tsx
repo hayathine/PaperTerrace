@@ -229,21 +229,18 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 
 			{/* Zoom Modal */}
 			{zoomedImage && (
-				<button
-					type="button"
-					className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4 md:p-8 border-none w-full h-full text-left"
-					onClick={() => setZoomedImage(null)}
-					onKeyDown={(e) => {
-						if (e.key === "Escape") setZoomedImage(null);
-					}}
-				>
+				<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 overflow-hidden animate-fade-in">
 					<button
 						type="button"
-						className="absolute top-6 right-6 text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-all"
-						onClick={(e) => {
-							e.stopPropagation();
-							setZoomedImage(null);
-						}}
+						className="absolute inset-0 w-full h-full bg-black/80 cursor-pointer border-none"
+						onClick={() => setZoomedImage(null)}
+						aria-label="Close zoom backdrop"
+					/>
+					<button
+						type="button"
+						className="absolute top-6 right-6 text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-all z-[110]"
+						onClick={() => setZoomedImage(null)}
+						aria-label="Close zoom"
 					>
 						<svg
 							className="w-8 h-8"
@@ -262,17 +259,15 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 					<div
 						role="dialog"
 						aria-modal="true"
-						className="relative max-w-4xl w-full max-h-full overflow-hidden flex items-center justify-center"
-						onClick={(e) => e.stopPropagation()}
-						onKeyDown={(e) => e.stopPropagation()}
+						className="relative max-w-5xl w-full max-h-full flex items-center justify-center pointer-events-none"
 					>
 						<img
 							src={zoomedImage}
 							alt="Zoomed figure"
-							className="max-w-full max-h-[90vh] object-contain shadow-2xl rounded-lg"
+							className="max-w-full max-h-[90vh] object-contain shadow-2xl rounded-lg pointer-events-auto cursor-default"
 						/>
 					</div>
-				</button>
+				</div>
 			)}
 		</div>
 	);
@@ -309,7 +304,13 @@ const FigureCard: React.FC<FigureCardProps> = ({
 			{/* 画像エリア */}
 			<button
 				type="button"
-				onClick={() => figure.image_url && onZoom(figure.image_url)}
+				onClick={() => {
+					if (!figure.image_url) return;
+					const fullUrl = figure.image_url.startsWith("http")
+						? figure.image_url
+						: `${API_URL}${figure.image_url}`;
+					onZoom(fullUrl);
+				}}
 				className="relative w-full bg-slate-100 aspect-video flex items-center justify-center overflow-hidden border-b border-slate-100 cursor-zoom-in group/img border-none p-0"
 			>
 				<img

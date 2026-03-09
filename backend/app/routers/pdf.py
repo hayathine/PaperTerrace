@@ -11,6 +11,7 @@ from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from app.auth import OptionalUser
+from app.core.config import is_production
 from app.domain.features import SummaryService
 from app.domain.services.analysis_service import EnglishAnalysisService
 from app.domain.services.paper_processing import (
@@ -330,8 +331,12 @@ async def analyze_pdf_json(
 
     except Exception as e:
         log.error("analyze_json", "Unexpected error", error=str(e), exc_info=True)
-        app_env = os.getenv("APP_ENV", "production")
-        error_msg = str(e) if app_env == "development" else "Internal Server Error"
+
+        error_msg = (
+            str(e)
+            if not is_production()
+            else "An error occurred while analyzing the document."
+        )
         return JSONResponse({"error": error_msg}, status_code=500)
 
 
@@ -344,51 +349,67 @@ async def analyze_paper(
     """
     Start streaming for an already uploaded/processed paper.
     """
-    paper = storage.get_paper(paper_id)
-    if not paper:
-        return JSONResponse({"error": "Paper not found"}, status_code=404)
+    try:
+        paper = storage.get_paper(paper_id)
+        if not paper:
+            return JSONResponse({"error": "Paper not found"}, status_code=404)
 
-    file_hash = paper.get("file_hash")
-    if not file_hash:
+        file_hash = paper.get("file_hash")
+        if not file_hash:
+            return JSONResponse(
+                {"error": "Paper record is corrupt (missing hash)"}, status_code=400
+            )
+
+        user_id = user.uid if user else None
+        is_registered = False
+        if user_id:
+            try:
+                if storage.get_user(user_id):
+                    is_registered = True
+            except Exception:
+                pass
+
+        task_id = str(uuid.uuid4())
+        task_data = {
+            "format": "json",
+            "lang": paper.get("target_language", "ja"),
+            "session_id": session_id,
+            "filename": paper.get("filename", "unknown.pdf"),
+            "file_hash": file_hash,
+            "paper_id": paper_id,
+            "user_id": user_id,
+            "is_registered": is_registered,
+        }
+
+        # If we already have HTML content or OCR text, we can skip reprocessing
+        if paper.get("html_content"):
+            task_data["text"] = "CACHED_HTML:" + paper["html_content"]
+        elif paper.get("ocr_text"):
+            task_data["text"] = paper["ocr_text"]
+        else:
+            # This shouldn't happen if it was saved correctly, but as a fallback
+            return JSONResponse(
+                {"error": "Paper content is missing, please re-upload"}, status_code=400
+            )
+
+        redis_service.set(f"task:{task_id}", task_data, expire=3600)  # 1-hour session
+
         return JSONResponse(
-            {"error": "Paper record is corrupt (missing hash)"}, status_code=400
+            {"task_id": task_id, "stream_url": f"/api/stream/{task_id}"}
         )
-
-    user_id = user.uid if user else None
-    is_registered = False
-    if user_id:
-        try:
-            if storage.get_user(user_id):
-                is_registered = True
-        except Exception:
-            pass
-
-    task_id = str(uuid.uuid4())
-    task_data = {
-        "format": "json",
-        "lang": paper.get("target_language", "ja"),
-        "session_id": session_id,
-        "filename": paper.get("filename", "unknown.pdf"),
-        "file_hash": file_hash,
-        "paper_id": paper_id,
-        "user_id": user_id,
-        "is_registered": is_registered,
-    }
-
-    # If we already have HTML content or OCR text, we can skip reprocessing
-    if paper.get("html_content"):
-        task_data["text"] = "CACHED_HTML:" + paper["html_content"]
-    elif paper.get("ocr_text"):
-        task_data["text"] = paper["ocr_text"]
-    else:
-        # This shouldn't happen if it was saved correctly, but as a fallback
-        return JSONResponse(
-            {"error": "Paper content is missing, please re-upload"}, status_code=400
+    except Exception as e:
+        log.error(
+            "analyze_paper",
+            "Error starting paper analysis",
+            error=str(e),
+            paper_id=paper_id,
         )
-
-    redis_service.set(f"task:{task_id}", task_data, expire=3600)  # 1-hour session
-
-    return JSONResponse({"task_id": task_id, "stream_url": f"/api/stream/{task_id}"})
+        error_msg = (
+            str(e)
+            if not is_production()
+            else "An error occurred while analyzing the document."
+        )
+        return JSONResponse({"error": error_msg}, status_code=500)
 
 
 @router.get("/stream/{task_id}")

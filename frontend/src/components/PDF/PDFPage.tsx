@@ -17,6 +17,17 @@ import type { PageData, SelectedFigure } from "./types";
 
 const log = createLogger("PDFPage");
 
+// Interactive targets in click mode (matches inference-service TARGET_CLASSES)
+const INTERACTIVE_TYPES = new Set([
+	"table",
+	"figure",
+	"picture",
+	"formula",
+	"chart",
+	"algorithm",
+	"equation",
+]);
+
 interface PDFPageProps {
 	page: PageData;
 	scale?: number;
@@ -310,16 +321,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
 								const label = (fig.label || "").toLowerCase();
 
-								// Interactive targets in click mode (matches inference-service TARGET_CLASSES)
-								const isInteractiveType = [
-									"table",
-									"figure",
-									"picture",
-									"formula",
-									"chart",
-									"algorithm",
-									"equation",
-								].includes(label);
+								const isInteractiveType = INTERACTIVE_TYPES.has(label);
 
 								// Production: skip non-interactive elements for clean UI (Req 3.4)
 								// Development: show all elements with debug borders/confidence

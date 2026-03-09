@@ -16,7 +16,9 @@ import UploadScreen from "./components/Upload/UploadScreen";
 import { useAuth } from "./contexts/AuthContext";
 import { useLoading } from "./contexts/LoadingContext";
 import { useSyncStatus } from "./db/sync";
+import { useLayoutState } from "./hooks/useLayoutState";
 import { useScrollTracking } from "./hooks/useScrollTracking";
+import { useSearchState } from "./hooks/useSearchState";
 import { useServiceHealth } from "./hooks/useServiceHealth";
 import { syncTrajectory } from "./lib/recommendation";
 
@@ -88,12 +90,17 @@ function App() {
 	const [selectedFigure, setSelectedFigure] = useState<SelectedFigure | null>(
 		null,
 	);
-	const [sidebarWidth, setSidebarWidth] = useState(384);
-	const [isResizing, setIsResizing] = useState(false);
-	// デスクトップ(>=768px)ではデフォルト表示。モバイル/タブレットでは初期非表示。
-	const [isLeftSidebarOpen, setIsLeftSidebarOpen] = useState(
-		() => window.innerWidth >= 768,
-	);
+	const {
+		sidebarWidth,
+		setSidebarWidth,
+		isResizing,
+		setIsResizing,
+		isLeftSidebarOpen,
+		setIsLeftSidebarOpen,
+		isRightSidebarOpen,
+		setIsRightSidebarOpen,
+		isMobile,
+	} = useLayoutState();
 	const [activeEvidence, setActiveEvidence] = useState<any>(null);
 	const [uploadedPapers, setUploadedPapers] = useState<any[]>([]);
 
@@ -234,55 +241,6 @@ function App() {
 		window.addEventListener("beforeunload", handleBeforeUnload);
 		return () => window.removeEventListener("beforeunload", handleBeforeUnload);
 	}, [currentPaperId, sessionId, token]);
-
-	// ブレークポイント: 768px未満をモバイル扱い (Tailwind md と一致)
-	const [isMobile, setIsMobile] = useState(() => window.innerWidth < 768);
-	// 初期状態は全デバイスで閉じた状態。論文選択・単語クリック時に自動で開く。
-	const [isRightSidebarOpen, setIsRightSidebarOpen] = useState(false);
-
-	useEffect(() => {
-		const checkMobile = () => {
-			const mobile = window.innerWidth < 768;
-			setIsMobile(mobile);
-			// モバイルに縮小したときはサイドバーを閉じて画面領域を確保する
-			if (mobile) {
-				setIsRightSidebarOpen(false);
-				setIsLeftSidebarOpen(false);
-			}
-		};
-		window.addEventListener("resize", checkMobile);
-		return () => window.removeEventListener("resize", checkMobile);
-	}, []);
-
-	useEffect(() => {
-		const handleMouseMove = (e: MouseEvent) => {
-			if (!isResizing) return;
-			// Calculate new width from right side
-			const newWidth = window.innerWidth - e.clientX;
-			// Constrain width between 200px and half the screen
-			if (newWidth > 200 && newWidth < window.innerWidth * 0.7) {
-				setSidebarWidth(newWidth);
-			}
-		};
-
-		const handleMouseUp = () => {
-			setIsResizing(false);
-			document.body.style.cursor = "default";
-			document.body.style.userSelect = "auto";
-		};
-
-		if (isResizing) {
-			window.addEventListener("mousemove", handleMouseMove);
-			window.addEventListener("mouseup", handleMouseUp);
-			document.body.style.cursor = "col-resize";
-			document.body.style.userSelect = "none";
-		}
-
-		return () => {
-			window.removeEventListener("mousemove", handleMouseMove);
-			window.removeEventListener("mouseup", handleMouseUp);
-		};
-	}, [isResizing]);
 
 	const handlePaperLoaded = (paperId: string | null) => {
 		if (paperId) {
@@ -456,69 +414,19 @@ function App() {
 		setIsRightSidebarOpen(true);
 	};
 
-	// Ctrl+F イベントをインターセプトしてカスタム検索を開く
-	const [isSearchOpen, setIsSearchOpen] = useState(false);
-	const [searchTerm, setSearchTerm] = useState("");
-	const [searchMatches, setSearchMatches] = useState<
-		Array<{ page: number; wordIndex: number }>
-	>([]);
-	const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
-
-	// 現在の検索マッチ
-	const currentSearchMatch =
-		searchMatches.length > 0 && currentMatchIndex < searchMatches.length
-			? searchMatches[currentMatchIndex]
-			: null;
-
-	// 検索マッチのナビゲーション
-	const handleNextMatch = useCallback(() => {
-		if (searchMatches.length === 0) return;
-		setCurrentMatchIndex((prev) => (prev + 1) % searchMatches.length);
-	}, [searchMatches.length]);
-
-	const handlePrevMatch = useCallback(() => {
-		if (searchMatches.length === 0) return;
-		setCurrentMatchIndex(
-			(prev) => (prev - 1 + searchMatches.length) % searchMatches.length,
-		);
-	}, [searchMatches.length]);
-
-	// 検索を閉じる
-	const handleCloseSearch = useCallback(() => {
-		setIsSearchOpen(false);
-		setSearchTerm("");
-		setSearchMatches([]);
-		setCurrentMatchIndex(0);
-	}, []);
-
-	// 検索マッチの更新
-	const handleSearchMatchesUpdate = useCallback(
-		(matches: Array<{ page: number; wordIndex: number }>) => {
-			setSearchMatches(matches);
-			setCurrentMatchIndex(0);
-		},
-		[],
-	);
-
-	useEffect(() => {
-		const handleKeyDown = (e: KeyboardEvent) => {
-			// Ctrl+F または Cmd+F (Mac)
-			if ((e.ctrlKey || e.metaKey) && e.key === "f") {
-				// PDFが表示されている場合のみカスタム検索を有効化
-				if (uploadFile || currentPaperId) {
-					e.preventDefault();
-					setIsSearchOpen(true);
-				}
-			}
-			// Escで検索を閉じる
-			if (e.key === "Escape" && isSearchOpen) {
-				handleCloseSearch();
-			}
-		};
-
-		window.addEventListener("keydown", handleKeyDown);
-		return () => window.removeEventListener("keydown", handleKeyDown);
-	}, [uploadFile, currentPaperId, isSearchOpen, handleCloseSearch]);
+	// 検索状態
+	const {
+		isSearchOpen,
+		searchTerm,
+		setSearchTerm,
+		searchMatches,
+		currentMatchIndex,
+		currentSearchMatch,
+		handleNextMatch,
+		handlePrevMatch,
+		handleCloseSearch,
+		handleSearchMatchesUpdate,
+	} = useSearchState(!!(uploadFile || currentPaperId));
 
 	return (
 		<ErrorBoundary>

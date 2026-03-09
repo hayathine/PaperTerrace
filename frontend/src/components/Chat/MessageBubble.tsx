@@ -1,4 +1,4 @@
-import type React from "react";
+import { memo } from "react";
 import { useTranslation } from "react-i18next";
 import CopyButton from "../Common/CopyButton";
 import FeedbackSection from "../Common/FeedbackSection";
@@ -116,4 +116,4 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 	);
 };
 
-export default MessageBubble;
+export default memo(MessageBubble);

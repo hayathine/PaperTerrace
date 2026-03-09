@@ -639,11 +639,10 @@ async def explain_deep(
         log.error(
             "explain_deep", "Gemini translation failed", error=str(e), lemma=lemma
         )
-        app_env = os.getenv("APP_ENV", "production")
+        from app.core.config import is_production
+
         error_msg = (
-            "Translation failed"
-            if app_env != "development"
-            else f"Translation failed: {str(e)}"
+            str(e) if not is_production() else "An error occurred during translation."
         )
         if not is_htmx:
             return JSONResponse(

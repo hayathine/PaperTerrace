@@ -81,6 +81,28 @@ export default defineConfig({
 			},
 		},
 	},
+	build: {
+		rollupOptions: {
+			output: {
+				manualChunks: {
+					"vendor-react": ["react", "react-dom"],
+					"vendor-markdown": [
+						"react-markdown",
+						"rehype-katex",
+						"remark-math",
+						"katex",
+					],
+					"vendor-i18n": [
+						"i18next",
+						"react-i18next",
+						"i18next-browser-languagedetector",
+						"i18next-http-backend",
+					],
+					"vendor-dexie": ["dexie", "dexie-react-hooks"],
+				},
+			},
+		},
+	},
 	test: {
 		globals: true,
 		environment: "jsdom",

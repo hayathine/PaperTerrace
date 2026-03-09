@@ -37,7 +37,11 @@ def _fix_indentation_artifacts(text: str) -> str:
     result = []
     for line in lines:
         # 4スペース以上のインデントがある行（Markdownコードブロックの条件）
-        if len(line) > 4 and line.startswith("    ") and not line.startswith("        "):
+        if (
+            len(line) > 4
+            and line.startswith("    ")
+            and not line.startswith("        ")
+        ):
             stripped = line.lstrip()
             # Markdownの構造要素（見出し、引用、リスト、コードフェンス等）は変更しない
             if stripped and stripped[0] not in "#>-*+|`":
@@ -220,7 +224,9 @@ class PDFOCRService:
                 exc_info=True,
             )
             error_msg = str(e)
-            if os.getenv("APP_ENV") == "production":
+            from app.core.config import is_production
+
+            if is_production():
                 error_msg = "Internal Server Error during OCR"
             yield (0, 0, f"ERROR_API_FAILED: {error_msg}", True, file_hash, None, None)
         finally:
@@ -463,18 +469,22 @@ class PDFOCRService:
                 fig_idx = 0
 
                 # ページ高さをレイアウト座標系で取得（y座標の正規化に使用）
-                page_height_layout = max(
-                    (
-                        block.get("bbox", {}).get("y_max", 0)
-                        if isinstance(block.get("bbox"), dict)
-                        else (
-                            block.get("bbox", [0, 0, 0, 0])[3]
-                            if len(block.get("bbox", [])) > 3
-                            else 0
+                page_height_layout = (
+                    max(
+                        (
+                            block.get("bbox", {}).get("y_max", 0)
+                            if isinstance(block.get("bbox"), dict)
+                            else (
+                                block.get("bbox", [0, 0, 0, 0])[3]
+                                if len(block.get("bbox", [])) > 3
+                                else 0
+                            )
                         )
+                        for block in layout_blocks
                     )
-                    for block in layout_blocks
-                ) if layout_blocks else 1
+                    if layout_blocks
+                    else 1
+                )
 
                 for block in layout_blocks:
                     class_name = block.get("class_name", "").lower()

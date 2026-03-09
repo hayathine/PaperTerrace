@@ -11,8 +11,18 @@ log = ServiceLogger("Config")
 
 
 def get_app_env() -> str:
-    """現在の環境を返す。APP_ENV が未設定の場合は 'dev' を返す。"""
-    return os.getenv("APP_ENV", "dev")
+    """
+    現在の環境を返す。
+    'production' -> 'prod'
+    'development' -> 'dev'
+    未設定の場合は 'dev' を返す。
+    """
+    env = os.getenv("APP_ENV", "dev").lower()
+    if env == "production":
+        return "prod"
+    if env == "development":
+        return "dev"
+    return env
 
 
 def is_production() -> bool:
