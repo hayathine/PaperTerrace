@@ -9,6 +9,13 @@
 			"description": "The issue has been reported. Please reload the page or try again later.",
 			"reload": "Reload Page"
 		},
+		"errors": {
+			"unexpected": "An unexpected error occurred. Please try again later.",
+			"load_failed": "Failed to load. Please try again.",
+			"upload_failed": "Upload failed. Please try again.",
+			"processing": "An error occurred during processing. Please try again.",
+			"network": "A network error occurred. Please check your connection."
+		},
 		"save": "Save",
 		"cancel": "Cancel",
 		"delete": "Delete",
@@ -54,7 +61,8 @@
 		"guest": "Continue as Guest",
 		"redirect_hint": "If popup doesn't work, try redirect:",
 		"terms_hint": "By signing in, you agree to our Terms of Service and Privacy Policy.",
-		"signing_in": "Signing in..."
+		"signing_in": "Signing in...",
+		"login_failed": "Login failed. Please try again."
 	},
 	"sidebar": {
 		"tabs": {

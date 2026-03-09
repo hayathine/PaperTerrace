@@ -551,8 +551,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			// Start streaming with retry logic
 			await startStreaming(stream_url, 0);
 		} catch (err: any) {
+			log.error("analyze_pdf", "PDF upload or processing failed", {
+				error: err,
+			});
 			setStatus("error");
-			setErrorMsg(err.message);
+			setErrorMsg(t("common.errors.upload_failed"));
 			processingFileRef.current = null;
 			activeTaskIdRef.current = null;
 		}
@@ -691,8 +694,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				} else if (eventData.type === "assist_mode_ready") {
 					// No action needed; reserved for future use
 				} else if (eventData.type === "error") {
+					log.error("sse_event", "SSE stream error event", {
+						message: eventData.message,
+					});
 					setStatus("error");
-					setErrorMsg(eventData.message);
+					setErrorMsg(t("common.errors.processing"));
 					es.close();
 					processingFileRef.current = null;
 					activeTaskIdRef.current = null;
@@ -1174,8 +1180,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						setStatus("done");
 						es.close();
 					} else if (eventData.type === "error") {
+						log.error("sse_reload_event", "SSE reload stream error event", {
+							message: eventData.message,
+						});
 						setStatus("error");
-						setErrorMsg(eventData.message);
+						setErrorMsg(t("common.errors.processing"));
 						es.close();
 					}
 				} catch (_e) {
@@ -1189,8 +1198,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				if (pages.length === 0) setStatus("error"); // Only error if we got nothing
 			};
 		} catch (err: any) {
+			log.error("reload_pages", "Reload pages failed", { error: err });
 			setStatus("error");
-			setErrorMsg(err.message);
+			setErrorMsg(t("common.errors.network"));
 		}
 	};
 

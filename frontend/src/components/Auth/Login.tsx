@@ -39,11 +39,7 @@ const Login: React.FC = () => {
 				error: err,
 			});
 
-			const errorCode = err.code || "unknown";
-			const errorMessage = err.message || "Error occurred";
-			setError(
-				`${provider}でのログインに失敗しました。 (${errorCode}: ${errorMessage})`,
-			);
+			setError(t("auth.login_failed"));
 		} finally {
 			setLoading(null);
 		}

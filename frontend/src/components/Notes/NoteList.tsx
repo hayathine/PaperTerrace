@@ -61,10 +61,14 @@ const NoteList: React.FC<NoteListProps> = ({
 				const data = await res.json();
 				setNotes(data.notes || []);
 			} else {
-				setError("Failed to load notes");
+				log.error("fetch_notes", "Failed to load notes", {
+					status: res.status,
+				});
+				setError(t("common.errors.load_failed"));
 			}
 		} catch (e) {
-			setError(String(e));
+			log.error("fetch_notes", "Network error loading notes", { error: e });
+			setError(t("common.errors.load_failed"));
 		} finally {
 			setLoading(false);
 		}

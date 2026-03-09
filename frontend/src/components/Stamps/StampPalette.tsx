@@ -71,7 +71,9 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 			onSelectStamp(data.url);
 			setActiveCategory("custom");
 		} catch (err) {
-			alert(err instanceof Error ? err.message : "Upload failed");
+			log.error("upload_custom_stamp", "Custom stamp upload failed", {
+				error: err,
+			});
 		} finally {
 			if (fileInputRef.current) {
 				fileInputRef.current.value = "";

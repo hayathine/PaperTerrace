@@ -126,13 +126,16 @@ const Summary: React.FC<SummaryProps> = ({
 				} else if (data.abstract) {
 					setSummaryData(data.abstract);
 				} else {
-					setError(data.error || "Summary not found in response");
+					log.error("handle_summarize", "Summary not found in response", {
+						data,
+					});
+					setError(t("common.errors.processing"));
 				}
 			} catch (e: any) {
-				setError(`Error: ${e.message}`);
 				log.error("handle_summarize", "Summary generation failed", {
 					error: e,
 				});
+				setError(t("common.errors.processing"));
 			} finally {
 				setLoading(false);
 				stopLoading();
@@ -175,8 +178,8 @@ const Summary: React.FC<SummaryProps> = ({
 			setCritiqueData(data);
 			setCritiqueTraceId(data.trace_id);
 		} catch (e: any) {
-			setError(`Error: ${e.message}`);
 			log.error("handle_critique", "Critique generation failed", { error: e });
+			setError(t("common.errors.processing"));
 		} finally {
 			setLoading(false);
 			stopLoading();

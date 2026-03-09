@@ -52,13 +52,13 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 	return (
 		<div className="flex flex-col items-center justify-center w-full h-full p-6 select-none animate-fade-in-up">
 			{/* Brand Section */}
-			<div className="mb-10 text-center relative group">
-				<div className="absolute -inset-1 bg-gradient-to-r from-orange-500 via-amber-500 to-pink-500 rounded-lg blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
+			<div className="mb-6 text-center relative group">
+				<div className="absolute -inset-1 bg-gradient-to-r from-orange-500 via-amber-500 to-pink-500 rounded-lg blur opacity-15 group-hover:opacity-30 transition duration-1000 group-hover:duration-200"></div>
 				<div className="relative">
-					<h1 className="text-[clamp(3rem,10vw,5rem)] font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-500 mb-2 tracking-tight leading-none">
+					<h1 className="text-[clamp(1.75rem,4vw,2.5rem)] font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-500 mb-1 tracking-tight leading-none">
 						PaperTerrace
 					</h1>
-					<p className="text-gray-500 text-[clamp(0.875rem,2vw,1.25rem)] font-light tracking-[0.3em] uppercase">
+					<p className="text-gray-500 text-[clamp(0.7rem,1.1vw,0.8rem)] font-light tracking-[0.3em] uppercase">
 						Intellectual & Relaxed
 					</p>
 				</div>
@@ -77,15 +77,15 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 				onDragLeave={handleDragLeave}
 				onDrop={handleDrop}
 				className={`
-          relative w-full max-w-5xl min-h-[clamp(300px,50vh,500px)]
+          relative w-full max-w-2xl min-h-[clamp(240px,35vh,340px)]
           flex flex-col items-center justify-center
-          border-2 border-dashed rounded-[clamp(1.5rem,3vw,3rem)]
+          border-2 border-dashed rounded-[clamp(1rem,1.5vw,1.5rem)]
           transition-all duration-300 ease-out
           cursor-pointer overflow-hidden
           group text-left
           ${
 						isDragging
-							? "border-orange-400 bg-orange-50/80 scale-[1.02] shadow-xl shadow-orange-200/50"
+							? "border-orange-400 bg-orange-50/80 scale-[1.01] shadow-xl shadow-orange-200/50"
 							: "border-slate-300 bg-white/60 hover:bg-white hover:shadow-2xl"
 					}
         `}
@@ -127,10 +127,10 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 					</svg>
 				</div>
 
-				<div className="z-10 flex flex-col items-center space-y-6 p-8">
+				<div className="z-10 flex flex-col items-center space-y-4 p-8">
 					<div
 						className={`
-            p-5 rounded-full 
+            p-3.5 rounded-full 
             transition-all duration-300 
             ${
 							isDragging
@@ -140,7 +140,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
           `}
 					>
 						<svg
-							className="w-[clamp(2.5rem,8vw,4rem)] h-[clamp(2.5rem,8vw,4rem)]"
+							className="w-[clamp(1.75rem,5vw,2.5rem)] h-[clamp(1.75rem,5vw,2.5rem)]"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24"
@@ -156,7 +156,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 
 					<div className="text-center">
 						<h3
-							className={`text-[clamp(1.25rem,4vw,2.5rem)] font-extrabold transition-colors duration-300 ${
+							className={`text-[clamp(1rem,2.5vw,1.5rem)] font-extrabold transition-colors duration-300 ${
 								isDragging
 									? "text-orange-600"
 									: "text-slate-700 group-hover:text-slate-900"
@@ -164,19 +164,19 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 						>
 							PDFをドロップして読み込み
 						</h3>
-						<p className="mt-2 text-slate-500 text-[clamp(0.875rem,2vw,1.125rem)] font-medium">
+						<p className="mt-1 text-slate-500 text-[clamp(0.75rem,1.3vw,0.875rem)] font-medium">
 							またはクリックしてファイルを選択
 						</p>
 					</div>
+				</div>
 
-					<div className="mt-2 flex gap-[clamp(0.5rem,1.5vw,1rem)]">
-						<span className="px-[clamp(0.5rem,1.5vw,1rem)] py-1 bg-slate-100 text-slate-500 text-[clamp(0.6rem,1.5vw,0.75rem)] font-semibold rounded-full border border-slate-200 uppercase tracking-wider">
-							English Support
-						</span>
-						<span className="px-[clamp(0.5rem,1.5vw,1rem)] py-1 bg-slate-100 text-slate-500 text-[clamp(0.6rem,1.5vw,0.75rem)] font-semibold rounded-full border border-slate-200 uppercase tracking-wider">
-							Fast Analysis
-						</span>
-					</div>
+				<div className="mt-1 flex gap-[clamp(0.4rem,1.2vw,0.8rem)]">
+					<span className="px-[clamp(0.4rem,1.2vw,0.8rem)] py-1 bg-slate-100 text-slate-400 text-[clamp(0.55rem,1.2vw,0.65rem)] font-bold rounded-full border border-slate-200 uppercase tracking-wider">
+						English Support
+					</span>
+					<span className="px-[clamp(0.4rem,1.2vw,0.8rem)] py-1 bg-slate-100 text-slate-400 text-[clamp(0.55rem,1.2vw,0.65rem)] font-bold rounded-full border border-slate-200 uppercase tracking-wider">
+						Fast Analysis
+					</span>
 				</div>
 			</button>
 

@@ -36,6 +36,9 @@ def get_db():
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -45,6 +48,9 @@ def get_db_context():
     db = SessionLocal()
     try:
         yield db
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
@@ -67,5 +73,8 @@ def get_orm_storage():
     db = SessionLocal()
     try:
         yield ORMStorageAdapter(db)
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
