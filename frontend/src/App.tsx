@@ -60,6 +60,32 @@ function App() {
 	const [dictSubTab, setDictSubTab] = useState<
 		"translation" | "explanation" | "figures" | "history"
 	>("translation");
+
+	// 翻訳・解説・その他は独立した state で管理（互いに上書きしない）
+	const [translationWord, setTranslationWord] = useState<string | undefined>(
+		undefined,
+	);
+	const [translationContext, setTranslationContext] = useState<
+		string | undefined
+	>(undefined);
+	const [translationCoordinates, setTranslationCoordinates] = useState<
+		{ page: number; x: number; y: number } | undefined
+	>(undefined);
+	const [translationConf, setTranslationConf] = useState<number | undefined>(
+		undefined,
+	);
+
+	const [explanationWord, setExplanationWord] = useState<string | undefined>(
+		undefined,
+	);
+	const [explanationContext, setExplanationContext] = useState<
+		string | undefined
+	>(undefined);
+	const [explanationCoordinates, setExplanationCoordinates] = useState<
+		{ page: number; x: number; y: number } | undefined
+	>(undefined);
+
+	// figures / comments タブ用（画像クリッピング等）
 	const [selectedWord, setSelectedWord] = useState<string | undefined>(
 		undefined,
 	);
@@ -69,9 +95,6 @@ function App() {
 	const [selectedCoordinates, setSelectedCoordinates] = useState<
 		{ page: number; x: number; y: number } | undefined
 	>(undefined);
-	const [selectedConf, setSelectedConf] = useState<number | undefined>(
-		undefined,
-	);
 	const [selectedImage, setSelectedImage] = useState<string | undefined>(
 		undefined,
 	);
@@ -283,6 +306,13 @@ function App() {
 		setUploadFile(file);
 		setCurrentPaperId(null);
 		// Reset all paper-specific states
+		setTranslationWord(undefined);
+		setTranslationContext(undefined);
+		setTranslationCoordinates(undefined);
+		setTranslationConf(undefined);
+		setExplanationWord(undefined);
+		setExplanationContext(undefined);
+		setExplanationCoordinates(undefined);
 		setSelectedWord(undefined);
 		setSelectedContext(undefined);
 		setSelectedCoordinates(undefined);
@@ -324,11 +354,10 @@ function App() {
 			);
 		}
 
-		setSelectedWord(word);
-		setSelectedContext(context);
-		setSelectedCoordinates(coords);
-		setSelectedConf(conf);
-		setSelectedImage(undefined);
+		setTranslationWord(word);
+		setTranslationContext(context);
+		setTranslationCoordinates(coords);
+		setTranslationConf(conf);
 		setActiveTab("notes");
 		setDictSubTab("translation");
 		setIsRightSidebarOpen(true);
@@ -393,12 +422,10 @@ function App() {
 			setDictSubTab("figures");
 			setIsRightSidebarOpen(true);
 		} else {
-			// If it's a text-based explanation, redirect to the explanation sub-tab of Dictionary
-			// Use the original raw text as the word so the card title is correct.
-			setSelectedWord(originalText || prompt);
-			setSelectedContext(contextText);
-			setSelectedImage(undefined);
-			setSelectedCoordinates(coords);
+			// テキスト解説：解説専用 state のみ更新（翻訳 state は変更しない）
+			setExplanationWord(originalText || prompt);
+			setExplanationContext(contextText);
+			setExplanationCoordinates(coords);
 			setActiveTab("notes");
 			setDictSubTab("explanation");
 			setIsRightSidebarOpen(true);
@@ -920,10 +947,30 @@ function App() {
 								onTabChange={setActiveTab}
 								dictSubTab={dictSubTab}
 								onDictSubTabChange={setDictSubTab}
-								selectedWord={selectedWord}
-								context={selectedContext}
-								coordinates={selectedCoordinates}
-								conf={selectedConf}
+								selectedWord={
+									dictSubTab === "translation"
+										? translationWord
+										: dictSubTab === "explanation"
+											? explanationWord
+											: selectedWord
+								}
+								context={
+									dictSubTab === "translation"
+										? translationContext
+										: dictSubTab === "explanation"
+											? explanationContext
+											: selectedContext
+								}
+								coordinates={
+									dictSubTab === "translation"
+										? translationCoordinates
+										: dictSubTab === "explanation"
+											? explanationCoordinates
+											: selectedCoordinates
+								}
+								conf={
+									dictSubTab === "translation" ? translationConf : undefined
+								}
 								selectedImage={selectedImage}
 								onJump={handleJumpToLocation}
 								isAnalyzing={isAnalyzing}

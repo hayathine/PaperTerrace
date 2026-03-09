@@ -326,7 +326,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 								onClick={() => setZoomedImage(imgSrc)}
 								className={`
 									mx-auto my-4 rounded shadow-sm border border-slate-200 object-contain cursor-zoom-in hover:brightness-[0.98] transition-all
-									${isEquation ? "max-h-24 w-auto max-w-[90%]" : "max-h-80 h-auto max-w-[min(100%,800px)]"}
+									${isEquation ? "max-h-24 w-auto max-w-[90%]" : "max-w-full h-auto"}
 								`.trim()}
 								loading="lazy"
 								{...rest}
@@ -348,7 +348,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 					onClick={() => src && setZoomedImage(src)}
 					className={`
 						mx-auto my-4 rounded shadow-sm object-contain cursor-zoom-in hover:brightness-[0.98] transition-all
-						${isEquationGeneric ? "max-h-24 w-auto max-w-[90%]" : "max-w-[min(100%,800px)] max-h-80 h-auto"}
+						${isEquationGeneric ? "max-h-24 w-auto max-w-[90%]" : "max-w-full h-auto"}
 					`.trim()}
 					loading="lazy"
 					{...rest}

@@ -192,10 +192,15 @@ const Summary: React.FC<SummaryProps> = ({
 		// Don't fetch while still analyzing
 		if (isAnalyzing) return;
 
-		// Fetch when: analysis just finished, or initial load (not analyzing)
-		// Only fetch if not already in state and the tab is ACTIVE.
-		if (isActive && sessionId && paperId && (wasAnalyzing || !summaryData)) {
-			// If we just finished analyzing, or we have no data and it's not and we are not analyzing
+		// When analysis just completed (all page images are ready), fetch immediately
+		// regardless of whether the Summary tab is currently active.
+		if (sessionId && paperId && wasAnalyzing) {
+			handleSummarize(false);
+			return;
+		}
+
+		// Lazy-fetch when the Summary tab becomes active but no data is available yet.
+		if (isActive && sessionId && paperId && !summaryData) {
 			handleSummarize(false);
 		}
 	}, [sessionId, paperId, isAnalyzing, summaryData, handleSummarize, isActive]);
