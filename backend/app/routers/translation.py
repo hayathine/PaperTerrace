@@ -203,8 +203,43 @@ async def explain(
     original_word = word
     lemma = clean_input  # Initial assumption, will be updated by ServiceB if needed
 
-    # 1. Cache Check (Bypass if low confidence to enforce context-aware Qwen translation)
+    # 1. Cache Check
+    # use_llamacpp=True (conf<=0.5): Qwen専用キャッシュ "trans:{lang}:{lemma}:hq" をチェック
+    # use_llamacpp=False: 通常キャッシュ "trans:{lang}:{lemma}" をチェック
     use_llamacpp = f_conf is not None and f_conf <= 0.5
+
+    if use_llamacpp:
+        hq_cached = service.word_analysis.redis.get(f"trans:{lang}:{lemma}:hq")
+        if hq_cached:
+            translation_str = hq_cached if isinstance(hq_cached, str) else str(hq_cached)
+            if not is_htmx:
+                return JSONResponse(
+                    {
+                        "word": original_word,
+                        "lemma": lemma,
+                        "translation": translation_str,
+                        "source": "Cache(HQ)",
+                        "element_id": element_id,
+                    }
+                )
+            elapsed = asyncio.get_event_loop().time() - start_time
+            log.info(
+                "explain",
+                "Lookup completed (Cache HQ)",
+                elapsed=f"{elapsed:.3f}s",
+                word=word,
+            )
+            return HTMLResponse(
+                build_dict_card_html(
+                    original_word,
+                    lemma,
+                    translation_str,
+                    "Cache(HQ)",
+                    lang,
+                    paper_id,
+                    element_id=element_id,
+                )
+            )
 
     if not use_llamacpp:
         cached = await service.get_translation(lemma, lang=lang)
@@ -285,6 +320,10 @@ async def explain(
                 lemma = res_lemma
 
             if local_translation:
+                # HQキャッシュに保存
+                service.word_analysis.redis.set(
+                    f"trans:{lang}:{lemma}:hq", local_translation, expire=604800
+                )
                 if not is_htmx:
                     return JSONResponse(
                         {

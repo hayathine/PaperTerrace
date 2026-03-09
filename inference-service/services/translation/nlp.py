@@ -1,5 +1,6 @@
 import logging
 import os
+from functools import lru_cache
 
 import spacy
 
@@ -35,6 +36,7 @@ class NLPService:
     """Service to handle NLP tasks like lemmatization on the inference side."""
 
     @staticmethod
+    @lru_cache(maxsize=5000)
     def lemmatize(text: str) -> str:
         """Get lemma for text using Spacy model."""
         if nlp is None:

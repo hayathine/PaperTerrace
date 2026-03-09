@@ -6,7 +6,7 @@ import { useAuth } from "../../contexts/AuthContext";
 
 const log = createLogger("Login");
 
-const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
+const Login: React.FC = () => {
 	const { t } = useTranslation();
 	const {
 		signInWithGoogle,
@@ -196,67 +196,6 @@ const Login: React.FC<{ onGuestAccess: () => void }> = ({ onGuestAccess }) => {
 							</div>
 						</button>
 					</div>
-
-					<div className="py-4">
-						<div className="flex items-center gap-4 mb-4">
-							<div className="h-px w-full bg-slate-100" />
-							<span className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] whitespace-nowrap">
-								{t("auth.redirect_hint")}
-							</span>
-							<div className="h-px w-full bg-slate-100" />
-						</div>
-
-						<div className="grid grid-cols-2 gap-3">
-							<button
-								type="button"
-								onClick={() => handleSignIn("google", "redirect")}
-								className="py-2.5 px-3 border border-slate-100 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-50 active:scale-[0.98] transition-all"
-							>
-								Google
-							</button>
-							<button
-								type="button"
-								onClick={() => handleSignIn("github", "redirect")}
-								className="py-2.5 px-3 border border-slate-100 rounded-xl text-xs font-semibold text-slate-500 hover:bg-slate-50 active:scale-[0.98] transition-all"
-							>
-								GitHub
-							</button>
-						</div>
-					</div>
-
-					<div className="relative py-4">
-						<div className="absolute inset-0 flex items-center">
-							<div className="w-full border-t border-slate-100" />
-						</div>
-						<div className="relative flex justify-center text-[10px]">
-							<span className="px-4 bg-white text-slate-300 font-black uppercase tracking-[0.3em]">
-								Or
-							</span>
-						</div>
-					</div>
-
-					<button
-						type="button"
-						onClick={onGuestAccess}
-						className="group relative w-full flex items-center justify-center py-4 px-4 border-2 border-dashed border-slate-200 text-sm font-bold rounded-2xl text-slate-500 bg-slate-50/30 hover:bg-orange-50 hover:text-orange-600 hover:border-orange-100 transition-all duration-300"
-					>
-						<span className="flex items-center gap-2">
-							<svg
-								className="w-5 h-5"
-								fill="none"
-								stroke="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth="2"
-									d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-								/>
-							</svg>
-							{t("auth.guest")}
-						</span>
-					</button>
 
 					<p className="text-center text-[10px] text-slate-400 font-medium leading-relaxed px-4 mt-8">
 						{t("auth.terms_hint")}

@@ -3,11 +3,14 @@
 確信度に基づく M2M100 と LlamaCpp (Qwen3) の切り替えを管理
 """
 
+import asyncio
 import logging
 import os
 
 from .llamacpp_service import LlamaCppTranslationService
 from .m2m100_service import M2M100TranslationService
+
+QWEN_FALLBACK_TIMEOUT = int(os.getenv("QWEN_FALLBACK_TIMEOUT", "50"))
 
 logger = logging.getLogger(__name__)
 
@@ -81,8 +84,11 @@ class TranslationService:
         if not self.m2m100:
             raise ValueError("M2M100 service is not initialized")
 
-        # 1. M2M100翻訳
-        res = await self.m2m100.translate(input_text, target_lang)
+        # 1. M2M100翻訳（単語の場合はbeam_size=2で高速化）
+        word_beam_size = 2 if NLPService.is_single_word(input_text) else None
+        res = await self.m2m100.translate(
+            input_text, target_lang, beam_size=word_beam_size
+        )
         translation = res["translation"]
         conf = res["conf"]
         model = res.get("model", "m2m100")
@@ -97,14 +103,23 @@ class TranslationService:
                 f"確信度が低いため LlamaCpp (Qwen3) に切り替えます (conf={conf:.3f}, target_lang={target_lang} -> {lang_full_name})"
             )
             try:
-                llm_result = await self.llamacpp.translate_with_llamacpp(
-                    original_word=input_text,
-                    paper_context=paper_context or "No specific context available.",
-                    lang_name=lang_full_name,
+                llm_result = await asyncio.wait_for(
+                    self.llamacpp.translate_with_llamacpp(
+                        original_word=input_text,
+                        paper_context=paper_context or "No specific context available.",
+                        lang_name=lang_full_name,
+                    ),
+                    timeout=QWEN_FALLBACK_TIMEOUT,
                 )
                 return llm_result, "Qwen", 1.0, lemma
+            except asyncio.TimeoutError:
+                # Qwen3 がタイムアウト → 上位でGeminiフォールバックを引き起こす
+                logger.warning(
+                    f"Qwen3タイムアウト ({QWEN_FALLBACK_TIMEOUT}s, conf={conf:.3f})、Geminiへフォールバック"
+                )
+                raise
             except Exception as e:
-                # Qwen3 が失敗した場合、m2m100の結果をそのまま返す
+                # その他のエラー: m2m100の結果をそのまま返す
                 logger.warning(
                     f"Qwen3翻訳失敗 (conf={conf:.3f})、m2m100の結果を使用します: {e}"
                 )

@@ -55,10 +55,10 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 			<div className="mb-10 text-center relative group">
 				<div className="absolute -inset-1 bg-gradient-to-r from-orange-500 via-amber-500 to-pink-500 rounded-lg blur opacity-20 group-hover:opacity-40 transition duration-1000 group-hover:duration-200"></div>
 				<div className="relative">
-					<h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-500 mb-2 tracking-tight">
+					<h1 className="text-[clamp(3rem,10vw,5rem)] font-black text-transparent bg-clip-text bg-gradient-to-r from-orange-500 to-amber-500 mb-2 tracking-tight leading-none">
 						PaperTerrace
 					</h1>
-					<p className="text-gray-500 text-lg font-light tracking-widest uppercase">
+					<p className="text-gray-500 text-[clamp(0.875rem,2vw,1.25rem)] font-light tracking-[0.3em] uppercase">
 						Intellectual & Relaxed
 					</p>
 				</div>
@@ -77,9 +77,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 				onDragLeave={handleDragLeave}
 				onDrop={handleDrop}
 				className={`
-          relative w-full max-w-2xl aspect-[16/9] md:aspect-[21/9]
+          relative w-full max-w-5xl min-h-[clamp(300px,50vh,500px)]
           flex flex-col items-center justify-center
-          border-2 border-dashed rounded-3xl
+          border-2 border-dashed rounded-[clamp(1.5rem,3vw,3rem)]
           transition-all duration-300 ease-out
           cursor-pointer overflow-hidden
           group text-left
@@ -140,7 +140,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
           `}
 					>
 						<svg
-							className="w-10 h-10"
+							className="w-[clamp(2.5rem,8vw,4rem)] h-[clamp(2.5rem,8vw,4rem)]"
 							fill="none"
 							stroke="currentColor"
 							viewBox="0 0 24 24"
@@ -156,7 +156,7 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 
 					<div className="text-center">
 						<h3
-							className={`text-2xl font-bold transition-colors duration-300 ${
+							className={`text-[clamp(1.25rem,4vw,2.5rem)] font-extrabold transition-colors duration-300 ${
 								isDragging
 									? "text-orange-600"
 									: "text-slate-700 group-hover:text-slate-900"
@@ -164,26 +164,24 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 						>
 							PDFをドロップして読み込み
 						</h3>
-						<p className="mt-2 text-slate-500 font-medium">
+						<p className="mt-2 text-slate-500 text-[clamp(0.875rem,2vw,1.125rem)] font-medium">
 							またはクリックしてファイルを選択
 						</p>
 					</div>
 
-					<div className="mt-2 flex gap-3">
-						<span className="px-3 py-1 bg-slate-100 text-slate-500 text-xs font-semibold rounded-full border border-slate-200 uppercase tracking-wide">
+					<div className="mt-2 flex gap-[clamp(0.5rem,1.5vw,1rem)]">
+						<span className="px-[clamp(0.5rem,1.5vw,1rem)] py-1 bg-slate-100 text-slate-500 text-[clamp(0.6rem,1.5vw,0.75rem)] font-semibold rounded-full border border-slate-200 uppercase tracking-wider">
 							English Support
 						</span>
-						<span className="px-3 py-1 bg-slate-100 text-slate-500 text-xs font-semibold rounded-full border border-slate-200 uppercase tracking-wide">
+						<span className="px-[clamp(0.5rem,1.5vw,1rem)] py-1 bg-slate-100 text-slate-500 text-[clamp(0.6rem,1.5vw,0.75rem)] font-semibold rounded-full border border-slate-200 uppercase tracking-wider">
 							Fast Analysis
 						</span>
 					</div>
 				</div>
 			</button>
 
-			<p className="mt-8 text-xs text-slate-400 max-w-md text-center leading-relaxed">
-				※現在、英語の論文のみサポートしています。
+			<p className="mt-8 text-[clamp(0.7rem,1.5vw,0.8rem)] text-slate-400 max-w-[min(90vw,500px)] text-center leading-relaxed opacity-80">
 				<br />
-				アップロードされたファイルは安全に処理され、解析後に破棄されます。
 			</p>
 		</div>
 	);

@@ -41,12 +41,18 @@ class M2M100TranslationService:
             os.getenv("TRANSLATION_NO_REPEAT_NGRAM_SIZE", "0")
         )
         self.max_decoding_length = int(os.getenv("TRANSLATION_MAX_LENGTH", "1024"))
+        self.length_penalty = float(os.getenv("TRANSLATION_LENGTH_PENALTY", "1.0"))
+        self.temperature = float(os.getenv("TRANSLATION_TEMPERATURE", "1.0"))
+        self.coverage_penalty = float(os.getenv("TRANSLATION_COVERAGE_PENALTY", "0.0"))
 
         logger.info(
             f"M2M100 parameters: beam_size={self.beam_size}, "
             f"repetition_penalty={self.repetition_penalty}, "
             f"no_repeat_ngram_size={self.no_repeat_ngram_size}, "
-            f"max_decoding_length={self.max_decoding_length}"
+            f"max_decoding_length={self.max_decoding_length}, "
+            f"length_penalty={self.length_penalty}, "
+            f"temperature={self.temperature}, "
+            f"coverage_penalty={self.coverage_penalty}"
         )
 
     async def initialize(self):
@@ -116,7 +122,7 @@ class M2M100TranslationService:
         src_token = get_m2m100_lang_code(self.src_lang)
         return [src_token] + pieces + ["</s>"]
 
-    async def translate(self, text: str, target_lang: str = "ja") -> dict:
+    async def translate(self, text: str, target_lang: str = "ja", beam_size: int | None = None) -> dict:
         """単一テキストの翻訳"""
         if not self.translator or not self.tokenizer:
             if (
@@ -146,16 +152,20 @@ class M2M100TranslationService:
             )
 
             # 翻訳実行（非同期実行のためスレッドプールを使用）
+            effective_beam_size = beam_size if beam_size is not None else self.beam_size
             loop = asyncio.get_event_loop()
             results = await loop.run_in_executor(
                 None,
                 lambda: self.translator.translate_batch(
                     [input_tokens],
                     target_prefix=[[tgt_code]],  # List[Optional[List[str]]]形式
-                    beam_size=self.beam_size,
+                    beam_size=effective_beam_size,
                     repetition_penalty=self.repetition_penalty,
                     no_repeat_ngram_size=self.no_repeat_ngram_size,
                     max_decoding_length=self.max_decoding_length,
+                    length_penalty=self.length_penalty,
+                    sampling_temperature=self.temperature,
+                    coverage_penalty=self.coverage_penalty,
                     return_scores=True,
                 ),
             )
@@ -242,6 +252,9 @@ class M2M100TranslationService:
                     repetition_penalty=self.repetition_penalty,
                     no_repeat_ngram_size=self.no_repeat_ngram_size,
                     max_decoding_length=self.max_decoding_length,
+                    length_penalty=self.length_penalty,
+                    sampling_temperature=self.temperature,
+                    coverage_penalty=self.coverage_penalty,
                     return_scores=True,
                 ),
             )

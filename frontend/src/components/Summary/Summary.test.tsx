@@ -154,7 +154,7 @@ describe("Summary Component", () => {
 			/>,
 		);
 
-		// Wait for initial mount fetch to complete so we aren't in loading state
+		// Wait for initial mount fetch to complete
 		await waitFor(() =>
 			expect(screen.queryByText("summary.processing")).toBeNull(),
 		);
@@ -179,5 +179,37 @@ describe("Summary Component", () => {
 		});
 
 		expect(screen.getByText("Critique Result")).toBeDefined();
+	});
+
+	it("triggers recommendation generation in discover mode", async () => {
+		const { generateRecommendations } = await import("@/lib/recommendation");
+		(generateRecommendations as any).mockResolvedValue({
+			recommendations: [{ title: "Rec Paper 1", abstract: "Abstract 1" }],
+			reasoning: "Reason",
+			knowledge_level: "Beginner",
+			search_queries: ["query"],
+		});
+
+		render(
+			<Summary
+				sessionId="s1"
+				paperId="p1"
+				isActive={true}
+				isAnalyzing={false}
+			/>,
+		);
+
+		// Switch to discover mode
+		const discoverBtn = screen.getByText("sidebar.tabs.discover");
+		fireEvent.click(discoverBtn);
+
+		const generateBtn = await screen.findByText("summary.generate_recommend");
+		fireEvent.click(generateBtn);
+
+		await waitFor(() => {
+			expect(generateRecommendations).toHaveBeenCalledWith("s1", mockToken);
+		});
+
+		expect(await screen.findByText("Rec Paper 1")).toBeDefined();
 	});
 });

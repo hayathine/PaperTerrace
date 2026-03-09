@@ -166,8 +166,6 @@ function App() {
 		fetchPapers();
 	}, [user, token]);
 
-	const { loginAsGuest: handleLoginAsGuest } = useAuth();
-
 	// Context Cache Lifecycle Management & Session Duration Tracking
 	useEffect(() => {
 		const deleteCache = (paperId: string) => {
@@ -456,7 +454,7 @@ function App() {
 							<button
 								type="button"
 								onClick={() => setIsLeftSidebarOpen(false)}
-								className="p-1.5 rounded-md hover:bg-orange-50 text-slate-400 hover:text-orange-500 transition-colors"
+								className="p-2 rounded-xl bg-slate-50 text-slate-400 hover:bg-orange-500 hover:text-white transition-all duration-300 shadow-sm border border-slate-200 hover:border-orange-400"
 								title={t("nav.close_menu")}
 							>
 								<svg
@@ -468,7 +466,7 @@ function App() {
 									<path
 										strokeLinecap="round"
 										strokeLinejoin="round"
-										strokeWidth="2.5"
+										strokeWidth="3"
 										d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
 									/>
 								</svg>
@@ -637,30 +635,63 @@ function App() {
 							)}
 						</div>
 
-						<div className="mt-4">
-							<label
-								htmlFor="pdf-upload-input"
-								className="block text-xs font-bold mb-2 text-slate-500"
-							>
-								{t("nav.upload_pdf")}
-							</label>
-							<p className="text-[10px] text-amber-400/80 mb-2 leading-tight">
-								{t("nav.only_english_supported")}
-							</p>
-							<input
-								id="pdf-upload-input"
-								type="file"
-								accept="application/pdf"
-								onChange={handleFileChange}
-								className="block w-full text-sm text-gray-400
-                  file:mr-4 file:py-2 file:px-4
-                  file:rounded-full file:border-0
-                  file:text-sm file:font-semibold
-                  file:bg-slate-100 file:text-slate-600
-                  hover:file:bg-orange-50 hover:file:text-orange-600
-                  cursor-pointer
-                "
-							/>
+						<div className="mt-8 px-2">
+							<div className="relative group">
+								<div className="absolute -inset-0.5 bg-gradient-to-r from-orange-400 to-amber-400 rounded-2xl blur opacity-10 group-hover:opacity-20 transition duration-300"></div>
+								<div className="relative bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300">
+									<label
+										htmlFor="pdf-upload-input"
+										className="flex flex-col items-center cursor-pointer group/label"
+									>
+										<div className="w-10 h-10 rounded-full bg-orange-50 flex items-center justify-center mb-3 group-hover/label:scale-110 group-hover/label:bg-orange-100 transition-all duration-300">
+											<svg
+												className="w-5 h-5 text-orange-500"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth="2.5"
+													d="M12 4v16m8-8H4"
+												/>
+											</svg>
+										</div>
+										<div className="text-center">
+											<span className="block text-sm font-black text-slate-800 tracking-tight mb-1">
+												{t("nav.upload_pdf")}
+											</span>
+											<span className="block text-[10px] text-amber-500 font-bold uppercase tracking-wider mb-2">
+												{t("nav.only_english_supported")}
+											</span>
+										</div>
+										<div className="w-full py-2 px-4 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase tracking-[0.1em] flex items-center justify-center gap-2 group-hover/label:bg-orange-600 transition-colors duration-300 shadow-lg shadow-slate-900/10">
+											<svg
+												className="w-3.5 h-3.5"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth="3"
+													d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"
+												/>
+											</svg>
+											{t("nav.select_file", "Select PDF")}
+										</div>
+										<input
+											id="pdf-upload-input"
+											type="file"
+											accept="application/pdf"
+											onChange={handleFileChange}
+											className="hidden"
+										/>
+									</label>
+								</div>
+							</div>
 						</div>
 					</div>
 				</div>
@@ -672,11 +703,11 @@ function App() {
 							<button
 								type="button"
 								onClick={() => setIsLeftSidebarOpen(true)}
-								className="mr-4 px-3 py-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
+								className="mr-4 px-4 py-2 rounded-xl bg-orange-50/50 text-orange-600 border border-orange-200 hover:bg-orange-500 hover:text-white transition-all duration-300 flex items-center justify-center gap-2 shadow-sm hover:shadow-orange-200 group/nav"
 								title={t("nav.open_menu")}
 							>
 								<svg
-									className="w-4 h-4"
+									className="w-4 h-4 transition-transform group-hover/nav:translate-x-0.5"
 									fill="none"
 									stroke="currentColor"
 									viewBox="0 0 24 24"
@@ -684,12 +715,12 @@ function App() {
 									<path
 										strokeLinecap="round"
 										strokeLinejoin="round"
-										strokeWidth="2.5"
-										d="M4 6h16M4 12h16M4 18h16"
+										strokeWidth="3"
+										d="M13 5l7 7-7 7M5 5l7 7-7 7"
 									/>
 								</svg>
-								<span className="text-xs font-bold tracking-tight">
-									[{t("nav.menu_label")}]
+								<span className="text-xs font-black tracking-widest uppercase">
+									{t("nav.menu_label")}
 								</span>
 							</button>
 						)}
@@ -761,28 +792,42 @@ function App() {
 						<button
 							type="button"
 							onClick={() => setIsRightSidebarOpen((prev) => !prev)}
-							className="ml-4 px-3 py-2 rounded-md bg-white text-slate-500 border border-slate-200 hover:bg-slate-50 transition-all duration-200 flex items-center justify-center gap-2 shadow-sm"
+							className={`ml-4 px-4 py-2 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 border shadow-sm group/assist
+								${
+									isRightSidebarOpen
+										? "bg-slate-900 text-white border-slate-800 hover:bg-orange-500 hover:border-orange-400"
+										: "bg-orange-50/50 text-orange-600 border-orange-200 hover:bg-orange-500 hover:text-white hover:shadow-orange-200"
+								}`}
 							title={
 								isRightSidebarOpen
 									? t("nav.close_right_panel", "Close panel")
 									: t("nav.open_right_panel", "Open panel")
 							}
 						>
-							<span className="text-xs font-bold tracking-tight">
-								[{t("nav.assistant_label")}]
+							<span className="text-xs font-black tracking-widest uppercase">
+								{t("nav.assistant_label")}
 							</span>
 							<svg
-								className="w-4 h-4"
+								className={`w-4 h-4 transition-transform ${isRightSidebarOpen ? "group-hover/assist:translate-x-0.5" : "group-hover/assist:-translate-x-0.5"}`}
 								fill="none"
 								stroke="currentColor"
 								viewBox="0 0 24 24"
 							>
-								<path
-									strokeLinecap="round"
-									strokeLinejoin="round"
-									strokeWidth="2.5"
-									d="M4 6h16M4 12h16M4 18h16"
-								/>
+								{isRightSidebarOpen ? (
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth="3"
+										d="M13 5l7 7-7 7M5 5l7 7-7 7"
+									/>
+								) : (
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth="3"
+										d="M11 19l-7-7 7-7m8 14l-7-7 7-7"
+									/>
+								)}
 							</svg>
 						</button>
 					</header>
@@ -918,12 +963,7 @@ function App() {
 							role="dialog"
 							aria-modal="true"
 						>
-							<Login
-								onGuestAccess={() => {
-									handleLoginAsGuest();
-									setShowLoginModal(false);
-								}}
-							/>
+							<Login />
 							<button
 								type="button"
 								onClick={() => setShowLoginModal(false)}

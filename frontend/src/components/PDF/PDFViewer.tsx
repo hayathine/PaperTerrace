@@ -741,9 +741,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			word: string,
 			context?: string,
 			coords?: { page: number; x: number; y: number },
+			conf?: number,
 		) => {
 			if (onWordClick) {
-				onWordClick(word, context, coords);
+				onWordClick(word, context, coords, conf);
 			}
 		},
 		[onWordClick],
