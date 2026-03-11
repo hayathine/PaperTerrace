@@ -97,7 +97,7 @@ class AdversarialReviewService:
                     extra={"text_length": len(text)},
                 )
                 # DSPy version
-                res, trace_id = trace_dspy_call(
+                res, trace_id = await trace_dspy_call(
                     "AdversarialModule",
                     "AdversarialCritique",
                     self.adversarial_mod,

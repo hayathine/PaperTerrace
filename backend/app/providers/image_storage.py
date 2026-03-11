@@ -8,14 +8,10 @@ import os
 from abc import ABC, abstractmethod
 from pathlib import Path
 
-from dotenv import load_dotenv
-
+from common.config import settings  # noqa: F401  secrets/.env の一括ロードを保証
 from common.logger import ServiceLogger
 
 log = ServiceLogger("ImageStorage")
-
-
-load_dotenv("../local-files/secrets/.env")
 
 
 class ImageStorageStrategy(ABC):

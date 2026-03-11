@@ -48,22 +48,30 @@ interface TextModePageProps {
 /**
  * searchTerm にマッチする部分を <mark> で囲んだ React ノードを返す。
  * children が文字列以外（React要素など）の場合は再帰的に処理する。
+ *
+ * パフォーマンス:
+ * - lowerTerm は呼び出し元で一度だけ計算し、再帰に渡す。
+ * - 文字列の走査は indexOf を lastIdx から進めるため O(n)。
+ * - React 要素ツリーの走査は O(ノード数)。
  */
 function highlightText(
 	children: React.ReactNode,
 	searchTerm: string,
+	lowerTerm?: string,
 ): React.ReactNode {
 	if (!searchTerm || searchTerm.length < 2) return children;
 
+	// lowerTerm は最初の呼び出しでのみ計算し、再帰時は引数で渡す
+	const term = lowerTerm ?? searchTerm.toLowerCase();
+
 	if (typeof children === "string") {
 		const lowerText = children.toLowerCase();
-		const lowerTerm = searchTerm.toLowerCase();
-		const idx = lowerText.indexOf(lowerTerm);
-		if (idx === -1) return children;
+		const firstIdx = lowerText.indexOf(term);
+		if (firstIdx === -1) return children;
 
 		const parts: React.ReactNode[] = [];
 		let lastIdx = 0;
-		let pos = idx;
+		let pos = firstIdx;
 		let key = 0;
 		while (pos !== -1) {
 			if (pos > lastIdx) {
@@ -75,7 +83,7 @@ function highlightText(
 				</mark>,
 			);
 			lastIdx = pos + searchTerm.length;
-			pos = lowerText.indexOf(lowerTerm, lastIdx);
+			pos = lowerText.indexOf(term, lastIdx);
 		}
 		if (lastIdx < children.length) {
 			parts.push(children.slice(lastIdx));
@@ -86,7 +94,7 @@ function highlightText(
 	if (Array.isArray(children)) {
 		return children.map((child, i) => (
 			<React.Fragment key={i}>
-				{highlightText(child, searchTerm)}
+				{highlightText(child, searchTerm, term)}
 			</React.Fragment>
 		));
 	}
@@ -104,10 +112,10 @@ function highlightText(
 		) {
 			return children;
 		}
-		if (element.props.children) {
+		if (element.props.children != null) {
 			return React.cloneElement(element, {
 				...element.props,
-				children: highlightText(element.props.children, searchTerm),
+				children: highlightText(element.props.children, searchTerm, term),
 			});
 		}
 	}
@@ -183,11 +191,18 @@ const TextModePage: React.FC<TextModePageProps> = ({
 		coords: any;
 	} | null>(null);
 	const [zoomedImage, setZoomedImage] = useState<string | null>(null);
+	// setTimeout のタイマー ID を ref で管理し、連続イベントで前のタイマーをキャンセルする
+	const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
 	// --- テキスト選択メニュー ---
 	React.useEffect(() => {
 		const handleSelectionEnd = () => {
-			setTimeout(() => {
+			// 前のタイマーをキャンセルして競合状態を防ぐ
+			if (selectionTimerRef.current !== null) {
+				clearTimeout(selectionTimerRef.current);
+			}
+			selectionTimerRef.current = setTimeout(() => {
+				selectionTimerRef.current = null;
 				const selection = window.getSelection();
 				const selectionText = selection?.toString().trim();
 				const container = document.getElementById(`text-page-${page.page_num}`);
@@ -262,6 +277,10 @@ const TextModePage: React.FC<TextModePageProps> = ({
 		return () => {
 			document.removeEventListener("mouseup", handleSelectionEnd);
 			document.removeEventListener("touchend", handleSelectionEnd);
+			// アンマウント時に残存タイマーをキャンセル
+			if (selectionTimerRef.current !== null) {
+				clearTimeout(selectionTimerRef.current);
+			}
 		};
 	}, [page.page_num]);
 

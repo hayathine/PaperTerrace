@@ -563,15 +563,15 @@ function App() {
 								<div className="space-y-4">
 									<div className="flex items-center gap-3 p-3 bg-slate-50 rounded-xl border border-slate-200 backdrop-blur-sm">
 										<div className="relative">
-											{user.photoURL ? (
+											{user.image ? (
 												<img
-													src={user.photoURL}
+													src={user.image}
 													alt="User"
 													className="w-10 h-10 rounded-full border-2 border-orange-500/30 shadow-inner"
 												/>
 											) : (
 												<div className="w-10 h-10 rounded-full bg-gradient-to-tr from-orange-500 to-amber-400 flex items-center justify-center text-sm font-black shadow-lg shadow-orange-500/10 text-white">
-													{user.displayName?.[0] || user.email?.[0] || "U"}
+													{user.name?.[0] || user.email?.[0] || "U"}
 												</div>
 											)}
 											<div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-green-500 border-2 border-white rounded-full shadow-sm" />
@@ -579,9 +579,7 @@ function App() {
 										<div className="overflow-hidden">
 											<div className="flex items-center gap-1.5">
 												<p className="text-sm font-bold text-slate-800 truncate">
-													{user.displayName ||
-														user.email?.split("@")[0] ||
-														"User"}
+													{user.name || user.email?.split("@")[0] || "User"}
 												</p>
 											</div>
 											<p className="text-[10px] text-green-400 font-bold uppercase tracking-wider flex items-center gap-1">

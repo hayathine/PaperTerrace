@@ -11,8 +11,19 @@ import { createLogger } from "@/lib/logger";
 
 const log = createLogger("Auth");
 
+/** Better Auth / Neon Auth が返すユーザーオブジェクトの型 */
+interface AuthUser {
+	id: string;
+	name: string | null;
+	email: string | null;
+	image?: string | null;
+	emailVerified: boolean;
+	createdAt: Date;
+	updatedAt: Date;
+}
+
 interface AuthContextType {
-	user: any | null;
+	user: AuthUser | null;
 	loading: boolean;
 	signInWithGoogle: () => Promise<void>;
 	signInWithGithub: () => Promise<void>;
@@ -36,7 +47,7 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 	children,
 }) => {
-	const [user, setUser] = useState<any | null>(null);
+	const [user, setUser] = useState<AuthUser | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [token, setToken] = useState<string | null>(null);
 	const [isGuest, setIsGuest] = useState(true);

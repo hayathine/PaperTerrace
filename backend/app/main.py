@@ -9,13 +9,13 @@ import time
 import traceback
 from datetime import datetime
 
-from dotenv import load_dotenv
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
 from app.core.config import get_neon_auth_url, is_production
+from common.config import settings  # noqa: F401  settings ロードを確実に実行
 from app.routers import (
     analysis_router,
     auth_router,
@@ -39,9 +39,6 @@ from common.logger import ServiceLogger, configure_logging
 log = ServiceLogger("Main")
 mw_log = ServiceLogger("Middleware")
 
-
-# Load environment variables from secrets directory
-load_dotenv("../local-files/secrets/.env")
 
 # Neon Auth Config for Frontend
 NEON_AUTH_CONFIG = {
@@ -107,20 +104,87 @@ app = FastAPI(
 
 
 # CORS configuration for Cloudflare Pages and Workers
+# 追加オリジンは CORS_EXTRA_ORIGINS 環境変数にカンマ区切りで指定可能
+_default_origins = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "https://paperterrace.pages.dev",
+    "https://www.paperterrace.page",
+    "https://paperterrace.page",
+]
+_extra_origins_raw = os.getenv("CORS_EXTRA_ORIGINS", "")
+_extra_origins = [o.strip() for o in _extra_origins_raw.split(",") if o.strip()]
+_allowed_origins = _default_origins + _extra_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://paperterrace.pages.dev",
-        "https://www.paperterrace.page",
-        "https://paperterrace.page",
-    ],
+    allow_origins=_allowed_origins,
     allow_origin_regex=r"https://.*\.(paperterrace\.page|pages\.dev)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """
+    IPアドレス / ユーザーIDベースの固定ウィンドウレートリミット。
+    Redis が利用不可の場合は制限をスキップし、可用性を優先する。
+    - 登録ユーザー: RATE_LIMIT_REGISTERED req/分 (デフォルト 120)
+    - ゲスト:       RATE_LIMIT_GUEST req/分 (デフォルト 30)
+    """
+
+    WINDOW_SECONDS = 60
+    REGISTERED_LIMIT = int(os.getenv("RATE_LIMIT_REGISTERED", "120"))
+    GUEST_LIMIT = int(os.getenv("RATE_LIMIT_GUEST", "30"))
+    # レートリミット対象外のパス
+    _SKIP_PATHS = frozenset(["/api/health", "/health", "/"])
+
+    def __init__(self, app):
+        super().__init__(app)
+        redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
+        try:
+            from redis import Redis
+
+            self._redis = Redis.from_url(
+                redis_url, socket_connect_timeout=1, decode_responses=True
+            )
+            self._redis.ping()
+        except Exception:
+            self._redis = None
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path in self._SKIP_PATHS:
+            return await call_next(request)
+
+        if not self._redis:
+            return await call_next(request)
+
+        # TrustedProxyMiddleware が先に設定した user_id を使用
+        user_id = getattr(request.state, "user_id", None)
+        identifier = user_id or (request.client.host if request.client else "unknown")
+        limit = self.REGISTERED_LIMIT if user_id else self.GUEST_LIMIT
+        key = f"rate:{identifier}"
+
+        try:
+            count = self._redis.incr(key)
+            if count == 1:
+                self._redis.expire(key, self.WINDOW_SECONDS)
+
+            if count > limit:
+                retry_after = self._redis.ttl(key)
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "error": "Too Many Requests",
+                        "message": "リクエスト制限に達しました。しばらく待ってから再試行してください。",
+                    },
+                    headers={"Retry-After": str(max(retry_after, 1))},
+                )
+        except Exception as e:
+            mw_log.warning("rate_limit", "Redis error, skipping rate limit", error=str(e))
+
+        return await call_next(request)
 
 
 class TrustedProxyMiddleware(BaseHTTPMiddleware):
@@ -210,6 +274,8 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             )
 
 
+# ミドルウェアの実行順 (Starlette は LIFO): LoggingMW → TrustedProxyMW → RateLimitMW → Routes
+app.add_middleware(RateLimitMiddleware)
 app.add_middleware(TrustedProxyMiddleware)
 app.add_middleware(LoggingMiddleware)
 

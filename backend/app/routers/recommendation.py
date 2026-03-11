@@ -55,4 +55,4 @@ async def generate_recommendation(
     Semantic Scholarで最新の論文を取得して応答する
     """
     current_user_id = get_current_user_id(request)
-    return RecommendationService.generate_recommendation(req, current_user_id)
+    return await RecommendationService.generate_recommendation(req, current_user_id)

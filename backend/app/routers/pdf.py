@@ -91,6 +91,14 @@ async def analyze_pdf(
     if not file.filename or file.size == 0:
         return Response("Error: No file", status_code=400)
 
+    # PDF ファイルサイズ上限チェック (デフォルト 50MB)
+    max_pdf_bytes = int(os.getenv("MAX_PDF_SIZE_MB", "50")) * 1024 * 1024
+    if file.size and file.size > max_pdf_bytes:
+        return Response(
+            f"Error: File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB.",
+            status_code=413,
+        )
+
     user_id = user.uid if user else None
 
     content = await file.read()
@@ -173,6 +181,16 @@ async def analyze_pdf_json(
     """
     if not file.filename or file.size == 0:
         return JSONResponse({"error": "No file provided"}, status_code=400)
+
+    # PDF ファイルサイズ上限チェック (デフォルト 50MB)
+    max_pdf_bytes = int(os.getenv("MAX_PDF_SIZE_MB", "50")) * 1024 * 1024
+    if file.size and file.size > max_pdf_bytes:
+        return JSONResponse(
+            {
+                "error": f"File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB."
+            },
+            status_code=413,
+        )
 
     import time
 

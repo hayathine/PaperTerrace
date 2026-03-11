@@ -211,7 +211,9 @@ async def explain(
     if use_llamacpp:
         hq_cached = service.word_analysis.redis.get(f"trans:{lang}:{lemma}:hq")
         if hq_cached:
-            translation_str = hq_cached if isinstance(hq_cached, str) else str(hq_cached)
+            translation_str = (
+                hq_cached if isinstance(hq_cached, str) else str(hq_cached)
+            )
             if not is_htmx:
                 return JSONResponse(
                     {
@@ -480,7 +482,7 @@ async def explain(
         setup_dspy()
         if is_phrase:
             trans_mod = TranslationModule()
-            res, trace_id = trace_dspy_call(
+            res, trace_id = await trace_dspy_call(
                 "TranslationModule",
                 "ContextAwareTranslation",
                 trans_mod,
@@ -494,7 +496,7 @@ async def explain(
             translation = res.translation_and_explanation.strip()
         else:
             simple_mod = SimpleTranslationModule()
-            res, trace_id = trace_dspy_call(
+            res, trace_id = await trace_dspy_call(
                 "SimpleTranslationModule",
                 "SimpleTranslation",
                 simple_mod,
@@ -624,7 +626,7 @@ async def explain_deep(
         setup_dspy()
         trans_mod = TranslationModule()
         # Single words might need different prompt, but for now use context aware phrase translation
-        res, trace_id = trace_dspy_call(
+        res, trace_id = await trace_dspy_call(
             "TranslationModule",
             "ContextAwareTranslation",
             trans_mod,
@@ -735,7 +737,7 @@ async def explain_with_context(req: ExplainContextRequest):
         setup_dspy()
         # DeepExplanation uses summary_context, context, word, lang_name
         deep_mod = DeepExplanationModule()
-        res, trace_id = trace_dspy_call(
+        res, trace_id = await trace_dspy_call(
             "DeepExplanationModule",
             "DeepExplanation",
             deep_mod,

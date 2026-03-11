@@ -194,7 +194,7 @@ class RecommendationService:
         return {"status": "ok", "message": "Feedback recorded successfully"}
 
     @staticmethod
-    def generate_recommendation(
+    async def generate_recommendation(
         req: RecommendationGenerateRequest, current_user_id: str, db=None
     ) -> RecommendationGenerateResponse:
         """
@@ -224,7 +224,7 @@ class RecommendationService:
             profile_mod = RecommendationService._get_profile_module()
 
             clicks_str = json.dumps(trajectory.word_clicks or [], ensure_ascii=False)
-            profile_res, trace_id = trace_dspy_call(
+            profile_res, trace_id = await trace_dspy_call(
                 "UserProfileModule",
                 "UserProfileEstimation",
                 profile_mod,
@@ -264,7 +264,7 @@ class RecommendationService:
             else str(unknown_concepts)
         )
 
-        rec_res, trace_id = trace_dspy_call(
+        rec_res, trace_id = await trace_dspy_call(
             "RecommendationModule",
             "PaperRecommendation",
             rec_mod,

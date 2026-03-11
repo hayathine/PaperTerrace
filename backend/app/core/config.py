@@ -1,10 +1,13 @@
 """
 環境設定モジュール。
+
+common.config の dynaconf settings 経由で設定を取得する。
 APP_ENV 環境変数 (prod | dev) に応じて、Neon・BigQuery の接続先を切り替える。
 """
 
 import os
 
+from common.config import settings
 from common.logger import ServiceLogger
 
 log = ServiceLogger("Config")
@@ -17,7 +20,7 @@ def get_app_env() -> str:
     'development' -> 'dev'
     未設定の場合は 'dev' を返す。
     """
-    env = os.getenv("APP_ENV", "dev").lower()
+    env = (os.getenv("APP_ENV") or settings.get("APP_ENV", "dev")).lower()
     if env == "production":
         return "prod"
     if env == "development":
@@ -32,9 +35,14 @@ def is_production() -> bool:
 def get_database_url() -> str:
     """環境に応じた Neon PostgreSQL 接続 URL を返す。"""
     if is_production():
-        url = os.getenv("DATABASE_URL")
+        url = os.getenv("DATABASE_URL") or settings.get("DATABASE_URL")
     else:
-        url = os.getenv("DATABASE_URL_DEV") or os.getenv("DATABASE_URL")
+        url = (
+            os.getenv("DATABASE_URL_DEV")
+            or settings.get("DATABASE_URL_DEV")
+            or os.getenv("DATABASE_URL")
+            or settings.get("DATABASE_URL")
+        )
 
     if not url:
         raise RuntimeError(
@@ -49,19 +57,33 @@ def get_database_url() -> str:
 def get_neon_auth_jwks_url() -> str | None:
     """環境に応じた Neon Auth JWKS URL を返す。"""
     if is_production():
-        return os.getenv("NEON_AUTH_JWKS_URL")
-    return os.getenv("NEON_AUTH_JWKS_URL_DEV") or os.getenv("NEON_AUTH_JWKS_URL")
+        return os.getenv("NEON_AUTH_JWKS_URL") or settings.get("NEON_AUTH_JWKS_URL")
+    return (
+        os.getenv("NEON_AUTH_JWKS_URL_DEV")
+        or settings.get("NEON_AUTH_JWKS_URL_DEV")
+        or os.getenv("NEON_AUTH_JWKS_URL")
+        or settings.get("NEON_AUTH_JWKS_URL")
+    )
 
 
 def get_neon_auth_url() -> str | None:
     """環境に応じた Neon Auth URL を返す。"""
     if is_production():
-        return os.getenv("NEON_AUTH_URL")
-    return os.getenv("NEON_AUTH_URL_DEV") or os.getenv("NEON_AUTH_URL")
+        return os.getenv("NEON_AUTH_URL") or settings.get("NEON_AUTH_URL")
+    return (
+        os.getenv("NEON_AUTH_URL_DEV")
+        or settings.get("NEON_AUTH_URL_DEV")
+        or os.getenv("NEON_AUTH_URL")
+        or settings.get("NEON_AUTH_URL")
+    )
 
 
 def get_bq_log_dataset() -> str:
     """環境に応じた BigQuery ログデータセット名を返す。"""
     if is_production():
-        return os.getenv("BQ_LOG_DATASET", "paperterrace_logs")
-    return os.getenv("BQ_LOG_DATASET_DEV", "paperterrace_logs_dev")
+        return os.getenv("BQ_LOG_DATASET") or settings.get(
+            "BQ_LOG_DATASET", "paperterrace_logs"
+        )
+    return os.getenv("BQ_LOG_DATASET_DEV") or settings.get(
+        "BQ_LOG_DATASET_DEV", "paperterrace_logs_dev"
+    )

@@ -149,7 +149,7 @@ class ChatService:
                             )
 
                 # DSPy version
-                res, trace_id = trace_dspy_call(
+                res, trace_id = await trace_dspy_call(
                     "ChatModule",
                     "ChatGeneral",
                     self.chat_mod,

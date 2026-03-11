@@ -81,7 +81,7 @@ class WordAnalysisService:
 
             setup_dspy()
             trans_mod = WordTranslationModule()
-            res, trace_id = trace_dspy_call(
+            res, trace_id = await trace_dspy_call(
                 "WordTranslationModule",
                 "WordTranslationInContext",
                 trans_mod,

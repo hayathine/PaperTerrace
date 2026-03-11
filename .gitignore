@@ -32,6 +32,7 @@ local-files/
 infrastructure/
 !pyproject.toml
 !backend/pyproject.toml
+!common/settings.toml
 !inference-service/pyproject.toml
 !redis_provider/pyproject.toml
 !wrangler.toml

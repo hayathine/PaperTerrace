@@ -20,7 +20,14 @@ storage = get_storage_provider()
 async def list_papers(user: OptionalUser = None, limit: int = 50):
     """
     List papers for the current user.
-    If not logged in, returns an empty list (as guest papers are not saved).
+
+    [ゲストポリシー]
+    ゲストユーザーはペーパーをDBに保存しないため、空リストを返す (HTTP 200)。
+    チャット等のゲストセッションは別途 Redis で管理されており、
+    エンドポイントごとのアクセス設計は以下の通り:
+    - GET /papers      : ゲスト → 空リスト (保存ペーパーなし)
+    - POST /chat       : ゲスト → セッションベースで許可 (Redis TTL 1h)
+    - DELETE /papers/* : ゲスト → 401 (オーナー検証が必要)
     """
     if not user:
         return JSONResponse({"papers": []})

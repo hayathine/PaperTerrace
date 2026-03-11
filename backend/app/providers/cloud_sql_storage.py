@@ -8,18 +8,15 @@ from contextlib import contextmanager
 from datetime import datetime
 
 import psycopg2
-from dotenv import load_dotenv
 from psycopg2.extras import RealDictCursor
 
 from app.core.config import get_database_url
+from common.config import settings  # noqa: F401  secrets/.env の一括ロードを保証
 from common.logger import ServiceLogger
 
 from .storage_provider import StorageInterface
 
 log = ServiceLogger("CloudSQL")
-
-
-load_dotenv("../local-files/secrets/.env")
 
 
 class CloudSQLStorage(StorageInterface):

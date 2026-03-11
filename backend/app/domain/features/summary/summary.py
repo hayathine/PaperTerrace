@@ -60,23 +60,31 @@ class SummaryService:
             limit=self.token_limit,
         )
 
-        # 簡易的な反復切り詰め
-        current_text = text
-        while count > self.token_limit:
-            ratio = self.token_limit / count
-            # 安全マージン 95%
-            cut_len = int(len(current_text) * ratio * 0.95)
-            current_text = current_text[:cut_len]
-            count = await self.ai_provider.count_tokens(current_text, model=self.model)
+        # 二分探索で適切な切り詰め長さを効率的に探索 (最大 5 回の API コールで収束)
+        # 初期推定値: トークン比率 × 安全マージン 90%
+        lo = 0
+        hi = int(len(text) * self.token_limit / count * 0.90)
+        best_text = text[:hi]
+
+        for _ in range(5):
+            if hi - lo < 100:
+                break
+            mid = (lo + hi) // 2
+            candidate = text[:mid]
+            mid_count = await self.ai_provider.count_tokens(candidate, model=self.model)
+            if mid_count <= self.token_limit:
+                best_text = candidate
+                lo = mid
+            else:
+                hi = mid
 
         log.info(
             "truncate",
             "Truncated text",
-            char_count=len(current_text),
-            token_count=count,
+            char_count=len(best_text),
         )
 
-        return current_text
+        return best_text
 
     async def summarize_full(
         self,
@@ -187,7 +195,7 @@ class SummaryService:
                 )
 
                 # DSPy version
-                res, trace_id = trace_dspy_call(
+                res, trace_id = await trace_dspy_call(
                     "PaperSummaryModule",
                     "PaperSummary",
                     self.summary_mod,
@@ -290,7 +298,7 @@ class SummaryService:
             )
             # DSPy version
 
-            res, trace_id = trace_dspy_call(
+            res, trace_id = await trace_dspy_call(
                 "SectionSummaryModule",
                 "PaperSummarySections",
                 self.section_mod,
@@ -383,7 +391,7 @@ class SummaryService:
         """
         try:
             # DSPy version
-            res, trace_id = trace_dspy_call(
+            res, trace_id = await trace_dspy_call(
                 "ContextSummaryModule",
                 "PaperSummaryContext",
                 self.context_mod,

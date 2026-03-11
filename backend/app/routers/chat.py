@@ -4,6 +4,7 @@ Handles chat interactions with the AI assistant.
 """
 
 import json
+import os
 
 from fastapi import APIRouter, Form
 from fastapi.responses import JSONResponse
@@ -29,6 +30,17 @@ redis_service = RedisService()
 storage = get_storage_provider()
 
 
+_MAX_MESSAGE_LENGTH = int(os.getenv("MAX_CHAT_MESSAGE_LENGTH", "4000"))
+
+
+def _sanitize_message(message: str) -> str:
+    """ユーザーメッセージの基本的なサニタイズを行う。NULバイト除去と長さ制限を適用する。"""
+    message = message.replace("\0", "")
+    if len(message) > _MAX_MESSAGE_LENGTH:
+        message = message[:_MAX_MESSAGE_LENGTH]
+    return message
+
+
 class ChatRequest(BaseModel):
     message: str
     session_id: str
@@ -45,6 +57,9 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
     if user_id:
         if storage.get_user(user_id):
             is_registered = True
+
+    # ユーザーメッセージをサニタイズ
+    sanitized_message = _sanitize_message(request.message)
 
     context = redis_service.get(f"session:{request.session_id}") or ""
 
@@ -114,7 +129,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
             )
 
     response_data = await chat_service.chat(
-        request.message,
+        sanitized_message,
         history=history,
         document_context=context,
         target_lang=request.lang,
@@ -129,7 +144,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
     trace_id = response_data.get("trace_id")
 
     # Update history
-    history.append({"role": "user", "content": request.message})
+    history.append({"role": "user", "content": sanitized_message})
     history.append(
         {
             "role": "assistant",

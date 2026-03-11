@@ -2,17 +2,14 @@ import os
 from abc import ABC, abstractmethod
 from typing import Any, TypedDict
 
-from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from pydantic import BaseModel
 
+from common.config import settings  # noqa: F401  secrets/.env の一括ロードを保証
 from common.logger import ServiceLogger
 
 log = ServiceLogger("AIProvider")
-
-
-load_dotenv("../local-files/secrets/.env")
 
 
 class AIProviderError(Exception):

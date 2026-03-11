@@ -15,14 +15,11 @@ import sys
 from datetime import date, datetime, timedelta
 
 import structlog
-from dotenv import load_dotenv
 from google.cloud import bigquery
 
 from app.models.bigquery.schemas import PageViewLogData, UserEngagementData
 from app.providers.bigquery_log import BigQueryLogClient
-
-# Load env for local dev
-load_dotenv("../local-files/secrets/.env")
+from common.config import settings  # noqa: F401  secrets/.env の一括ロードを保証
 
 log = structlog.get_logger("GA4Sync")
 

@@ -8,14 +8,11 @@ import sqlite3
 from abc import ABC, abstractmethod
 from datetime import datetime
 
-from dotenv import load_dotenv
-
+from common.config import settings  # noqa: F401  secrets/.env の一括ロードを保証
 from common.logger import ServiceLogger
 
 log = ServiceLogger("Storage")
 
-
-load_dotenv("../local-files/secrets/.env")
 
 DB_PATH = os.getenv("DB_PATH", "ocr_reader.db")
 

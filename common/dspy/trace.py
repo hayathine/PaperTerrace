@@ -3,6 +3,7 @@ DSPy module trace recording utility.
 Records input/output pairs to BigQuery for later use as DSPy training examples.
 """
 
+import asyncio
 import json
 import os
 import time
@@ -156,7 +157,7 @@ def save_trace(
     return trace_id
 
 
-def trace_dspy_call(
+async def trace_dspy_call(
     module_name: str,
     signature_name: str,
     module_callable,
@@ -164,7 +165,7 @@ def trace_dspy_call(
     context: TraceContext | None = None,
 ):
     """
-    Call a DSPy module and record the trace.
+    Call a DSPy module and record the trace (Async version).
 
     Args:
         module_name: e.g. "ChatModule"
@@ -179,7 +180,8 @@ def trace_dspy_call(
     start = time.perf_counter()
     trace_id = "error"
     try:
-        result = module_callable(**inputs)
+        # Run sync DSPy module in a separate thread to avoid event loop issues
+        result = await asyncio.to_thread(module_callable, **inputs)
         elapsed_ms = int((time.perf_counter() - start) * 1000)
         outputs = _prediction_to_dict(result)
         prompt = _get_last_prompt()
