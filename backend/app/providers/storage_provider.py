@@ -1140,40 +1140,50 @@ class SQLiteStorage(StorageInterface):
         return True
 
 
-# Singleton instance cache (SQLite のみ。PostgreSQL は ORM アダプター経由)
-_storage_provider_instance: StorageInterface | None = None
+# Singleton instance cache
+# SQLiteStorage: fully stateless, safe to share as singleton.
+# ORMStorageAdapter: NOT safe to share a single Session across requests.
+#   A failed DB operation puts the session in an aborted state and all
+#   subsequent requests would get PendingRollbackError.
+#   We therefore cache only the SQLiteStorage singleton; for ORM mode we
+#   create a fresh Session (and adapter) per call.
+_sqlite_singleton: SQLiteStorage | None = None
+_orm_mode: bool = False
 
 
 def get_storage_provider() -> StorageInterface:
     """
-    ストレージプロバイダーを返すファクトリ関数（シングルトン）。
+    ストレージプロバイダーを返すファクトリ関数。
 
-    PostgreSQL 環境では ORMStorageAdapter を返す。
-    SQLite 環境 (ローカル開発) では SQLiteStorage を返す。
+    PostgreSQL 環境では ORMStorageAdapter を **リクエストごとに新規セッション** で返す。
+    SQLite 環境 (ローカル開発) ではシングルトンの SQLiteStorage を返す。
 
     DATABASE_URL または DB_USER/DB_HOST 等の環境変数が設定されている場合は
     PostgreSQL モードになる。
     """
-    global _storage_provider_instance
-
-    if _storage_provider_instance is not None:
-        return _storage_provider_instance
+    global _sqlite_singleton, _orm_mode
 
     database_url = os.getenv("DATABASE_URL")
     default_provider = "orm" if database_url else "sqlite"
     provider_type = os.getenv("STORAGE_PROVIDER", default_provider).lower()
 
     if provider_type in ["cloudsql", "postgresql", "neon", "orm"]:
+        # Always create a fresh session per call so that a failed DB
+        # operation in one request cannot poison subsequent requests.
         from app.database import SessionLocal
         from app.providers.orm_storage import ORMStorageAdapter
 
-        # シングルトン用の永続セッション
-        # （本番では FastAPI の Depends(get_db) 経由を推奨）
-        _db = SessionLocal()
-        _storage_provider_instance = ORMStorageAdapter(_db)
-        log.info("init", "ORMStorageAdapter initialized (PostgreSQL/ORM mode)")
-    else:
-        _storage_provider_instance = SQLiteStorage()
-        log.info("init", "SQLiteStorage initialized")
+        if not _orm_mode:
+            _orm_mode = True
+            log.info(
+                "init",
+                "ORMStorageAdapter initialized (PostgreSQL/ORM mode, per-call session)",
+            )
 
-    return _storage_provider_instance
+        db = SessionLocal()
+        return ORMStorageAdapter(db)
+    else:
+        if _sqlite_singleton is None:
+            _sqlite_singleton = SQLiteStorage()
+            log.info("init", "SQLiteStorage initialized")
+        return _sqlite_singleton

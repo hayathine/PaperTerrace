@@ -28,7 +28,11 @@ def get_url():
     return url
 
 
-engine = create_engine(get_url())
+engine = create_engine(
+    get_url(),
+    pool_pre_ping=True,  # Test connection liveness before checkout
+    pool_recycle=1800,  # Recycle connections after 30 minutes
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

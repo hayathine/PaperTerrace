@@ -723,12 +723,12 @@ function App() {
 
 				{/* Main Content Area */}
 				<div className="flex-1 flex flex-col h-full relative transition-all duration-300">
-					<header className="h-14 sm:h-12 bg-white border-b border-slate-200 flex items-center px-4">
+					<header className="h-14 sm:h-12 bg-white border-b border-slate-200 flex items-center px-2 sm:px-4 header-container">
 						{!isLeftSidebarOpen && (
 							<button
 								type="button"
 								onClick={() => setIsLeftSidebarOpen(true)}
-								className="mr-4 px-4 py-2 rounded-xl bg-orange-50/50 text-orange-600 border border-orange-200 hover:bg-orange-500 hover:text-white transition-all duration-300 flex items-center justify-center gap-2 shadow-sm hover:shadow-orange-200 group/nav"
+								className="mr-2 sm:mr-4 px-2 sm:px-4 py-2 rounded-xl bg-orange-50/50 text-orange-600 border border-orange-200 hover:bg-orange-500 hover:text-white transition-all duration-300 flex items-center justify-center gap-1 sm:gap-2 shadow-sm hover:shadow-orange-200 group/nav"
 								title={t("nav.open_menu")}
 							>
 								<svg
@@ -744,7 +744,7 @@ function App() {
 										d="M13 5l7 7-7 7M5 5l7 7-7 7"
 									/>
 								</svg>
-								<span className="text-xs font-black tracking-widest uppercase">
+								<span className="header-shrink-text font-black tracking-widest uppercase">
 									{t("nav.menu_label")}
 								</span>
 							</button>
@@ -755,7 +755,7 @@ function App() {
 								onClick={() => {
 									throw new Error("Sentry Test Error: Break the world");
 								}}
-								className="mr-4 px-3 py-2 rounded-md bg-red-500 text-white text-xs font-bold hover:bg-red-600 transition-all shadow-sm"
+								className="mr-2 sm:mr-4 px-2 sm:px-3 py-2 rounded-md bg-red-500 text-white header-shrink-text font-bold hover:bg-red-600 transition-all shadow-sm"
 							>
 								Break the world
 							</button>
@@ -768,7 +768,7 @@ function App() {
 										onClick={() =>
 											startModeTransition(() => setPdfMode("plaintext"))
 										}
-										className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2 ${
+										className={`px-1.5 sm:px-3 py-1.5 rounded-lg header-shrink-text font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-1 sm:gap-2 ${
 											pdfMode === "plaintext"
 												? "bg-white text-orange-600 shadow-sm"
 												: "text-slate-400 hover:text-slate-600"
@@ -782,7 +782,7 @@ function App() {
 										onClick={() =>
 											startModeTransition(() => setPdfMode("text"))
 										}
-										className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-2 ${
+										className={`px-1.5 sm:px-3 py-1.5 rounded-lg header-shrink-text font-black uppercase tracking-wider transition-all duration-200 flex items-center gap-1 sm:gap-2 ${
 											pdfMode === "text"
 												? "bg-white text-orange-600 shadow-sm"
 												: "text-slate-400 hover:text-slate-600"
@@ -810,14 +810,14 @@ function App() {
 						)}
 						<div className="flex-1" />
 						{uploadFile && (
-							<span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mr-4 truncate max-w-[150px] sm:max-w-xs">
+							<span className="header-shrink-text font-bold text-slate-400 uppercase tracking-wider mr-2 sm:mr-4 truncate max-w-[80px] sm:max-w-xs">
 								{uploadFile.name}
 							</span>
 						)}
 						<button
 							type="button"
 							onClick={() => setIsRightSidebarOpen((prev) => !prev)}
-							className={`ml-4 px-4 py-2 rounded-xl transition-all duration-300 flex items-center justify-center gap-2 border shadow-sm group/assist
+							className={`ml-2 sm:ml-4 px-2 sm:px-4 py-2 rounded-xl transition-all duration-300 flex items-center justify-center gap-1 sm:gap-2 border shadow-sm group/assist
 								${
 									isRightSidebarOpen
 										? "bg-slate-900 text-white border-slate-800 hover:bg-orange-500 hover:border-orange-400"
@@ -829,7 +829,7 @@ function App() {
 									: t("nav.open_right_panel", "Open panel")
 							}
 						>
-							<span className="text-xs font-black tracking-widest uppercase">
+							<span className="header-shrink-text font-black tracking-widest uppercase">
 								{t("nav.assistant_label")}
 							</span>
 							<svg

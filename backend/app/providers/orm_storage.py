@@ -8,6 +8,7 @@ ORM モデルを単一の変更箇所として扱えるようにする。
 import json
 from typing import Optional
 
+from sqlalchemy.exc import InvalidRequestError, PendingRollbackError
 from sqlalchemy.orm import Session
 
 from app.models.orm.figure import PaperFigure
@@ -86,9 +87,23 @@ class ORMStorageAdapter(StorageInterface):
 
     全ての DB アクセスをリポジトリ経由に統一することで、
     テーブル定義の変更を ORM モデル 1 箇所の修正に抑える。
+
+    セッション自己回復 (catch-and-retry):
+    シングルトンとして長期利用される場合、DB エラーによってセッションが
+    PendingRollback 状態になることがある。_with_recovery() が PendingRollbackError /
+    InvalidRequestError を捕捉するとセッションを置き換えて一度だけリトライする。
     """
 
     def __init__(self, db: Session):
+        self._db = db
+        self._init_repositories(db)
+
+    # ------------------------------------------------------------------
+    # Internal helpers
+    # ------------------------------------------------------------------
+
+    def _init_repositories(self, db: Session) -> None:
+        """リポジトリをセッションで初期化する。"""
         self.db = db
         self.papers = PaperRepository(db)
         self.notes = NoteRepository(db)
@@ -98,6 +113,36 @@ class ORMStorageAdapter(StorageInterface):
         self.ocr = OCRRepository(db)
         self.sessions = SessionRepository(db)
         self.chat = ChatHistoryRepository(db)
+
+    def _replace_session(self) -> None:
+        """現在のセッションをクローズし、新しいセッションで全リポジトリを再初期化する。"""
+        from app.database import SessionLocal
+
+        try:
+            self._db.rollback()
+            self._db.close()
+        except Exception:
+            pass
+
+        new_db = SessionLocal()
+        self._db = new_db
+        self._init_repositories(new_db)
+
+    def _with_recovery(self, fn):
+        """
+        fn() を実行し、PendingRollbackError / InvalidRequestError が発生した場合は
+        セッションを置き換えて 1 回だけリトライする。
+
+        使い方:
+            return self._with_recovery(lambda: self.papers.list_by_owner(uid))
+        """
+        try:
+            return fn()
+        except (PendingRollbackError, InvalidRequestError):
+            self._replace_session()
+            return fn()
+
+    # ------------------------------------------------------------------
 
     def init_tables(self) -> None:
         """Alembic によるマイグレーションに委譲するため何もしない。"""
@@ -117,49 +162,66 @@ class ORMStorageAdapter(StorageInterface):
         owner_id: Optional[str] = None,
         visibility: str = "private",
     ) -> str:
-        return self.papers.upsert(
-            paper_id=paper_id,
-            file_hash=file_hash,
-            filename=filename,
-            ocr_text=ocr_text,
-            html_content=html_content,
-            target_language=target_language,
-            layout_json=layout_json,
-            owner_id=owner_id,
-            visibility=visibility,
+        return self._with_recovery(
+            lambda: self.papers.upsert(
+                paper_id=paper_id,
+                file_hash=file_hash,
+                filename=filename,
+                ocr_text=ocr_text,
+                html_content=html_content,
+                target_language=target_language,
+                layout_json=layout_json,
+                owner_id=owner_id,
+                visibility=visibility,
+            )
         )
 
     def get_paper(self, paper_id: str) -> Optional[dict]:
-        paper = self.papers.get_by_id(paper_id)
+        paper = self._with_recovery(lambda: self.papers.get_by_id(paper_id))
         return _paper_to_dict(paper) if paper else None
 
     def get_paper_by_hash(self, file_hash: str) -> Optional[dict]:
-        paper = self.papers.get_by_hash(file_hash)
+        paper = self._with_recovery(lambda: self.papers.get_by_hash(file_hash))
         return _paper_to_dict(paper) if paper else None
 
     def list_papers(self, limit: int = 50) -> list[dict]:
-        return [_paper_to_dict(p) for p in self.papers.list_recent(limit)]
+        return [
+            _paper_to_dict(p)
+            for p in self._with_recovery(lambda: self.papers.list_recent(limit))
+        ]
 
     def update_paper_html(self, paper_id: str, html_content: str) -> bool:
-        return self.papers.update_html(paper_id, html_content)
+        return self._with_recovery(
+            lambda: self.papers.update_html(paper_id, html_content)
+        )
 
     def update_paper_abstract(self, paper_id: str, abstract: str) -> bool:
-        return self.papers.update_abstract(paper_id, abstract)
+        return self._with_recovery(
+            lambda: self.papers.update_abstract(paper_id, abstract)
+        )
 
     def update_paper_full_summary(self, paper_id: str, summary: str) -> bool:
-        return self.papers.update_full_summary(paper_id, summary)
+        return self._with_recovery(
+            lambda: self.papers.update_full_summary(paper_id, summary)
+        )
 
     def update_paper_section_summary(self, paper_id: str, json_summary: str) -> bool:
-        return self.papers.update_section_summary(paper_id, json_summary)
+        return self._with_recovery(
+            lambda: self.papers.update_section_summary(paper_id, json_summary)
+        )
 
     def delete_paper(self, paper_id: str) -> bool:
-        return self.papers.delete(paper_id)
+        return self._with_recovery(lambda: self.papers.delete(paper_id))
 
     def update_paper_layout(self, paper_id: str, layout_json: str) -> bool:
-        return self.papers.update_layout(paper_id, layout_json)
+        return self._with_recovery(
+            lambda: self.papers.update_layout(paper_id, layout_json)
+        )
 
     def update_paper_visibility(self, paper_id: str, visibility: str) -> bool:
-        return self.papers.update_visibility(paper_id, visibility)
+        return self._with_recovery(
+            lambda: self.papers.update_visibility(paper_id, visibility)
+        )
 
     # ===== Note methods =====
 
@@ -176,17 +238,19 @@ class ORMStorageAdapter(StorageInterface):
         user_id: Optional[str] = None,
         paper_id: Optional[str] = None,
     ) -> str:
-        return self.notes.upsert(
-            note_id=note_id,
-            session_id=session_id,
-            term=term,
-            note=note,
-            image_url=image_url,
-            page_number=page_number,
-            x=x,
-            y=y,
-            user_id=user_id,
-            paper_id=paper_id,
+        return self._with_recovery(
+            lambda: self.notes.upsert(
+                note_id=note_id,
+                session_id=session_id,
+                term=term,
+                note=note,
+                image_url=image_url,
+                page_number=page_number,
+                x=x,
+                y=y,
+                user_id=user_id,
+                paper_id=paper_id,
+            )
         )
 
     def get_notes(
@@ -195,11 +259,15 @@ class ORMStorageAdapter(StorageInterface):
         paper_id: Optional[str] = None,
         user_id: Optional[str] = None,
     ) -> list[dict]:
-        rows = self.notes.get_for_session(session_id, paper_id=paper_id, user_id=user_id)
+        rows = self._with_recovery(
+            lambda: self.notes.get_for_session(
+                session_id, paper_id=paper_id, user_id=user_id
+            )
+        )
         return [_note_to_dict(n) for n in rows]
 
     def delete_note(self, note_id: str) -> bool:
-        return self.notes.delete(note_id)
+        return self._with_recovery(lambda: self.notes.delete(note_id))
 
     # ===== Stamp methods =====
 
@@ -212,20 +280,25 @@ class ORMStorageAdapter(StorageInterface):
         x: Optional[float] = None,
         y: Optional[float] = None,
     ) -> str:
-        return self.stamps.add_paper_stamp(
-            paper_id=paper_id,
-            stamp_type=stamp_type,
-            user_id=user_id,
-            page_number=page_number,
-            x=x,
-            y=y,
+        return self._with_recovery(
+            lambda: self.stamps.add_paper_stamp(
+                paper_id=paper_id,
+                stamp_type=stamp_type,
+                user_id=user_id,
+                page_number=page_number,
+                x=x,
+                y=y,
+            )
         )
 
     def get_paper_stamps(self, paper_id: str) -> list[dict]:
-        return [_stamp_to_dict(s) for s in self.stamps.get_paper_stamps(paper_id)]
+        return [
+            _stamp_to_dict(s)
+            for s in self._with_recovery(lambda: self.stamps.get_paper_stamps(paper_id))
+        ]
 
     def delete_paper_stamp(self, stamp_id: str) -> bool:
-        return self.stamps.delete_paper_stamp(stamp_id)
+        return self._with_recovery(lambda: self.stamps.delete_paper_stamp(stamp_id))
 
     def add_note_stamp(
         self,
@@ -235,19 +308,24 @@ class ORMStorageAdapter(StorageInterface):
         x: Optional[float] = None,
         y: Optional[float] = None,
     ) -> str:
-        return self.stamps.add_note_stamp(
-            note_id=note_id,
-            stamp_type=stamp_type,
-            user_id=user_id,
-            x=x,
-            y=y,
+        return self._with_recovery(
+            lambda: self.stamps.add_note_stamp(
+                note_id=note_id,
+                stamp_type=stamp_type,
+                user_id=user_id,
+                x=x,
+                y=y,
+            )
         )
 
     def get_note_stamps(self, note_id: str) -> list[dict]:
-        return [_stamp_to_dict(s) for s in self.stamps.get_note_stamps(note_id)]
+        return [
+            _stamp_to_dict(s)
+            for s in self._with_recovery(lambda: self.stamps.get_note_stamps(note_id))
+        ]
 
     def delete_note_stamp(self, stamp_id: str) -> bool:
-        return self.stamps.delete_note_stamp(stamp_id)
+        return self._with_recovery(lambda: self.stamps.delete_note_stamp(stamp_id))
 
     # ===== Figure methods =====
 
@@ -279,72 +357,85 @@ class ORMStorageAdapter(StorageInterface):
         return ids[0]
 
     def save_figures_batch(self, paper_id: str, figures: list[dict]) -> list[str]:
-        return self.figures.save_batch(paper_id, figures)
+        return self._with_recovery(lambda: self.figures.save_batch(paper_id, figures))
 
     def get_paper_figures(self, paper_id: str) -> list[dict]:
-        return [_figure_to_dict(f) for f in self.figures.get_by_paper(paper_id)]
+        return [
+            _figure_to_dict(f)
+            for f in self._with_recovery(lambda: self.figures.get_by_paper(paper_id))
+        ]
 
     def get_figure(self, figure_id: str) -> Optional[dict]:
-        fig = self.figures.get_by_id(figure_id)
+        fig = self._with_recovery(lambda: self.figures.get_by_id(figure_id))
         return _figure_to_dict(fig) if fig else None
 
     def update_figure_explanation(self, figure_id: str, explanation: str) -> bool:
-        return self.figures.update_explanation(figure_id, explanation)
+        return self._with_recovery(
+            lambda: self.figures.update_explanation(figure_id, explanation)
+        )
 
     def update_figure_latex(self, figure_id: str, latex: str) -> bool:
-        return self.figures.update_latex(figure_id, latex)
+        return self._with_recovery(lambda: self.figures.update_latex(figure_id, latex))
 
     # ===== User methods =====
 
     def create_user(self, user_data: dict) -> str:
-        return self.users.create(user_data)
+        return self._with_recovery(lambda: self.users.create(user_data))
 
     def get_user(self, user_id: str) -> Optional[dict]:
-        user = self.users.get_by_id(user_id)
+        user = self._with_recovery(lambda: self.users.get_by_id(user_id))
         return _user_to_dict(user) if user else None
 
     def update_user(self, user_id: str, data: dict) -> bool:
-        return self.users.update(user_id, data)
+        return self._with_recovery(lambda: self.users.update(user_id, data))
 
     def delete_user(self, user_id: str) -> bool:
-        return self.users.delete(user_id)
+        return self._with_recovery(lambda: self.users.delete(user_id))
 
     def get_user_stats(self, user_id: str) -> dict:
-        return self.papers.get_user_stats(user_id)
+        return self._with_recovery(lambda: self.papers.get_user_stats(user_id))
 
     # ===== Social paper methods =====
 
     def get_user_papers(
         self, user_id: str, page: int = 1, per_page: int = 20
     ) -> tuple[list[dict], int]:
-        rows, total = self.papers.list_by_owner(user_id, page, per_page)
+        rows, total = self._with_recovery(
+            lambda: self.papers.list_by_owner(user_id, page, per_page)
+        )
         return [_paper_to_dict(p) for p in rows], total
 
     def get_user_public_papers(
         self, user_id: str, page: int = 1, per_page: int = 20
     ) -> tuple[list[dict], int]:
-        rows, total = self.papers.list_public_by_owner(user_id, page, per_page)
+        rows, total = self._with_recovery(
+            lambda: self.papers.list_public_by_owner(user_id, page, per_page)
+        )
         return [_paper_to_dict(p) for p in rows], total
 
     def get_public_papers(
         self, page: int = 1, per_page: int = 20, sort: str = "recent"
     ) -> tuple[list[dict], int]:
-        rows, total = self.papers.list_public(page, per_page, sort)
+        rows, total = self._with_recovery(
+            lambda: self.papers.list_public(page, per_page, sort)
+        )
         return [_paper_to_dict(p) for p in rows], total
 
     def search_public_papers(
         self, query: str, page: int = 1, per_page: int = 20
     ) -> tuple[list[dict], int]:
-        rows, total = self.papers.search_public(query, page, per_page)
+        rows, total = self._with_recovery(
+            lambda: self.papers.search_public(query, page, per_page)
+        )
         return [_paper_to_dict(p) for p in rows], total
 
     def get_popular_tags(self, limit: int = 20) -> list[dict]:
-        return self.papers.get_popular_tags(limit)
+        return self._with_recovery(lambda: self.papers.get_popular_tags(limit))
 
     # ===== OCR cache methods =====
 
     def get_ocr_cache(self, file_hash: str) -> Optional[dict]:
-        return self.ocr.get_cache(file_hash)
+        return self._with_recovery(lambda: self.ocr.get_cache(file_hash))
 
     def save_ocr_cache(
         self,
@@ -354,25 +445,29 @@ class ORMStorageAdapter(StorageInterface):
         model_name: str,
         layout_json: Optional[str] = None,
     ) -> None:
-        self.ocr.save_cache(file_hash, ocr_text, filename, model_name, layout_json)
+        self._with_recovery(
+            lambda: self.ocr.save_cache(
+                file_hash, ocr_text, filename, model_name, layout_json
+            )
+        )
 
     # ===== Session methods =====
 
     def save_session_context(self, session_id: str, paper_id: str) -> None:
-        self.sessions.save(session_id, paper_id)
+        self._with_recovery(lambda: self.sessions.save(session_id, paper_id))
 
     def get_session_paper_id(self, session_id: str) -> Optional[str]:
-        return self.sessions.get_paper_id(session_id)
+        return self._with_recovery(lambda: self.sessions.get_paper_id(session_id))
 
     # ===== Chat history methods =====
 
     def save_chat_history(self, user_id: str, paper_id: str, messages: list) -> None:
         """チャット履歴を保存する。"""
-        self.chat.save(user_id, paper_id, messages)
+        self._with_recovery(lambda: self.chat.save(user_id, paper_id, messages))
 
     def get_chat_history(self, user_id: str, paper_id: str) -> list:
         """チャット履歴を取得する。"""
-        return self.chat.get(user_id, paper_id)
+        return self._with_recovery(lambda: self.chat.get(user_id, paper_id))
 
     # ===== Misc =====
 
@@ -384,10 +479,19 @@ class ORMStorageAdapter(StorageInterface):
         from app.models.orm.paper import Paper, PaperLike
         from app.models.orm.session import AppSession
 
-        for model in [
-            NoteStamp, PaperStamp, PaperFigure, PaperLike, Note,
-            AppSession, OCRCache, Paper,
-        ]:
-            self.db.query(model).delete()
-        self.db.commit()
-        return True
+        def _do_clear():
+            for model in [
+                NoteStamp,
+                PaperStamp,
+                PaperFigure,
+                PaperLike,
+                Note,
+                AppSession,
+                OCRCache,
+                Paper,
+            ]:
+                self.db.query(model).delete()
+            self.db.commit()
+            return True
+
+        return self._with_recovery(_do_clear)

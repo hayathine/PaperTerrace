@@ -28,6 +28,18 @@
 		-webkit-overflow-scrolling: touch;
 		overscroll-behavior: contain;
 	}
+
+	/* Header responsive text scaling */
+	.header-container {
+		container-type: inline-size;
+		width: 100%;
+	}
+
+	.header-shrink-text {
+		/* Scale font-size between 8px and 12px based on header width */
+		font-size: clamp(8px, 1.2cqi + 6px, 12px);
+		white-space: nowrap;
+	}
 }
 
 /* Performance: content-visibility for off-screen page containers */
