@@ -267,7 +267,10 @@ const Summary: React.FC<SummaryProps> = ({
 				</button>
 			</div>
 
-			<div className="flex-1 overflow-y-auto p-4 custom-scrollbar">
+			<div
+				className="flex-1 overflow-y-auto p-4 custom-scrollbar"
+				style={{ WebkitOverflowScrolling: "touch" }}
+			>
 				{error && (
 					<div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg text-xs text-red-600">
 						{error}

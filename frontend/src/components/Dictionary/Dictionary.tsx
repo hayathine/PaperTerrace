@@ -522,7 +522,10 @@ const Dictionary: React.FC<DictionaryProps> = ({
 		}
 	} else {
 		content = (
-			<div className="p-4 flex-1 overflow-y-auto">
+			<div
+				className="p-4 flex-1 overflow-y-auto"
+				style={{ WebkitOverflowScrolling: "touch" }}
+			>
 				{loading && activeEntries.length === 0 && (
 					<div className="flex flex-col items-center justify-center py-12 animate-in fade-in duration-500">
 						<div className="relative w-12 h-12 mb-4">
@@ -721,7 +724,10 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	}
 
 	const historyContent = (
-		<div className="p-3 flex-1 overflow-y-auto">
+		<div
+			className="p-3 flex-1 overflow-y-auto"
+			style={{ WebkitOverflowScrolling: "touch" }}
+		>
 			{savedNotes.length === 0 ? (
 				<div className="flex flex-col items-center justify-center h-full p-8 text-slate-300">
 					<div className="bg-slate-50 p-4 rounded-xl mb-4">
@@ -831,7 +837,10 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				</button>
 			</div>
 
-			<div className="flex-1 overflow-y-auto">
+			<div
+				className="flex-1 overflow-y-auto"
+				style={{ WebkitOverflowScrolling: "touch" }}
+			>
 				{currentSubTab === "translation" || currentSubTab === "explanation" ? (
 					content
 				) : currentSubTab === "history" ? (

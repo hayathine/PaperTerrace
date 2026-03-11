@@ -5,6 +5,8 @@
 @layer base {
 	:root {
 		--font-inter: "Inter", system-ui, -apple-system, sans-serif;
+		/* モバイルブラウザのURLバーを考慮した実際のビューポート高 */
+		--app-height: 100dvh;
 	}
 
 	body {
@@ -13,6 +15,18 @@
 		text-rendering: optimizeLegibility;
 		-webkit-font-smoothing: antialiased;
 		-moz-osx-font-smoothing: grayscale;
+	}
+
+	/* モバイルサイドバーのスクロール用: h-dvh クラス */
+	.h-dvh {
+		height: 100dvh;
+		height: 100vh; /* fallback */
+	}
+
+	/* iOS WebKit モメンタムスクロール */
+	.scroll-touch {
+		-webkit-overflow-scrolling: touch;
+		overscroll-behavior: contain;
 	}
 }
 

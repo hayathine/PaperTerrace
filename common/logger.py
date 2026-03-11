@@ -94,7 +94,7 @@ def configure_logging(log_level: str = "INFO"):
     import os
 
     # 環境変数からログレベルを取得（デフォルトはINFO）
-    env_log_level = os.getenv("LOG_LEVEL", log_level).upper()
+    env_log_level = (os.getenv("LOG_LEVEL") or log_level).upper()
 
     structlog.configure(
         processors=shared_processors

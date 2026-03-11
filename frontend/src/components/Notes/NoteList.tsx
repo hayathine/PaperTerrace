@@ -212,7 +212,10 @@ const NoteList: React.FC<NoteListProps> = ({
 				}
 			/>
 
-			<div className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar">
+			<div
+				className="flex-1 overflow-y-auto space-y-2 pr-1 custom-scrollbar"
+				style={{ WebkitOverflowScrolling: "touch" }}
+			>
 				{loading && notes.length === 0 && (
 					<div className="text-center py-8 text-slate-400 text-xs">
 						Loading notes...

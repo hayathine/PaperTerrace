@@ -445,6 +445,11 @@ tasks:
     cmds:
       - kubectl rollout restart deployment/inference-qwen -n {{.NAMESPACE}} || true
 
+  k3s:restart:queue-worker:
+    desc: "Restart queue-worker in k3s"
+    cmds:
+      - kubectl rollout restart deployment/queue-worker -n {{.NAMESPACE}} || true
+
   k3s:restart:all:
     desc: "Restart all application services in k3s"
     cmds:
@@ -452,6 +457,7 @@ tasks:
       - task: k3s:restart:inference-layout
       - task: k3s:restart:inference-m2m100
       - task: k3s:restart:inference-qwen
+      - task: k3s:restart:queue-worker
 
   k3s:health:
     desc: "Check health of services in k3s"

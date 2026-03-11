@@ -199,6 +199,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 			<div className="flex-1 overflow-hidden relative">
 				<div
 					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "notes" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
+					style={{ touchAction: "pan-y" }}
 				>
 					<Suspense fallback={<TabFallback />}>
 						<Dictionary
@@ -220,6 +221,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 				<div
 					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "analysis" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
+					style={{ touchAction: "pan-y" }}
 				>
 					<Suspense fallback={<TabFallback />}>
 						<Summary
@@ -233,6 +235,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 				<div
 					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "chat" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
+					style={{ touchAction: "pan-y" }}
 				>
 					<Suspense fallback={<TabFallback />}>
 						<ChatWindow
@@ -249,6 +252,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 
 				<div
 					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "comments" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
+					style={{ touchAction: "pan-y" }}
 				>
 					<Suspense fallback={<TabFallback />}>
 						<NoteList

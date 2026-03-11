@@ -455,7 +455,7 @@ function App() {
 
 	return (
 		<ErrorBoundary>
-			<div className="flex h-screen w-full bg-gray-100 overflow-hidden">
+			<div className="flex h-screen h-dvh w-full bg-gray-100 overflow-hidden">
 				{/* Mobile Backdrop for Left Sidebar */}
 				{isLeftSidebarOpen && (
 					<button
@@ -470,7 +470,7 @@ function App() {
 			    モバイルでは fixed 配置にしてドキュメント幅に影響させない。
 			    absolute だと overflow:hidden でクリップされずに横スクロールが発生するため。 */}
 				<div
-					className={`bg-white text-slate-900 border-r border-slate-200 transition-all duration-300 ease-in-out flex flex-col shrink-0 fixed top-0 left-0 md:relative md:top-auto md:left-auto z-50 h-screen md:h-full ${
+					className={`bg-white text-slate-900 border-r border-slate-200 transition-all duration-300 ease-in-out flex flex-col shrink-0 fixed top-0 left-0 md:relative md:top-auto md:left-auto z-50 h-screen h-dvh md:h-full ${
 						isLeftSidebarOpen
 							? "w-72 md:w-64 translate-x-0"
 							: "-translate-x-full md:translate-x-0 w-72 md:w-0 overflow-hidden"
@@ -932,7 +932,7 @@ function App() {
 										? sidebarWidth
 										: 0,
 							}}
-							className={`fixed top-0 right-0 md:relative md:top-auto md:right-auto h-screen md:h-full shadow-xl z-50 md:z-20 bg-white overflow-hidden shrink-0 transition-all duration-300 ${
+							className={`fixed top-0 right-0 md:relative md:top-auto md:right-auto h-screen h-dvh md:h-full shadow-xl z-50 md:z-20 bg-white overflow-hidden shrink-0 transition-all duration-300 ${
 								isRightSidebarOpen
 									? "translate-x-0"
 									: "translate-x-full md:translate-x-0"
