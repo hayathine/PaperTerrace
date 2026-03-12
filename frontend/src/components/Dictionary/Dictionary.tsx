@@ -199,6 +199,19 @@ const Dictionary: React.FC<DictionaryProps> = ({
 							lang: i18n.language,
 						}),
 					});
+				} else if (term.length > 50) {
+					// 長文テキスト（文章・段落）はPOSTエンドポイントで処理
+					// GETパスパラメータに長文を含めると500エラーになるため
+					res = await fetch(`${API_URL}/api/explain/context`, {
+						method: "POST",
+						headers: { ...headers, "Content-Type": "application/json" },
+						body: JSON.stringify({
+							word: term,
+							context: context || term,
+							session_id: sessionId,
+							lang: i18n.language,
+						}),
+					});
 				} else {
 					const queryParams = new URLSearchParams({
 						lang: i18n.language,
