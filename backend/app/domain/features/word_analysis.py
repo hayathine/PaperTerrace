@@ -26,7 +26,11 @@ class WordAnalysisService:
         self.translation_cache = {}  # lemma -> translation
 
     async def translate(
-        self, lemma: str, lang: str = "ja", context: str | None = None
+        self,
+        lemma: str,
+        lang: str = "ja",
+        context: str | None = None,
+        session_id: str | None = None,
     ) -> dict | None:
         # 3.5 Local Machine Translation (M2M100) - ServiceB経由
         try:
@@ -59,7 +63,7 @@ class WordAnalysisService:
 
         # 4. AI Translation (Context-aware if context provided)
         if context:
-            return await self.translate_with_context(lemma, context, lang)
+            return await self.translate_with_context(lemma, context, lang, session_id=session_id)
 
         return None
 

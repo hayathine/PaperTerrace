@@ -15,13 +15,8 @@ if (GLITCHTIP_DSN) {
 	Sentry.init({
 		dsn: GLITCHTIP_DSN,
 		tunnel: SENTRY_TUNNEL,
-		integrations: [
-			Sentry.browserTracingIntegration(),
-			Sentry.replayIntegration(),
-		],
+		integrations: [Sentry.browserTracingIntegration()],
 		tracesSampleRate: 1.0,
-		replaysSessionSampleRate: 0.1,
-		replaysOnErrorSampleRate: 1.0,
 		environment: import.meta.env.MODE,
 	});
 }

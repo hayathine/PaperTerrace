@@ -157,7 +157,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 							key={tab.id}
 							type="button"
 							onClick={() => onTabChange(tab.id)}
-							className={`flex-1 min-w-[46px] sm:min-w-[52px] py-2 sm:py-2.5 flex flex-col items-center gap-1 transition-all border-b-2 ${
+							className={`shrink-0 min-w-[52px] sm:min-w-[60px] py-2 sm:py-2.5 flex flex-col items-center gap-1 transition-all border-b-2 ${
 								activeTab === tab.id
 									? "bg-white text-orange-500 border-orange-500"
 									: "text-slate-400 border-transparent hover:text-slate-600"
@@ -198,7 +198,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 			{/* Tab Content - All rendered but hidden when not active to preserve state */}
 			<div className="flex-1 overflow-hidden relative">
 				<div
-					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "notes" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
+					className={`absolute inset-0 overflow-y-auto bg-white transition-opacity duration-200 ${activeTab === "notes" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
 					style={{ touchAction: "pan-y" }}
 				>
 					<Suspense fallback={<TabFallback />}>
@@ -220,7 +220,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 				</div>
 
 				<div
-					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "analysis" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
+					className={`absolute inset-0 overflow-y-auto bg-white transition-opacity duration-200 ${activeTab === "analysis" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
 					style={{ touchAction: "pan-y" }}
 				>
 					<Suspense fallback={<TabFallback />}>
@@ -234,7 +234,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 				</div>
 
 				<div
-					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "chat" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
+					className={`absolute inset-0 overflow-y-auto bg-white transition-opacity duration-200 ${activeTab === "chat" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
 					style={{ touchAction: "pan-y" }}
 				>
 					<Suspense fallback={<TabFallback />}>
@@ -251,7 +251,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 				</div>
 
 				<div
-					className={`absolute inset-0 bg-white transition-opacity duration-200 ${activeTab === "comments" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
+					className={`absolute inset-0 overflow-y-auto bg-white transition-opacity duration-200 ${activeTab === "comments" ? "opacity-100 z-10 pointer-events-auto" : "opacity-0 z-0 pointer-events-none"}`}
 					style={{ touchAction: "pan-y" }}
 				>
 					<Suspense fallback={<TabFallback />}>

@@ -278,7 +278,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 					<img
 						src={displayUrl}
 						alt={`Page ${page.page_num}`}
-						className="w-full h-auto block select-none"
+						className="absolute inset-0 w-full h-full object-contain block select-none"
 						loading="lazy"
 						onError={() => {
 							log.warn("load_image", "Image failed to load", {
@@ -291,7 +291,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 					/>
 				) : (
 					/* Fallback: Show message when image fails to load */
-					<div className="w-full min-h-[600px] bg-slate-50 flex flex-col items-center justify-center p-8 text-slate-500">
+					<div className="absolute inset-0 bg-slate-50 flex flex-col items-center justify-center p-8 text-slate-500">
 						<div className="text-4xl mb-4">📄</div>
 						<p className="text-sm font-medium mb-2">
 							{t("viewer.image_not_available", "画像を読み込めません")}

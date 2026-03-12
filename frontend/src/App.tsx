@@ -17,6 +17,7 @@ import { useAuth } from "./contexts/AuthContext";
 import { useLoading } from "./contexts/LoadingContext";
 import { useSyncStatus } from "./db/sync";
 import { useLayoutState } from "./hooks/useLayoutState";
+import { usePinchZoom } from "./hooks/usePinchZoom";
 import { useScrollTracking } from "./hooks/useScrollTracking";
 import { useSearchState } from "./hooks/useSearchState";
 import { useServiceHealth } from "./hooks/useServiceHealth";
@@ -131,6 +132,12 @@ function App() {
 	const paperStartTimeRef = useRef<number | null>(null);
 
 	const handleScroll = useScrollTracking(currentPaperId || uploadFile?.name);
+	const {
+		zoom,
+		resetZoom,
+		containerRef: zoomContainerRef,
+		onWheel: handleZoomWheel,
+	} = usePinchZoom();
 	const [appEnv, setAppEnv] = useState<string>("production");
 	const [pdfMode, setPdfMode] = useState<
 		"text" | "stamp" | "area" | "plaintext"
@@ -862,28 +869,64 @@ function App() {
 						<div className="flex-1 bg-slate-100 flex items-start justify-center relative overflow-hidden">
 							{uploadFile || currentPaperId ? (
 								<div
+									ref={zoomContainerRef}
 									onScroll={handleScroll}
-									className="w-full h-full p-2 sm:p-4 md:p-8 overflow-y-auto overflow-x-hidden custom-scrollbar"
+									onWheel={handleZoomWheel}
+									className="w-full h-full overflow-auto custom-scrollbar"
+									style={{ touchAction: zoom > 1 ? "pan-x pan-y" : "pan-y" }}
 								>
-									<PDFViewer
-										sessionId={sessionId}
-										uploadFile={uploadFile}
-										paperId={currentPaperId}
-										onWordClick={handleWordClick}
-										onTextSelect={handleTextSelect}
-										onAreaSelect={handleAreaSelect}
-										jumpTarget={jumpTarget}
-										onStatusChange={handleAnalysisStatusChange}
-										onPaperLoaded={handlePaperLoaded}
-										onAskAI={handleAskAI}
-										onFigureSelect={handleFigureSelect}
-										searchTerm={searchTerm}
-										onSearchMatchesUpdate={handleSearchMatchesUpdate}
-										currentSearchMatch={currentSearchMatch}
-										evidence={activeEvidence}
-										appEnv={appEnv}
-										mode={pdfMode}
-									/>
+									{/* スペーサー: transform後の視覚サイズに合わせてスクロール領域を確保 */}
+									<div
+										style={{
+											width: zoom > 1 ? `${zoom * 100}%` : "100%",
+											minHeight: "100%",
+										}}
+									>
+										{/* ズームtransformラッパー */}
+										<div
+											className="p-2 sm:p-4 md:p-8"
+											style={
+												zoom > 1
+													? {
+															transform: `scale(${zoom})`,
+															transformOrigin: "top left",
+															width: `${(100 / zoom).toFixed(4)}%`,
+														}
+													: undefined
+											}
+										>
+											<PDFViewer
+												sessionId={sessionId}
+												uploadFile={uploadFile}
+												paperId={currentPaperId}
+												onWordClick={handleWordClick}
+												onTextSelect={handleTextSelect}
+												onAreaSelect={handleAreaSelect}
+												jumpTarget={jumpTarget}
+												onStatusChange={handleAnalysisStatusChange}
+												onPaperLoaded={handlePaperLoaded}
+												onAskAI={handleAskAI}
+												onFigureSelect={handleFigureSelect}
+												searchTerm={searchTerm}
+												onSearchMatchesUpdate={handleSearchMatchesUpdate}
+												currentSearchMatch={currentSearchMatch}
+												evidence={activeEvidence}
+												appEnv={appEnv}
+												mode={pdfMode}
+											/>
+										</div>
+									</div>
+									{/* ズームインジケーター */}
+									{zoom > 1 && (
+										<button
+											type="button"
+											onClick={resetZoom}
+											className="sticky bottom-4 left-4 z-50 inline-flex items-center gap-1.5 bg-slate-800/80 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg backdrop-blur-sm hover:bg-slate-700/90 transition-colors"
+										>
+											{Math.round(zoom * 100)}%
+											<span className="text-slate-300">×</span>
+										</button>
+									)}
 								</div>
 							) : (
 								<div className="w-full h-full flex items-center justify-center p-4">
