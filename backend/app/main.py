@@ -167,6 +167,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     GUEST_LIMIT = int(os.getenv("RATE_LIMIT_GUEST", "30"))
     # レートリミット対象外のパス
     _SKIP_PATHS = frozenset(["/api/health", "/health", "/"])
+    # レートリミット対象外のプレフィックス（ポーリング系エンドポイント）
+    _SKIP_PREFIXES = ("/api/layout-jobs/",)
 
     def __init__(self, app):
         super().__init__(app)
@@ -183,6 +185,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         if request.url.path in self._SKIP_PATHS:
+            return await call_next(request)
+
+        if any(request.url.path.startswith(p) for p in self._SKIP_PREFIXES):
             return await call_next(request)
 
         if not self._redis:

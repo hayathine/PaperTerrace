@@ -460,6 +460,7 @@ async def stream(task_id: str):
     lang = data.get("lang", "ja")
     session_id = data.get("session_id")
     user_id = data.get("user_id")  # Retrieve user_id
+    is_registered = data.get("is_registered", False)
     file_hash = data.get("file_hash", "")
     filename = data.get("filename", "unknown.pdf")
 
@@ -604,7 +605,7 @@ async def stream(task_id: str):
 
                 # Save to permanent DB ONLY for registered users (prevent DB clutter for transient guest sessions)
                 # Transient sessions rely on Redis and Frontend IndexedDB.
-                if user_id:
+                if is_registered:
                     try:
                         from app.crud import save_figure_to_db
                         from app.domain.services.paper_processing import (
@@ -797,7 +798,7 @@ async def stream(task_id: str):
                     )
 
                 # DBのセッション→論文マッピングも更新（レビュー等が正しい論文を参照するため）
-                if session_id and paper_id:
+                if is_registered and session_id and paper_id:
                     try:
                         storage.save_session_context(session_id, paper_id)
                     except Exception as e:
@@ -1015,64 +1016,71 @@ async def stream(task_id: str):
             # 全ページ完了後、DB保存 (Backup for analysis tasks)
             full_text = "\n\n---\n\n".join(full_text_fragments)
 
-            try:
-                storage.save_paper(
-                    paper_id=paper_id,
-                    file_hash=file_hash,
-                    filename=filename,
-                    ocr_text=full_text,
-                    html_content="",
-                    target_language="ja",
-                    owner_id=user_id,
-                )
-                log.info("ocr_generate", "Paper record saved", paper_id=paper_id)
+            if is_registered:
+                try:
+                    storage.save_paper(
+                        paper_id=paper_id,
+                        file_hash=file_hash,
+                        filename=filename,
+                        ocr_text=full_text,
+                        html_content="",
+                        target_language="ja",
+                        owner_id=user_id,
+                    )
+                    log.info("ocr_generate", "Paper record saved", paper_id=paper_id)
 
-                # Save Collected Figures and Explain
-                if collected_figures:
-                    from app.crud import save_figure_to_db
+                    # Save Collected Figures and Explain
+                    if collected_figures:
+                        from app.crud import save_figure_to_db
 
-                    log.info(
+                        log.info(
+                            "ocr_generate",
+                            f"Saving {len(collected_figures)} extracted figures",
+                            paper_id=paper_id,
+                        )
+
+                        for fig in collected_figures:
+                            fid = save_figure_to_db(
+                                paper_id=paper_id,
+                                page_number=fig["page_num"],
+                                bbox=fig["bbox"],
+                                image_url=fig["image_url"],
+                                caption="",  # Can't easily extract yet
+                                explanation="",  # Initially empty
+                                label=fig.get("label", "figure"),
+                                latex=fig.get("latex", ""),
+                            )
+                            # Trigger figure analysis via asyncio task
+                            asyncio.create_task(
+                                process_figure_analysis_task(
+                                    fid,
+                                    fig["image_url"],
+                                    user_id=user_id,
+                                    session_id=session_id,
+                                )
+                            )
+
+                    # --- Auto-Summarization for Abstract ---
+                    asyncio.create_task(
+                        process_paper_summary_task(
+                            paper_id, lang=lang, user_id=user_id, session_id=session_id
+                        )
+                    )
+
+                    # DBにもセッションマッピングを保存
+                    if session_id:
+                        storage.save_session_context(session_id, paper_id)
+
+                except Exception as e:
+                    log.error(
                         "ocr_generate",
-                        f"Saving {len(collected_figures)} extracted figures",
+                        f"Failed to save paper record: {e}",
                         paper_id=paper_id,
                     )
-
-                    for fig in collected_figures:
-                        fid = save_figure_to_db(
-                            paper_id=paper_id,
-                            page_number=fig["page_num"],
-                            bbox=fig["bbox"],
-                            image_url=fig["image_url"],
-                            caption="",  # Can't easily extract yet
-                            explanation="",  # Initially empty
-                            label=fig.get("label", "figure"),
-                            latex=fig.get("latex", ""),
-                        )
-                        # Trigger figure analysis via asyncio task
-                        asyncio.create_task(
-                            process_figure_analysis_task(
-                                fid,
-                                fig["image_url"],
-                                user_id=user_id,
-                                session_id=session_id,
-                            )
-                        )
-
-                # --- Auto-Summarization for Abstract ---
-                asyncio.create_task(
-                    process_paper_summary_task(
-                        paper_id, lang=lang, user_id=user_id, session_id=session_id
-                    )
-                )
-
-                # DBにもセッションマッピングを保存
-                if session_id:
-                    storage.save_session_context(session_id, paper_id)
-
-            except Exception as e:
-                log.error(
+            else:
+                log.info(
                     "ocr_generate",
-                    f"Failed to save paper record: {e}",
+                    "Skipping DB save for guest session",
                     paper_id=paper_id,
                 )
 

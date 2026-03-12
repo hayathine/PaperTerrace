@@ -58,3 +58,24 @@ async def report_client_error(
         repo.create(error)
     except Exception as e:
         log.error("report", f"Failed to initialize or write client error: {e}")
+
+    try:
+        import sentry_sdk
+
+        with sentry_sdk.new_scope() as scope:
+            scope.set_tag("source", "frontend")
+            scope.set_tag("component", req.component)
+            scope.set_tag("operation", req.operation)
+            if user_id:
+                scope.set_user({"id": user_id})
+            scope.set_extra("url", req.url)
+            scope.set_extra("context", req.context)
+            if req.stack:
+                scope.set_extra("stack", req.stack)
+            sentry_sdk.capture_message(
+                f"[{req.component}.{req.operation}] {req.message}",
+                level="error",
+                scope=scope,
+            )
+    except Exception:
+        pass

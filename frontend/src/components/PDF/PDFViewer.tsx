@@ -375,62 +375,65 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		});
 	};
 
-	const pollLayoutJob = async (
+	const pollLayoutJob = (
 		jobId: string,
 		paperId: string,
 		fileHash: string | null,
-		headers: HeadersInit,
 	): Promise<void> => {
-		const POLL_INTERVAL_MS = 5000;
-		const TIMEOUT_MS = 120_000;
-		const deadline = Date.now() + TIMEOUT_MS;
+		return new Promise((resolve) => {
+			const es = new EventSource(`${API_URL}/api/layout-jobs/${jobId}/stream`);
 
-		while (Date.now() < deadline) {
-			await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+			const timeout = setTimeout(() => {
+				log.error("poll_layout_job", "Job timed out", { job_id: jobId });
+				es.close();
+				resolve();
+			}, 130_000);
 
-			const statusRes = await fetch(`${API_URL}/api/layout-jobs/${jobId}`, {
-				headers,
-			});
-			if (!statusRes.ok) {
-				if (statusRes.status === 429) {
-					const retryAfter = statusRes.headers.get("Retry-After");
-					const waitMs = retryAfter ? Number(retryAfter) * 1000 : 15_000;
-					log.warn("poll_layout_job", "Rate limited, backing off", {
-						job_id: jobId,
-						wait_ms: waitMs,
-					});
-					await new Promise((resolve) => setTimeout(resolve, waitMs));
-					continue;
+			es.onmessage = (event) => {
+				try {
+					const data = JSON.parse(event.data);
+
+					if (data.status === "completed") {
+						log.info("poll_layout_job", "Job completed", {
+							job_id: jobId,
+							figures: data.figures_detected,
+						});
+						applyLayoutFigures(data.figures, paperId, fileHash);
+						clearTimeout(timeout);
+						es.close();
+						resolve();
+					} else if (data.status === "failed") {
+						log.error("poll_layout_job", "Job failed", {
+							job_id: jobId,
+							error: data.error,
+						});
+						clearTimeout(timeout);
+						es.close();
+						resolve();
+					} else if (data.status === "not_found" || data.status === "timeout") {
+						log.warn("poll_layout_job", "Job ended unexpectedly", {
+							job_id: jobId,
+							status: data.status,
+						});
+						clearTimeout(timeout);
+						es.close();
+						resolve();
+					}
+					// queued / processing → 次のSSEメッセージを待つ
+				} catch {
+					// ignore parse errors
 				}
-				log.error("poll_layout_job", "Status check failed", {
+			};
+
+			es.onerror = () => {
+				log.warn("poll_layout_job", "SSE connection error", {
 					job_id: jobId,
-					status: statusRes.status,
 				});
-				return;
-			}
-
-			const statusData = await statusRes.json();
-
-			if (statusData.status === "completed") {
-				log.info("poll_layout_job", "Job completed", {
-					job_id: jobId,
-					figures: statusData.figures_detected,
-				});
-				applyLayoutFigures(statusData.figures, paperId, fileHash);
-				return;
-			}
-
-			if (statusData.status === "failed") {
-				log.error("poll_layout_job", "Job failed", {
-					job_id: jobId,
-					error: statusData.error,
-				});
-				return;
-			}
-			// queued / processing → 次のポーリングへ
-		}
-
-		log.error("poll_layout_job", "Job timed out", { job_id: jobId });
+				clearTimeout(timeout);
+				es.close();
+				resolve();
+			};
+		});
 	};
 
 	const enqueueBatch = async (
@@ -493,7 +496,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			};
 			if (token) headers.Authorization = `Bearer ${token}`;
 
-			// バッチに分割してキューに一括投入
+			// バッチに分割
 			const batches: number[][] = [];
 			for (let i = 0; i < finalPages.length; i += BATCH_SIZE) {
 				batches.push(
@@ -507,28 +510,28 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				batches: batches.length,
 			});
 
-			// 全バッチを並列でキューに投入し job_id を取得
-			const jobIds = await Promise.all(
-				batches.map((batchPages) =>
-					enqueueBatch(paperId, batchPages, fileHash, headers),
-				),
-			);
-
-			// 各ジョブをポーリング（レート制限対策: 最大2並列）
-			const validJobIds = jobIds.filter((id): id is string => id !== null);
-			const pollFns = validJobIds.map(
-				(jobId) => () => pollLayoutJob(jobId, paperId, fileHash, headers),
-			);
-			const CONCURRENCY = 2;
-			let next = 0;
-			const worker = async () => {
-				while (next < pollFns.length) {
-					const i = next++;
-					await pollFns[i]();
+			// バッチを順番に（少しディレイをおいて）キューに投入
+			// ゲートウェイへの負荷集中を避けつつ、バックグラウンドの3ワーカーに仕事を渡す
+			const jobIds: (string | null)[] = [];
+			for (const batchPages of batches) {
+				const jobId = await enqueueBatch(
+					paperId,
+					batchPages,
+					fileHash,
+					headers,
+				);
+				jobIds.push(jobId);
+				if (batches.length > 1) {
+					// 3ワーカーが順次取り出せる程度の適度な間隔
+					await new Promise((resolve) => setTimeout(resolve, 500));
 				}
-			};
+			}
+
+			// 各ジョブをSSEで並列待機（ポーリング不要・レート制限なし）
 			await Promise.all(
-				Array.from({ length: Math.min(CONCURRENCY, pollFns.length) }, worker),
+				jobIds
+					.filter((id): id is string => id !== null)
+					.map((jobId) => pollLayoutJob(jobId, paperId, fileHash)),
 			);
 
 			log.info(

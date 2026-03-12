@@ -4,8 +4,11 @@ Handles paper analysis features: summary,
 figure/table analysis, layout detection, and adversarial review.
 """
 
+import asyncio
+import json
+
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.auth import OptionalUser
 from app.domain.features import (
@@ -298,4 +301,61 @@ async def get_layout_job_status(job_id: str):
             "status": status,
             "error": job.get("error"),
         }
+    )
+
+
+@router.get("/layout-jobs/{job_id}/stream")
+async def stream_layout_job(job_id: str):
+    """
+    レイアウト解析ジョブの完了をSSEでプッシュ通知する。
+
+    クライアントはポーリングせず、この接続を維持するだけでよい。
+    status: "queued" | "processing" | "completed" | "failed" | "timeout" | "not_found"
+    """
+    redis_client = get_redis_client()
+    if redis_client is None:
+        raise HTTPException(status_code=503, detail="Redis unavailable")
+
+    async def generate():
+        POLL_INTERVAL = 1.0
+        TIMEOUT = 125.0
+        HEARTBEAT_INTERVAL = 15.0
+        deadline = asyncio.get_event_loop().time() + TIMEOUT
+        last_heartbeat = asyncio.get_event_loop().time()
+
+        while asyncio.get_event_loop().time() < deadline:
+            now = asyncio.get_event_loop().time()
+
+            if now - last_heartbeat >= HEARTBEAT_INTERVAL:
+                yield ": heartbeat\n\n"
+                last_heartbeat = now
+
+            job = get_job_status(redis_client, job_id)
+            if job is None:
+                yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
+                return
+
+            status = job.get("status")
+
+            if status == "completed":
+                figures = job.get("result", [])
+                yield f"data: {json.dumps({'status': 'completed', 'figures': figures, 'figures_detected': len(figures)})}\n\n"
+                return
+
+            if status == "failed":
+                yield f"data: {json.dumps({'status': 'failed', 'error': job.get('error')})}\n\n"
+                return
+
+            yield f"data: {json.dumps({'status': status})}\n\n"
+            await asyncio.sleep(POLL_INTERVAL)
+
+        yield f"data: {json.dumps({'status': 'timeout'})}\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "X-Accel-Buffering": "no",
+        },
     )

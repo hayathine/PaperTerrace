@@ -184,30 +184,49 @@ class LayoutAnalysisService:
 
         all_figures = []
 
-        async for (
-            batch_start,
-            batch_results,
-        ) in inference_client.analyze_images_batch_streaming(
-            image_data_list, page_nums=page_info_list, max_batch_size=10
+        async def get_batches(images, page_nums):
+            # First batch: up to 3 pages
+            if images:
+                first_batch_size = min(3, len(images))
+                yield 0, images[:first_batch_size], page_nums[:first_batch_size]
+
+                # Remaining batches: 10 pages each
+                for i in range(first_batch_size, len(images), 10):
+                    batch_images = images[i : i + 10]
+                    batch_pages = page_nums[i : i + 10]
+                    yield i, batch_images, batch_pages
+
+        async for batch_start, batch_img_bytes, batch_page_nums in get_batches(
+            image_data_list, page_info_list
         ):
-            batch_page_nums = page_info_list[
-                batch_start : batch_start + len(batch_results)
-            ]
-            batch_img_bytes = image_data_list[
-                batch_start : batch_start + len(batch_results)
-            ]
+            logger.info(f"[analyze_layout_lazy] Sending batch: pages {batch_page_nums}")
+            try:
+                # Use the existing analyze_images_batch functionality but with our custom batching
+                # We can call analyze_images_batch_streaming with max_batch_size=len(batch) to process exactly this batch
+                async for (
+                    _,
+                    batch_results,
+                ) in inference_client.analyze_images_batch_streaming(
+                    batch_img_bytes,
+                    page_nums=batch_page_nums,
+                    max_batch_size=len(batch_img_bytes),
+                ):
+                    logger.info(
+                        f"[analyze_layout_lazy] Batch received: pages {batch_page_nums}"
+                    )
 
-            logger.info(
-                f"[analyze_layout_lazy] Batch received: pages {batch_page_nums}"
-            )
-
-            for page_num, img_bytes, results in zip(
-                batch_page_nums, batch_img_bytes, batch_results
-            ):
-                page_figures = await self._process_page_results(
-                    page_num, img_bytes, results, file_hash
+                    for page_num, img_bytes, results in zip(
+                        batch_page_nums, batch_img_bytes, batch_results
+                    ):
+                        page_figures = await self._process_page_results(
+                            page_num, img_bytes, results, file_hash
+                        )
+                        all_figures.extend(page_figures)
+            except Exception as e:
+                logger.error(
+                    f"[analyze_layout_lazy] Batch processing failed for pages {batch_page_nums}: {e}"
                 )
-                all_figures.extend(page_figures)
+                continue
 
         # 3. Save to DB ONLY for registered users
         if all_figures and user_id:
