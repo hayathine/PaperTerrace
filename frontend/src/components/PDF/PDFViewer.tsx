@@ -347,6 +347,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				const fileHash = hashMatch ? hashMatch[1] : null;
 
 				if (fileHash) formData.append("file_hash", fileHash);
+				if (sessionId) formData.append("session_id", sessionId);
 
 				const response = await fetch(`${API_URL}/api/analyze-layout-lazy`, {
 					method: "POST",

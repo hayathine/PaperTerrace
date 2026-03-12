@@ -14,3 +14,4 @@ class ClientErrorRequest(BaseModel):
     context: Optional[dict] = None
     url: Optional[str] = Field(None, max_length=2000)
     user_agent: Optional[str] = Field(None, max_length=500)
+    session_id: Optional[str] = Field(None, max_length=200)

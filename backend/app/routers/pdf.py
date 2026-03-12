@@ -99,7 +99,7 @@ async def analyze_pdf(
             status_code=413,
         )
 
-    user_id = user.uid if user else None
+    user_id = user.uid if user else (f"guest:{session_id}" if session_id else None)
 
     content = await file.read()
     file_hash = _get_file_hash(content)
@@ -198,7 +198,7 @@ async def analyze_pdf_json(
     log.info("analyze_json", "START", filename=file.filename, size=file.size)
 
     # Capture user_id
-    user_id = user.uid if user else None
+    user_id = user.uid if user else (f"guest:{session_id}" if session_id else None)
     if user_id:
         log.info("analyze_json", "Authenticated user", user_id=user_id)
 
@@ -378,7 +378,7 @@ async def analyze_paper(
                 {"error": "Paper record is corrupt (missing hash)"}, status_code=400
             )
 
-        user_id = user.uid if user else None
+        user_id = user.uid if user else (f"guest:{session_id}" if session_id else None)
         is_registered = False
         if user_id:
             try:
@@ -1005,6 +1005,7 @@ async def stream(task_id: str):
                         id_prefix=page_prefix,
                         save_to_db=False,
                         lang=lang,
+                        session_id=session_id,
                     ):
                         yield chunk
                         await asyncio.sleep(0.005)
@@ -1047,11 +1048,20 @@ async def stream(task_id: str):
                         )
                         # Trigger figure analysis via asyncio task
                         asyncio.create_task(
-                            process_figure_analysis_task(fid, fig["image_url"])
+                            process_figure_analysis_task(
+                                fid,
+                                fig["image_url"],
+                                user_id=user_id,
+                                session_id=session_id,
+                            )
                         )
 
                 # --- Auto-Summarization for Abstract ---
-                asyncio.create_task(process_paper_summary_task(paper_id, lang=lang))
+                asyncio.create_task(
+                    process_paper_summary_task(
+                        paper_id, lang=lang, user_id=user_id, session_id=session_id
+                    )
+                )
 
                 # DBにもセッションマッピングを保存
                 if session_id:
@@ -1114,7 +1124,9 @@ async def stream(task_id: str):
     log.info("stream", "Starting tokenization", paper_id=paper_id)
 
     async def generate():
-        async for chunk in service.tokenize_stream(text, paper_id, lang=lang):
+        async for chunk in service.tokenize_stream(
+            text, paper_id, lang=lang, session_id=session_id
+        ):
             yield chunk
             await asyncio.sleep(0.01)
 

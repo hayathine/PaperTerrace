@@ -11,10 +11,6 @@ log = ServiceLogger("Feedback")
 router = APIRouter(prefix="/feedback", tags=["Feedback"])
 
 
-def get_current_user_id(request: Request) -> str:
-    return getattr(request.state, "user_id", "anonymous")
-
-
 @router.post("", summary="汎用的なフィードバックを記録する")
 async def submit_feedback(
     req: FeedbackRequest,
@@ -23,7 +19,9 @@ async def submit_feedback(
     """
     AI生成結果（推薦、要約、レビュー等）に対するユーザーの評価（Good/Bad）を記録する
     """
-    current_user_id = get_current_user_id(request)
+    current_user_id = getattr(request.state, "user_id", None) or (
+        f"guest:{req.session_id}" if req.session_id else "anonymous"
+    )
 
     feedback = FeedbackData(
         session_id=req.session_id,

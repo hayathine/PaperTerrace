@@ -44,9 +44,11 @@ class ChatService:
         document_context: str = "",
         target_lang: str = "ja",
         paper_id: str | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
         pdf_bytes: bytes | None = None,
         image_bytes: bytes | None = None,
-    ) -> str:
+    ) -> dict | str:
         """
         Generate a chat response based on user message and document context.
 
@@ -56,11 +58,13 @@ class ChatService:
             document_context: The paper text for context
             target_lang: Output language
             paper_id: 論文ID (キャッシュ管理用)
+            user_id: ユーザーID (トレース用)
+            session_id: セッションID (トレース用)
             pdf_bytes: PDFバイナリデータ (PDF直接入力方式)
             image_bytes: 図表等の画像データ
 
         Returns:
-            AI-generated response
+            AI-generated response (dict with text, trace_id, and optionally grounding)
         """
         # Build conversation context
         recent_history = history[-10:] if len(history) > 10 else history
@@ -161,7 +165,9 @@ class ChatService:
                         "user_message": user_message,
                         "lang_name": lang_name,
                     },
-                    context=TraceContext(paper_id=paper_id),
+                    context=TraceContext(
+                        user_id=user_id, session_id=session_id, paper_id=paper_id
+                    ),
                 )
                 response_data = res.answer
 
@@ -202,7 +208,10 @@ class ChatService:
                 "Chat request failed",
                 extra={"error": str(e), "message_preview": user_message[:50]},
             )
-            return f"エラーが発生しました: {str(e)}"
+            return {
+                "text": f"エラーが発生しました: {str(e)}",
+                "trace_id": "error",
+            }
 
     async def delete_paper_cache(self, paper_id: str):
         """Delete the context cache for a specific paper."""

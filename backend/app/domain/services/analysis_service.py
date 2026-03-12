@@ -28,16 +28,24 @@ class EnglishAnalysisService:
         self.word_cache = self.word_analysis.word_cache
         self.translation_cache = self.word_analysis.translation_cache
 
-    async def tokenize_stream(self, *args, **kwargs):
+    async def tokenize_stream(self, text, paper_id=None, lang="ja", session_id=None):
         """Processes text paragraph by paragraph and yields interactive HTML."""
-        async for chunk in self.tokenization.tokenize_stream(*args, **kwargs):
+        async for chunk in self.tokenization.tokenize_stream(
+            text, paper_id=paper_id, lang=lang, session_id=session_id
+        ):
             yield chunk
 
     async def get_translation(
-        self, lemma: str, context: str | None = None, lang: str = "ja"
+        self,
+        lemma: str,
+        context: str | None = None,
+        lang: str = "ja",
+        session_id: str | None = None,
     ):
         """Get translation for a lemma, optionally using context."""
-        return await self.word_analysis.translate(lemma, lang=lang, context=context)
+        return await self.word_analysis.translate(
+            lemma, lang=lang, context=context, session_id=session_id
+        )
 
     # Legacy accessors
     def get_word_cache(self):

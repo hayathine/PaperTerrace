@@ -26,6 +26,9 @@ class FigureInsightService:
         caption: str = "",
         mime_type: str = "image/png",
         target_lang: str = "ja",
+        user_id: str | None = None,
+        session_id: str | None = None,
+        paper_id: str | None = None,
     ) -> str:
         """
         図表画像を分析し、洞察を生成する。
@@ -64,6 +67,8 @@ class FigureInsightService:
                     mime_type,
                     model=self.model,
                     response_model=FigureAnalysisResponse,
+                    # We don't have a direct TraceContext param for generate_with_image in AIProviderInterface yet,
+                    # but we can log it here.
                 )
             )
 
@@ -82,6 +87,9 @@ class FigureInsightService:
                 "analyze",
                 "Figure analysis generated",
                 output_length=len(formatted_text),
+                user_id=user_id,
+                session_id=session_id,
+                paper_id=paper_id,
             )
             return formatted_text
 

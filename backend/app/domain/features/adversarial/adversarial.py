@@ -29,7 +29,12 @@ class AdversarialReviewService:
         self.adversarial_mod = AdversarialModule()
 
     async def critique(
-        self, text: str = "", target_lang: str = "ja", pdf_bytes: bytes | None = None
+        self,
+        text: str = "",
+        target_lang: str = "ja",
+        user_id: str | None = None,
+        session_id: str | None = None,
+        pdf_bytes: bytes | None = None,
     ) -> dict:
         """
         Analyze the paper from a critical perspective.
@@ -97,11 +102,14 @@ class AdversarialReviewService:
                     extra={"text_length": len(text)},
                 )
                 # DSPy version
+                from common.dspy.trace import TraceContext
+
                 res, trace_id = await trace_dspy_call(
                     "AdversarialModule",
                     "AdversarialCritique",
                     self.adversarial_mod,
                     {"paper_text": text[:12000], "lang_name": lang_name},
+                    context=TraceContext(user_id=user_id, session_id=session_id),
                 )
 
                 critique_dict = {

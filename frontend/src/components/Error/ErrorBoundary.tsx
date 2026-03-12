@@ -16,7 +16,22 @@ class ErrorBoundary extends Component<Props, State> {
 		hasError: false,
 	};
 
-	public static getDerivedStateFromError(_error: Error): State {
+	public static getDerivedStateFromError(error: Error): State {
+		const msg = error.message || "";
+		const isChunkLoadError =
+			error.name === "ChunkLoadError" ||
+			msg.includes("Failed to fetch dynamically imported module") ||
+			msg.includes("Importing a module script failed");
+
+		if (isChunkLoadError) {
+			const url = new URL(window.location.href);
+			if (!url.searchParams.has("reloadedT")) {
+				// 意図的なループを防ぐためにタイムスタンプを付与
+				url.searchParams.set("reloadedT", Date.now().toString());
+				window.location.href = url.toString();
+			}
+		}
+
 		return { hasError: true };
 	}
 

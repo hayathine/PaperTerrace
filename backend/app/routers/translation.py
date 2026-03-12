@@ -172,6 +172,7 @@ async def explain(
     word: str,
     lang: str = "ja",
     paper_id: str | None = None,
+    session_id: str | None = None,
     element_id: str | None = None,
     conf: str | None = None,
     context: str | None = None,
@@ -202,6 +203,11 @@ async def explain(
 
     original_word = word
     lemma = clean_input  # Initial assumption, will be updated by ServiceB if needed
+
+    # Calculate user_id (handling guest case)
+    current_user_id = getattr(req.state, "user_id", None) or (
+        f"guest:{session_id}" if session_id else None
+    )
 
     # 1. Cache Check
     # use_llamacpp=True (conf<=0.5): Qwen専用キャッシュ "trans:{lang}:{lemma}:hq" をチェック
@@ -491,7 +497,9 @@ async def explain(
                     "target_word": original_word,
                     "lang_name": lang_name,
                 },
-                context=TraceContext(paper_id=paper_id),
+                context=TraceContext(
+                    user_id=current_user_id, session_id=session_id, paper_id=paper_id
+                ),
             )
             translation = res.translation_and_explanation.strip()
         else:
@@ -505,7 +513,9 @@ async def explain(
                     "target_word": lemma,
                     "lang_name": lang_name,
                 },
-                context=TraceContext(paper_id=paper_id),
+                context=TraceContext(
+                    user_id=current_user_id, session_id=session_id, paper_id=paper_id
+                ),
             )
             translation = res.translation.strip()
 
@@ -587,6 +597,7 @@ async def explain_deep(
     word: str,
     lang: str = "ja",
     paper_id: str | None = None,
+    session_id: str | None = None,
     element_id: str | None = None,
     context: str | None = None,
 ):
@@ -603,6 +614,11 @@ async def explain_deep(
 
     original_word = word
     lemma = clean_input  # Initial assumption
+
+    # Calculate user_id (handling guest case)
+    current_user_id = getattr(req.state, "user_id", None) or (
+        f"guest:{session_id}" if session_id else None
+    )
 
     # Stage 3: Gemini translation
     try:
@@ -635,7 +651,9 @@ async def explain_deep(
                 "target_word": original_word,
                 "lang_name": lang_name,
             },
-            context=TraceContext(paper_id=paper_id),
+            context=TraceContext(
+                user_id=current_user_id, session_id=session_id, paper_id=paper_id
+            ),
         )
         translation = res.translation_and_explanation.strip()
 
@@ -717,7 +735,7 @@ class ExplainContextRequest(BaseModel):
 
 
 @router.post("/explain/context")
-async def explain_with_context(req: ExplainContextRequest):
+async def explain_with_context(req: ExplainContextRequest, request: Request):
     """Explain word with context using Gemini"""
     start_time = asyncio.get_event_loop().time()
     lang_name = SUPPORTED_LANGUAGES.get(req.lang, req.lang)
@@ -747,7 +765,14 @@ async def explain_with_context(req: ExplainContextRequest):
                 "target_word": req.word,
                 "lang_name": lang_name,
             },
-            context=TraceContext(paper_id=paper_id),
+            context=TraceContext(
+                user_id=(
+                    getattr(request.state, "user_id", None)
+                    or (f"guest:{req.session_id}" if req.session_id else None)
+                ),
+                session_id=req.session_id,
+                paper_id=paper_id,
+            ),
         )
         explanation = res.explanation
 
@@ -795,7 +820,7 @@ class ExplainImageRequest(BaseModel):
 
 
 @router.post("/explain/image")
-async def explain_image(req: ExplainImageRequest):
+async def explain_image(req: ExplainImageRequest, request: Request):
     """Explain image with context using Gemini"""
     start_time = asyncio.get_event_loop().time()
     lang_name = SUPPORTED_LANGUAGES.get(req.lang, req.lang)
@@ -841,12 +866,17 @@ async def explain_image(req: ExplainImageRequest):
             system_instruction=CORE_SYSTEM_PROMPT,
         )
         elapsed = asyncio.get_event_loop().time() - start_time
+        current_user_id = getattr(request.state, "user_id", None) or (
+            f"guest:{req.session_id}" if req.session_id else None
+        )
         log.info(
             "explain_image",
             "Image explanation completed",
             elapsed=f"{elapsed:.3f}s",
             word=req.prompt,
             paper_id=req.paper_id,
+            user_id=current_user_id,
+            session_id=req.session_id,
         )
 
         return JSONResponse(

@@ -128,12 +128,17 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
                 paper_id=paper_id,
             )
 
+    # Calculate user_id (handling guest case)
+    current_user_id = user_id if is_registered else f"guest:{request.session_id}"
+
     response_data = await chat_service.chat(
         sanitized_message,
         history=history,
         document_context=context,
         target_lang=request.lang,
         paper_id=paper_id,
+        user_id=current_user_id,
+        session_id=request.session_id,
         image_bytes=image_bytes,
         pdf_bytes=pdf_bytes,
     )
@@ -202,9 +207,13 @@ async def get_chat_history(
             history = storage.get_chat_history(user_id, paper_id)
             if history:
                 # Redis に復元（7日TTL）
-                redis_service.set(history_key, json.dumps(history), expire=7 * 24 * 3600)
+                redis_service.set(
+                    history_key, json.dumps(history), expire=7 * 24 * 3600
+                )
         except Exception as e:
-            log.warning("chat_history", "Failed to fetch chat history from DB", error=str(e))
+            log.warning(
+                "chat_history", "Failed to fetch chat history from DB", error=str(e)
+            )
 
     return JSONResponse({"history": history})
 

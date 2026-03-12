@@ -8,11 +8,6 @@ from app.schemas.recommendation import (
     RecommendationSyncRequest,
 )
 
-
-def get_current_user_id(request: Request) -> str:
-    return getattr(request.state, "user_id", "anonymous")
-
-
 router = APIRouter(prefix="/recommendation", tags=["Recommendation"])
 
 
@@ -25,8 +20,8 @@ async def sync_trajectory(
     時間経過やセッション終了時、対話中にフロントから定期送信して
     Trajectoryに行動データを追記/作成する
     """
-    current_user_id = get_current_user_id(request)
-    return RecommendationService.sync_trajectory(req, current_user_id)
+    user_id = getattr(request.state, "user_id", None) or f"guest:{req.session_id}"
+    return RecommendationService.sync_trajectory(req, user_id)
 
 
 @router.post("/rollout", summary="推薦結果の評価（Rollout）を記録する")
@@ -37,8 +32,8 @@ async def submit_rollout(
     """
     提示された推薦に対するユーザーの評価をRollout（報酬データ）として記録する
     """
-    current_user_id = get_current_user_id(request)
-    return RecommendationService.submit_rollout(req, current_user_id)
+    user_id = getattr(request.state, "user_id", None) or f"guest:{req.session_id}"
+    return RecommendationService.submit_rollout(req, user_id)
 
 
 @router.post(
@@ -54,5 +49,5 @@ async def generate_recommendation(
     Trajectory履歴とDSPyのRecommendationModuleを用いて推薦論文リストと検索クエリを作成し、
     Semantic Scholarで最新の論文を取得して応答する
     """
-    current_user_id = get_current_user_id(request)
-    return await RecommendationService.generate_recommendation(req, current_user_id)
+    user_id = getattr(request.state, "user_id", None) or f"guest:{req.session_id}"
+    return await RecommendationService.generate_recommendation(req, user_id)

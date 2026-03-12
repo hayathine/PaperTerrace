@@ -72,6 +72,7 @@ async def summarize(
     paper_id: str | None = Form(None),
     key_word: str | None = Form(None),
     force: bool = Form(False),
+    user: OptionalUser = None,
 ):
     context = _get_context(session_id)
     if not context:
@@ -101,8 +102,15 @@ async def summarize(
         force=force,
     )
 
+    current_user_id = user.uid if user else f"guest:{session_id}"
+
     summary, trace_id = await summary_service.summarize_full(
-        context, target_lang=lang, paper_id=paper_id, key_word=key_word
+        context,
+        target_lang=lang,
+        paper_id=paper_id,
+        user_id=current_user_id,
+        session_id=session_id,
+        key_word=key_word,
     )
     return JSONResponse({"summary": summary, "trace_id": trace_id})
 
@@ -113,10 +121,28 @@ async def summarize(
 
 
 @router.post("/analyze-figure")
-async def analyze_figure(file: UploadFile = File(...), caption: str = Form("")):
+async def analyze_figure(
+    file: UploadFile = File(...),
+    caption: str = Form(""),
+    session_id: str | None = Form(None),
+    paper_id: str | None = Form(None),
+    user: OptionalUser = None,
+):
     content = await file.read()
     mime_type = file.content_type or "image/png"
-    analysis = await figure_insight_service.analyze_figure(content, caption, mime_type)
+    # Determine current user ID
+    current_user_id = (
+        user.uid if user else (f"guest:{session_id}" if session_id else None)
+    )
+
+    analysis = await figure_insight_service.analyze_figure(
+        content,
+        caption,
+        mime_type,
+        user_id=current_user_id,
+        session_id=session_id,
+        paper_id=paper_id,
+    )
     return JSONResponse({"analysis": analysis})
 
 
@@ -126,12 +152,17 @@ async def analyze_figure(file: UploadFile = File(...), caption: str = Form("")):
 
 
 @router.post("/critique")
-async def critique(session_id: str = Form(...), lang: str = Form("ja")):
+async def critique(
+    session_id: str = Form(...), lang: str = Form("ja"), user: OptionalUser = None
+):
     context = _get_context(session_id)
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
-    critique = await adversarial_service.critique(context, target_lang=lang)
+    current_user_id = user.uid if user else f"guest:{session_id}"
+    critique = await adversarial_service.critique(
+        context, target_lang=lang, user_id=current_user_id, session_id=session_id
+    )
     return JSONResponse(critique)
 
 
@@ -145,6 +176,7 @@ async def analyze_layout_lazy(
     paper_id: str = Form(...),
     page_numbers: str | None = Form(None),
     file_hash: str | None = Form(None),
+    session_id: str | None = Form(None),
     user: OptionalUser = None,
 ):
     """
@@ -168,9 +200,15 @@ async def analyze_layout_lazy(
                 )
 
         # Pass user_id and file_hash to handle transient papers
-        user_id = user.uid if user else None
+        current_user_id = (
+            user.uid if user else (f"guest:{session_id}" if session_id else None)
+        )
         all_figures = await layout_analysis_service.analyze_layout_lazy(
-            paper_id, parsed_pages, user_id=user_id, file_hash=file_hash
+            paper_id,
+            parsed_pages,
+            user_id=current_user_id,
+            file_hash=file_hash,
+            session_id=session_id,
         )
 
         return JSONResponse(

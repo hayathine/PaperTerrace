@@ -23,6 +23,11 @@ async function reportErrorToServer(
 			ctx && "error" in ctx ? (ctx as { error: unknown }).error : undefined;
 		const isError = errorObj instanceof Error;
 
+		const sessionId =
+			typeof window !== "undefined"
+				? localStorage.getItem("paper_terrace_session")
+				: undefined;
+
 		await fetch(`${API_URL}/api/client-errors`, {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
@@ -35,6 +40,7 @@ async function reportErrorToServer(
 				stack: isError ? errorObj.stack : undefined,
 				context: ctx,
 				url: typeof window !== "undefined" ? window.location.href : undefined,
+				session_id: sessionId,
 			}),
 		});
 	} catch {

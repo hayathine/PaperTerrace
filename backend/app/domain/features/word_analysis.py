@@ -65,7 +65,12 @@ class WordAnalysisService:
 
     # geminiを用いた翻訳
     async def translate_with_context(
-        self, word: str, context: str, lang: str = "ja"
+        self,
+        word: str,
+        context: str,
+        lang: str = "ja",
+        user_id: str | None = None,
+        session_id: str | None = None,
     ) -> dict | None:
         """
         Translate word using document context.
@@ -77,7 +82,7 @@ class WordAnalysisService:
         try:
             from common.dspy.config import setup_dspy
             from common.dspy.modules import WordTranslationModule
-            from common.dspy.trace import trace_dspy_call
+            from common.dspy.trace import TraceContext, trace_dspy_call
 
             setup_dspy()
             trans_mod = WordTranslationModule()
@@ -90,6 +95,7 @@ class WordAnalysisService:
                     "context": truncated,
                     "lang_name": lang_name,
                 },
+                context=TraceContext(user_id=user_id, session_id=session_id),
             )
             translation = res.translation.strip()
 

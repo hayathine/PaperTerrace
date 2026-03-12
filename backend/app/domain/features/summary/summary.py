@@ -91,6 +91,8 @@ class SummaryService:
         text: str = "",
         target_lang: str = "ja",
         paper_id: str | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
         pdf_bytes: bytes | None = None,
         key_word: str | None = None,
     ) -> tuple[str, str | None]:
@@ -200,7 +202,9 @@ class SummaryService:
                     "PaperSummary",
                     self.summary_mod,
                     {"paper_text": safe_text, "lang_name": lang_name},
-                    context=TraceContext(paper_id=paper_id),
+                    context=TraceContext(
+                        user_id=user_id, session_id=session_id, paper_id=paper_id
+                    ),
                 )
 
                 # DSPy may return key_words as None, [], or a raw string when
@@ -259,7 +263,12 @@ class SummaryService:
             return f"要約の生成に失敗しました: {str(e)}", None
 
     async def summarize_sections(
-        self, text: str, target_lang: str = "ja", paper_id: str | None = None
+        self,
+        text: str,
+        target_lang: str = "ja",
+        paper_id: str | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
     ) -> list[dict]:
         """
         セクションごとの要約を生成する。
@@ -303,7 +312,9 @@ class SummaryService:
                 "PaperSummarySections",
                 self.section_mod,
                 {"paper_text": safe_text, "lang_name": lang_name},
-                context=TraceContext(paper_id=paper_id),
+                context=TraceContext(
+                    user_id=user_id, session_id=session_id, paper_id=paper_id
+                ),
             )
 
             sections = []

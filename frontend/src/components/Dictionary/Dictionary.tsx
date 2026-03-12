@@ -203,6 +203,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					const queryParams = new URLSearchParams({
 						lang: i18n.language,
 						paper_id: paperId || "",
+						session_id: sessionId || "",
 					});
 					if (context) {
 						queryParams.append("context", context);
@@ -368,7 +369,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					});
 				} else {
 					res = await fetch(
-						`${API_URL}/api/explain-deep/${encodeURIComponent(entry.word)}?lang=${i18n.language}&paper_id=${paperId || ""}`,
+						`${API_URL}/api/explain-deep/${encodeURIComponent(entry.word)}?lang=${i18n.language}&paper_id=${paperId || ""}&session_id=${sessionId || ""}`,
 						{ headers },
 					);
 				}

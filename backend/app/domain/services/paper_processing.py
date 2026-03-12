@@ -14,7 +14,11 @@ summary_service = SummaryService(storage=storage)
 
 
 async def process_figure_analysis_task(
-    figure_id: str, image_url: str, lang: str = "ja"
+    figure_id: str,
+    image_url: str,
+    lang: str = "ja",
+    user_id: str | None = None,
+    session_id: str | None = None,
 ):
     """
     Background task to analyze figure.
@@ -63,6 +67,9 @@ async def process_figure_analysis_task(
             image_bytes,
             caption=figure.get("caption", ""),
             target_lang=lang,
+            user_id=user_id,
+            session_id=session_id,
+            paper_id=figure.get("paper_id"),
         )
         storage.update_figure_explanation(figure_id, explanation)
 
@@ -81,7 +88,12 @@ async def process_figure_analysis_task(
         )
 
 
-async def process_paper_summary_task(paper_id: str, lang: str = "ja"):
+async def process_paper_summary_task(
+    paper_id: str,
+    lang: str = "ja",
+    user_id: str | None = None,
+    session_id: str | None = None,
+):
     """
     Background task to summarize paper.
     """
@@ -109,7 +121,11 @@ async def process_paper_summary_task(paper_id: str, lang: str = "ja"):
 
         # Execute summary
         await summary_service.summarize_full(
-            text=paper["ocr_text"], target_lang=lang, paper_id=paper_id
+            text=paper["ocr_text"],
+            target_lang=lang,
+            paper_id=paper_id,
+            user_id=user_id,
+            session_id=session_id,
         )
         log.info(
             "summary_task", "SUCCESS: generated summary for paper", paper_id=paper_id

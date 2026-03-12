@@ -110,6 +110,7 @@ class LayoutAnalysisService:
         page_numbers: list[int] | None = None,
         user_id: str | None = None,
         file_hash: str | None = None,
+        session_id: str | None = None,
     ):
         # 1. Resolve paper and file_hash
         paper = await anyio.to_thread.run_sync(self.storage.get_paper, paper_id)
@@ -243,7 +244,12 @@ class LayoutAnalysisService:
             for fid, fig in zip(fids, all_figures):
                 if fig.get("image_url"):
                     asyncio.create_task(
-                        process_figure_analysis_task(fid, fig["image_url"])
+                        process_figure_analysis_task(
+                            fid,
+                            fig["image_url"],
+                            user_id=user_id,
+                            session_id=session_id,
+                        )
                     )
 
             # Update layout_json (if paper exists in DB)

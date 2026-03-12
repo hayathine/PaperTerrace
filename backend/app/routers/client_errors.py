@@ -17,10 +17,6 @@ log = ServiceLogger("ClientErrors")
 router = APIRouter(prefix="/client-errors", tags=["ClientErrors"])
 
 
-def get_current_user_id(request: Request) -> str | None:
-    return getattr(request.state, "user_id", None)
-
-
 @router.post("", summary="フロントエンドエラーを記録する", status_code=204)
 async def report_client_error(
     req: ClientErrorRequest,
@@ -30,7 +26,9 @@ async def report_client_error(
     フロントエンドで発生したエラーを受け取り BigQuery に保存する。
     ユーザーには生のエラー情報を返さない。
     """
-    user_id = get_current_user_id(request)
+    user_id = getattr(request.state, "user_id", None) or (
+        f"guest:{req.session_id}" if req.session_id else None
+    )
     user_agent = request.headers.get("user-agent", "")[:500]
 
     context_str = json.dumps(req.context, ensure_ascii=False) if req.context else None

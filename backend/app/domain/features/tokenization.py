@@ -1,8 +1,4 @@
-import asyncio
 import re
-
-# Use the same executor if possible, or create a new one
-from concurrent.futures import ThreadPoolExecutor
 
 from app.providers import get_storage_provider
 from common.logger import ServiceLogger
@@ -11,9 +7,6 @@ from common.utils.text import clean_text_for_tokenization
 from .word_analysis import WordAnalysisService
 
 log = ServiceLogger("Tokenization")
-
-
-executor = ThreadPoolExecutor(max_workers=4)
 
 
 class TokenizationService:
@@ -32,10 +25,10 @@ class TokenizationService:
         id_prefix: str = "p",
         save_to_db: bool = True,
         lang: str = "ja",
+        session_id: str | None = None,
     ):
         """Processes text paragraph by paragraph and yields interactive HTML."""
         paragraphs = re.split(r"\n{2,}", text.replace("\r\n", "\n"))
-        loop = asyncio.get_running_loop()
         all_html_parts: dict[str, str] = {}
         unknown_words = set()
 
@@ -75,12 +68,14 @@ class TokenizationService:
                             self.word_analysis.word_cache[lemma] = False
                         else:
                             # Try Local Machine Translation
-                            local_trans = await loop.run_in_executor(
-                                executor,
-                                self.word_analysis.local_translator.translate,
-                                lemma,
+                            (
+                                local_trans,
+                                _,
+                                _,
+                            ) = await self.word_analysis.local_translator.translate_async(
+                                lemma, tgt_lang=lang
                             )
-                            if local_trans:
+                            if local_trans and local_trans != lemma:
                                 self.word_analysis.word_cache[lemma] = False
                                 self.word_analysis.translation_cache[lemma] = (
                                     local_trans
@@ -99,13 +94,14 @@ class TokenizationService:
                 )
 
                 paper_param = f"&paper_id={paper_id}" if paper_id else ""
+                session_param = f"&session_id={session_id}" if session_id else ""
                 token_id = f"{unique_id}-{j}"
                 # hx-vals を使い、クリック時にスパンが属する段落のテキストを context として渡す。
                 # JS 式でクリック要素の最近接 .paragraph-container のテキストを取得し、
                 # 先頭 800 文字に制限してコンテキスト過大によるURL肥大化を防ぐ。
                 p_tokens_html.append(
                     f'<span id="{token_id}" class="cursor-pointer border-b transition-colors {color}'
-                    f'" hx-get="/explain/{lemma}?lang={lang}{paper_param}&element_id={token_id}" hx-trigger="click" '
+                    f'" hx-get="/explain/{lemma}?lang={lang}{paper_param}{session_param}&element_id={token_id}" hx-trigger="click" '
                     f'hx-vals=\'js:{{context: (document.getElementById("{token_id}").closest(".paragraph-container, p") || document.getElementById("{token_id}").parentElement)?.innerText?.slice(0, 800) || ""}}\' '
                     f'hx-indicator="#dict-loading" '
                     f'hx-target="#dict-stack" hx-swap="afterbegin">{text}</span>{whitespace}'
