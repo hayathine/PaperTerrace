@@ -306,6 +306,160 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		}
 	}, [loadedPaperId]);
 
+	const applyLayoutFigures = (
+		figures: any[],
+		paperId: string,
+		fileHash: string | null,
+	) => {
+		if (!figures || figures.length === 0) return;
+
+		setPages((prevPages) => {
+			const nextPages = prevPages.map((page) => {
+				const pageFigures = figures.filter(
+					(f: any) => f.page_num === page.page_num,
+				);
+				if (pageFigures.length === 0) return page;
+
+				const processedFigures = pageFigures.map((f: any) => ({
+					...f,
+					image_url:
+						f.image_url &&
+						!f.image_url.startsWith("http") &&
+						!f.image_url.startsWith("blob:")
+							? `${API_URL}${f.image_url}`
+							: f.image_url,
+				}));
+
+				const existingUrls = new Set(
+					(page.figures || []).map((ef) => ef.image_url),
+				);
+				const newUniqueFigures = processedFigures.filter(
+					(nf: any) => !existingUrls.has(nf.image_url),
+				);
+
+				if (newUniqueFigures.length === 0) return page;
+
+				return {
+					...page,
+					figures: [...(page.figures || []), ...newUniqueFigures],
+				};
+			});
+
+			// Persist to IndexedDB cache (Crucial for Transient sessions)
+			if (paperId && isDbAvailable()) {
+				const layoutJson = JSON.stringify(
+					nextPages.map((p) => ({
+						width: p.width,
+						height: p.height,
+						words: p.words,
+						figures: p.figures,
+						links: p.links,
+					})),
+				);
+
+				getCachedPaper(paperId).then((cached) => {
+					savePaperToCache({
+						...(cached || {
+							id: paperId,
+							file_hash: fileHash || "",
+							title: "Untitled",
+							last_accessed: Date.now(),
+						}),
+						layout_json: layoutJson,
+						last_accessed: Date.now(),
+					});
+				});
+			}
+
+			return nextPages;
+		});
+	};
+
+	const pollLayoutJob = async (
+		jobId: string,
+		paperId: string,
+		fileHash: string | null,
+		headers: HeadersInit,
+	): Promise<void> => {
+		const POLL_INTERVAL_MS = 2000;
+		const TIMEOUT_MS = 120_000;
+		const deadline = Date.now() + TIMEOUT_MS;
+
+		while (Date.now() < deadline) {
+			await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
+
+			const statusRes = await fetch(`${API_URL}/api/layout-jobs/${jobId}`, {
+				headers,
+			});
+			if (!statusRes.ok) {
+				log.error("poll_layout_job", "Status check failed", {
+					job_id: jobId,
+					status: statusRes.status,
+				});
+				return;
+			}
+
+			const statusData = await statusRes.json();
+
+			if (statusData.status === "completed") {
+				log.info("poll_layout_job", "Job completed", {
+					job_id: jobId,
+					figures: statusData.figures_detected,
+				});
+				applyLayoutFigures(statusData.figures, paperId, fileHash);
+				return;
+			}
+
+			if (statusData.status === "failed") {
+				log.error("poll_layout_job", "Job failed", {
+					job_id: jobId,
+					error: statusData.error,
+				});
+				return;
+			}
+			// queued / processing → 次のポーリングへ
+		}
+
+		log.error("poll_layout_job", "Job timed out", { job_id: jobId });
+	};
+
+	const enqueueBatch = async (
+		paperId: string,
+		batchPages: number[],
+		fileHash: string | null,
+		headers: HeadersInit,
+	): Promise<string | null> => {
+		const formData = new URLSearchParams();
+		formData.append("paper_id", paperId);
+		formData.append("page_numbers", batchPages.join(","));
+		if (fileHash) formData.append("file_hash", fileHash);
+		if (sessionId) formData.append("session_id", sessionId);
+
+		const response = await fetch(`${API_URL}/api/analyze-layout-lazy`, {
+			method: "POST",
+			headers,
+			body: formData,
+		});
+
+		if (!response.ok) {
+			log.error("enqueue_batch", "Enqueue failed", {
+				pages: batchPages,
+				status: response.status,
+			});
+			return null;
+		}
+
+		const result = await response.json();
+
+		// Redis 未接続時のフォールバック: 即時結果が返る
+		if (result.figures) {
+			applyLayoutFigures(result.figures, paperId, fileHash);
+			return null;
+		}
+
+		return result.job_id ?? null;
+	};
+
 	const triggerLazyLayoutAnalysis = async (
 		paperId: string,
 		initialPages?: PageData[],
@@ -318,121 +472,45 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			if (!finalPages || finalPages.length === 0) return;
 
 			const BATCH_SIZE = 10;
-			const totalPages = finalPages.length;
 
-			for (let startIdx = 0; startIdx < totalPages; startIdx += BATCH_SIZE) {
-				const endIdx = Math.min(startIdx + BATCH_SIZE, totalPages);
-				const batchPages = finalPages
-					.slice(startIdx, endIdx)
-					.map((p) => p.page_num);
+			// Important for transient sessions: provide file_hash explicitly
+			const firstImgUrl = finalPages[0]?.image_url || "";
+			const hashMatch = firstImgUrl.match(/\/static\/paper_images\/([^/]+)\//);
+			const fileHash = hashMatch ? hashMatch[1] : null;
 
-				log.info("trigger_lazy_layout_analysis", "Triggering batch analysis", {
-					pages: batchPages,
-				});
+			const headers: HeadersInit = {
+				"Content-Type": "application/x-www-form-urlencoded",
+			};
+			if (token) headers.Authorization = `Bearer ${token}`;
 
-				const headers: HeadersInit = {
-					"Content-Type": "application/x-www-form-urlencoded",
-				};
-				if (token) headers.Authorization = `Bearer ${token}`;
-
-				const formData = new URLSearchParams();
-				formData.append("paper_id", paperId);
-				formData.append("page_numbers", batchPages.join(","));
-
-				// Important for transient sessions: provide file_hash explicitly
-				const firstImgUrl = finalPages[0]?.image_url || "";
-				const hashMatch = firstImgUrl.match(
-					/\/static\/paper_images\/([^/]+)\//,
+			// バッチに分割してキューに一括投入
+			const batches: number[][] = [];
+			for (let i = 0; i < finalPages.length; i += BATCH_SIZE) {
+				batches.push(
+					finalPages.slice(i, i + BATCH_SIZE).map((p) => p.page_num),
 				);
-				const fileHash = hashMatch ? hashMatch[1] : null;
-
-				if (fileHash) formData.append("file_hash", fileHash);
-				if (sessionId) formData.append("session_id", sessionId);
-
-				const response = await fetch(`${API_URL}/api/analyze-layout-lazy`, {
-					method: "POST",
-					headers,
-					body: formData,
-				});
-
-				if (!response.ok) {
-					const errorText = await response.text();
-					log.error("trigger_lazy_layout_analysis", "Analysis failed", {
-						pages: batchPages,
-						status: response.status,
-						error: errorText,
-					});
-					continue; // Try next batch even if this one failed
-				}
-
-				const result = await response.json();
-
-				// 1. Merge detected figures into page state
-				if (result.figures && result.figures.length > 0) {
-					setPages((prevPages) => {
-						const nextPages = prevPages.map((page) => {
-							const pageFigures = result.figures.filter(
-								(f: any) => f.page_num === page.page_num,
-							);
-							if (pageFigures.length > 0) {
-								const processedFigures = pageFigures.map((f: any) => ({
-									...f,
-									image_url:
-										f.image_url &&
-										!f.image_url.startsWith("http") &&
-										!f.image_url.startsWith("blob:")
-											? `${API_URL}${f.image_url}`
-											: f.image_url,
-								}));
-
-								// Deduplicate based on BBox or Image URL
-								const existingUrls = new Set(
-									(page.figures || []).map((ef) => ef.image_url),
-								);
-								const newUniqueFigures = processedFigures.filter(
-									(nf: any) => !existingUrls.has(nf.image_url),
-								);
-
-								if (newUniqueFigures.length === 0) return page;
-
-								return {
-									...page,
-									figures: [...(page.figures || []), ...newUniqueFigures],
-								};
-							}
-							return page;
-						});
-
-						// 2. Persist to IndexedDB cache (Crucial for Transient sessions)
-						if (paperId && isDbAvailable()) {
-							const layoutJson = JSON.stringify(
-								nextPages.map((p) => ({
-									width: p.width,
-									height: p.height,
-									words: p.words,
-									figures: p.figures,
-									links: p.links,
-								})),
-							);
-
-							getCachedPaper(paperId).then((cached) => {
-								savePaperToCache({
-									...(cached || {
-										id: paperId,
-										file_hash: fileHash || "",
-										title: "Untitled",
-										last_accessed: Date.now(),
-									}),
-									layout_json: layoutJson,
-									last_accessed: Date.now(),
-								});
-							});
-						}
-
-						return nextPages;
-					});
-				}
 			}
+
+			log.info("trigger_lazy_layout_analysis", "Enqueuing batches", {
+				paper_id: paperId,
+				total_pages: finalPages.length,
+				batches: batches.length,
+			});
+
+			// 全バッチを並列でキューに投入し job_id を取得
+			const jobIds = await Promise.all(
+				batches.map((batchPages) =>
+					enqueueBatch(paperId, batchPages, fileHash, headers),
+				),
+			);
+
+			// 各ジョブを並列ポーリング（結果が出次第 figures を反映）
+			await Promise.all(
+				jobIds
+					.filter((id): id is string => id !== null)
+					.map((jobId) => pollLayoutJob(jobId, paperId, fileHash, headers)),
+			);
+
 			log.info(
 				"trigger_lazy_layout_analysis",
 				"Completed lazy layout analysis",

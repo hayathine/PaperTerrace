@@ -16,8 +16,10 @@ from app.domain.features import (
 from app.domain.services.layout_analysis_service import LayoutAnalysisService
 from app.providers import (
     RedisService,
+    get_redis_client,
     get_storage_provider,
 )  # RedisService now uses in-memory cache
+from app.workers.layout_job import enqueue_layout_job, get_job_status
 from common.logger import ServiceLogger
 
 log = ServiceLogger("Analysis")
@@ -30,7 +32,6 @@ summary_service = SummaryService()
 figure_insight_service = FigureInsightService()
 adversarial_service = AdversarialReviewService()
 redis_service = RedisService()
-storage = get_storage_provider()
 layout_analysis_service = LayoutAnalysisService()
 
 
@@ -44,6 +45,7 @@ def _get_context(session_id: str) -> str | None:
         return context
 
     # 2. DB から取得（キャッシュミス時のフォールバック）
+    storage = get_storage_provider()
     paper_id = storage.get_session_paper_id(session_id)
     resolved_paper_id = paper_id or session_id
 
@@ -83,6 +85,7 @@ async def summarize(
             status_code=400,
         )
 
+    storage = get_storage_provider()
     # Resolve paper_id if missing
     if not paper_id:
         paper_id = storage.get_session_paper_id(session_id)
@@ -180,7 +183,8 @@ async def analyze_layout_lazy(
     user: OptionalUser = None,
 ):
     """
-    画面表示後に遅延実行されるレイアウト解析エンドポイント（バッチ処理版）
+    レイアウト解析ジョブをキューに投入し、job_id を即時返却する。
+    結果は GET /layout-jobs/{job_id} でポーリングして取得する。
     """
     log.info(
         "layout_lazy",
@@ -188,43 +192,104 @@ async def analyze_layout_lazy(
         paper_id=paper_id,
         pages=page_numbers,
     )
-    try:
-        # Parse page numbers
-        parsed_pages = None
-        if page_numbers:
-            try:
-                parsed_pages = [int(p.strip()) for p in page_numbers.split(",")]
-            except ValueError:
-                raise HTTPException(
-                    status_code=400, detail="Invalid page_numbers format"
-                )
 
-        # Pass user_id and file_hash to handle transient papers
-        current_user_id = (
-            user.uid if user else (f"guest:{session_id}" if session_id else None)
+    # Parse page numbers
+    parsed_pages = None
+    if page_numbers:
+        try:
+            parsed_pages = [int(p.strip()) for p in page_numbers.split(",")]
+        except ValueError:
+            raise HTTPException(
+                status_code=400, detail="Invalid page_numbers format"
+            )
+
+    current_user_id = (
+        user.uid if user else (f"guest:{session_id}" if session_id else None)
+    )
+
+    redis_client = get_redis_client()
+    if redis_client is None:
+        # Redis 未接続時はフォールバックとして同期処理
+        log.warning(
+            "layout_lazy",
+            "Redis unavailable, falling back to synchronous processing",
         )
-        all_figures = await layout_analysis_service.analyze_layout_lazy(
-            paper_id,
-            parsed_pages,
+        try:
+            all_figures = await layout_analysis_service.analyze_layout_lazy(
+                paper_id,
+                parsed_pages,
+                user_id=current_user_id,
+                file_hash=file_hash,
+                session_id=session_id,
+            )
+            return JSONResponse(
+                {
+                    "success": True,
+                    "paper_id": paper_id,
+                    "figures_detected": len(all_figures),
+                    "figures": all_figures,
+                }
+            )
+        except Exception as e:
+            log.error("layout_lazy", "Synchronous fallback failed", error=str(e))
+            raise HTTPException(status_code=500, detail="Layout analysis failed.")
+
+    try:
+        job_id = enqueue_layout_job(
+            redis_client,
+            paper_id=paper_id,
+            page_numbers=parsed_pages,
             user_id=current_user_id,
             file_hash=file_hash,
             session_id=session_id,
         )
-
+        log.info("layout_lazy", "Job enqueued", job_id=job_id, paper_id=paper_id)
         return JSONResponse(
             {
                 "success": True,
-                "paper_id": paper_id,
-                "figures_detected": len(all_figures),
-                "figures": all_figures,
+                "job_id": job_id,
+                "status": "queued",
+            }
+        )
+    except Exception as e:
+        log.error("layout_lazy", "Failed to enqueue job", error=str(e))
+        raise HTTPException(status_code=500, detail="Failed to enqueue layout analysis job.")
+
+
+@router.get("/layout-jobs/{job_id}")
+async def get_layout_job_status(job_id: str):
+    """
+    レイアウト解析ジョブのステータスと結果を返す。
+
+    status: "queued" | "processing" | "completed" | "failed"
+    """
+    redis_client = get_redis_client()
+    if redis_client is None:
+        raise HTTPException(status_code=503, detail="Redis unavailable")
+
+    job = get_job_status(redis_client, job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+
+    status = job.get("status")
+
+    if status == "completed":
+        figures = job.get("result", [])
+        return JSONResponse(
+            {
+                "success": True,
+                "job_id": job_id,
+                "status": "completed",
+                "figures_detected": len(figures),
+                "figures": figures,
             }
         )
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        log.error("layout_lazy", "Unexpected error", error=str(e), exc_info=True)
-        # Use a generic message for internal server errors to avoid exposing technical details
-        raise HTTPException(
-            status_code=500, detail="Layout analysis failed due to an internal error."
-        )
+    return JSONResponse(
+        {
+            "success": True,
+            "job_id": job_id,
+            "status": status,
+            "error": job.get("error"),
+        }
+    )

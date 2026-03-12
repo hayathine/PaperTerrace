@@ -32,9 +32,11 @@ dependencies = [
     "go-task-bin>=3.48.0",
     "uuid6>=2025.0.1",
     "redis>=7.2.0",
+    "sentry-sdk[fastapi]>=2.0.0",
     "dspy>=2.5.26",
     "pymupdf4llm>=0.3.4",
     "python-jose[cryptography]>=3.5.0",
+    "google-cloud-vision>=3.12.1",
 ]
 
 [dependency-groups]

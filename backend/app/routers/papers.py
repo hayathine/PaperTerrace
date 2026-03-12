@@ -12,9 +12,6 @@ from app.providers import get_storage_provider
 
 router = APIRouter(tags=["Papers"])
 
-# Services
-storage = get_storage_provider()
-
 
 @router.get("/papers")
 async def list_papers(user: OptionalUser = None, limit: int = 50):
@@ -32,7 +29,7 @@ async def list_papers(user: OptionalUser = None, limit: int = 50):
     if not user:
         return JSONResponse({"papers": []})
 
-    # Get papers owned by this user
+    storage = get_storage_provider()
     papers, _ = storage.get_user_papers(user.uid, page=1, per_page=limit)
     return JSONResponse({"papers": jsonable_encoder(papers)})
 
@@ -43,6 +40,7 @@ async def get_paper(paper_id: str, user: OptionalUser = None):
     Get a paper by ID.
     Performs ownership/visibility check.
     """
+    storage = get_storage_provider()
     paper = storage.get_paper(paper_id)
     if not paper:
         return JSONResponse({"error": "Paper not found"}, status_code=404)
@@ -68,6 +66,7 @@ async def delete_paper(paper_id: str, user: OptionalUser = None):
     if not user:
         return JSONResponse({"error": "Authentication required"}, status_code=401)
 
+    storage = get_storage_provider()
     paper = storage.get_paper(paper_id)
     if not paper:
         return JSONResponse({"error": "Paper not found"}, status_code=404)

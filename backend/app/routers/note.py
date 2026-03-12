@@ -16,8 +16,6 @@ from app.providers import get_storage_provider
 router = APIRouter(tags=["Notes"])
 
 sidebar_note_service = SidebarNoteService()
-# paper_id の解決にのみ使用 (ノートの読み書きは sidebar_note_service に委譲)
-_storage = get_storage_provider()
 
 
 class NoteRequest(BaseModel):
@@ -37,7 +35,7 @@ async def get_notes(session_id: str, user: OptionalUser, paper_id: str | None = 
 
     # Resolve paper_id if not provided
     if not paper_id:
-        paper_id = _storage.get_session_paper_id(session_id)
+        paper_id = get_storage_provider().get_session_paper_id(session_id)
 
     notes = sidebar_note_service.get_notes(
         session_id, paper_id=paper_id, user_id=user_id
@@ -52,7 +50,7 @@ async def add_note(request: NoteRequest, user: OptionalUser):
     # Resolve paper_id if not provided
     paper_id = request.paper_id
     if not paper_id:
-        paper_id = _storage.get_session_paper_id(request.session_id)
+        paper_id = get_storage_provider().get_session_paper_id(request.session_id)
 
     note = sidebar_note_service.add_note(
         request.session_id,

@@ -15,7 +15,6 @@ log = ServiceLogger("Figures")
 
 
 router = APIRouter(tags=["Figures"])
-storage = get_storage_provider()
 figure_service = FigureInsightService()
 
 
@@ -29,6 +28,7 @@ class ExplainRequest(BaseModel):
 async def get_paper_figures(paper_id: str, user: OptionalUser = None):
     """Get all figures for a paper."""
     try:
+        storage = get_storage_provider()
         figures = storage.get_paper_figures(paper_id)
         return {"figures": figures}
     except Exception as e:
@@ -72,6 +72,7 @@ async def explain_figure(
     DBに存在しないため、リクエストボディの image_url を使って直接解析する。
     """
     try:
+        storage = get_storage_provider()
         figure = storage.get_figure(figure_id)
 
         if figure:

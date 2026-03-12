@@ -32,12 +32,8 @@ log = ServiceLogger("PDF")
 router = APIRouter(tags=["PDF Analysis"])
 
 # Services
-
-
-# Services
 service = EnglishAnalysisService()
 summary_service = SummaryService()
-storage = get_storage_provider()
 redis_service = RedisService()
 img_storage = get_image_storage()
 
@@ -49,6 +45,7 @@ async def update_session_context(
 ):
     """セッション→論文マッピングを更新する（キャッシュ表示時用）。"""
     try:
+        storage = get_storage_provider()
         storage.save_session_context(session_id, paper_id)
         # Redis のセッションコンテキストも更新
         paper = storage.get_paper(paper_id)
@@ -99,6 +96,7 @@ async def analyze_pdf(
             status_code=413,
         )
 
+    storage = get_storage_provider()
     user_id = user.uid if user else (f"guest:{session_id}" if session_id else None)
 
     content = await file.read()
@@ -194,6 +192,7 @@ async def analyze_pdf_json(
 
     import time
 
+    storage = get_storage_provider()
     start_time = time.time()
     log.info("analyze_json", "START", filename=file.filename, size=file.size)
 
@@ -368,6 +367,7 @@ async def analyze_paper(
     Start streaming for an already uploaded/processed paper.
     """
     try:
+        storage = get_storage_provider()
         paper = storage.get_paper(paper_id)
         if not paper:
             return JSONResponse({"error": "Paper not found"}, status_code=404)
@@ -467,6 +467,7 @@ async def stream(task_id: str):
     if is_json:
 
         async def _inner_json_generate():
+            storage = get_storage_provider()
             if data.get("pending_ocr"):
                 pdf_path = data.get("pdf_path")
                 pdf_b64 = data.get("pdf_b64", "")
@@ -885,6 +886,7 @@ async def stream(task_id: str):
             return Response("Error: PDF source not found", status_code=404)
 
         async def ocr_generate():
+            storage = get_storage_provider()
             # paper_id is pre-generated in analyze_pdf or analyze_pdf_json
             nonlocal paper_id
             if not paper_id or paper_id == "pending":

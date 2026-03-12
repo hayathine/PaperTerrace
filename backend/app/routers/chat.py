@@ -27,7 +27,6 @@ router = APIRouter(tags=["Chat"])
 # Services
 chat_service = ChatService()
 redis_service = RedisService()
-storage = get_storage_provider()
 
 
 _MAX_MESSAGE_LENGTH = int(os.getenv("MAX_CHAT_MESSAGE_LENGTH", "4000"))
@@ -51,6 +50,7 @@ class ChatRequest(BaseModel):
 
 @router.post("/chat")
 async def chat(request: ChatRequest, user: OptionalUser = None):
+    storage = get_storage_provider()
     # Check registration status
     user_id = user.uid if user else None
     is_registered = False
@@ -188,6 +188,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
 async def get_chat_history(
     session_id: str, paper_id: str | None = None, user: OptionalUser = None
 ):
+    storage = get_storage_provider()
     user_id = user.uid if user else None
     is_registered = False
     if user_id:
@@ -224,6 +225,7 @@ async def clear_chat(
     paper_id: str | None = Form(None),
     user: OptionalUser = None,
 ):
+    storage = get_storage_provider()
     user_id = user.uid if user else None
     is_registered = False
     if user_id:
@@ -243,6 +245,7 @@ async def clear_chat(
 async def delete_cache(session_id: str = Form(...), paper_id: str | None = Form(None)):
     """Delete the AI context cache for the given paper."""
     if not paper_id:
+        storage = get_storage_provider()
         paper_id = storage.get_session_paper_id(session_id)
 
     if paper_id:

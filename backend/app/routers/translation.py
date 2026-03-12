@@ -38,7 +38,6 @@ router = APIRouter(tags=["Translation"])
 
 # Services
 service = EnglishAnalysisService()
-storage = get_storage_provider()
 
 
 def build_dict_card_html(
@@ -178,6 +177,7 @@ async def explain(
     context: str | None = None,
 ):
     """単語の解説 (Local: Cache -> local-MT)"""
+    storage = get_storage_provider()
     # Parse conf safely
     f_conf: float | None = None
     if conf:
@@ -602,6 +602,7 @@ async def explain_deep(
     context: str | None = None,
 ):
     """Geminiによる詳細翻訳（ユーザー押下により発動）"""
+    storage = get_storage_provider()
     # Robust element_id detection
     element_id = element_id or req.headers.get("HX-Trigger")
 
@@ -737,6 +738,7 @@ class ExplainContextRequest(BaseModel):
 @router.post("/explain/context")
 async def explain_with_context(req: ExplainContextRequest, request: Request):
     """Explain word with context using Gemini"""
+    storage = get_storage_provider()
     start_time = asyncio.get_event_loop().time()
     lang_name = SUPPORTED_LANGUAGES.get(req.lang, req.lang)
 

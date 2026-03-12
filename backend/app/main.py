@@ -14,8 +14,13 @@ from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
+from sentry_sdk.integrations.logging import LoggingIntegration
+from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+
 from app.core.config import get_neon_auth_url, is_production
-from common.config import settings  # noqa: F401  settings ロードを確実に実行
+from common.config import settings
 from app.routers import (
     analysis_router,
     auth_router,
@@ -38,6 +43,29 @@ from common.logger import ServiceLogger, configure_logging
 
 log = ServiceLogger("Main")
 mw_log = ServiceLogger("Middleware")
+
+# ============================================================================
+# Sentry / GlitchTip 初期化
+# ============================================================================
+_sentry_dsn = str(getattr(settings, "SENTRY_DSN", "") or "")
+_sentry_enabled = bool(getattr(settings, "SENTRY_ENABLED", False))
+
+if _sentry_enabled and _sentry_dsn:
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        integrations=[
+            FastApiIntegration(),
+            SqlalchemyIntegration(),
+            LoggingIntegration(),  # ERROR 以上を自動キャプチャ
+        ],
+        traces_sample_rate=float(getattr(settings, "SENTRY_TRACES_SAMPLE_RATE", 0.1)),
+        profiles_sample_rate=float(getattr(settings, "SENTRY_PROFILES_SAMPLE_RATE", 0.1)),
+        environment=os.getenv("APP_ENV", "production"),
+        send_default_pii=False,
+    )
+    log.info("sentry", "Sentry initialized", dsn=_sentry_dsn[:40] + "...")
+else:
+    log.info("sentry", "Sentry disabled")
 
 
 # Neon Auth Config for Frontend
