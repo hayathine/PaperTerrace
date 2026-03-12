@@ -151,7 +151,10 @@ const Sidebar: React.FC<SidebarProps> = ({
 			    overflow-x-auto 内のタッチイベントは pan-x として解釈されるため、
 			    同一コンテナ内のボタンの click が発火しない問題を防ぐ。 */}
 			<div className="flex bg-slate-50 border-b border-slate-200 items-center">
-				<div className="flex flex-1 overflow-x-auto">
+				<div
+					className="flex flex-1 overflow-x-auto"
+					style={{ touchAction: "pan-x" }}
+				>
 					{tabs.map((tab) => (
 						<button
 							key={tab.id}

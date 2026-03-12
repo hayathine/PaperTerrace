@@ -9,11 +9,11 @@ LOG_LEVEL = "INFO"
 AI_PROVIDER = "vertex"
 AI_TEMPERATURE = 0.1
 AI_MAX_OUTPUT_TOKENS = 2048
-VERTEX_MODEL = "gemini-2.5-flash-lite"
-MODEL_CHAT = "gemini-2.5-flash-lite"
-MODEL_SUMMARY = "gemini-2.5-flash-lite"
-MODEL_TRANSLATE = "gemini-2.5-flash-lite"
-FIGURE_EXPLAIN_MODEL = "gemini-2.5-flash-lite"
+VERTEX_MODEL = "gemini-2.0-flash-lite"
+MODEL_CHAT = "gemini-2.0-flash-lite"
+MODEL_SUMMARY = "gemini-2.0-flash-lite"
+MODEL_TRANSLATE = "gemini-2.0-flash-lite"
+FIGURE_EXPLAIN_MODEL = "gemini-2.0-flash-lite"
 LAYOUT_PARSER_TYPE = "gemini"
 
 # 翻訳モデル設定（M2M100）

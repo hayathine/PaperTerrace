@@ -381,7 +381,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		fileHash: string | null,
 		headers: HeadersInit,
 	): Promise<void> => {
-		const POLL_INTERVAL_MS = 2000;
+		const POLL_INTERVAL_MS = 5000;
 		const TIMEOUT_MS = 120_000;
 		const deadline = Date.now() + TIMEOUT_MS;
 
@@ -392,6 +392,16 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				headers,
 			});
 			if (!statusRes.ok) {
+				if (statusRes.status === 429) {
+					const retryAfter = statusRes.headers.get("Retry-After");
+					const waitMs = retryAfter ? Number(retryAfter) * 1000 : 15_000;
+					log.warn("poll_layout_job", "Rate limited, backing off", {
+						job_id: jobId,
+						wait_ms: waitMs,
+					});
+					await new Promise((resolve) => setTimeout(resolve, waitMs));
+					continue;
+				}
 				log.error("poll_layout_job", "Status check failed", {
 					job_id: jobId,
 					status: statusRes.status,
@@ -504,11 +514,21 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				),
 			);
 
-			// 各ジョブを並列ポーリング（結果が出次第 figures を反映）
+			// 各ジョブをポーリング（レート制限対策: 最大2並列）
+			const validJobIds = jobIds.filter((id): id is string => id !== null);
+			const pollFns = validJobIds.map(
+				(jobId) => () => pollLayoutJob(jobId, paperId, fileHash, headers),
+			);
+			const CONCURRENCY = 2;
+			let next = 0;
+			const worker = async () => {
+				while (next < pollFns.length) {
+					const i = next++;
+					await pollFns[i]();
+				}
+			};
 			await Promise.all(
-				jobIds
-					.filter((id): id is string => id !== null)
-					.map((jobId) => pollLayoutJob(jobId, paperId, fileHash, headers)),
+				Array.from({ length: Math.min(CONCURRENCY, pollFns.length) }, worker),
 			);
 
 			log.info(
@@ -1055,7 +1075,15 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								width: layout?.width || 0,
 								height: layout?.height || 0,
 								words: layout?.words || [],
-								figures: layout?.figures || [],
+								figures: (layout?.figures || []).map((f: any) => ({
+									...f,
+									image_url:
+										f.image_url &&
+										!f.image_url.startsWith("http") &&
+										!f.image_url.startsWith("blob:")
+											? `${API_URL}${f.image_url}`
+											: f.image_url,
+								})),
 								links: layout?.links || [],
 								content: ocrParts[i] || "",
 							}),
@@ -1129,7 +1157,27 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						file_hash: paperData.file_hash || "",
 						title: paperData.title || paperData.filename,
 						ocr_text: paperData.ocr_text,
-						layout_json: paperData.layout_json,
+						layout_json: (() => {
+							if (!paperData.layout_json) return paperData.layout_json;
+							try {
+								const parsed = JSON.parse(paperData.layout_json);
+								const normalized = parsed.map((page: any) => ({
+									...page,
+									figures: (page.figures || []).map((f: any) => ({
+										...f,
+										image_url:
+											f.image_url &&
+											!f.image_url.startsWith("http") &&
+											!f.image_url.startsWith("blob:")
+												? `${API_URL}${f.image_url}`
+												: f.image_url,
+									})),
+								}));
+								return JSON.stringify(normalized);
+							} catch {
+								return paperData.layout_json;
+							}
+						})(),
 						full_summary: paperData.full_summary,
 						section_summary_json: paperData.section_summary_json,
 						last_accessed: Date.now(),
@@ -1149,7 +1197,15 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								width: layout?.width || 0,
 								height: layout?.height || 0,
 								words: layout?.words || [],
-								figures: layout?.figures || [],
+								figures: (layout?.figures || []).map((f: any) => ({
+									...f,
+									image_url:
+										f.image_url &&
+										!f.image_url.startsWith("http") &&
+										!f.image_url.startsWith("blob:")
+											? `${API_URL}${f.image_url}`
+											: f.image_url,
+								})),
 								links: layout?.links || [],
 								content: ocrParts[i] || "",
 							}),

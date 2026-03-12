@@ -85,16 +85,22 @@ async def summarize(
             status_code=400,
         )
 
-    storage = get_storage_provider()
-    # Resolve paper_id if missing
-    if not paper_id:
-        paper_id = storage.get_session_paper_id(session_id)
+    try:
+        storage = get_storage_provider()
+        # Resolve paper_id if missing
+        if not paper_id:
+            paper_id = storage.get_session_paper_id(session_id)
 
-    # Clear cached summary if force=True
-    if force and paper_id:
-        log.info("summarize", "Force regeneration requested", paper_id=paper_id)
-
-        storage.update_paper_full_summary(paper_id, "")
+        # Clear cached summary if force=True
+        if force and paper_id:
+            log.info("summarize", "Force regeneration requested", paper_id=paper_id)
+            storage.update_paper_full_summary(paper_id, "")
+    except Exception as e:
+        log.error("summarize", "Storage error during summarize setup", error=str(e))
+        return JSONResponse(
+            {"error": "ストレージへのアクセスに失敗しました。"},
+            status_code=500,
+        )
 
     log.info(
         "summarize",

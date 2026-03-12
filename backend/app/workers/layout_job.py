@@ -28,6 +28,7 @@ def enqueue_layout_job(
 
     job_payload = {
         "job_id": job_id,
+        "type": "layout_analysis",
         "paper_id": paper_id,
         "page_numbers": page_numbers,
         "user_id": user_id,

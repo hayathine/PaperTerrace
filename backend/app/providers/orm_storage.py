@@ -8,7 +8,7 @@ ORM モデルを単一の変更箇所として扱えるようにする。
 import json
 from typing import Optional
 
-from sqlalchemy.exc import InvalidRequestError, PendingRollbackError
+from sqlalchemy.exc import InvalidRequestError, OperationalError, PendingRollbackError
 from sqlalchemy.orm import Session
 
 from app.models.orm.figure import PaperFigure
@@ -138,7 +138,7 @@ class ORMStorageAdapter(StorageInterface):
         """
         try:
             return fn()
-        except (PendingRollbackError, InvalidRequestError):
+        except (PendingRollbackError, InvalidRequestError, OperationalError):
             self._replace_session()
             return fn()
 

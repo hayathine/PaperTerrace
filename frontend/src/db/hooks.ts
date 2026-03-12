@@ -151,9 +151,19 @@ export function usePaperCache() {
 	const cachePaperImages = useCallback(
 		async (paperId: string, pageUrls: string[]) => {
 			if (!isDbAvailable()) return [];
-			return Promise.all(
-				pageUrls.map((url) => fetchAndCacheImage(url, paperId, "page")),
+			const CONCURRENCY = 3;
+			const results: (ImageCache | null)[] = [];
+			let next = 0;
+			const worker = async () => {
+				while (next < pageUrls.length) {
+					const i = next++;
+					results[i] = await fetchAndCacheImage(pageUrls[i], paperId, "page");
+				}
+			};
+			await Promise.all(
+				Array.from({ length: Math.min(CONCURRENCY, pageUrls.length) }, worker),
 			);
+			return results;
 		},
 		[],
 	);

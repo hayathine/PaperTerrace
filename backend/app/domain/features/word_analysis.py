@@ -63,7 +63,9 @@ class WordAnalysisService:
 
         # 4. AI Translation (Context-aware if context provided)
         if context:
-            return await self.translate_with_context(lemma, context, lang, session_id=session_id)
+            return await self.translate_with_context(
+                lemma, context, lang, session_id=session_id
+            )
 
         return None
 

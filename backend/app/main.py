@@ -409,6 +409,8 @@ if _storage_type == "gcs":
         filename: str = FastAPIPath(...),
     ):
         """Proxy GCS images to avoid CORS issues."""
+        import asyncio
+
         try:
             from app.providers.image_storage import _get_instance
 
@@ -416,10 +418,11 @@ if _storage_type == "gcs":
             blob_name = f"paper_images/{file_hash}/{filename}"
             blob = storage_inst.bucket.blob(blob_name)
 
-            if not blob.exists():
+            exists = await asyncio.to_thread(blob.exists)
+            if not exists:
                 return FastAPIResponse(status_code=404, content=b"Not Found")
 
-            data = blob.download_as_bytes()
+            data = await asyncio.to_thread(blob.download_as_bytes)
             content_type = "image/png" if filename.endswith(".png") else "image/jpeg"
             return FastAPIResponse(
                 content=data,

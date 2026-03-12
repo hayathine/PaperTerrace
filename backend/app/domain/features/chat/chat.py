@@ -32,7 +32,7 @@ class ChatService:
     def __init__(self):
         self.ai_provider = get_ai_provider()
         self.redis = RedisService()
-        self.model = os.getenv("MODEL_CHAT", "gemini-2.0-flash")
+        self.model = os.getenv("MODEL_CHAT", "gemini-2.5-flash")
         self.cache_ttl_minutes = 60
         setup_dspy()
         self.chat_mod = ChatModule()
