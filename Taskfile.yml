@@ -31,14 +31,6 @@ vars:
     {
       sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["backend"]["memory"])''',
     }
-  BE_STG_CPU:
-    {
-      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["backend_staging"]["cpu"])''',
-    }
-  BE_STG_MEM:
-    {
-      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["backend_staging"]["memory"])''',
-    }
 
   INF_CPU:
     {
@@ -47,18 +39,6 @@ vars:
   INF_MEM:
     {
       sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["inference"]["memory"])''',
-    }
-  INF_STG_CPU:
-    {
-      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["inference_staging"]["cpu"])''',
-    }
-  INF_STG_MEM:
-    {
-      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["inference_staging"]["memory"])''',
-    }
-  INF_STG_WORKERS:
-    {
-      sh: 'python3 -c ''import json; print(json.load(open("config/resources.json"))["inference_staging"].get("batch_parallel_workers", 2))''',
     }
 
   INF_WORKERS:
@@ -305,11 +285,6 @@ tasks:
     cmds:
       - echo "🔄 Running GlitchTip migrations..."
       - kubectl exec -n {{.NAMESPACE}} deployment/glitchtip-web -- python3 manage.py migrate
-
-  # ============================================================================
-  # Staging Environment Tasks
-  # ============================================================================
-
   # ============================================================================
   # Infrastructure Tasks
   # ============================================================================

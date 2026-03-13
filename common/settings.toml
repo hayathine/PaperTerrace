@@ -70,14 +70,6 @@ STORAGE_PROVIDER = "sqlite"
 IMAGES_DIR = "src/static/paper_images"
 BQ_LOG_DATASET = "paperterrace_logs_dev"
 
-[staging]
-LOG_LEVEL = "INFO"
-STORAGE_TYPE = "gcs"
-STORAGE_PROVIDER = "neon"
-IMAGES_DIR = "app/static/paper_images"
-BQ_LOG_DATASET = "paperterrace_logs_dev"
-SENTRY_ENABLED = true
-
 [prod]
 LOG_LEVEL = "INFO"
 SENTRY_ENABLED = true
