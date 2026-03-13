@@ -29,10 +29,14 @@ Your goal is to help users understand complex academic papers, translate technic
 # Used in: common/dspy/signatures.py (ContextAwareTranslation)
 # フロントエンド表示: Dictionary.tsx (文脈に適した翻訳・解説として表示)
 # QwenおよびGeminiの共通プロンプトベースとして利用
-DICT_TRANSLATE_QWEN_PROMPT = """{paper_context}
-Based on the context above, translate the following English text into {lang_name}.
+DICT_TRANSLATE_QWEN_PROMPT = """[Academic Context]
+{paper_context}
+
+[Target Text]
 {target_word}
-Output the translation and intuitive explanation in short sentences(50 -100 characters)."""
+
+Based on the context above, translate the English text into {lang_name}.
+Output the translation and intuitive explanation in short sentences (50-100 characters)."""
 
 # Used in: backend/app/routers/translation.py
 # フロントエンド表示: Dictionary.tsx (単語クリック時の簡易翻訳として表示)

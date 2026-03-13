@@ -22,6 +22,9 @@ vars:
   NAMESPACE: '{{if eq .ENV "main"}}paperterrace{{else}}paperterrace-{{.ENV}}{{end}}'
   RELEASE_NAME: '{{if eq .ENV "main"}}paperterrace{{else}}paperterrace-{{.ENV}}{{end}}'
 
+  # BigQuery dataset name based on environment
+  BQ_DATASET: '{{if or (eq .ENV "main") (eq .ENV "prod")}}paperterrace_logs{{else}}paperterrace_logs_dev{{end}}'
+
   # Resource Configurations from JSON
   BE_CPU:
     {
@@ -469,6 +472,26 @@ tasks:
     desc: "Show status of all services"
     cmds:
       - task: k3s:status
+
+  # ============================================================================
+  # Prompt Optimization Tasks (DSPy)
+  # ============================================================================
+
+  dspy:data:
+    desc: "Fetch training data for DSPy from BigQuery and save as JSON"
+    summary: |
+      BigQueryから直近のトレースデータを取得し、DSPyの学習用データセットとして
+      assets/prompt_optimization/ に保存します。
+      デフォルトでは現在のブランチ（ENV）に応じたDB（dataset）を使用します。
+    cmds:
+      - GCP_PROJECT_ID={{.PROJECT_ID}} BQ_DATASET={{.BQ_DATASET}} uv run --directory prompt_optimization python main.py --save-assets --days {{.DAYS | default 30}} --limit {{.LIMIT | default 100}}
+
+  dspy:run:
+    desc: "Run DSPy prompt optimization (GEPA)"
+    summary: |
+      取得したデータを使用してプロンプトの最適化プロセスを実行します。
+    cmds:
+      - GCP_PROJECT_ID={{.PROJECT_ID}} BQ_DATASET={{.BQ_DATASET}} uv run --directory prompt_optimization python main.py --days {{.DAYS | default 30}} --limit {{.LIMIT | default 1000}} --auto {{.AUTO | default "medium"}}
 
   # ============================================================================
   # Cloudflare Deployment Tasks

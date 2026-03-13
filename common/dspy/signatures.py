@@ -29,11 +29,11 @@ def clean_prompt_for_dspy(prompt_str: str) -> str:
     最適化可能性を高めたクリーンな Instruction（__doc__ 用）を生成する。
     """
     cleaned = prompt_str
-    # プレースホルダーを汎用的な指示表現に置換
+    # プレースホルダーを「フィールド名」を意識した汎用的な指示表現に置換
     cleaned = cleaned.replace("PAPER_TEXT: {paper_text}", "")
     cleaned = cleaned.replace("{paper_text}", "the provided paper text")
     cleaned = cleaned.replace("{lang_name}", "the specified target language")
-    cleaned = cleaned.replace("{document_context}", "the provided academic context")
+    cleaned = cleaned.replace("{document_context}", "the academic paper context")
     cleaned = cleaned.replace("{history_text}", "the conversation history")
     cleaned = cleaned.replace("{text}", "the provided text")
     cleaned = cleaned.replace("{question}", "the user's question")
@@ -41,19 +41,26 @@ def clean_prompt_for_dspy(prompt_str: str) -> str:
     cleaned = cleaned.replace("{context_hint}", "the context hint")
     cleaned = cleaned.replace("{table_text}", "the table text")
     cleaned = cleaned.replace("{paragraph}", "the paragraph text")
-    cleaned = cleaned.replace("{target_word}", "the target word")
+    cleaned = cleaned.replace("{target_word}", "the target text")
     cleaned = cleaned.replace("{trajectory}", "the user's trajectory")
-    # paper_context は DSPy InputField として動的に渡されるため、
-    # テンプレート文字列をプロンプト冒頭の自然な指示文に置換する
+    cleaned = cleaned.replace("{summary_context}", "the paper summary context")
+    cleaned = cleaned.replace("{context}", "the surrounding context")
+    # paper_context は InputField 名と一致させることでモデルの参照を助ける
     cleaned = cleaned.replace(
         "{paper_context}",
-        "Use the provided academic paper context (surrounding sentences and/or paper summary) for accurate translation.",
+        "the academic paper context provided in the `paper_context` field",
+    )
+
+    # 「above（上記）」という表現が DSPy のパース後のフィールド順序と矛盾する場合があるため、
+    # より汎用的な「provided（提供された）」等に置き換える。
+    # 特に Qwen 等のモデルで「上記」とあるのに「下記」にフィールドがある場合の混乱を防ぐ。
+    cleaned = cleaned.replace("context above", "provided context")
+    cleaned = cleaned.replace(
+        "Based on the context above", "Based on the provided context"
     )
 
     # DSPyは自身の構造化出力フォーマット（フィールドマーカー）を使用するため、
     # プロンプト内のJSON出力形式の指示を除去する。
-    # これがあると LLM が "Output ONLY valid JSON" に従い、
-    # DSPy のパーサが期待するフォーマットと衝突して例外が発生する。
     cleaned = re.sub(
         r"Please output in the following JSON format.*?Output ONLY valid JSON\.",
         "Output each field according to the instructions.",
