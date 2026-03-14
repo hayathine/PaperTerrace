@@ -163,6 +163,7 @@ class ChatService:
                         else "See Context Cache",
                         "history_text": history_text_for_prompt,
                         "user_message": user_message,
+                        "user_persona": "Helpful Research Assistant",
                         "lang_name": lang_name,
                     },
                     context=TraceContext(

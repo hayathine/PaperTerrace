@@ -108,7 +108,11 @@ class AdversarialReviewService:
                     "AdversarialModule",
                     "AdversarialCritique",
                     self.adversarial_mod,
-                    {"paper_text": text[:12000], "lang_name": lang_name},
+                    {
+                        "paper_text": text[:12000],
+                        "user_persona": "Critical Academic Reviewer",
+                        "lang_name": lang_name,
+                    },
                     context=TraceContext(user_id=user_id, session_id=session_id),
                 )
 

@@ -495,6 +495,7 @@ async def explain(
                 {
                     "paper_context": paper_context,
                     "target_word": original_word,
+                    "user_persona": "Professional Academic Translator",
                     "lang_name": lang_name,
                 },
                 context=TraceContext(
@@ -511,6 +512,7 @@ async def explain(
                 {
                     "paper_context": paper_context,
                     "target_word": lemma,
+                    "user_persona": "Professional Academic Translator",
                     "lang_name": lang_name,
                 },
                 context=TraceContext(
@@ -650,6 +652,7 @@ async def explain_deep(
             {
                 "paper_context": paper_context,
                 "target_word": original_word,
+                "user_persona": "Professional Academic Translator",
                 "lang_name": lang_name,
             },
             context=TraceContext(
@@ -765,6 +768,7 @@ async def explain_with_context(req: ExplainContextRequest, request: Request):
                 "summary_context": summary_context,
                 "context": req.context,
                 "target_word": req.word,
+                "user_persona": "Academic Expert",
                 "lang_name": lang_name,
             },
             context=TraceContext(

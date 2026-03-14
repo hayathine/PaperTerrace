@@ -87,18 +87,19 @@ class WordAnalysisService:
 
         try:
             from common.dspy.config import setup_dspy
-            from common.dspy.modules import WordTranslationModule
+            from common.dspy.modules import SimpleTranslationModule
             from common.dspy.trace import TraceContext, trace_dspy_call
 
             setup_dspy()
-            trans_mod = WordTranslationModule()
+            trans_mod = SimpleTranslationModule()
             res, trace_id = await trace_dspy_call(
-                "WordTranslationModule",
-                "WordTranslationInContext",
+                "SimpleTranslationModule",
+                "SimpleTranslation",
                 trans_mod,
                 {
                     "target_word": word,
-                    "context": truncated,
+                    "paper_context": truncated,
+                    "user_persona": "Professional Translator",
                     "lang_name": lang_name,
                 },
                 context=TraceContext(user_id=user_id, session_id=session_id),

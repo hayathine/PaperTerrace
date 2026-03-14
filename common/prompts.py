@@ -36,7 +36,22 @@ DICT_TRANSLATE_QWEN_PROMPT = """[Academic Context]
 {target_word}
 
 Based on the context above, translate the English text into {lang_name}.
-Output the translation and intuitive explanation in short sentences (50-100 characters)."""
+Output ONLY the translated word.
+
+Examples:
+- Context: The transformer architecture has revolutionized natural language processing.
+  Target: transformer
+  Language: Japanese
+  Output: トランスフォーマー
+- Context: We found a significant correlation between the two variables.
+  Target: significant
+  Language: Japanese
+  Output: 有意な
+- Context: This method achieved state-of-the-art performance on the benchmark.
+  Target: state-of-the-art
+  Language: Japanese
+  Output: 最先端の"""
+
 
 # Used in: backend/app/routers/translation.py
 # フロントエンド表示: Dictionary.tsx (単語クリック時の簡易翻訳として表示)

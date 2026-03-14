@@ -52,14 +52,10 @@ class InferenceServiceClient:
         # 個別設定があればそれを使用し、なければ共通設定を使用する
         default_url = os.getenv("INFERENCE_SERVICE_URL", "http://localhost:8080")
         self.layout_base_url = os.getenv("INFERENCE_LAYOUT_URL", default_url)
-        self.m2m100_base_url = os.getenv("INFERENCE_M2M100_URL", default_url)
         self.qwen_base_url = os.getenv("INFERENCE_QWEN_URL", default_url)
 
         self.timeout = int(os.getenv("INFERENCE_SERVICE_TIMEOUT", "60"))
         self.max_retries = int(os.getenv("INFERENCE_SERVICE_RETRIES", "2"))
-        self.fallback_threshold = float(
-            os.getenv("TRANSLATION_FALLBACK_THRESHOLD", "0.5")
-        )
 
         # 無効化フラグ
         self.is_disabled = (
@@ -408,70 +404,13 @@ class InferenceServiceClient:
         paper_context: str | None = None,
         original_text: str | None = None,
     ) -> tuple[str, str | None, str | None]:
-        """単一テキストの翻訳（M2M100 -> Qwen fallback付）"""
-        request_data = TranslationRequest(
-            text=text,
+        """単一テキストの翻訳（Qwen）"""
+        return await self.translate_with_qwen(
+            text,
+            target_lang,
+            paper_context,
             original_text=original_text,
-            target_lang=target_lang,
-            paper_context=paper_context,
         )
-
-        try:
-            log.debug("translate", "M2M100翻訳リクエスト", text_preview=text[:50])
-
-            # 1. M2M100 にリクエスト
-            response = await self._make_request_with_retry(
-                self.m2m100_base_url,
-                "POST",
-                "/api/v1/translate",
-                json=request_data.model_dump(),
-            )
-
-            if response.get("success"):
-                translation = response.get("translation", "")
-                model = response.get("model", "m2m100")
-                confidence = response.get("confidence", 1.0)
-                lemma = response.get("lemma")
-
-                log.debug(
-                    "translate",
-                    "M2M100翻訳完了",
-                    model=model,
-                    confidence=confidence,
-                    lemma=lemma,
-                    processing_time=response.get("processing_time", 0),
-                )
-
-                # フォールバック判定
-                if confidence <= self.fallback_threshold and self.qwen_base_url:
-                    log.info(
-                        "translate_fallback",
-                        "確信度が低いため Qwen にフォールバックします",
-                        confidence=confidence,
-                        threshold=self.fallback_threshold,
-                    )
-                    try:
-                        return await self.translate_with_qwen(
-                            text,
-                            target_lang,
-                            paper_context,
-                            original_text=original_text,
-                        )
-                    except Exception as e:
-                        log.warning(
-                            "translate_fallback_failed",
-                            "Qwenへのフォールバックに失敗しました。M2M100の結果を使用します。",
-                            error=str(e),
-                        )
-
-                return translation, model, lemma
-            else:
-                error_msg = response.get("message", "不明なエラー")
-                raise InferenceServiceError(f"翻訳失敗: {error_msg}")
-
-        except Exception as e:
-            log.error("translate", "翻訳エラー", error=str(e))
-            raise
 
     async def translate_with_qwen(
         self,
@@ -517,7 +456,7 @@ class InferenceServiceClient:
             log.debug("tokenize", "トークナイズリクエスト", text_preview=text[:50])
 
             response = await self._make_request_with_retry(
-                self.m2m100_base_url,
+                self.qwen_base_url,
                 "POST",
                 "/api/v1/tokenize",
                 json=request_data.model_dump(),
