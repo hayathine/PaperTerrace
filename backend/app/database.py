@@ -28,10 +28,22 @@ def get_url():
     return url
 
 
+_url = get_url()
+_connect_args = {}
+if _url.startswith("postgresql"):
+    # TCP keepalive でサーバー側の突然切断を防ぐ (Cloud Run / Cloud SQL 向け)
+    _connect_args = {
+        "keepalives": 1,
+        "keepalives_idle": 30,
+        "keepalives_interval": 10,
+        "keepalives_count": 5,
+    }
+
 engine = create_engine(
-    get_url(),
+    _url,
     pool_pre_ping=True,  # Test connection liveness before checkout
-    pool_recycle=1800,  # Recycle connections after 30 minutes
+    pool_recycle=300,    # Recycle connections after 5 minutes (Cloud Run 向けに短縮)
+    connect_args=_connect_args,
 )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 

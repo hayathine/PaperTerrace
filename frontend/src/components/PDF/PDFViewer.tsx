@@ -782,7 +782,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						})();
 
 						// Trigger lazy layout analysis in background (non-blocking)
-						triggerLazyLayoutAnalysis(pId).catch((err) =>
+						// finalPages を明示的に渡す: pagesRef は useEffect 経由で同期されるため、
+						// "done" イベント時点では stale な可能性がある
+						triggerLazyLayoutAnalysis(pId, finalPages).catch((err) =>
 							log.warn("trigger_lazy_layout_analysis", "Lazy analysis failed", {
 								error: err,
 							}),

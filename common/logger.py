@@ -222,10 +222,15 @@ class ServiceLogger:
     def _log(self, level: str, operation: str, message: str, **kwargs):
         """内部共通ロギングメソッド"""
         method = getattr(self._logger, level)
-        # 構造化データとしてserviceとoperationを渡す
-        # コンソール表示の際に見やすくするため、eventの先頭に最小限のタグを付与するか検討
-        # ここでは純粋なメッセージをeventとし、メタデータはフィールドに逃がす
-        method(message, service=self.service_name, operation=operation, **kwargs)
+
+        # kwargs内のservice/operationと衝突しないように退避
+        log_data = kwargs.copy()
+        if "service" in log_data:
+            log_data["target_service"] = log_data.pop("service")
+        if "operation" in log_data:
+            log_data["target_operation"] = log_data.pop("operation")
+
+        method(message, service=self.service_name, operation=operation, **log_data)
 
     def debug(self, operation: str, message: str, **kwargs):
         self._log("debug", operation, message, **kwargs)

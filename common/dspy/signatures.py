@@ -100,9 +100,14 @@ class BuildDecisionProfile(dspy.Signature):
 
 
 class SolveTask(dspy.Signature):
+    """ユーザーペルソナと入力データからパーソナライズされたタスク指示を生成する"""
+
     user_persona = dspy.InputField(desc="The user's persona")
-    lang_name = dspy.InputField()
-    input_data = dspy.InputField()
+    lang_name = dspy.InputField(desc="The target language name")
+    input_data = dspy.InputField(desc="The main input data for the task")
+    task_instruction: str = dspy.OutputField(
+        desc="Personalized task instruction optimized for the user's persona and language"
+    )
 
 
 # =============================================================

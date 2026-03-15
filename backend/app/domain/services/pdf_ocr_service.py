@@ -14,7 +14,6 @@ import pymupdf4llm
 from app.crud import get_ocr_from_db, save_ocr_to_db
 from app.providers import get_ai_provider
 from app.providers.image_storage import get_page_images, save_page_image
-from app.providers.inference_client import get_inference_client
 from app.utils import _get_file_hash
 from common.logger import ServiceLogger
 from common.utils.bbox import scale_bbox
@@ -153,31 +152,11 @@ class PDFOCRService:
                         )
                         prefetched_pages.append(page_data)
 
-                    # Step B: Batch Layout Analysis for the whole chunk
-                    log.debug(
-                        "batch_layout_start",
-                        "Requesting batch layout analysis",
-                        count=len(prefetched_pages),
-                    )
-                    batch_images = [p["img_bytes"] for p in prefetched_pages]
-
-                    try:
-                        inference_client = await get_inference_client()
-                        batch_layout_results = (
-                            await inference_client.analyze_images_batch(batch_images)
-                        )
-                    except Exception as e:
-                        log.warning(
-                            "batch_layout_failed",
-                            "Batch layout failed, falling back to empty",
-                            error=str(e),
-                        )
-                        batch_layout_results = [[] for _ in prefetched_pages]
-
-                    # Step C: Finalize each page (Phase 3) and yield sequentially
+                    # Step B: Finalize each page (Phase 3) and yield sequentially
+                    # Layout/figure analysis is handled lazily after OCR via analyze_layout_lazy
                     for i, page_idx in enumerate(range(chunk_start, chunk_end)):
                         page_data = prefetched_pages[i]
-                        layout_blocks = batch_layout_results[i]
+                        layout_blocks = []
 
                         # Yield Phase 1 (Initial UI update)
                         yield page_data["phase1_result"]

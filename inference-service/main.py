@@ -439,6 +439,12 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
             )
 
         except Exception as e:
+            from services.translation.llamacpp_service import LlamaBusyError
+
+            if isinstance(e, LlamaBusyError):
+                logger.warning(f"Qwen busy, rejecting request: {e}")
+                raise HTTPException(status_code=503, detail="Qwen is busy")
+
             logger.exception("Translation failed")
             app_env = os.getenv("APP_ENV", "production")
             error_msg = (

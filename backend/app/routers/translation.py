@@ -11,14 +11,8 @@ from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
-from app.domain.services import local_translator
 from app.domain.services.analysis_service import EnglishAnalysisService
 from app.providers import get_ai_provider, get_storage_provider
-from app.providers.inference_client import (
-    CircuitBreakerError,
-    InferenceServiceDownError,
-    InferenceServiceTimeoutError,
-)
 from common.dspy.config import setup_dspy
 from common.dspy.modules import (
     DeepExplanationModule,
@@ -176,18 +170,9 @@ async def explain(
     conf: str | None = None,
     context: str | None = None,
 ):
-    """単語の解説 (Local: Cache -> local-MT)"""
+    """単語の解説 (Cache -> Gemini)"""
     storage = get_storage_provider()
-    # Parse conf safely
-    f_conf: float | None = None
-    if conf:
-        try:
-            f_conf = float(conf)
-        except (ValueError, TypeError):
-            f_conf = None
-
     start_time = asyncio.get_event_loop().time()
-    # Robust element_id detection: Try query param, then fallback to HTMX header
     element_id = element_id or req.headers.get("HX-Trigger")
 
     log.info(
@@ -202,7 +187,7 @@ async def explain(
         clean_input = word.strip()
 
     original_word = word
-    lemma = clean_input  # Initial assumption, will be updated by ServiceB if needed
+    lemma = clean_input
 
     # Calculate user_id (handling guest case)
     current_user_id = getattr(req.state, "user_id", None) or (
@@ -210,264 +195,41 @@ async def explain(
     )
 
     # 1. Cache Check
-    # use_llamacpp=True (conf<=0.5): Qwen専用キャッシュ "trans:{lang}:{lemma}:hq" をチェック
-    # use_llamacpp=False: 通常キャッシュ "trans:{lang}:{lemma}" をチェック
-    use_llamacpp = f_conf is not None and f_conf <= 0.5
-
-    if use_llamacpp:
-        hq_cached = service.word_analysis.redis.get(f"trans:{lang}:{lemma}:hq")
-        if hq_cached:
-            translation_str = (
-                hq_cached if isinstance(hq_cached, str) else str(hq_cached)
-            )
-            if not is_htmx:
-                return JSONResponse(
-                    {
-                        "word": original_word,
-                        "lemma": lemma,
-                        "translation": translation_str,
-                        "source": "Cache(HQ)",
-                        "element_id": element_id,
-                    }
-                )
-            elapsed = asyncio.get_event_loop().time() - start_time
-            log.info(
-                "explain",
-                "Lookup completed (Cache HQ)",
-                elapsed=f"{elapsed:.3f}s",
-                word=word,
-            )
-            return HTMLResponse(
-                build_dict_card_html(
-                    original_word,
-                    lemma,
-                    translation_str,
-                    "Cache(HQ)",
-                    lang,
-                    paper_id,
-                    element_id=element_id,
-                )
-            )
-
-    if not use_llamacpp:
-        cached = await service.get_translation(lemma, lang=lang)
-        if cached:
-            source = cached.get("source", "Cache")
-            if not is_htmx:
-                return JSONResponse(
-                    {
-                        "word": original_word,
-                        "lemma": lemma,
-                        "translation": cached["translation"],
-                        "source": source,
-                        "element_id": element_id,
-                    }
-                )
-            elapsed = asyncio.get_event_loop().time() - start_time
-            log.info(
-                "explain",
-                "Lookup completed (Cache)",
-                elapsed=f"{elapsed:.3f}s",
-                word=word,
-                paper_id=paper_id,
-            )
-
-            return HTMLResponse(
-                build_dict_card_html(
-                    original_word,
-                    lemma,
-                    cached["translation"],
-                    source,
-                    lang,
-                    paper_id,
-                    element_id=element_id,
-                )
-            )
-
-    # Build Context
-    paper_context_str = ""
-    if paper_id:
-        paper = storage.get_paper(paper_id)
-        if paper:
-            summary = paper.get("abstract") or paper.get("summary")
-            if summary:
-                paper_context_str = f"\n[Paper Context / Summary]\n{summary}\n"
-
-    if context:
-        paper_context_str += f"\n[Surrounding Context]\n...{context}...\n"
-
-    if not paper_context_str:
-        paper_context_str = (
-            "No specific context available, but please translate carefully."
-        )
-
-    # Stage 2: Local Translation (Qwen or M2M100)
-    local_translation = None
-    qwen_skipped_to_gemini = False
-    # if word confidence is low, use Qwen
-    if use_llamacpp:
-        log.info(
-            "explain",
-            f"Word confidence {f_conf} <= 0.5, switching to Qwen",
-            word=original_word,
-            conf=f_conf,
-        )
-
-        try:
-            from app.providers.inference_client import get_inference_client
-
-            client = await get_inference_client()
-
-            local_translation, _model, res_lemma = await client.translate_with_qwen(
-                clean_input,
-                lang,
-                paper_context=paper_context_str,
-                original_text=original_word,
-            )
-            if res_lemma:
-                lemma = res_lemma
-
-            if local_translation:
-                # HQキャッシュに保存
-                service.word_analysis.redis.set(
-                    f"trans:{lang}:{lemma}:hq", local_translation, expire=604800
-                )
-                if not is_htmx:
-                    return JSONResponse(
-                        {
-                            "word": original_word,
-                            "lemma": lemma,
-                            "translation": local_translation,
-                            "source": "Qwen3",
-                            "element_id": element_id,
-                        }
-                    )
-
-                elapsed = asyncio.get_event_loop().time() - start_time
-                log.info(
-                    "explain",
-                    "Lookup completed (Qwen3)",
-                    elapsed=f"{elapsed:.3f}s",
-                    word=word,
-                )
-
-                return HTMLResponse(
-                    build_dict_card_html(
-                        original_word,
-                        lemma,
-                        local_translation,
-                        "Qwen3",
-                        lang,
-                        paper_id,
-                        element_id=element_id,
-                        show_deep_btn=False,
-                    )
-                )
-        except (InferenceServiceTimeoutError, CircuitBreakerError) as e:
-            log.warning(
-                "explain",
-                "Qwen translation timeout or circuit open, skipping directly to Gemini",
-                error=str(e),
-                lemma=lemma,
-            )
-            qwen_skipped_to_gemini = True
-        except Exception as e:
-            log.warning(
-                "explain",
-                "Qwen translation failed, trying M2M100 fallback",
-                error=str(e),
-                lemma=lemma,
-            )
-            # Proceed to M2M100 fallback
-
-    # Stage 2: ServiceB Machine Translation (M2M100)
-    if not local_translation and not qwen_skipped_to_gemini:
-        translator = local_translator.get_local_translator()
-        if translator._initialized:
-            try:
-                local_translation, _model, res_lemma = await translator.translate_async(
-                    clean_input,
-                    lang,
-                    paper_context=paper_context_str,
-                    original_text=original_word,
-                )
-                if res_lemma:
-                    lemma = res_lemma
-                log.info(
-                    "explain",
-                    "ServiceB translation result",
-                    result=local_translation,
-                    lemma=lemma,
-                )
-
-            except InferenceServiceTimeoutError:
-                log.warning(
-                    "explain",
-                    "ServiceB translation timeout (busy), falling back to Gemini",
-                    lemma=lemma,
-                )
-                local_translation = None
-            except (InferenceServiceDownError, CircuitBreakerError):
-                log.warning(
-                    "explain",
-                    "ServiceB is down or circuit open, falling back to Gemini",
-                    lemma=lemma,
-                )
-                local_translation = None
-            except Exception as e:
-                log.warning(
-                    "explain", "ServiceB translation failed", error=str(e), lemma=lemma
-                )
-                local_translation = None
-        else:
-            log.warning("explain", "Local translator not initialized", lemma=lemma)
-            local_translation = None
-    elif qwen_skipped_to_gemini:
-        # We already decided to skip to Gemini
-        local_translation = None
-
-    if local_translation:
-        if local_translation not in ["混雑中", "サーバーが故障中です"]:
-            service.translation_cache[lemma] = local_translation
-            service.word_cache[lemma] = False
-
-        source = "Local-MT"
-
+    cached = await service.get_translation(lemma, lang=lang)
+    if cached:
+        source = cached.get("source", "Cache")
         if not is_htmx:
             return JSONResponse(
                 {
                     "word": original_word,
                     "lemma": lemma,
-                    "translation": local_translation,
+                    "translation": cached["translation"],
                     "source": source,
+                    "element_id": element_id,
                 }
             )
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(
             "explain",
-            "Lookup completed (ServiceB)",
+            "Lookup completed (Cache)",
             elapsed=f"{elapsed:.3f}s",
             word=word,
             paper_id=paper_id,
         )
-
         return HTMLResponse(
             build_dict_card_html(
                 original_word,
                 lemma,
-                local_translation,
+                cached["translation"],
                 source,
                 lang,
                 paper_id,
                 element_id=element_id,
-                show_deep_btn=(
-                    local_translation not in ["混雑中", "サーバーが故障中です"]
-                ),
             )
         )
 
-    # ローカル翻訳が失敗した場合、Gemini翻訳にフォールバック
-    log.info("explain", "Local translation failed, falling back to Gemini", lemma=lemma)
+    # 2. Gemini Translation
+    log.info("explain", "Cache miss, translating with Gemini", lemma=lemma)
 
     try:
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)

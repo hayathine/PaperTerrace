@@ -83,16 +83,6 @@ async def lifespan(app: FastAPI):
     # Re-configure logging to ensure it survives uvicorn's setup if needed
     configure_logging()
 
-    async def _prewarm_models():
-        try:
-            from app.domain.services.local_translator import get_local_translator
-
-            # Prewarm ServiceB (推論サービス)
-            lt = get_local_translator()
-            await lt.prewarm()
-        except Exception as e:
-            log.warning("prewarm", "Failed to pre-warm models", error=str(e))
-
     try:
         # Run Alembic migrations
         from alembic import command
@@ -101,9 +91,6 @@ async def lifespan(app: FastAPI):
         alembic_cfg = Config("alembic.ini")
         # Ensure alembic uses the correct directory if we're not in root (though usually we are)
         command.upgrade(alembic_cfg, "head")
-
-        # Pre-warm models before server starts (Blocking)
-        await _prewarm_models()
     except Exception as e:
         # If tables already exist, we might get a DuplicateTable error.
         # We log and continue so the app can still run.

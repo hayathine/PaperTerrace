@@ -28,13 +28,6 @@ layout = [
     "onnx-graphsurgeon>=0.5.8",
     "Pillow>=11.0.0",
 ]
-translation = [
-    "ctranslate2>=4.4.0",
-    "sentencepiece>=0.2.0",
-    "llama-cpp-python>=0.3.16",
-    "dspy-ai>=2.4.9",
-    "spacy>=3.8.11",
-]
 dev = [
     "pyright>=1.1.408",
     "pytest>=9.0.2",

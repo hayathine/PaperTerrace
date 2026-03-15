@@ -1,6 +1,6 @@
 """
 推論サービス（ServiceB）クライアント
-レイアウト解析と翻訳処理のリモート呼び出し
+レイアウト解析のリモート呼び出し
 """
 
 import asyncio
@@ -11,11 +11,7 @@ from typing import Any
 import httpx
 
 from common.logger import ServiceLogger
-from common.schemas.inference import (
-    LayoutAnalysisRequest,
-    TokenizeRequest,
-    TranslationRequest,
-)
+from common.schemas.inference import LayoutAnalysisRequest
 
 
 class InferenceServiceError(Exception):
@@ -46,13 +42,11 @@ log = ServiceLogger("InferenceClient")
 
 
 class InferenceServiceClient:
-    """推論サービスクライアント"""
+    """推論サービスクライアント（レイアウト解析専用）"""
 
     def __init__(self):
-        # 個別設定があればそれを使用し、なければ共通設定を使用する
         default_url = os.getenv("INFERENCE_SERVICE_URL", "http://localhost:8080")
         self.layout_base_url = os.getenv("INFERENCE_LAYOUT_URL", default_url)
-        self.qwen_base_url = os.getenv("INFERENCE_QWEN_URL", default_url)
 
         self.timeout = int(os.getenv("INFERENCE_SERVICE_TIMEOUT", "60"))
         self.max_retries = int(os.getenv("INFERENCE_SERVICE_RETRIES", "2"))
@@ -63,11 +57,11 @@ class InferenceServiceClient:
         )
 
         # 回路ブレーカー設定
-        self.failure_count = 0
-        self.last_failure_time = None
-        self.circuit_open = False
         self.failure_threshold = 5
         self.recovery_timeout = 60  # 1分
+        self._circuit_state: dict[str, dict] = {
+            "layout": {"failure_count": 0, "last_failure_time": None, "circuit_open": False},
+        }
 
         # SSL検証設定
         verify_env = os.getenv("INFERENCE_VERIFY_SSL", "true").lower()
@@ -96,42 +90,45 @@ class InferenceServiceClient:
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.client.aclose()
 
-    def _check_circuit_breaker(self):
+    def _check_circuit_breaker(self, service: str):
         """回路ブレーカーの状態チェック"""
-        if self.circuit_open:
+        state = self._circuit_state[service]
+        if state["circuit_open"]:
             if (
-                self.last_failure_time
-                and time.time() - self.last_failure_time > self.recovery_timeout
+                state["last_failure_time"]
+                and time.time() - state["last_failure_time"] > self.recovery_timeout
             ):
-                # 回路ブレーカーをリセット
-                self.circuit_open = False
-                self.failure_count = 0
-                log.info("circuit_breaker", "回路ブレーカーをリセットしました")
+                state["circuit_open"] = False
+                state["failure_count"] = 0
+                log.info("circuit_breaker", "回路ブレーカーをリセットしました", service=service)
             else:
                 raise CircuitBreakerError("推論サービスの回路ブレーカーが開いています")
 
-    def _record_success(self):
+    def _record_success(self, service: str):
         """成功時の記録"""
-        self.failure_count = 0
-        if self.circuit_open:
-            self.circuit_open = False
-            log.info("circuit_breaker", "推論サービスが復旧しました")
+        state = self._circuit_state[service]
+        state["failure_count"] = 0
+        if state["circuit_open"]:
+            state["circuit_open"] = False
+            log.info("circuit_breaker", "推論サービスが復旧しました", service=service)
 
-    def _record_failure(self):
+    def _record_failure(self, service: str):
         """失敗時の記録"""
-        self.failure_count += 1
-        self.last_failure_time = time.time()
+        state = self._circuit_state[service]
+        state["failure_count"] += 1
+        state["last_failure_time"] = time.time()
 
-        if self.failure_count >= self.failure_threshold:
-            self.circuit_open = True
+        if state["failure_count"] >= self.failure_threshold:
+            state["circuit_open"] = True
             log.error(
                 "circuit_breaker",
                 "推論サービスの回路ブレーカーを開きました",
-                failure_count=self.failure_count,
+                service=service,
+                failure_count=state["failure_count"],
             )
 
     async def _make_request_with_retry(
-        self, base_url: str, method: str, endpoint: str, **kwargs
+        self, base_url: str, method: str, endpoint: str, service: str, timeout: int | None = None, **kwargs
     ) -> dict[str, Any]:
         """リトライ機能付きリクエスト"""
         if self.is_disabled:
@@ -142,27 +139,32 @@ class InferenceServiceClient:
                 "Inference service is disabled by configuration"
             )
 
-        self._check_circuit_breaker()
+        self._check_circuit_breaker(service)
 
         last_exception = None
 
         for attempt in range(self.max_retries + 1):
             try:
                 url = f"{base_url}{endpoint}"
-                response = await self.client.request(method, url, **kwargs)
+                request_timeout = httpx.Timeout(timeout, connect=10.0) if timeout else None
+                response = await self.client.request(method, url, timeout=request_timeout, **kwargs)
                 response.raise_for_status()
 
-                self._record_success()
+                self._record_success(service)
                 return response.json()
 
             except httpx.HTTPError as e:
                 last_exception = e
 
-                # SSLエラーや接続エラーの場合はリトライせずに即座に失敗させる（ハング防止）
+                # SSLエラー・接続エラー・503(Busy)はリトライせず即座に失敗させる
                 error_str = str(e).lower()
                 is_ssl_error = "ssl" in error_str or "cert" in error_str
                 is_conn_error = isinstance(
                     e, (httpx.ConnectError, httpx.ConnectTimeout)
+                )
+                is_busy = (
+                    isinstance(e, httpx.HTTPStatusError)
+                    and e.response.status_code == 503
                 )
 
                 log.warning(
@@ -171,19 +173,20 @@ class InferenceServiceClient:
                     attempt=attempt + 1,
                     max_retries=self.max_retries + 1,
                     error=str(e),
-                    is_fatal=is_ssl_error or is_conn_error,
+                    is_fatal=is_ssl_error or is_conn_error or is_busy,
                 )
 
                 if (
                     attempt < self.max_retries
                     and not is_ssl_error
                     and not is_conn_error
+                    and not is_busy
                 ):
                     # 指数バックオフ
                     wait_time = 2**attempt
                     await asyncio.sleep(wait_time)
                 else:
-                    self._record_failure()
+                    self._record_failure(service)
 
         # 全ての試行が失敗
         if isinstance(last_exception, httpx.TimeoutException):
@@ -214,6 +217,7 @@ class InferenceServiceClient:
                 self.layout_base_url,
                 "POST",
                 "/api/v1/layout-analysis",
+                service="layout",
                 json=request_data.model_dump(),
             )
 
@@ -243,7 +247,7 @@ class InferenceServiceClient:
             files = {"file": ("image.png", image_bytes, "image/png")}
 
             response = await self._make_request_with_retry(
-                self.layout_base_url, "POST", "/api/v1/analyze-image", files=files
+                self.layout_base_url, "POST", "/api/v1/analyze-image", service="layout", files=files
             )
 
             if response.get("success"):
@@ -306,6 +310,7 @@ class InferenceServiceClient:
                     self.layout_base_url,
                     "POST",
                     "/api/v1/analyze-images-batch",
+                    service="layout",
                     files=files,
                 )
 
@@ -369,6 +374,7 @@ class InferenceServiceClient:
                     self.layout_base_url,
                     "POST",
                     "/api/v1/analyze-images-batch",
+                    service="layout",
                     files=files,
                 )
 
@@ -397,80 +403,6 @@ class InferenceServiceClient:
                 # 1バッチに失敗しても他のバッチは続ける
                 yield i, [[] for _ in batch]
 
-    async def translate_text(
-        self,
-        text: str,
-        target_lang: str = "ja",
-        paper_context: str | None = None,
-        original_text: str | None = None,
-    ) -> tuple[str, str | None, str | None]:
-        """単一テキストの翻訳（Qwen）"""
-        return await self.translate_with_qwen(
-            text,
-            target_lang,
-            paper_context,
-            original_text=original_text,
-        )
-
-    async def translate_with_qwen(
-        self,
-        text: str,
-        target_lang: str = "ja",
-        paper_context: str | None = None,
-        original_text: str | None = None,
-    ) -> tuple[str, str | None, str | None]:
-        """Qwenによる翻訳（明示的呼び出し）"""
-        # Qwen uses original_text (original form) if available, fallback to text (lemma)
-        qwen_input = original_text or text
-        request_data = TranslationRequest(
-            text=qwen_input, target_lang=target_lang, paper_context=paper_context
-        )
-
-        try:
-            log.debug("translate_qwen", "Qwen翻訳リクエスト", text_preview=text[:50])
-
-            response = await self._make_request_with_retry(
-                self.qwen_base_url,
-                "POST",
-                "/api/v1/translate",
-                json=request_data.model_dump(),
-            )
-
-            if response.get("success"):
-                translation = response.get("translation", "")
-                model = response.get("model", "qwen")
-                lemma = response.get("lemma")
-                return translation, model, lemma
-            else:
-                error_msg = response.get("message", "不明なエラー")
-                raise InferenceServiceError(f"Qwen翻訳失敗: {error_msg}")
-        except Exception as e:
-            log.error("translate_qwen", "Qwen翻訳エラー", error=str(e))
-            raise
-
-    async def tokenize_text(self, text: str, lang: str = "en") -> list[dict[str, Any]]:
-        """テキストをトークナイズ（ServiceBを使用）"""
-        request_data = TokenizeRequest(text=text, lang=lang)
-
-        try:
-            log.debug("tokenize", "トークナイズリクエスト", text_preview=text[:50])
-
-            response = await self._make_request_with_retry(
-                self.qwen_base_url,
-                "POST",
-                "/api/v1/tokenize",
-                json=request_data.model_dump(),
-            )
-
-            if response.get("success"):
-                return response.get("tokens", [])
-            else:
-                error_msg = response.get("message", "不明なエラー")
-                raise InferenceServiceError(f"トークナイズ失敗: {error_msg}")
-        except Exception as e:
-            log.error("tokenize", "トークナイズエラー", error=str(e))
-            raise
-
     async def health_check(self) -> dict[str, Any]:
         """推論サービスのヘルスチェック"""
         try:
@@ -479,10 +411,10 @@ class InferenceServiceClient:
             response = await self.client.get(url, timeout=5.0)  # 5 second timeout
             response.raise_for_status()
 
-            self._record_success()
+            self._record_success("layout")
             return response.json()
         except Exception as e:
-            self._record_failure()
+            self._record_failure("layout")
             log.error("health_check", "ヘルスチェックエラー", error=str(e))
 
             raise

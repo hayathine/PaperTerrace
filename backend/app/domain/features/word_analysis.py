@@ -13,11 +13,8 @@ log = ServiceLogger("WordAnalysis")
 
 class WordAnalysisService:
     def __init__(self):
-        from app.domain.services.local_translator import get_local_translator
-
         self.ai_provider = get_ai_provider()
         self.dict_provider = get_dictionary_provider()
-        self.local_translator = get_local_translator()
         self.redis = RedisService()
         self.translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
         self.executor = ThreadPoolExecutor(max_workers=4)
@@ -32,36 +29,7 @@ class WordAnalysisService:
         context: str | None = None,
         session_id: str | None = None,
     ) -> dict | None:
-        # 3.5 Local Machine Translation (M2M100) - ServiceB経由
-        try:
-            # translate_async は (translated_text, model_name, lemma) のタプルを返す
-            (
-                local_translation,
-                _model,
-                _lemma,
-            ) = await self.local_translator.translate_async(lemma, tgt_lang=lang)
-            if (
-                local_translation and local_translation != lemma
-            ):  # 翻訳が成功し、元の単語と異なる場合
-                self.word_cache[lemma] = False
-                self.translation_cache[lemma] = local_translation
-                self.redis.set(
-                    f"trans:{lang}:{lemma}", local_translation, expire=604800
-                )
-                return {
-                    "word": lemma,
-                    "translation": local_translation,
-                    "source": "ServiceB-MT",
-                }
-        except Exception as e:
-            log.warning(
-                "translate",
-                "ServiceB translation failed",
-                lemma=lemma,
-                error=str(e),
-            )
-
-        # 4. AI Translation (Context-aware if context provided)
+        # Gemini Translation (Context-aware if context provided)
         if context:
             return await self.translate_with_context(
                 lemma, context, lang, session_id=session_id

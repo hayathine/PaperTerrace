@@ -22,13 +22,14 @@ class FigureInsightService:
 
     async def analyze_figure(
         self,
-        image_bytes: bytes,
+        image_bytes: bytes | None = None,
         caption: str = "",
         mime_type: str = "image/png",
         target_lang: str = "ja",
         user_id: str | None = None,
         session_id: str | None = None,
         paper_id: str | None = None,
+        image_uri: str | None = None,
     ) -> str:
         """
         図表画像を分析し、洞察を生成する。
@@ -57,18 +58,18 @@ class FigureInsightService:
             log.debug(
                 "analyze",
                 "Analyzing figure",
-                image_size=len(image_bytes),
+                image_size=len(image_bytes) if image_bytes else 0,
+                image_uri=image_uri,
                 mime_type=mime_type,
             )
             analysis: FigureAnalysisResponse = (
                 await self.ai_provider.generate_with_image(
                     prompt,
-                    image_bytes,
-                    mime_type,
+                    image_bytes=image_bytes,
+                    mime_type=mime_type,
                     model=self.model,
                     response_model=FigureAnalysisResponse,
-                    # We don't have a direct TraceContext param for generate_with_image in AIProviderInterface yet,
-                    # but we can log it here.
+                    image_uri=image_uri,
                 )
             )
 

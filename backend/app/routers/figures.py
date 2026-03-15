@@ -1,5 +1,3 @@
-import os
-
 import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse
@@ -45,14 +43,28 @@ async def get_paper_figures(paper_id: str, user: OptionalUser = None):
 
 
 async def _fetch_image_bytes(image_url: str) -> bytes | None:
-    """image_url から画像バイトを取得する。ローカルパスと HTTP URL の両方に対応。"""
-    if image_url.startswith("/static/"):
-        relative_path = image_url.lstrip("/")
-        file_path = f"src/{relative_path}"
-        if os.path.exists(file_path):
-            with open(file_path, "rb") as f:
-                return f.read()
-    elif image_url.startswith("http"):
+    """image_url から画像バイトを取得する。
+
+    ストレージ層 (Local/GCS) に委譲することで、Cloudflare Workers 等の
+    認証済みエンドポイントへの HTTP リクエストを回避する。
+    /static/... 相対パスおよびフロントエンドが API_URL を付与したフルURLの両方に対応。
+    """
+    import anyio
+    from app.providers.image_storage import get_image_bytes
+
+    try:
+        if image_url.startswith("/static/") or image_url.startswith("http"):
+            return await anyio.to_thread.run_sync(get_image_bytes, image_url)
+    except Exception as e:
+        log.warning(
+            "fetch_image_bytes",
+            "Storage fetch failed, falling back to HTTP",
+            image_url=image_url,
+            error=str(e),
+        )
+
+    # ストレージ層で処理できない URL: 直接 HTTP フェッチ
+    if image_url.startswith("http"):
         async with httpx.AsyncClient() as client:
             resp = await client.get(image_url)
             if resp.status_code == 200:
@@ -106,19 +118,34 @@ async def explain_figure(
             )
             raise HTTPException(status_code=400, detail="No image URL")
 
-        image_bytes = await _fetch_image_bytes(image_url)
-        if not image_bytes:
-            log.warning(
-                "explain_figure",
-                "Image file not found",
-                figure_id=figure_id,
-                image_url=image_url,
-            )
-            raise HTTPException(status_code=404, detail="Image file not found")
+        # GCS 環境では URI を直接 Gemini に渡し、バイト転送を省略する
+        import anyio
+        from app.providers.image_storage import get_gcs_uri
 
-        explanation = await figure_service.analyze_figure(
-            image_bytes, caption=caption, target_lang="ja"
-        )
+        gcs_uri = await anyio.to_thread.run_sync(get_gcs_uri, image_url)
+        if gcs_uri:
+            log.debug(
+                "explain_figure",
+                "Using GCS URI directly (no download)",
+                figure_id=figure_id,
+                gcs_uri=gcs_uri,
+            )
+            explanation = await figure_service.analyze_figure(
+                image_uri=gcs_uri, caption=caption, target_lang="ja"
+            )
+        else:
+            image_bytes = await _fetch_image_bytes(image_url)
+            if not image_bytes:
+                log.warning(
+                    "explain_figure",
+                    "Image file not found",
+                    figure_id=figure_id,
+                    image_url=image_url,
+                )
+                raise HTTPException(status_code=404, detail="Image file not found")
+            explanation = await figure_service.analyze_figure(
+                image_bytes=image_bytes, caption=caption, target_lang="ja"
+            )
 
         # DB登録済みfigureのみ解説をキャッシュする
         if figure:

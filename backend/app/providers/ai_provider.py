@@ -59,14 +59,20 @@ class AIProviderInterface(ABC):
     async def generate_with_image(
         self,
         prompt: str,
-        image_bytes: bytes,
+        image_bytes: bytes | None = None,
         mime_type: str = "image/png",
         model: str | None = None,
         response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
+        image_uri: str | None = None,
     ) -> Any:
-        """Generate text or structured response from prompt with image input."""
+        """Generate text or structured response from prompt with image input.
+
+        image_bytes か image_uri のいずれかを指定する。
+        image_uri (gs://bucket/blob) を指定した場合、GCS から直接取得するため
+        バックエンドでのダウンロードが不要になる。
+        """
         ...
 
     @abstractmethod
@@ -337,20 +343,25 @@ class GeminiProvider(AIProviderInterface):
     async def generate_with_image(
         self,
         prompt: str,
-        image_bytes: bytes,
+        image_bytes: bytes | None = None,
         mime_type: str = "image/png",
         model: str | None = None,
         response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
+        image_uri: str | None = None,
     ) -> Any:
         """Generate text response from prompt with image input."""
+        if image_bytes is None and image_uri is None:
+            raise ValueError("image_bytes か image_uri のいずれかを指定してください")
+
         target_model = model or self.model
         try:
             log.debug(
                 "gemini_image",
                 "Gemini image request",
-                image_size=len(image_bytes),
+                image_size=len(image_bytes) if image_bytes else 0,
+                image_uri=image_uri,
                 mime_type=mime_type,
                 model=target_model,
                 structured=response_model is not None,
@@ -374,14 +385,14 @@ class GeminiProvider(AIProviderInterface):
 
             config = types.GenerateContentConfig(**config_params)
 
-            contents = (
-                [prompt]
-                if cached_content_name
-                else [
-                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                    prompt,
-                ]
-            )
+            if cached_content_name:
+                image_part = None
+            elif image_uri:
+                image_part = types.Part.from_uri(file_uri=image_uri, mime_type=mime_type)
+            else:
+                image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+
+            contents = [prompt] if cached_content_name else [image_part, prompt]
 
             response = await self.client.aio.models.generate_content(
                 model=target_model,
@@ -846,24 +857,28 @@ class VertexAIProvider(AIProviderInterface):
     async def generate_with_image(
         self,
         prompt: str,
-        image_bytes: bytes,
+        image_bytes: bytes | None = None,
         mime_type: str = "image/png",
         model: str | None = None,
         response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
+        image_uri: str | None = None,
     ) -> Any:
         """Generate text response from prompt with image input."""
+        if image_bytes is None and image_uri is None:
+            raise ValueError("image_bytes か image_uri のいずれかを指定してください")
+
         target_model = model or self.model
         try:
-            contents = (
-                [prompt]
-                if cached_content_name
-                else [
-                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
-                    prompt,
-                ]
-            )
+            if cached_content_name:
+                image_part = None
+            elif image_uri:
+                image_part = types.Part.from_uri(file_uri=image_uri, mime_type=mime_type)
+            else:
+                image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+
+            contents = [prompt] if cached_content_name else [image_part, prompt]
 
             config_params: GenConfig = {
                 "temperature": self.temperature,

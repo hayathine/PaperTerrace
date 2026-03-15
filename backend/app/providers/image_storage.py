@@ -34,6 +34,10 @@ class ImageStorageStrategy(ABC):
     def get_image_bytes(self, image_url: str) -> bytes:
         pass
 
+    def get_gcs_uri(self, image_url: str) -> str | None:
+        """GCS URI (gs://bucket/blob) を返す。ローカルストレージでは None。"""
+        return None
+
     @abstractmethod
     def save_doc(self, file_hash: str, doc_bytes: bytes) -> str:
         pass
@@ -126,8 +130,21 @@ class LocalImageStorage(ImageStorageStrategy):
 
     def get_image_bytes(self, image_url: str) -> bytes:
         # e.g., /static/paper_images/HASH/page_1.png
-        if image_url.startswith("/static/paper_images/"):
-            relative_path = image_url.replace("/static/paper_images/", "")
+        # フロントエンドから渡されるフルURL (https://worker.example.com/...) も正規化して処理する
+        resolved_url = image_url
+        if image_url.startswith("http"):
+            from urllib.parse import urlparse
+
+            parsed_path = urlparse(image_url).path
+            if parsed_path.startswith("/static/paper_images/"):
+                resolved_url = parsed_path
+            elif len(parsed_path.strip("/").split("/")) == 2:
+                # /{hash}/{filename} 形式 → /static/paper_images/{hash}/{filename} に変換
+                parts = parsed_path.strip("/").split("/")
+                resolved_url = f"/static/paper_images/{parts[0]}/{parts[1]}"
+
+        if resolved_url.startswith("/static/paper_images/"):
+            relative_path = resolved_url.replace("/static/paper_images/", "")
             full_path = self.images_dir / relative_path
             if full_path.exists():
                 return full_path.read_bytes()
@@ -279,6 +296,10 @@ class GCSImageStorage(ImageStorageStrategy):
                     # フロントエンドから渡されるフルURL（例: https://worker.paperterrace.page/static/...）
                     # Cloudflare経由の迂回を避け、GCSから直接取得する
                     blob_name = parsed_path.replace("/static/", "", 1)
+                elif len(parsed_path.strip("/").split("/")) == 2:
+                    # /{hash}/{filename} 形式 → paper_images/{hash}/{filename} に変換
+                    parts = parsed_path.strip("/").split("/")
+                    blob_name = f"paper_images/{parts[0]}/{parts[1]}"
                 else:
                     # 純粋なGCS URLなど: 最終手段としてHTTPフェッチ
                     import requests
@@ -301,6 +322,30 @@ class GCSImageStorage(ImageStorageStrategy):
             )
 
             raise
+
+    def get_gcs_uri(self, image_url: str) -> str | None:
+        """image_url から gs://bucket/blob 形式の GCS URI を返す。"""
+        try:
+            blob_name: str | None = None
+            if image_url.startswith("/static/"):
+                blob_name = image_url.replace("/static/", "", 1)
+            elif image_url.startswith("http"):
+                from urllib.parse import urlparse
+
+                parsed_path = urlparse(image_url).path
+                if parsed_path.startswith("/static/"):
+                    blob_name = parsed_path.replace("/static/", "", 1)
+                elif len(parsed_path.strip("/").split("/")) == 2:
+                    parts = parsed_path.strip("/").split("/")
+                    blob_name = f"paper_images/{parts[0]}/{parts[1]}"
+            else:
+                blob_name = image_url
+
+            if blob_name:
+                return f"gs://{self.bucket_name}/{blob_name}"
+        except Exception as e:
+            log.warning("get_gcs_uri", "Failed to build GCS URI", image_url=image_url, error=str(e))
+        return None
 
     def save_doc(self, file_hash: str, doc_bytes: bytes) -> str:
         try:
@@ -376,3 +421,7 @@ def delete_page_images(file_hash: str) -> bool:
 
 def get_image_bytes(image_url: str) -> bytes:
     return _get_instance().get_image_bytes(image_url)
+
+
+def get_gcs_uri(image_url: str) -> str | None:
+    return _get_instance().get_gcs_uri(image_url)

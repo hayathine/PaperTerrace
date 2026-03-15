@@ -2,13 +2,15 @@ import asyncio
 import logging
 import os
 import re
-import types
-from typing import Any, Optional
+from typing import Optional
 
-import dspy
 from llama_cpp import Llama
 
 logger = logging.getLogger(__name__)
+
+
+class LlamaBusyError(RuntimeError):
+    """llama-cpp が別のリクエストを処理中に新規リクエストが来た場合に送出される。"""
 
 
 class LlamaCppTranslationService:
@@ -35,6 +37,7 @@ class LlamaCppTranslationService:
         # mmap allows the model to be loaded from disk on demand, reducing initial RAM usage.
         self.use_mmap = os.getenv("LLAMACPP_USE_MMAP", "true").lower() == "true"
         self.max_tokens = int(os.getenv("LLAMACPP_MAX_TOKENS", "2048"))
+        self._is_busy = False
         logger.info(f"Llama-cpp モデルの初期化設定: {self.__dict__}")
 
     async def initialize(self):
@@ -76,6 +79,18 @@ class LlamaCppTranslationService:
                 )
 
             logger.info("Llama-cpp モデルの読み込みが完了しました。")
+
+            # ウォームアップ推論: mmap ページキャッシュを温める
+            logger.info("ウォームアップ推論を実行中...")
+            llm_ref = self.llm
+            await loop.run_in_executor(
+                None,
+                lambda: llm_ref.create_chat_completion(
+                    messages=[{"role": "user", "content": "hi"}],
+                    max_tokens=1,
+                ),
+            )
+            logger.info("ウォームアップ完了")
         except Exception as e:
             logger.error(f"Llama-cpp モデルの初期化中にエラーが発生しました: {e}")
             if os.getenv("DEV_MODE", "false").lower() == "true":
@@ -87,123 +102,67 @@ class LlamaCppTranslationService:
         self, original_word: str, paper_context: str, lang_name: str = "Japanese"
     ) -> str:
         """
-        論文の文脈を考慮した高度な翻訳を実行します。
-        DSPyを用いてプロンプト構築と実行を行います。
+        論文の文脈を考慮した翻訳を実行します。
+        DICT_TRANSLATE_QWEN_PROMPT を直接使用し、DSPy を経由しません。
         """
         if self.llm is None:
-            # initialize() は起動時に ensure_initialized() から1度だけ呼ばれる前提。
-            # ここに到達した場合は起動シーケンスの異常を示す。
             logger.error(
                 "LLM が未初期化の状態で翻訳が要求されました。起動処理を確認してください。"
             )
             return "Error: LLM service is not initialized."
 
-        from common.dspy.signatures import ContextAwareTranslation
+        # await のない箇所でフラグ確認・設定するため asyncio の協調スケジューリング上安全
+        if self._is_busy:
+            raise LlamaBusyError(
+                f"Qwen is currently processing another request. word='{original_word[:30]}'"
+            )
+        self._is_busy = True
 
-        class InMemoryLlama(dspy.BaseLM):
-            """DSPy 3.x 互換のインメモリLlamaラッパー。
+        from common.prompts import DICT_TRANSLATE_QWEN_PROMPT
 
-            DSPy 3.x では BaseLM.forward() を実装し、OpenAI 互換レスポンス形式を返す必要がある。
-            __call__ は BaseLM が管理するため、ここでは forward() のみ実装する。
-            """
-
-            def __init__(self, llm_instance: Any, max_tokens: int):
-                super().__init__(
-                    model="local-llama", temperature=0.3, max_tokens=max_tokens
-                )
-                self.llm_instance = llm_instance
-                self._max_tokens = max_tokens
-
-            def forward(
-                self,
-                prompt: str | None = None,
-                messages: list[dict] | None = None,
-                **kwargs,
-            ) -> Any:
-                # Use messages if provided by ChatAdapter, otherwise fallback to wrapping prompt
-                chat_messages = messages or [{"role": "user", "content": prompt or ""}]
-
-                logger.debug(f"LLM 推論開始: messages_count={len(chat_messages)}")
-                if len(chat_messages) > 0:
-                    last_msg = chat_messages[-1]["content"]
-                    logger.debug(f"LLM 最終プロンプト: {last_msg[:500]}...")
-
-                logger.debug("llama-cpp-python 推論実行中 (create_chat_completion)...")
-                raw = self.llm_instance.create_chat_completion(
-                    messages=chat_messages,
-                    temperature=kwargs.get("temperature", 0.3),
-                    max_tokens=kwargs.get("max_tokens", self._max_tokens),
-                )
-                logger.debug("llama-cpp-python 推論が正常に終了しました。")
-
-                # Qwen3 thinking models prepend <think>...</think> blocks.
-                # Strip them before passing the text to DSPy's output parser.
-                text = raw["choices"][0]["message"]["content"]
-                logger.debug(
-                    f"LLM 生レスポンス取得 (文字数={len(text)}): {text[:500]}..."
-                )
-                text = re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
-
-                # DSPy BaseLM._process_completion requires an OpenAI-like response object
-                # with attribute access (response.choices, response.usage, response.model).
-                usage = raw.get(
-                    "usage",
-                    {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0},
-                )
-                message_ns = types.SimpleNamespace(content=text, role="assistant")
-                choice_ns = types.SimpleNamespace(
-                    message=message_ns,
-                    finish_reason="stop",
-                    index=0,
-                )
-                return types.SimpleNamespace(
-                    choices=[choice_ns],
-                    usage=usage,
-                    model="local-llama",
-                )
+        user_content = DICT_TRANSLATE_QWEN_PROMPT.format(
+            paper_context=paper_context,
+            target_word=original_word,
+            lang_name=lang_name,
+        )
+        messages = [{"role": "user", "content": user_content}]
 
         try:
+            import time
+
             logger.info(
                 f"LLM 翻訳実行開始: word='{original_word[:50]}', lang='{lang_name}', context_len={len(paper_context)}"
             )
-            import time
-
             start_time = time.time()
             loop = asyncio.get_running_loop()
 
-            # DSPy predict can be blocking, so we run it in executor.
-            # Use dspy.context() instead of dspy.settings.configure() because
-            # the latter modifies global state and DSPy forbids it from non-main threads.
-            def _run_dspy():
-                logger.debug("DSPy 推論スレッド開始 (executor内)")
-                lm = InMemoryLlama(self.llm, self.max_tokens)
-                # Use ChatAdapter to properly handle system prompts from Signatures
-                with dspy.context(lm=lm, adapter=dspy.ChatAdapter()):
-                    logger.debug("DSPy predictor 初期化中...")
-                    logger.debug(
-                        f"コンテキスト確認: paper_context 先頭200文字 = {paper_context[:200]!r}"
-                    )
-                    predictor = dspy.Predict(ContextAwareTranslation)
-                    logger.debug("DSPy predictor 実行中...")
-                    prediction = predictor(
-                        paper_context=paper_context,
-                        target_word=original_word,
-                        lang_name=lang_name,
-                    )
-                    logger.debug("DSPy predictor 実行完了")
-                    return prediction.translation_and_explanation
+            llm_ref = self.llm
+            max_tokens = self.max_tokens
 
-            logger.debug("executor に翻訳タスクを投入します...")
-            result = await loop.run_in_executor(None, _run_dspy)
+            def _run():
+                raw = llm_ref.create_chat_completion(
+                    messages=messages,
+                    temperature=0.3,
+                    max_tokens=max_tokens,
+                )
+                text = raw["choices"][0]["message"]["content"]
+                # Qwen3 thinking ブロックを除去
+                return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+            result = await loop.run_in_executor(None, _run)
             elapsed = time.time() - start_time
             logger.info(
                 f"LLM 翻訳が正常に完了しました。経過時間: {elapsed:.2f}s, 結果文字数: {len(result)}"
             )
-            return result.strip()
+            return result
 
+        except LlamaBusyError:
+            raise
         except Exception as e:
             logger.error(f"LLM 推論エラー: {e}")
             return f"Translation error occurred: {str(e)}"
+        finally:
+            self._is_busy = False
 
     async def cleanup(self):
         """リソースを解放します。"""

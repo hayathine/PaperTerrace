@@ -67,25 +67,8 @@ class TokenizationService:
                             self.word_analysis.translation_cache[lemma] = cached_trans
                             self.word_analysis.word_cache[lemma] = False
                         else:
-                            # Try Local Machine Translation
-                            (
-                                local_trans,
-                                _,
-                                _,
-                            ) = await self.word_analysis.local_translator.translate_async(
-                                lemma, tgt_lang=lang
-                            )
-                            if local_trans and local_trans != lemma:
-                                self.word_analysis.word_cache[lemma] = False
-                                self.word_analysis.translation_cache[lemma] = (
-                                    local_trans
-                                )
-                                self.redis.set(
-                                    f"trans:{lang}:{lemma}", local_trans, expire=604800
-                                )
-                            else:
-                                self.word_analysis.word_cache[lemma] = False
-                                unknown_words.add(lemma)
+                            self.word_analysis.word_cache[lemma] = False
+                            unknown_words.add(lemma)
 
                 color = (
                     "border-transparent hover:border-indigo-300 hover:bg-indigo-50"

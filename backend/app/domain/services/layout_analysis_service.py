@@ -184,49 +184,57 @@ class LayoutAnalysisService:
 
         all_figures = []
 
-        async def get_batches(images, page_nums):
-            # First batch: up to 3 pages
-            if images:
-                first_batch_size = min(3, len(images))
-                yield 0, images[:first_batch_size], page_nums[:first_batch_size]
+        # バッチを収集（先頭3枚 + 以降10枚ずつ）
+        batches: list[tuple[list[bytes], list[int]]] = []
+        if image_data_list:
+            first_batch_size = min(3, len(image_data_list))
+            batches.append(
+                (image_data_list[:first_batch_size], page_info_list[:first_batch_size])
+            )
+            for i in range(first_batch_size, len(image_data_list), 10):
+                batches.append(
+                    (image_data_list[i : i + 10], page_info_list[i : i + 10])
+                )
 
-                # Remaining batches: 10 pages each
-                for i in range(first_batch_size, len(images), 10):
-                    batch_images = images[i : i + 10]
-                    batch_pages = page_nums[i : i + 10]
-                    yield i, batch_images, batch_pages
+        logger.info(
+            f"[analyze_layout_lazy] Sending {len(batches)} batches in parallel"
+        )
 
-        async for batch_start, batch_img_bytes, batch_page_nums in get_batches(
-            image_data_list, page_info_list
-        ):
-            logger.info(f"[analyze_layout_lazy] Sending batch: pages {batch_page_nums}")
+        async def _send_batch(
+            batch_imgs: list[bytes], batch_pages: list[int]
+        ) -> tuple[list[int], list[bytes], list]:
+            """1バッチを推論サービスに並列送信し (page_nums, img_bytes, results) を返す"""
             try:
-                # Use the existing analyze_images_batch functionality but with our custom batching
-                # We can call analyze_images_batch_streaming with max_batch_size=len(batch) to process exactly this batch
-                async for (
-                    _,
-                    batch_results,
-                ) in inference_client.analyze_images_batch_streaming(
-                    batch_img_bytes,
-                    page_nums=batch_page_nums,
-                    max_batch_size=len(batch_img_bytes),
-                ):
-                    logger.info(
-                        f"[analyze_layout_lazy] Batch received: pages {batch_page_nums}"
-                    )
-
-                    for page_num, img_bytes, results in zip(
-                        batch_page_nums, batch_img_bytes, batch_results
-                    ):
-                        page_figures = await self._process_page_results(
-                            page_num, img_bytes, results, file_hash
-                        )
-                        all_figures.extend(page_figures)
+                results = await inference_client.analyze_images_batch(
+                    batch_imgs,
+                    page_nums=batch_pages,
+                    max_batch_size=len(batch_imgs),
+                )
+                logger.info(
+                    f"[analyze_layout_lazy] Batch received: pages {batch_pages}"
+                )
+                return batch_pages, batch_imgs, results
             except Exception as e:
                 logger.error(
-                    f"[analyze_layout_lazy] Batch processing failed for pages {batch_page_nums}: {e}"
+                    f"[analyze_layout_lazy] Batch failed for pages {batch_pages}: {e}"
                 )
-                continue
+                return batch_pages, batch_imgs, [[] for _ in batch_imgs]
+
+        batch_results = await asyncio.gather(
+            *[_send_batch(imgs, pages) for imgs, pages in batches]
+        )
+
+        # ページ順を保証して結果を処理
+        for batch_page_nums, batch_img_bytes, results in sorted(
+            batch_results, key=lambda x: x[0][0]
+        ):
+            for page_num, img_bytes, page_results in zip(
+                batch_page_nums, batch_img_bytes, results
+            ):
+                page_figures = await self._process_page_results(
+                    page_num, img_bytes, page_results, file_hash
+                )
+                all_figures.extend(page_figures)
 
         # 3. Save to DB ONLY for registered users
         if all_figures and user_id:

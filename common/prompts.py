@@ -28,7 +28,6 @@ Your goal is to help users understand complex academic papers, translate technic
 
 # Used in: common/dspy/signatures.py (ContextAwareTranslation)
 # フロントエンド表示: Dictionary.tsx (文脈に適した翻訳・解説として表示)
-# QwenおよびGeminiの共通プロンプトベースとして利用
 DICT_TRANSLATE_QWEN_PROMPT = """[Academic Context]
 {paper_context}
 
@@ -39,18 +38,18 @@ Based on the context above, translate the English text into {lang_name}.
 Output ONLY the translated word.
 
 Examples:
-- Context: The transformer architecture has revolutionized natural language processing.
-  Target: transformer
-  Language: Japanese
-  Output: トランスフォーマー
 - Context: We found a significant correlation between the two variables.
   Target: significant
   Language: Japanese
   Output: 有意な
-- Context: This method achieved state-of-the-art performance on the benchmark.
-  Target: state-of-the-art
+- Context: Our approach outperforms existing SOTA models.
+  Target: SOTA
   Language: Japanese
-  Output: 最先端の"""
+  Output: 最先端の
+- Context: Large Language Models (LLMs) have revolutionized the field.
+  Target: LLMs
+  Language: Japanese
+  Output: 大規模言語モデル"""
 
 
 # Used in: backend/app/routers/translation.py
