@@ -64,7 +64,12 @@ def _extract_answer(outputs: dict) -> str | None:
 
 
 def _get_last_prompt() -> str | None:
-    """Try to get the last prompt from dspy history."""
+    """Try to get the last prompt from dspy history.
+
+    DSPy 2.5+ stores prompts in `messages` (list of role/content dicts)
+    rather than the `prompt` key (which is always None).
+    Concatenate system + user messages as the prompt representation.
+    """
     try:
         import dspy
 
@@ -74,7 +79,20 @@ def _get_last_prompt() -> str | None:
             and hasattr(dspy.settings.lm, "history")
             and dspy.settings.lm.history
         ):
-            return dspy.settings.lm.history[-1].get("prompt")
+            entry = dspy.settings.lm.history[-1]
+            # DSPy 2.5+: prompt is in messages list
+            messages = entry.get("messages")
+            if messages:
+                parts = []
+                for msg in messages:
+                    role = msg.get("role", "")
+                    content = msg.get("content", "")
+                    if isinstance(content, str) and content:
+                        parts.append(f"[{role}]\n{content}")
+                if parts:
+                    return "\n\n".join(parts)
+            # fallback: legacy prompt field
+            return entry.get("prompt")
     except (ImportError, AttributeError, IndexError, KeyError):
         pass
     return None

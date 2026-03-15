@@ -6,6 +6,7 @@ from app.schemas.gemini_schema import (
 )
 from common.dspy.config import setup_dspy
 from common.dspy.modules import VisionFigureModule
+from common.dspy.trace import TraceContext, save_trace
 from common.logger import ServiceLogger
 
 log = ServiceLogger("FigureInsight")
@@ -54,6 +55,9 @@ class FigureInsightService:
             lang_name=lang_name, caption_hint=caption_hint
         )
 
+        import time
+
+        start = time.perf_counter()
         try:
             log.debug(
                 "analyze",
@@ -84,6 +88,16 @@ class FigureInsightService:
             ]
             formatted_text = "\n".join(result_lines)
 
+            elapsed_ms = int((time.perf_counter() - start) * 1000)
+            save_trace(
+                module_name="VisionFigureModule",
+                signature="VisionAnalyzeFigure",
+                inputs={"caption_hint": caption_hint, "lang_name": lang_name, "image_uri": image_uri or ""},
+                outputs=analysis.model_dump(),
+                latency_ms=elapsed_ms,
+                context=TraceContext(user_id=user_id, session_id=session_id, paper_id=paper_id),
+            )
+
             log.info(
                 "analyze",
                 "Figure analysis generated",
@@ -95,6 +109,17 @@ class FigureInsightService:
             return formatted_text
 
         except Exception as e:
+            elapsed_ms = int((time.perf_counter() - start) * 1000)
+            save_trace(
+                module_name="VisionFigureModule",
+                signature="VisionAnalyzeFigure",
+                inputs={"caption_hint": caption_hint, "lang_name": lang_name, "image_uri": image_uri or ""},
+                outputs={},
+                latency_ms=elapsed_ms,
+                is_success=False,
+                error_msg=str(e),
+                context=TraceContext(user_id=user_id, session_id=session_id, paper_id=paper_id),
+            )
             log.exception(
                 "analyze",
                 "Figure analysis failed",

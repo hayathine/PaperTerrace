@@ -43,6 +43,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 								? "text-orange-50 hover:text-white hover:bg-orange-500"
 								: ""
 						}
+						traceId={isUser ? undefined : message.traceId}
 					/>
 				</div>
 				<MarkdownContent

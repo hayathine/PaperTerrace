@@ -1048,6 +1048,24 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		[pages],
 	);
 
+	// figure 画像が実際にサーバー上に存在するか確認する（最初の1枚をHEADリクエストで検証）
+	const checkFigureImagesExist = async (
+		pages: PageData[],
+	): Promise<boolean> => {
+		for (const page of pages) {
+			const firstFigure = page.figures?.[0];
+			if (firstFigure?.image_url) {
+				try {
+					const res = await fetch(firstFigure.image_url, { method: "HEAD" });
+					return res.ok;
+				} catch {
+					return false;
+				}
+			}
+		}
+		return true; // 確認対象なし
+	};
+
 	const loadExistingPaper = async (id: string) => {
 		setStatus("processing");
 		setLoadedPaperId(id);
@@ -1100,11 +1118,26 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							// Cached papers: preserved current mode
 
 							// Trigger lazy layout analysis to fetch figures if not already present
+							// キャッシュに figures があっても画像が実際に存在しない場合は再解析する
 							const hasFigures = cachedPages.some(
 								(p) => p.figures && p.figures.length > 0,
 							);
-							if (!hasFigures) {
-								triggerLazyLayoutAnalysis(id, cachedPages).catch((err) =>
+							const figuresOk =
+								hasFigures && (await checkFigureImagesExist(cachedPages));
+							if (!hasFigures || !figuresOk) {
+								// 壊れた figure URL が重複排除を妨げないようクリアしてから解析
+								const pagesForAnalysis = hasFigures
+									? cachedPages.map((p) => ({ ...p, figures: [] }))
+									: cachedPages;
+								if (hasFigures) {
+									log.warn(
+										"load_existing_paper",
+										"Figure images missing, clearing and re-running layout analysis",
+										{ paper_id: id },
+									);
+									setPages(pagesForAnalysis);
+								}
+								triggerLazyLayoutAnalysis(id, pagesForAnalysis).catch((err) =>
 									log.warn(
 										"trigger_lazy_layout_analysis",
 										"Lazy layout analysis failed",
@@ -1230,11 +1263,25 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							);
 
 							// Trigger lazy layout analysis to fetch figures if not already present
+							// キャッシュに figures があっても画像が実際に存在しない場合は再解析する
 							const hasFigures = fullPages.some(
 								(p) => p.figures && p.figures.length > 0,
 							);
-							if (!hasFigures) {
-								triggerLazyLayoutAnalysis(id, fullPages).catch((err) =>
+							const figuresOk =
+								hasFigures && (await checkFigureImagesExist(fullPages));
+							if (!hasFigures || !figuresOk) {
+								const pagesForAnalysis = hasFigures
+									? fullPages.map((p) => ({ ...p, figures: [] }))
+									: fullPages;
+								if (hasFigures) {
+									log.warn(
+										"load_existing_paper",
+										"Figure images missing (API path), clearing and re-running layout analysis",
+										{ paper_id: id },
+									);
+									setPages(pagesForAnalysis);
+								}
+								triggerLazyLayoutAnalysis(id, pagesForAnalysis).catch((err) =>
 									log.warn(
 										"trigger_lazy_layout_analysis",
 										"Lazy analysis failed",

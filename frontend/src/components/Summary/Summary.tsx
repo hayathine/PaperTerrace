@@ -321,7 +321,7 @@ const Summary: React.FC<SummaryProps> = ({
 						{summaryData && !loading && (
 							<div>
 								<div className="flex justify-end mb-2 gap-1">
-									<CopyButton text={summaryData} />
+									<CopyButton text={summaryData} traceId={summaryTraceId} />
 									<button
 										type="button"
 										onClick={() => handleSummarize(true)}
@@ -551,6 +551,7 @@ const Summary: React.FC<SummaryProps> = ({
 													(h) => `${h.risk}: ${h.detail}`,
 												) || []),
 											].join("\n\n")}
+											traceId={critiqueTraceId}
 										/>
 									</div>
 									<MarkdownContent className="prose prose-sm max-w-none text-sm text-slate-700 leading-relaxed font-medium mb-4">

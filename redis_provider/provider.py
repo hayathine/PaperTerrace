@@ -1,5 +1,6 @@
 import json
 import os
+import time
 from datetime import datetime
 from typing import Any
 
@@ -16,32 +17,38 @@ REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
 REDIS_DB = int(os.getenv("REDIS_DB", 0))
 REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
 
+_RETRY_INTERVAL = 30.0  # 接続失敗後のリトライ間隔（秒）
+
 _redis_client = None
 _redis_enabled = True
-_redis_attempted = False
+_last_attempt_time: float = 0.0  # 0 = 未試行
 
 
 def get_redis_client():
-    global _redis_client, _redis_attempted
+    global _redis_client, _last_attempt_time
     if not _redis_enabled:
         return None
 
-    if _redis_client is None and not _redis_attempted:
-        _redis_attempted = True
+    now = time.monotonic()
+    should_attempt = _redis_client is None and (now - _last_attempt_time) >= _RETRY_INTERVAL
+
+    if should_attempt:
+        _last_attempt_time = now
         try:
-            _redis_client = redis.Redis.from_url(
+            client = redis.Redis.from_url(
                 REDIS_URL,
                 decode_responses=True,
                 socket_timeout=5.0,
                 socket_connect_timeout=5.0,
             )
             # test connection
-            _redis_client.ping()
+            client.ping()
+            _redis_client = client
             log.info("init", f"Connected to Redis at {REDIS_URL}")
         except Exception as e:
             log.warning(
                 "init",
-                f"Failed to connect to Redis ({REDIS_URL}): {e}. Using in-memory fallback.",
+                f"Failed to connect to Redis ({REDIS_URL}): {e}. Will retry in {_RETRY_INTERVAL:.0f}s.",
             )
             _redis_client = None
     return _redis_client

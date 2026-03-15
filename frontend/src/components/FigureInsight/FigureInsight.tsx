@@ -404,7 +404,7 @@ const FigureCard: React.FC<FigureCardProps> = ({
 					) : explanation ? (
 						<>
 							<div className="flex justify-end mb-1">
-								<CopyButton text={explanation} size={12} />
+								<CopyButton text={explanation} size={12} traceId={traceId} />
 							</div>
 							<MarkdownContent className="prose prose-xs max-w-none text-xs text-slate-600 leading-relaxed">
 								{explanation}
