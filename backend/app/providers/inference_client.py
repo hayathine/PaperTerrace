@@ -46,7 +46,19 @@ class InferenceServiceClient:
 
     def __init__(self):
         default_url = os.getenv("INFERENCE_SERVICE_URL", "http://localhost:8080")
-        self.layout_base_url = os.getenv("INFERENCE_LAYOUT_URL", default_url)
+        primary_url = os.getenv("INFERENCE_LAYOUT_URL", default_url)
+
+        # 追加エンドポイント（カンマ区切り）でラウンドロビン対応
+        extra_urls = [
+            u.strip()
+            for u in os.getenv("INFERENCE_LAYOUT_EXTRA_URLS", "").split(",")
+            if u.strip()
+        ]
+        self.layout_urls: list[str] = [primary_url] + extra_urls
+        self._rr_index: int = 0
+
+        # 後方互換
+        self.layout_base_url = primary_url
 
         self.timeout = int(os.getenv("INFERENCE_SERVICE_TIMEOUT", "60"))
         self.max_retries = int(os.getenv("INFERENCE_SERVICE_RETRIES", "2"))
@@ -60,7 +72,8 @@ class InferenceServiceClient:
         self.failure_threshold = 5
         self.recovery_timeout = 60  # 1分
         self._circuit_state: dict[str, dict] = {
-            "layout": {"failure_count": 0, "last_failure_time": None, "circuit_open": False},
+            url: {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
+            for url in self.layout_urls
         }
 
         # SSL検証設定
@@ -89,6 +102,22 @@ class InferenceServiceClient:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.client.aclose()
+
+    def _next_layout_url(self) -> str:
+        """ラウンドロビンで次の利用可能なURLを返す。全URL遮断中は先頭を返す。"""
+        for _ in range(len(self.layout_urls)):
+            url = self.layout_urls[self._rr_index % len(self.layout_urls)]
+            self._rr_index += 1
+            state = self._circuit_state[url]
+            if not state["circuit_open"]:
+                return url
+            # 回復タイムアウト経過済みなら復旧して返す
+            if state["last_failure_time"] and time.time() - state["last_failure_time"] > self.recovery_timeout:
+                state["circuit_open"] = False
+                state["failure_count"] = 0
+                return url
+        # 全URL遮断中はとりあえず先頭を返す
+        return self.layout_urls[0]
 
     def _check_circuit_breaker(self, service: str):
         """回路ブレーカーの状態チェック"""
@@ -128,7 +157,7 @@ class InferenceServiceClient:
             )
 
     async def _make_request_with_retry(
-        self, base_url: str, method: str, endpoint: str, service: str, timeout: int | None = None, **kwargs
+        self, base_url: str, method: str, endpoint: str, service: str | None = None, timeout: int | None = None, **kwargs
     ) -> dict[str, Any]:
         """リトライ機能付きリクエスト"""
         if self.is_disabled:
@@ -139,7 +168,12 @@ class InferenceServiceClient:
                 "Inference service is disabled by configuration"
             )
 
-        self._check_circuit_breaker(service)
+        # circuit breaker キーは base_url を使用（後方互換で service も受け付ける）
+        cb_key = base_url if base_url in self._circuit_state else (service or base_url)
+        if cb_key not in self._circuit_state:
+            self._circuit_state[cb_key] = {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
+
+        self._check_circuit_breaker(cb_key)
 
         last_exception = None
 
@@ -150,7 +184,7 @@ class InferenceServiceClient:
                 response = await self.client.request(method, url, timeout=request_timeout, **kwargs)
                 response.raise_for_status()
 
-                self._record_success(service)
+                self._record_success(cb_key)
                 return response.json()
 
             except httpx.HTTPError as e:
@@ -186,7 +220,7 @@ class InferenceServiceClient:
                     wait_time = 2**attempt
                     await asyncio.sleep(wait_time)
                 else:
-                    self._record_failure(service)
+                    self._record_failure(cb_key)
 
         # 全ての試行が失敗
         if isinstance(last_exception, httpx.TimeoutException):
@@ -306,11 +340,11 @@ class InferenceServiceClient:
                     page_num = page_nums[i + j] if page_nums else j
                     files.append(("files", (f"page_{page_num}.jpg", img, "image/jpeg")))
 
+                target_url = self._next_layout_url()
                 response = await self._make_request_with_retry(
-                    self.layout_base_url,
+                    target_url,
                     "POST",
                     "/api/v1/analyze-images-batch",
-                    service="layout",
                     files=files,
                 )
 
@@ -370,11 +404,11 @@ class InferenceServiceClient:
                 files.append(("files", (f"page_{page_num}.jpg", img, "image/jpeg")))
 
             try:
+                target_url = self._next_layout_url()
                 response = await self._make_request_with_retry(
-                    self.layout_base_url,
+                    target_url,
                     "POST",
                     "/api/v1/analyze-images-batch",
-                    service="layout",
                     files=files,
                 )
 
