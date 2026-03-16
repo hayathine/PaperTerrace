@@ -3,7 +3,7 @@ BigQuery table initialization script.
 Creates datasets and tables for behavioral logs.
 
 Usage:
-    python -m app.workers.init_bigquery_tables [--env prod|dev]
+    python -m app.workers.init_bigquery_tables [--env prod|staging|local]
 """
 
 import argparse
@@ -77,9 +77,9 @@ def main():
     )
     parser.add_argument(
         "--env",
-        choices=["prod", "dev"],
-        default="dev",
-        help="Environment (determines dataset name)",
+        choices=["prod", "staging", "local"],
+        default="local",
+        help="Environment (determines dataset name): prod=本番, staging=開発/staging, local=ローカル",
     )
     args = parser.parse_args()
 
@@ -87,8 +87,10 @@ def main():
 
     if args.env == "prod":
         dataset_id = os.getenv("BQ_LOG_DATASET", "paperterrace_logs")
+    elif args.env == "staging":
+        dataset_id = os.getenv("BQ_LOG_DATASET_STAGING", "paperterrace_logs_staging")
     else:
-        dataset_id = os.getenv("BQ_LOG_DATASET_DEV", "paperterrace_logs_dev")
+        dataset_id = os.getenv("BQ_LOG_DATASET_LOCAL", "paperterrace_logs_local")
 
     print(f"Initializing BigQuery tables for {args.env} environment")
     print(f"  Project: {project_id}")

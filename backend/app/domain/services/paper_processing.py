@@ -4,9 +4,10 @@ from app.providers import get_storage_provider
 from common.logger import ServiceLogger
 
 log = ServiceLogger("Processing")
-storage = get_storage_provider()
+# FigureInsightService は DB セッションを持たないためシングルトンで問題なし。
+# storage はモジュールレベルで生成すると SessionLocal() がプロセス終了まで
+# コネクションを占有し続けるため、各タスク内で都度生成・クローズする。
 figure_insight = FigureInsightService()
-summary_service = SummaryService(storage=storage)
 
 
 async def process_figure_analysis_task(
@@ -24,6 +25,7 @@ async def process_figure_analysis_task(
 
     log.info("figure_task", "Analysis task started", figure_id=figure_id)
 
+    storage = get_storage_provider()
     try:
         figure = storage.get_figure(figure_id)
         if not figure:
@@ -88,6 +90,8 @@ async def process_figure_analysis_task(
             error=str(e),
             exc_info=True,
         )
+    finally:
+        storage.close()
 
 
 async def process_paper_summary_task(
@@ -104,6 +108,7 @@ async def process_paper_summary_task(
 
     log.info("summary_task", "Summary task started", paper_id=paper_id)
 
+    storage = get_storage_provider()
     try:
         paper = storage.get_paper(paper_id)
         if not paper or not paper.get("ocr_text"):
@@ -122,6 +127,7 @@ async def process_paper_summary_task(
             return
 
         # Execute summary
+        summary_service = SummaryService(storage=storage)
         await summary_service.summarize_full(
             text=paper["ocr_text"],
             target_lang=lang,
@@ -141,3 +147,5 @@ async def process_paper_summary_task(
             error=str(e),
             exc_info=True,
         )
+    finally:
+        storage.close()

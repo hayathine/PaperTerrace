@@ -6,7 +6,7 @@ dynaconf を使用して common/settings.toml の設定を一元管理する。
 優先順位 (高→低):
   1. 実際の環境変数 (K8s Secret / OS 環境変数)
   2. local-files/secrets/.env (ローカル秘密情報)
-  3. common/settings.toml の環境セクション ([dev] / [prod])
+  3. common/settings.toml の環境セクション ([local] / [prod])
   4. common/settings.toml の [default] セクション
 
 使用方法:
@@ -34,7 +34,7 @@ settings = Dynaconf(
     envvar_prefix=False,
     # common/settings.toml（Docker イメージに収録）
     settings_file=str(_SETTINGS_TOML),
-    # [default] → [dev] or [prod] の階層ロードを有効化
+    # [default] → [local] or [prod] の階層ロードを有効化
     # default_env は指定しない（指定すると [default] セクションが無視される）
     environments=True,
     env_switcher="APP_ENV",

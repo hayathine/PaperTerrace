@@ -9,18 +9,16 @@ import time
 import traceback
 from datetime import datetime
 
+import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.middleware.cors import CORSMiddleware
-
-import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.cors import CORSMiddleware
 
-from app.core.config import get_neon_auth_url, is_production
-from common.config import settings
+from app.core.config import get_app_env, get_neon_auth_url, is_production
 from app.routers import (
     analysis_router,
     auth_router,
@@ -39,6 +37,7 @@ from app.routers import (
     upload_router,
     users_router,
 )
+from common.config import settings
 from common.logger import ServiceLogger, configure_logging
 
 log = ServiceLogger("Main")
@@ -59,8 +58,10 @@ if _sentry_enabled and _sentry_dsn:
             LoggingIntegration(),  # ERROR 以上を自動キャプチャ
         ],
         traces_sample_rate=float(getattr(settings, "SENTRY_TRACES_SAMPLE_RATE", 0.1)),
-        profiles_sample_rate=float(getattr(settings, "SENTRY_PROFILES_SAMPLE_RATE", 0.1)),
-        environment=os.getenv("APP_ENV", "production"),
+        profiles_sample_rate=float(
+            getattr(settings, "SENTRY_PROFILES_SAMPLE_RATE", 0.1)
+        ),
+        environment=get_app_env(),
         send_default_pii=False,
     )
     log.info("sentry", "Sentry initialized", dsn=_sentry_dsn[:40] + "...")
@@ -85,6 +86,7 @@ async def lifespan(app: FastAPI):
     # DB接続ウォームアップ: コールドスタート後の初回リクエストレイテンシを削減
     try:
         import asyncio
+
         from app.database import engine
 
         await asyncio.to_thread(_warmup_db, engine)
@@ -196,7 +198,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     headers={"Retry-After": str(max(retry_after, 1))},
                 )
         except Exception as e:
-            mw_log.warning("rate_limit", "Redis error, skipping rate limit", error=str(e))
+            mw_log.warning(
+                "rate_limit", "Redis error, skipping rate limit", error=str(e)
+            )
 
         return await call_next(request)
 
@@ -341,9 +345,7 @@ async def init_db_manual():
         }
     except Exception as e:
         app_env = os.getenv("APP_ENV", "production")
-        error_msg = (
-            str(e) if app_env == "development" else "Failed to initialize database"
-        )
+        error_msg = str(e) if app_env == "local" else "Failed to initialize database"
         return JSONResponse(
             status_code=500, content={"status": "error", "message": error_msg}
         )
@@ -410,7 +412,9 @@ if _storage_type == "gcs":
 
             data = await asyncio.to_thread(blob.download_as_bytes)
             ext = filename.rsplit(".", 1)[-1].lower()
-            content_type = {"webp": "image/webp", "png": "image/png"}.get(ext, "image/jpeg")
+            content_type = {"webp": "image/webp", "png": "image/png"}.get(
+                ext, "image/jpeg"
+            )
             return FastAPIResponse(
                 content=data,
                 media_type=content_type,
@@ -525,6 +529,6 @@ async def get_config():
     return JSONResponse(
         content={
             "neon_auth": NEON_AUTH_CONFIG,
-            "app_env": os.getenv("APP_ENV", "production"),
+            "app_env": get_app_env(),
         }
     )

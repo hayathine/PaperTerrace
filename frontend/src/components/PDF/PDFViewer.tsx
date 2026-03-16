@@ -76,12 +76,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	onSearchMatchesUpdate,
 	currentSearchMatch,
 	evidence,
-	appEnv = "production",
+	appEnv = "prod",
 	mode: externalMode,
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token, isGuest } = useAuth();
-	const isDev = appEnv === "development";
+	const isLocal = appEnv === "local";
 	const {
 		getCachedPaper,
 		savePaperToCache,
@@ -1482,7 +1482,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 										searchTerm={searchTerm}
 										currentSearchMatch={currentSearchMatch}
 										evidenceHighlights={evidenceHighlights[page.page_num]}
-										isDev={isDev}
+										isLocal={isLocal}
 									/>
 								))}
 							</div>

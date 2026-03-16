@@ -73,7 +73,7 @@ interface PDFPageProps {
 		width: number;
 		height: number;
 	}>;
-	isDev?: boolean;
+	isLocal?: boolean;
 }
 
 const PDFPage: React.FC<PDFPageProps> = ({
@@ -92,7 +92,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 	searchTerm,
 	currentSearchMatch,
 	evidenceHighlights = [],
-	isDev = false,
+	isLocal = false,
 }) => {
 	const { t } = useTranslation();
 	const { width, height, words, figures, image_url, page_num } = page;
@@ -325,7 +325,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
 								// Production: skip non-interactive elements for clean UI (Req 3.4)
 								// Development: show all elements with debug borders/confidence
-								if (!isInteractiveType && !isDev) return null;
+								if (!isInteractiveType && !isLocal) return null;
 
 								const pageWidth = width || 1;
 								const pageHeight = height || 1;
@@ -356,7 +356,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 												? "group-data-[click-mode]/viewer:pointer-events-auto group-data-[click-mode]/viewer:hover:ring-2 group-data-[click-mode]/viewer:hover:ring-orange-500/60 group-data-[click-mode]/viewer:hover:ring-inset"
 												: ""
 										} group-data-[click-mode]/viewer:rounded-sm ${
-											isDev
+											isLocal
 												? "group-data-[click-mode]/viewer:border-2 group-data-[click-mode]/viewer:border-orange-300/60"
 												: ""
 										}`}
@@ -370,8 +370,8 @@ const PDFPage: React.FC<PDFPageProps> = ({
 										{/* クリックモード時のみ表示するインタラクティブ要素。
 									    子要素はすべて absolute なのでラッパー div はレイアウトに影響しない。 */}
 										<div className="hidden group-data-[click-mode]/viewer:block">
-											{/* 確信度バッジ (isDev=true のみ) */}
-											{isDev && fig.conf !== undefined && (
+											{/* 確信度バッジ (isLocal=true のみ) */}
+											{isLocal && fig.conf !== undefined && (
 												<div className="absolute top-0 left-0 bg-black/70 text-white text-[10px] px-1 py-0.5 rounded-br z-[9999] pointer-events-none">
 													Score: {(fig.conf * 100).toFixed(1)}%
 												</div>

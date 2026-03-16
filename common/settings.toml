@@ -1,6 +1,6 @@
 # PaperTerrace アプリケーション設定
-# 環境切り替え: APP_ENV=dev (デフォルト) / APP_ENV=prod
-# 優先順位: 実環境変数 > [prod]/[dev] セクション > [default] セクション
+# 環境切り替え: APP_ENV=local (デフォルト) / APP_ENV=staging (開発/staging) / APP_ENV=prod (本番)
+# 優先順位: 実環境変数 > [prod]/[staging]/[local] セクション > [default] セクション
 
 [default]
 LOG_LEVEL = "INFO"
@@ -64,12 +64,21 @@ RATE_LIMIT_TRANSLATE = "300/minute"
 # CORS
 CORS_EXTRA_ORIGINS = ""
 
-[dev]
+[local]
 LOG_LEVEL = "DEBUG"
 STORAGE_TYPE = "local"
 STORAGE_PROVIDER = "sqlite"
 IMAGES_DIR = "src/static/paper_images"
-BQ_LOG_DATASET = "paperterrace_logs_dev"
+BQ_LOG_DATASET = "paperterrace_logs_local"
+
+[staging]
+LOG_LEVEL = "DEBUG"
+SENTRY_ENABLED = false
+STORAGE_TYPE = "gcs"
+STORAGE_PROVIDER = "neon"
+IMAGES_DIR = "app/static/paper_images"
+BQ_LOG_DATASET = "paperterrace_logs_staging"
+INFERENCE_VERIFY_SSL = false
 
 [prod]
 LOG_LEVEL = "INFO"

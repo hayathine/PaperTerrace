@@ -98,12 +98,15 @@ class LayoutAnalysisService:
         session_id: str | None = None,
         on_figures: Callable[[list[dict]], Awaitable[None]] | None = None,
     ):
-        from app.crud import save_figures_to_db
         from app.providers.image_storage import (
             get_image_bytes,
             get_page_images,
             get_signed_url,
         )
+
+        # self.storage (SQLAlchemy Session) はスレッドセーフでないため、
+        # 並行バッチから同時アクセスしないようロックで直列化する。
+        _db_lock = asyncio.Lock()
 
         # 1. Resolve paper and file_hash
         paper = await anyio.to_thread.run_sync(self.storage.get_paper, paper_id)
@@ -162,9 +165,10 @@ class LayoutAnalysisService:
                     for fig in batch_figures
                 ]
                 try:
-                    fids = await anyio.to_thread.run_sync(
-                        save_figures_to_db, paper_id, batch_db
-                    )
+                    async with _db_lock:
+                        fids = await anyio.to_thread.run_sync(
+                            self.storage.save_figures_batch, paper_id, batch_db
+                        )
                     for fid, fig in zip(fids, batch_figures):
                         fig["id"] = fid
                     for fid, fig in zip(fids, batch_figures):

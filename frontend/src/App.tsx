@@ -138,7 +138,7 @@ function App() {
 		containerRef: zoomContainerRef,
 		onWheel: handleZoomWheel,
 	} = usePinchZoom();
-	const [appEnv, setAppEnv] = useState<string>("production");
+	const [appEnv, setAppEnv] = useState<string>("prod");
 	const [pdfMode, setPdfMode] = useState<
 		"text" | "stamp" | "area" | "plaintext"
 	>("plaintext");
@@ -162,8 +162,8 @@ function App() {
 	}, []);
 
 	useEffect(() => {
-		if (appEnv === "development") {
-			document.title = `PaperTerrace (Dev) - ${t("tagline", "Read papers casually, like sitting on a terrace")}`;
+		if (appEnv === "local") {
+			document.title = `PaperTerrace (Local) - ${t("tagline", "Read papers casually, like sitting on a terrace")}`;
 		} else {
 			document.title = `PaperTerrace - ${t("tagline", "Read papers casually, like sitting on a terrace")}`;
 		}
