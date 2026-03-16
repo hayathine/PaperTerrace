@@ -8,7 +8,6 @@
 import asyncio
 import os
 import time
-from pathlib import Path
 from typing import Optional
 
 from fastapi import FastAPI, File, HTTPException, Request, UploadFile
@@ -208,17 +207,17 @@ if INFERENCE_TYPE in ["all", "layout"]:
             raise HTTPException(status_code=503, detail="Layout service unavailable")
 
         start_time = time.time()
-        temp_path: Optional[Path] = None
 
         try:
-            temp_path = Path(f"/tmp/{int(time.time() * 1000)}.png")
-            with temp_path.open("wb") as f:
-                f.write(await file.read())
+            image_bytes = await file.read()
 
             if hasattr(layout_service, "engine"):
                 logger.info(f"Using {layout_service.engine} for layout analysis")
 
-            results = await layout_service.analyze_image(str(temp_path))
+            if hasattr(layout_service, "analyze_image_from_bytes"):
+                results = await layout_service.analyze_image_from_bytes(image_bytes)
+            else:
+                results = await layout_service.analyze_image(image_bytes)
 
             serializable = [
                 {
@@ -254,10 +253,6 @@ if INFERENCE_TYPE in ["all", "layout"]:
                 "processing_time": time.time() - start_time,
                 "message": error_msg,
             }
-
-        finally:
-            if temp_path and temp_path.exists():
-                temp_path.unlink(missing_ok=True)
 
     @app.post("/api/v1/analyze-images-batch")
     @limiter.limit(os.getenv("RATE_LIMIT_LAYOUT_BATCH", "20/minute"))
@@ -296,57 +291,40 @@ if INFERENCE_TYPE in ["all", "layout"]:
         )
 
         try:
-            # 環境変数から並列数を取得
-            cpu_count = os.cpu_count() or 2
-            max_parallel = int(os.getenv("BATCH_PARALLEL_WORKERS", cpu_count))
-            max_parallel = max(1, max_parallel)
+            # 各画像をbytesとして読み込む（一時ファイル不要）
+            images_bytes = [await file.read() for file in files]
 
-            # 各画像を一時ファイルに保存
-            temp_paths = []
-            try:
-                for i, file in enumerate(files):
-                    temp_path = Path(f"/tmp/{int(time.time() * 1000)}_{i}.jpg")
-                    content = await file.read()
-                    temp_path.write_bytes(content)
-                    temp_paths.append(str(temp_path))
+            # 一括解析を実行
+            if hasattr(layout_service, "analyze_images_batch_from_bytes"):
+                batch_results = await layout_service.analyze_images_batch_from_bytes(
+                    images_bytes
+                )
+            elif hasattr(layout_service, "analyze_images_batch"):
+                # フォールバック（analyze_images_batchしかない場合）
+                batch_results = await layout_service.analyze_images_batch(images_bytes)
+            else:
+                batch_results = []
+                for img_bytes in images_bytes:
+                    res = await run_in_threadpool(layout_service.analyze_image, img_bytes)
+                    batch_results.append(res)
 
-                # 一括解析を実行
-                if hasattr(layout_service, "analyze_images_batch"):
-                    batch_results = await layout_service.analyze_images_batch(
-                        temp_paths
-                    )
-                else:
-                    # フォールバック
-                    batch_results = []
-                    for path in temp_paths:
-                        res = await run_in_threadpool(
-                            layout_service.analyze_image, path
-                        )
-                        batch_results.append(res)
-
-                # シリアライズ
-                results = []
-                for page_results in batch_results:
-                    serializable = [
-                        {
-                            "bbox": {
-                                "x_min": r.bbox.x_min,
-                                "y_min": r.bbox.y_min,
-                                "x_max": r.bbox.x_max,
-                                "y_max": r.bbox.y_max,
-                            },
-                            "class_name": r.class_name,
-                            "score": r.score,
-                        }
-                        for r in page_results
-                    ]
-                    results.append(serializable)
-
-            finally:
-                for path in temp_paths:
-                    p = Path(path)
-                    if p.exists():
-                        p.unlink(missing_ok=True)
+            # シリアライズ
+            results = []
+            for page_results in batch_results:
+                serializable = [
+                    {
+                        "bbox": {
+                            "x_min": r.bbox.x_min,
+                            "y_min": r.bbox.y_min,
+                            "x_max": r.bbox.x_max,
+                            "y_max": r.bbox.y_max,
+                        },
+                        "class_name": r.class_name,
+                        "score": r.score,
+                    }
+                    for r in page_results
+                ]
+                results.append(serializable)
 
             processing_time = time.time() - start_time
             return {

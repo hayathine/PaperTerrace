@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import io
 import json
 
@@ -8,7 +7,7 @@ from PIL import Image
 
 from app.domain.services.paper_processing import process_figure_analysis_task
 from app.providers import get_storage_provider
-from app.providers.image_storage import save_page_image
+from app.providers.image_storage import async_save_page_image
 from app.providers.inference_client import get_inference_client
 from common.logger import logger
 
@@ -62,14 +61,14 @@ class LayoutAnalysisService:
 
             try:
 
-                def _crop_and_encode(img_data: bytes, box: tuple):
+                def _crop_to_bytes(img_data: bytes, box: tuple) -> bytes:
                     from PIL import Image
 
                     img = Image.open(io.BytesIO(img_data))
                     crop = img.crop(box).convert("RGB")
                     buf = io.BytesIO()
                     crop.save(buf, format="JPEG", quality=85, optimize=True)
-                    return base64.b64encode(buf.getvalue()).decode("utf-8")
+                    return buf.getvalue()
 
                 margin = 5
                 crop_box = (
@@ -78,14 +77,12 @@ class LayoutAnalysisService:
                     min(img_w, x_max + margin),
                     min(img_h, y_max + margin),
                 )
-                img_b64 = await anyio.to_thread.run_sync(
-                    _crop_and_encode, img_bytes, crop_box
+                crop_bytes = await anyio.to_thread.run_sync(
+                    _crop_to_bytes, img_bytes, crop_box
                 )
 
                 img_name = f"p{page_num}_{class_name}_{fig_idx}"
-                figure_image_url = await anyio.to_thread.run_sync(
-                    save_page_image, file_hash, img_name, img_b64
-                )
+                figure_image_url = await async_save_page_image(file_hash, img_name, crop_bytes, "jpg")
                 fig_idx += 1
 
                 page_figures.append(
@@ -150,26 +147,20 @@ class LayoutAnalysisService:
 
         from app.providers.image_storage import get_image_bytes
 
-        for page_num, image_url in pages_to_process:
-            try:
-                img_bytes = await anyio.to_thread.run_sync(get_image_bytes, image_url)
+        async def _load_page(page_num: int, image_url: str) -> tuple[int, bytes]:
+            return page_num, await anyio.to_thread.run_sync(get_image_bytes, image_url)
 
-                def _prepare_image(data: bytes):
-                    from PIL import Image
-
-                    img_pil = Image.open(io.BytesIO(data))
-                    buffer = io.BytesIO()
-                    img_pil.save(buffer, format="JPEG", quality=85, optimize=True)
-                    return buffer.getvalue()
-
-                compressed_bytes = await anyio.to_thread.run_sync(
-                    _prepare_image, img_bytes
-                )
-                image_data_list.append(compressed_bytes)
-                page_info_list.append(page_num)
-            except Exception as e:
-                logger.error(f"Failed to load page {page_num}: {e}")
+        load_results = await asyncio.gather(
+            *[_load_page(pn, url) for pn, url in pages_to_process],
+            return_exceptions=True,
+        )
+        for res in load_results:
+            if isinstance(res, Exception):
+                logger.error(f"Failed to load page image: {res}")
                 continue
+            page_num, img_bytes = res
+            image_data_list.append(img_bytes)
+            page_info_list.append(page_num)
 
         if not image_data_list:
             logger.warning(

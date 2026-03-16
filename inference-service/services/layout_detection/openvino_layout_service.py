@@ -1,4 +1,5 @@
 import asyncio
+import io
 import os
 import queue
 import time
@@ -149,6 +150,75 @@ class OpenVINOLayoutAnalysisService:
         results = await self.analyze_images_batch([image_path], target_classes)
         return results[0]
 
+    async def analyze_image_from_bytes(
+        self, image_bytes: bytes, target_classes: list[str] | None = None
+    ) -> list[LayoutItem]:
+        results = await self.analyze_images_batch_from_bytes([image_bytes], target_classes)
+        return results[0]
+
+    async def analyze_images_batch_from_bytes(
+        self, images_bytes: list[bytes], target_classes: list[str] | None = None
+    ) -> list[list[LayoutItem]]:
+        """bytesリストを直接受け取ってバッチ解析する（一時ファイル不要）。"""
+        if self.compiled_model is None:
+            raise RuntimeError("Model is not initialized")
+
+        if not images_bytes:
+            return []
+
+        target_class_ids = None
+        if target_classes:
+            name_to_id = {v: k for k, v in self.LABELS.items()}
+            target_class_ids = [
+                name_to_id[name] for name in target_classes if name in name_to_id
+            ]
+
+        logger.info(
+            f"Starting OpenVINO batch layout analysis for {len(images_bytes)} images (from bytes)"
+        )
+        start_time = time.time()
+        try:
+            preprocessed_list = [
+                self._preprocess_from_bytes(img_bytes, target_size=self.target_size)
+                for img_bytes in images_bytes
+            ]
+
+            tasks = [
+                asyncio.to_thread(self._inference, img, scale_factor, im_shape)
+                for img, im_shape, scale_factor, _, _ in preprocessed_list
+            ]
+            all_outputs = await asyncio.gather(*tasks)
+
+            batch_results = []
+            for i, outputs in enumerate(all_outputs):
+                _, _, _, real_pad_info, real_scale = preprocessed_list[i]
+                results = self._postprocess(
+                    outputs,
+                    real_scale=real_scale,
+                    pad_info=real_pad_info,
+                    threshold=self.threshold,
+                    target_class_ids=target_class_ids,
+                )
+                layout_items = []
+                for result in results:
+                    bbox = BBoxModel.from_list(result["bbox"])
+                    class_id = int(result["class_id"])
+                    class_name = self.LABELS.get(class_id, f"Unknown({class_id})")
+                    layout_items.append(
+                        LayoutItem(bbox=bbox, class_name=class_name, score=result["score"])
+                    )
+                batch_results.append(layout_items)
+
+            total_time = time.time() - start_time
+            logger.info(
+                f"Batch analysis (from bytes) time: {total_time:.3f}s for {len(images_bytes)} pages."
+            )
+            return batch_results
+
+        except Exception as e:
+            logger.error(f"Batch analysis from bytes failed: {e}")
+            raise
+
     async def analyze_images_batch(
         self, image_paths: list[str | Path], target_classes: list[str] | None = None
     ) -> list[list[LayoutItem]]:
@@ -217,6 +287,42 @@ class OpenVINOLayoutAnalysisService:
         except Exception as e:
             logger.error(f"Batch analysis failed: {e}")
             raise
+
+    def _preprocess_from_bytes(
+        self, img_bytes: bytes, target_size: tuple[int, int] = (640, 640)
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+        try:
+            from PIL import Image
+
+            img_pil = Image.open(io.BytesIO(img_bytes))
+            if img_pil.mode != "RGB":
+                img_pil = img_pil.convert("RGB")
+            img = np.array(img_pil)
+        except Exception as e:
+            raise ValueError(f"Could not decode image bytes: {e}") from e
+
+        ops = [
+            LetterBoxResize(target_size=target_size),
+            NormalizeImage(
+                mean=[0.0, 0.0, 0.0],
+                std=[1.0, 1.0, 1.0],
+                is_scale=True,
+                norm_type="none",
+            ),
+            Permute(),
+        ]
+        img, im_info = preprocess(img, ops)
+        img = np.expand_dims(img, axis=0).astype(np.float32)
+
+        im_shape = np.array([[img.shape[2], img.shape[3]]], dtype=np.float32)
+        scale_factor = np.array([[1.0, 1.0]], dtype=np.float32)
+
+        real_pad_info = np.expand_dims(
+            im_info.get("pad_info", np.array([0, 0])), axis=0
+        ).astype(np.float32)
+        real_scale = np.expand_dims(im_info["scale_factor"], axis=0).astype(np.float32)
+
+        return img, im_shape, scale_factor, real_pad_info, real_scale
 
     def _preprocess(
         self, img_path: str | Path, target_size: tuple[int, int] = (640, 640)

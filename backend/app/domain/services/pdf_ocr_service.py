@@ -1,5 +1,4 @@
 import asyncio
-import base64
 import io
 import json
 import os
@@ -13,7 +12,7 @@ import pymupdf4llm
 
 from app.crud import get_ocr_from_db, save_ocr_to_db
 from app.providers import get_ai_provider
-from app.providers.image_storage import get_page_images, save_page_image
+from app.providers.image_storage import async_save_page_image, get_page_images
 from app.utils import _get_file_hash
 from common.logger import ServiceLogger
 from common.utils.bbox import scale_bbox
@@ -345,11 +344,10 @@ class PDFOCRService:
         img_pil = page_img.original.convert("RGB")
 
         buffer = io.BytesIO()
-        img_pil.save(buffer, format="PNG")
+        img_pil.save(buffer, format="WEBP", quality=85, method=4)
         img_bytes = buffer.getvalue()
 
-        page_image_b64 = base64.b64encode(img_bytes).decode("utf-8")
-        image_url = save_page_image(file_hash, page_num, page_image_b64)
+        image_url = await async_save_page_image(file_hash, page_num, img_bytes, "webp")
 
         # Update layout data coordinates with actual image scale
         scale_x = img_pil.width / float(page.width)
@@ -520,12 +518,9 @@ class PDFOCRService:
                             if crop_box[2] > crop_box[0] and crop_box[3] > crop_box[1]:
                                 crop_img = img_pil.crop(crop_box)
                                 buf = io.BytesIO()
-                                crop_img.save(buf, format="JPEG", quality=85)
-                                crop_b64 = base64.b64encode(buf.getvalue()).decode(
-                                    "utf-8"
-                                )
+                                crop_img.save(buf, format="JPEG", quality=85, optimize=True)
                                 img_name = f"p{page_num}_{class_name.replace(' ', '_')}_{fig_idx}"
-                                fig_url = save_page_image(file_hash, img_name, crop_b64)
+                                fig_url = await async_save_page_image(file_hash, img_name, buf.getvalue(), "jpg")
                                 fig_idx += 1
                                 layout_data["figures"].append(
                                     {

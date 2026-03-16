@@ -80,33 +80,27 @@ async def lifespan(app: FastAPI):
     Lifespan event handler for FastAPI.
     Handles startup and shutdown events.
     """
-    # Re-configure logging to ensure it survives uvicorn's setup if needed
     configure_logging()
 
+    # DB接続ウォームアップ: コールドスタート後の初回リクエストレイテンシを削減
     try:
-        # Run Alembic migrations
-        from alembic import command
-        from alembic.config import Config
+        import asyncio
+        from app.database import engine
 
-        alembic_cfg = Config("alembic.ini")
-        # Ensure alembic uses the correct directory if we're not in root (though usually we are)
-        command.upgrade(alembic_cfg, "head")
+        await asyncio.to_thread(_warmup_db, engine)
+        log.info("lifespan", "DB warmup completed")
     except Exception as e:
-        # If tables already exist, we might get a DuplicateTable error.
-        # We log and continue so the app can still run.
-        if "already exists" in str(e).lower():
-            log.warning(
-                "migration",
-                "Database tables already exist, skipping initial migration",
-                error=str(e),
-            )
-        else:
-            log.error("migration", "Failed to initialize database", error=str(e))
-
-            # Re-raise for non-existence errors if necessary, or just continue
-            # For now, let's allow the app to try to run.
+        log.warning("lifespan", "DB warmup failed (non-fatal)", error=str(e))
 
     yield
+
+
+def _warmup_db(engine) -> None:
+    """DBへの接続を1本確立してプールをウォームアップする。"""
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
 
 
 # Create FastAPI app with lifespan
@@ -166,7 +160,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             self._redis = Redis.from_url(
                 redis_url, socket_connect_timeout=1, decode_responses=True
             )
-            self._redis.ping()
+            # ping() は行わない — 接続確立はリクエスト時に遅延させてコールドスタートを高速化
         except Exception:
             self._redis = None
 
@@ -415,7 +409,8 @@ if _storage_type == "gcs":
                 return FastAPIResponse(status_code=404, content=b"Not Found")
 
             data = await asyncio.to_thread(blob.download_as_bytes)
-            content_type = "image/png" if filename.endswith(".png") else "image/jpeg"
+            ext = filename.rsplit(".", 1)[-1].lower()
+            content_type = {"webp": "image/webp", "png": "image/png"}.get(ext, "image/jpeg")
             return FastAPIResponse(
                 content=data,
                 media_type=content_type,

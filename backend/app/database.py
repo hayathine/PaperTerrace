@@ -1,11 +1,12 @@
 import os
 from contextlib import contextmanager
+from urllib.parse import urlparse, urlunparse
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import NullPool
 
 
-# Import DB config from storage provider or env
 def get_url():
     url = os.getenv("DATABASE_URL")
     if not url:
@@ -15,7 +16,6 @@ def get_url():
         dbname = os.getenv("DB_NAME")
 
         if all([user, password, host, dbname]):
-            # Cloud SQL uses postgresql
             return f"postgresql://{user}:{password}@{host}/{dbname}"
 
         db_path = os.getenv("DB_PATH", "ocr_reader.db")
@@ -28,10 +28,32 @@ def get_url():
     return url
 
 
+def _to_neon_pooler_url(url: str) -> str | None:
+    """Neon の direct endpoint URL を pgbouncer pooler URL に変換する。
+
+    例: ep-cool-name-123456.us-east-2.aws.neon.tech
+     →  ep-cool-name-123456-pooler.us-east-2.aws.neon.tech
+    """
+    try:
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+        if ".neon.tech" in host and "-pooler" not in host:
+            # ホスト名の最初のセグメント（エンドポイントID）に -pooler を付加
+            first_dot = host.index(".")
+            new_host = host[:first_dot] + "-pooler" + host[first_dot:]
+            new_netloc = parsed.netloc.replace(host, new_host)
+            return urlunparse(parsed._replace(netloc=new_netloc))
+    except Exception:
+        pass
+    return None
+
+
 _url = get_url()
+_is_postgres = _url.startswith("postgresql")
+
 _connect_args = {}
-if _url.startswith("postgresql"):
-    # TCP keepalive でサーバー側の突然切断を防ぐ (Cloud Run / Cloud SQL 向け)
+if _is_postgres:
+    # TCP keepalive でサーバー側の突然切断を防ぐ (Cloud Run / Neon 向け)
     _connect_args = {
         "keepalives": 1,
         "keepalives_idle": 30,
@@ -39,12 +61,37 @@ if _url.startswith("postgresql"):
         "keepalives_count": 5,
     }
 
-engine = create_engine(
-    _url,
-    pool_pre_ping=True,  # Test connection liveness before checkout
-    pool_recycle=300,    # Recycle connections after 5 minutes (Cloud Run 向けに短縮)
-    connect_args=_connect_args,
-)
+# Neon pgbouncer pooler endpoint の解決
+# 優先順位:
+#   1. DATABASE_POOL_URL 環境変数（明示的な pooler URL）
+#   2. DATABASE_URL が Neon URL の場合、自動的に pooler hostname に変換
+#   3. フォールバック: 通常の QueuePool
+_pool_url = os.getenv("DATABASE_POOL_URL", "")
+if not _pool_url and _is_postgres:
+    _pool_url = _to_neon_pooler_url(_url) or ""
+
+_use_pgbouncer = bool(_pool_url)
+
+if _use_pgbouncer:
+    # NullPool: pgbouncer 側で接続プールを管理するため SQLAlchemy のプールは不要。
+    # トランザクションモードの pgbouncer では prepared statement が使えないが、
+    # psycopg2 + SQLAlchemy はデフォルトでサーバーサイド prepared statement を使わないため問題なし。
+    engine = create_engine(
+        _pool_url,
+        poolclass=NullPool,
+        connect_args=_connect_args,
+    )
+else:
+    # 通常の QueuePool（non-Neon PostgreSQL または SQLite）
+    engine = create_engine(
+        _url,
+        pool_pre_ping=True,
+        pool_recycle=300,
+        pool_size=2 if _is_postgres else 5,
+        max_overflow=2 if _is_postgres else 10,
+        connect_args=_connect_args,
+    )
+
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 

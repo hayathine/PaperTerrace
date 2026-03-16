@@ -2,8 +2,6 @@ import os
 from abc import ABC, abstractmethod
 from typing import Any, TypedDict
 
-from google import genai
-from google.genai import types
 from pydantic import BaseModel
 
 from common.config import settings  # noqa: F401  secrets/.env の一括ロードを保証
@@ -144,6 +142,11 @@ class GeminiProvider(AIProviderInterface):
     """Gemini API provider implementation."""
 
     def __init__(self):
+        # コールドスタート最適化: 初回使用時のみインポート
+        from google import genai
+        from google.genai import types
+        self._types = types
+
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable is required")
@@ -185,7 +188,7 @@ class GeminiProvider(AIProviderInterface):
             # Configure tools
             tools = None
             if enable_search:
-                tools = [types.Tool(google_search=types.GoogleSearch())]
+                tools = [self._types.Tool(google_search=self._types.GoogleSearch())]
 
             # Configure generation config
             config_params: GenConfig = {
@@ -205,7 +208,7 @@ class GeminiProvider(AIProviderInterface):
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name
 
-            config = types.GenerateContentConfig(**config_params)
+            config = self._types.GenerateContentConfig(**config_params)
 
             # If using cached content, contents should only be the new prompt
             contents = prompt if cached_content_name else full_prompt
@@ -383,14 +386,14 @@ class GeminiProvider(AIProviderInterface):
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name
 
-            config = types.GenerateContentConfig(**config_params)
+            config = self._types.GenerateContentConfig(**config_params)
 
             if cached_content_name:
                 image_part = None
             elif image_uri:
-                image_part = types.Part.from_uri(file_uri=image_uri, mime_type=mime_type)
+                image_part = self._types.Part.from_uri(file_uri=image_uri, mime_type=mime_type)
             else:
-                image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+                image_part = self._types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
 
             contents = [prompt] if cached_content_name else [image_part, prompt]
 
@@ -492,7 +495,7 @@ class GeminiProvider(AIProviderInterface):
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name
 
-            config = types.GenerateContentConfig(**config_params)
+            config = self._types.GenerateContentConfig(**config_params)
 
             if cached_content_name:
                 contents = [prompt]
@@ -500,7 +503,7 @@ class GeminiProvider(AIProviderInterface):
                 contents = []
                 for img_bytes in images_list:
                     contents.append(
-                        types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
+                        self._types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
                     )
                 contents.append(prompt)
 
@@ -566,13 +569,13 @@ class GeminiProvider(AIProviderInterface):
             }
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name
-            config = types.GenerateContentConfig(**config_params)
+            config = self._types.GenerateContentConfig(**config_params)
 
             contents = (
                 [prompt]
                 if cached_content_name
                 else [
-                    types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+                    self._types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
                     prompt,
                 ]
             )
@@ -631,18 +634,18 @@ class GeminiProvider(AIProviderInterface):
 
             # contents can be a list of parts or a single string
             if isinstance(contents, str):
-                parts = [types.Part.from_text(text=contents)]
+                parts = [self._types.Part.from_text(text=contents)]
             elif isinstance(contents, bytes):
                 # Assume PDF if bytes
                 parts = [
-                    types.Part.from_bytes(data=contents, mime_type="application/pdf")
+                    self._types.Part.from_bytes(data=contents, mime_type="application/pdf")
                 ]
             else:
                 parts = contents
 
             cache = await self.client.aio.caches.create(
                 model=model,
-                config=types.CreateCachedContentConfig(
+                config=self._types.CreateCachedContentConfig(
                     contents=parts,
                     system_instruction=system_instruction,
                     ttl=f"{ttl_minutes * 60}s",
@@ -695,6 +698,11 @@ class VertexAIProvider(AIProviderInterface):
     """
 
     def __init__(self):
+        # コールドスタート最適化: 初回使用時のみインポート
+        from google import genai
+        from google.genai import types
+        self._types = types
+
         self.project_id = os.getenv("GCP_PROJECT_ID")
         self.location = os.getenv("GCP_LOCATION", "us-central1")
         self.model = os.getenv("VERTEX_MODEL", "gemini-2.5-flash-lite")
@@ -784,7 +792,7 @@ class VertexAIProvider(AIProviderInterface):
             # Configure tools
             tools = None
             if enable_search:
-                tools = [types.Tool(google_search=types.GoogleSearch())]
+                tools = [self._types.Tool(google_search=self._types.GoogleSearch())]
 
             config_params: GenConfig = {
                 "temperature": self.temperature,
@@ -803,7 +811,7 @@ class VertexAIProvider(AIProviderInterface):
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name
 
-            config = types.GenerateContentConfig(**config_params)
+            config = self._types.GenerateContentConfig(**config_params)
 
             log.debug(
                 "vertex_generate",
@@ -874,9 +882,9 @@ class VertexAIProvider(AIProviderInterface):
             if cached_content_name:
                 image_part = None
             elif image_uri:
-                image_part = types.Part.from_uri(file_uri=image_uri, mime_type=mime_type)
+                image_part = self._types.Part.from_uri(file_uri=image_uri, mime_type=mime_type)
             else:
-                image_part = types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+                image_part = self._types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
 
             contents = [prompt] if cached_content_name else [image_part, prompt]
 
@@ -895,7 +903,7 @@ class VertexAIProvider(AIProviderInterface):
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name
 
-            config = types.GenerateContentConfig(**config_params)
+            config = self._types.GenerateContentConfig(**config_params)
 
             response = await self.client.aio.models.generate_content(
                 model=target_model,
@@ -962,7 +970,7 @@ class VertexAIProvider(AIProviderInterface):
                 contents = []
                 for img_bytes in images_list:
                     contents.append(
-                        types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
+                        self._types.Part.from_bytes(data=img_bytes, mime_type=mime_type)
                     )
                 contents.append(prompt)
 
@@ -981,7 +989,7 @@ class VertexAIProvider(AIProviderInterface):
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name
 
-            config = types.GenerateContentConfig(**config_params)
+            config = self._types.GenerateContentConfig(**config_params)
 
             response = await self.client.aio.models.generate_content(
                 model=target_model,
@@ -1034,7 +1042,7 @@ class VertexAIProvider(AIProviderInterface):
                 [prompt]
                 if cached_content_name
                 else [
-                    types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+                    self._types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
                     prompt,
                 ]
             )
@@ -1046,7 +1054,7 @@ class VertexAIProvider(AIProviderInterface):
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name
 
-            config = types.GenerateContentConfig(**config_params)
+            config = self._types.GenerateContentConfig(**config_params)
 
             response = await self.client.aio.models.generate_content(
                 model=target_model,
@@ -1094,17 +1102,17 @@ class VertexAIProvider(AIProviderInterface):
             )
 
             if isinstance(contents, str):
-                parts = [types.Part.from_text(text=contents)]
+                parts = [self._types.Part.from_text(text=contents)]
             elif isinstance(contents, bytes):
                 parts = [
-                    types.Part.from_bytes(data=contents, mime_type="application/pdf")
+                    self._types.Part.from_bytes(data=contents, mime_type="application/pdf")
                 ]
             else:
                 parts = contents
 
             cache = await self.client.aio.caches.create(
                 model=model,
-                config=types.CreateCachedContentConfig(
+                config=self._types.CreateCachedContentConfig(
                     contents=parts,
                     system_instruction=system_instruction,
                     ttl=f"{ttl_minutes * 60}s",

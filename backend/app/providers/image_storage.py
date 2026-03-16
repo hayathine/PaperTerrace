@@ -3,7 +3,6 @@ Image Storage Provider
 Handles caching of PDF page images to filesystem or Cloud Storage.
 """
 
-import base64
 import os
 from abc import ABC, abstractmethod
 from pathlib import Path
@@ -13,14 +12,26 @@ from common.logger import ServiceLogger
 
 log = ServiceLogger("ImageStorage")
 
+_EXT_CONTENT_TYPE: dict[str, str] = {
+    "webp": "image/webp",
+    "jpg": "image/jpeg",
+    "jpeg": "image/jpeg",
+    "png": "image/png",
+}
+
 
 class ImageStorageStrategy(ABC):
     def __init__(self):
         self.storage_type = "base"
 
     @abstractmethod
-    def save(self, file_hash: str, page_num: int | str, image_b64: str) -> str:
+    def save(self, file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp") -> str:
         pass
+
+    async def async_save(self, file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp") -> str:
+        """非同期でsave()を実行する（イベントループをブロックしない）。"""
+        import asyncio
+        return await asyncio.to_thread(self.save, file_hash, page_num, image_bytes, ext)
 
     @abstractmethod
     def get_list(self, file_hash: str) -> list[str]:
@@ -60,15 +71,14 @@ class LocalImageStorage(ImageStorageStrategy):
     def _ensure_dir(self):
         self.images_dir.mkdir(parents=True, exist_ok=True)
 
-    def save(self, file_hash: str, page_num: int | str, image_b64: str) -> str:
+    def save(self, file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp") -> str:
         hash_dir = self.images_dir / file_hash
         hash_dir.mkdir(exist_ok=True)
 
-        image_path = hash_dir / f"page_{page_num}.png"
-        image_bytes = base64.b64decode(image_b64)
+        image_path = hash_dir / f"page_{page_num}.{ext}"
         image_path.write_bytes(image_bytes)
 
-        relative_path = f"/static/paper_images/{file_hash}/page_{page_num}.png"
+        relative_path = f"/static/paper_images/{file_hash}/page_{page_num}.{ext}"
         log.debug("save_local", "Saved page image", path=relative_path)
 
         return relative_path
@@ -107,10 +117,14 @@ class LocalImageStorage(ImageStorageStrategy):
                 return -1
 
         images = []
-        for p in hash_dir.glob("page_*.png"):
-            num = extract_page_num(p)
-            if num >= 0:
-                images.append((num, p))
+        # WebP優先（新形式）、次にPNG（旧形式・移行期対応）
+        seen_page_nums: set[int] = set()
+        for ext in ("webp", "png"):
+            for p in hash_dir.glob(f"page_*.{ext}"):
+                num = extract_page_num(p)
+                if num >= 0 and num not in seen_page_nums:
+                    seen_page_nums.add(num)
+                    images.append((num, p))
 
         # Sort by page number
         images.sort()
@@ -167,18 +181,18 @@ class GCSImageStorage(ImageStorageStrategy):
             "gcs_init", "GCSImageStorage initialized", bucket_name=self.bucket_name
         )
 
-    def save(self, file_hash: str, page_num: int | str, image_b64: str) -> str:
+    def save(self, file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp") -> str:
         try:
-            blob_name = f"paper_images/{file_hash}/page_{page_num}.png"
+            blob_name = f"paper_images/{file_hash}/page_{page_num}.{ext}"
             blob = self.bucket.blob(blob_name)
 
-            image_bytes = base64.b64decode(image_b64)
-            blob.upload_from_string(image_bytes, content_type="image/png")
+            content_type = _EXT_CONTENT_TYPE.get(ext, "application/octet-stream")
+            blob.upload_from_string(image_bytes, content_type=content_type)
 
             # Return a backend-relative URL instead of a GCS direct URL.
             # This avoids CORS/OpaqueResponseBlocking issues in the browser.
             # The frontend prepends API_URL, and the backend serves via /static/paper_images/ proxy.
-            relative_path = f"/static/paper_images/{file_hash}/page_{page_num}.png"
+            relative_path = f"/static/paper_images/{file_hash}/page_{page_num}.{ext}"
             log.debug(
                 "save_gcs", "Saved page image", blob_name=blob_name, path=relative_path
             )
@@ -208,21 +222,27 @@ class GCSImageStorage(ImageStorageStrategy):
             # page_1.png, page_2.png...
             def extract_page_num_and_filter(blob):
                 try:
-                    basename = os.path.basename(blob.name).replace(".png", "")
-                    parts = basename.split("_")
+                    basename = os.path.basename(blob.name)
+                    stem = basename.rsplit(".", 1)[0]
+                    parts = stem.split("_")
                     if len(parts) == 2 and parts[1].isdigit():
                         return int(parts[1])
                     return -1
                 except Exception:
                     return -1
 
-            blob_list = []
+            # WebP優先（新形式）、次にPNG（旧形式・移行期対応）
+            seen: dict[int, object] = {}
             for b in blobs:
+                ext = os.path.basename(b.name).rsplit(".", 1)[-1].lower()
+                if ext not in ("webp", "png"):
+                    continue
                 num = extract_page_num_and_filter(b)
-                if num >= 0:
-                    blob_list.append((num, b))
-
-            blob_list.sort()
+                if num < 0:
+                    continue
+                if num not in seen or ext == "webp":
+                    seen[num] = b
+            blob_list = sorted(seen.items())  # sorted by page_num
 
             # Return backend-relative URLs (consistent with save())
             urls = []
@@ -407,8 +427,13 @@ def _get_instance():
 
 
 # 既存APIとの互換レイヤー
-def save_page_image(file_hash: str, page_num: int | str, image_b64: str) -> str:
-    return _get_instance().save(file_hash, page_num, image_b64)
+def save_page_image(file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp") -> str:
+    return _get_instance().save(file_hash, page_num, image_bytes, ext)
+
+
+async def async_save_page_image(file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp") -> str:
+    """非同期でページ画像を保存する（asyncコンテキスト用）。"""
+    return await _get_instance().async_save(file_hash, page_num, image_bytes, ext)
 
 
 def get_page_images(file_hash: str) -> list[str]:
