@@ -121,9 +121,9 @@ class LocalImageStorage(ImageStorageStrategy):
                 return -1
 
         images = []
-        # WebP優先（新形式）、次にPNG（旧形式・移行期対応）
+        # JPEG優先（新形式）、次にWebP、次にPNG（旧形式・移行期対応）
         seen_page_nums: set[int] = set()
-        for ext in ("webp", "png"):
+        for ext in ("jpg", "jpeg", "webp", "png"):
             for p in hash_dir.glob(f"page_*.{ext}"):
                 num = extract_page_num(p)
                 if num >= 0 and num not in seen_page_nums:
@@ -235,17 +235,21 @@ class GCSImageStorage(ImageStorageStrategy):
                 except Exception:
                     return -1
 
-            # WebP優先（新形式）、次にPNG（旧形式・移行期対応）
+            # JPEG優先（新形式）、次にWebP、次にPNG（旧形式・移行期対応）
+            _EXT_PRIORITY = {"jpg": 0, "jpeg": 0, "webp": 1, "png": 2}
             seen: dict[int, object] = {}
+            seen_priority: dict[int, int] = {}
             for b in blobs:
                 ext = os.path.basename(b.name).rsplit(".", 1)[-1].lower()
-                if ext not in ("webp", "png"):
+                if ext not in _EXT_PRIORITY:
                     continue
                 num = extract_page_num_and_filter(b)
                 if num < 0:
                     continue
-                if num not in seen or ext == "webp":
+                priority = _EXT_PRIORITY[ext]
+                if num not in seen or priority < seen_priority[num]:
                     seen[num] = b
+                    seen_priority[num] = priority
             blob_list = sorted(seen.items())  # sorted by page_num
 
             # Return backend-relative URLs (consistent with save())

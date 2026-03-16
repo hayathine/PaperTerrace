@@ -6,6 +6,8 @@
 """
 
 import asyncio
+import base64
+import io
 import httpx
 import os
 import time
@@ -64,9 +66,49 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
     except ImportError:
         logger.warning("Translation dependencies not found, skipping import")
 
+_CROP_TARGET_CLASSES = {"table", "figure", "picture", "formula", "chart", "algorithm", "equation"}
+
+
+def _crop_page_figures(img_bytes: bytes, serialized_results: list) -> list[dict]:
+	"""検出結果から対象クラスをクロップしてbase64エンコードで返す（スレッド内実行用）。"""
+	from PIL import Image
+
+	crops = []
+	try:
+		img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+		img_w, img_h = img.size
+	except Exception:
+		return crops
+
+	for res in serialized_results:
+		class_name = res.get("class_name", "").lower()
+		if class_name not in _CROP_TARGET_CLASSES:
+			continue
+		bbox = res.get("bbox", {})
+		margin = 5
+		x_min = max(0, bbox.get("x_min", 0) - margin)
+		y_min = max(0, bbox.get("y_min", 0) - margin)
+		x_max = min(img_w, bbox.get("x_max", 0) + margin)
+		y_max = min(img_h, bbox.get("y_max", 0) + margin)
+		if x_max <= x_min or y_max <= y_min:
+			continue
+		try:
+			crop = img.crop((x_min, y_min, x_max, y_max))
+			buf = io.BytesIO()
+			crop.save(buf, format="JPEG", quality=85)
+			crops.append({
+				"class_name": class_name,
+				"bbox": {"x_min": x_min, "y_min": y_min, "x_max": x_max, "y_max": y_max},
+				"image_b64": base64.b64encode(buf.getvalue()).decode(),
+			})
+		except Exception:
+			pass
+	return crops
+
+
 limiter = Limiter(
-    key_func=get_remote_address,
-    enabled=os.getenv("ENABLE_RATE_LIMIT", "false").lower() == "true",
+	key_func=get_remote_address,
+	enabled=os.getenv("ENABLE_RATE_LIMIT", "false").lower() == "true",
 )
 
 app = FastAPI(
@@ -310,9 +352,10 @@ if INFERENCE_TYPE in ["all", "layout"]:
                     res = await run_in_threadpool(layout_service.analyze_image, img_bytes)
                     batch_results.append(res)
 
-            # シリアライズ
+            # シリアライズ + クロップ
             results = []
-            for page_results in batch_results:
+            all_crops = []
+            for img_bytes, page_results in zip(images_bytes, batch_results):
                 serializable = [
                     {
                         "bbox": {
@@ -327,11 +370,14 @@ if INFERENCE_TYPE in ["all", "layout"]:
                     for r in page_results
                 ]
                 results.append(serializable)
+                page_crops = await run_in_threadpool(_crop_page_figures, img_bytes, serializable)
+                all_crops.append(page_crops)
 
             processing_time = time.time() - start_time
             return {
                 "success": True,
                 "results": results,
+                "crops": all_crops,
                 "processing_time": processing_time,
                 "images_processed": len(files),
             }
@@ -393,7 +439,8 @@ if INFERENCE_TYPE in ["all", "layout"]:
                     batch_results.append(res)
 
             results = []
-            for page_results in batch_results:
+            all_crops = []
+            for img_bytes, page_results in zip(images_bytes, batch_results):
                 serializable = [
                     {
                         "bbox": {
@@ -408,10 +455,13 @@ if INFERENCE_TYPE in ["all", "layout"]:
                     for r in page_results
                 ]
                 results.append(serializable)
+                page_crops = await run_in_threadpool(_crop_page_figures, img_bytes, serializable)
+                all_crops.append(page_crops)
 
             return {
                 "success": True,
                 "results": results,
+                "crops": all_crops,
                 "processing_time": time.time() - start_time,
                 "images_processed": len(req.image_urls),
             }

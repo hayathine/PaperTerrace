@@ -115,6 +115,17 @@ def set_job_completed(redis_client, job_id: str, result: Any) -> None:
         pass
 
 
+def publish_job_figures(redis_client, job_id: str, figures: list) -> None:
+    """バッチ処理済み figures を Pub/Sub で通知する（逐次表示用）。"""
+    try:
+        redis_client.publish(
+            f"{JOB_PUB_PREFIX}{job_id}",
+            json.dumps({"status": "partial", "figures": figures}),
+        )
+    except Exception:
+        pass
+
+
 def set_job_failed(redis_client, job_id: str, error: str) -> None:
     """ジョブを失敗に更新する"""
     updates = {

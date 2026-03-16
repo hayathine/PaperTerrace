@@ -35,7 +35,6 @@ summary_service = SummaryService()
 figure_insight_service = FigureInsightService()
 adversarial_service = AdversarialReviewService()
 redis_service = RedisService()
-layout_analysis_service = LayoutAnalysisService()
 
 
 def _get_context(session_id: str) -> tuple[str | None, str | None]:
@@ -225,7 +224,8 @@ async def analyze_layout_lazy(
             "Redis unavailable, falling back to synchronous processing",
         )
         try:
-            all_figures = await layout_analysis_service.analyze_layout_lazy(
+            service = LayoutAnalysisService()
+            all_figures = await service.analyze_layout_lazy(
                 paper_id,
                 parsed_pages,
                 user_id=current_user_id,
@@ -377,11 +377,14 @@ async def stream_layout_job(job_id: str):
                         try:
                             data = json.loads(message["data"])
                             evt_status = data.get("status")
-                            if evt_status == "completed":
+                            if evt_status == "partial":
+                                figures = data.get("figures", [])
+                                yield f"data: {json.dumps({'status': 'partial', 'figures': figures})}\n\n"
+                            elif evt_status == "completed":
                                 figures = data.get("result", [])
                                 yield f"data: {json.dumps({'status': 'completed', 'figures': figures, 'figures_detected': len(figures)})}\n\n"
                                 return
-                            if evt_status == "failed":
+                            elif evt_status == "failed":
                                 yield f"data: {json.dumps({'status': 'failed', 'error': data.get('error')})}\n\n"
                                 return
                         except Exception:

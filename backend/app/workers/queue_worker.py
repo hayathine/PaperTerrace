@@ -11,8 +11,10 @@ from datetime import datetime
 
 from redis import Redis
 
+from app.domain.services.layout_analysis_service import LayoutAnalysisService
 from app.workers.layout_job import (
     JOB_QUEUE_KEY,
+    publish_job_figures,
     set_job_completed,
     set_job_failed,
     set_job_processing,
@@ -79,8 +81,6 @@ class QueueWorker:
         Args:
             job_data: paper_id, page_numbers, user_id, file_hash, session_id を含む辞書
         """
-        from app.domain.services.layout_analysis_service import LayoutAnalysisService
-
         job_id = job_data.get("job_id", "unknown")
         paper_id = job_data.get("paper_id")
         page_numbers = job_data.get("page_numbers")
@@ -94,6 +94,9 @@ class QueueWorker:
 
         set_job_processing(self.redis, job_id)
 
+        async def _on_figures(batch: list) -> None:
+            publish_job_figures(self.redis, job_id, batch)
+
         service = LayoutAnalysisService()
         figures = await service.analyze_layout_lazy(
             paper_id=paper_id,
@@ -101,6 +104,7 @@ class QueueWorker:
             user_id=user_id,
             file_hash=file_hash,
             session_id=session_id,
+            on_figures=_on_figures,
         )
 
         set_job_completed(self.redis, job_id, figures)

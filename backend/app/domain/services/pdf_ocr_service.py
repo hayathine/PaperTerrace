@@ -139,17 +139,16 @@ class PDFOCRService:
                         total=total_pages,
                     )
 
-                    # Step A: Prefetch Phase 1 & 2 for all pages in chunk
-                    # Rendering and native text extraction in Service A
-                    prefetched_pages = []
-                    for page_idx in range(chunk_start, chunk_end):
-                        page_data = await self._prepare_page_phases_1_2(
+                    # Step A: Prefetch Phase 1 & 2 for all pages in chunk (parallel)
+                    prefetched_pages = list(await asyncio.gather(*[
+                        self._prepare_page_phases_1_2(
                             pdf.pages[page_idx],
                             page_idx,
                             total_pages,
                             file_hash,
                         )
-                        prefetched_pages.append(page_data)
+                        for page_idx in range(chunk_start, chunk_end)
+                    ]))
 
                     # Step B: Finalize each page (Phase 3) and yield sequentially
                     # Layout/figure analysis is handled lazily after OCR via analyze_layout_lazy
@@ -339,15 +338,16 @@ class PDFOCRService:
             layout_data,
         )
 
-        # Phase 2: Page Image
-        page_img = page.to_image(resolution=resolution, antialias=True)
-        img_pil = page_img.original.convert("RGB")
+        # Phase 2: Page Image (CPU-bound rendering をスレッドで実行)
+        def _render_and_encode(p, res):
+            page_img = p.to_image(resolution=res, antialias=True)
+            pil = page_img.original.convert("RGB")
+            buf = io.BytesIO()
+            pil.save(buf, format="JPEG", quality=85)
+            return pil, buf.getvalue()
 
-        buffer = io.BytesIO()
-        img_pil.save(buffer, format="WEBP", quality=85, method=4)
-        img_bytes = buffer.getvalue()
-
-        image_url = await async_save_page_image(file_hash, page_num, img_bytes, "webp")
+        img_pil, img_bytes = await asyncio.to_thread(_render_and_encode, page, resolution)
+        image_url = await async_save_page_image(file_hash, page_num, img_bytes, "jpg")
 
         # Update layout data coordinates with actual image scale
         scale_x = img_pil.width / float(page.width)

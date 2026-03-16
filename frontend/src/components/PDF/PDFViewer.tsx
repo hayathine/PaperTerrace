@@ -393,7 +393,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				try {
 					const data = JSON.parse(event.data);
 
-					if (data.status === "completed") {
+					if (data.status === "partial") {
+						applyLayoutFigures(data.figures, paperId, fileHash);
+					} else if (data.status === "completed") {
 						log.info("poll_layout_job", "Job completed", {
 							job_id: jobId,
 							figures: data.figures_detected,

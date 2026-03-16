@@ -331,6 +331,7 @@ class InferenceServiceClient:
 
             # バッチサイズで分割
             all_results = []
+            all_crops: list[list[dict]] = []
             for i in range(0, len(images), max_batch_size):
                 batch = images[i : i + max_batch_size]
 
@@ -350,7 +351,9 @@ class InferenceServiceClient:
 
                 if response.get("success"):
                     batch_results = response.get("results", [])
+                    batch_crops = response.get("crops", [[] for _ in batch])
                     all_results.extend(batch_results)
+                    all_crops.extend(batch_crops)
                     log.debug(
                         "analyze_batch",
                         "サブバッチの送信・解析が完了",
@@ -368,7 +371,7 @@ class InferenceServiceClient:
                 result_count=len(all_results),
             )
 
-            return all_results
+            return all_results, all_crops
 
         except Exception as e:
             log.error("analyze_batch", "バッチレイアウト解析エラー", error=str(e))
@@ -395,6 +398,7 @@ class InferenceServiceClient:
             )
 
             all_results = []
+            all_crops: list[list[dict]] = []
             for i in range(0, len(image_urls), max_batch_size):
                 batch_urls = image_urls[i : i + max_batch_size]
                 batch_page_nums = page_nums[i : i + max_batch_size] if page_nums else None
@@ -414,7 +418,9 @@ class InferenceServiceClient:
 
                 if response.get("success"):
                     batch_results = response.get("results", [])
+                    batch_crops = response.get("crops", [[] for _ in batch_urls])
                     all_results.extend(batch_results)
+                    all_crops.extend(batch_crops)
                     log.debug(
                         "analyze_batch_by_urls",
                         "サブバッチ完了",
@@ -430,7 +436,7 @@ class InferenceServiceClient:
                 "全URL経由解析完了",
                 result_count=len(all_results),
             )
-            return all_results
+            return all_results, all_crops
 
         except Exception as e:
             log.error("analyze_batch_by_urls", "URL経由バッチ解析エラー", error=str(e))
@@ -475,6 +481,7 @@ class InferenceServiceClient:
 
                 if response.get("success"):
                     batch_results = response.get("results", [])
+                    batch_crops = response.get("crops", [[] for _ in batch])
                     log.debug(
                         "analyze_batch_streaming",
                         "サブバッチ完了 → yield",
@@ -483,7 +490,7 @@ class InferenceServiceClient:
                         processing_time=response.get("processing_time", 0),
                     )
                     # バッチが返ってきた時点で即座に yield
-                    yield i, batch_results
+                    yield i, batch_results, batch_crops
                 else:
                     error_msg = response.get("message", "不明なエラー")
                     raise InferenceServiceError(f"バッチ解析失敗: {error_msg}")
@@ -496,7 +503,7 @@ class InferenceServiceClient:
                     error=str(e),
                 )
                 # 1バッチに失敗しても他のバッチは続ける
-                yield i, [[] for _ in batch]
+                yield i, [[] for _ in batch], [[] for _ in batch]
 
     async def health_check(self) -> dict[str, Any]:
         """推論サービスのヘルスチェック"""
