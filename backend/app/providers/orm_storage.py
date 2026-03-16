@@ -142,6 +142,13 @@ class ORMStorageAdapter(StorageInterface):
             self._replace_session()
             return fn()
 
+    def close(self) -> None:
+        """DBセッションをクローズしてプールに接続を返却する。"""
+        try:
+            self._db.close()
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
 
     def init_tables(self) -> None:

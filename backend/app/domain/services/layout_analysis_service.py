@@ -109,6 +109,25 @@ class LayoutAnalysisService:
         file_hash: str | None = None,
         session_id: str | None = None,
     ):
+        try:
+            return await self._analyze_layout_lazy_inner(
+                paper_id=paper_id,
+                page_numbers=page_numbers,
+                user_id=user_id,
+                file_hash=file_hash,
+                session_id=session_id,
+            )
+        finally:
+            self.storage.close()
+
+    async def _analyze_layout_lazy_inner(
+        self,
+        paper_id: str,
+        page_numbers: list[int] | None = None,
+        user_id: str | None = None,
+        file_hash: str | None = None,
+        session_id: str | None = None,
+    ):
         # 1. Resolve paper and file_hash
         paper = await anyio.to_thread.run_sync(self.storage.get_paper, paper_id)
 

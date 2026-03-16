@@ -318,6 +318,10 @@ class StorageInterface(ABC):
         """Clear all data from the database (papers, figures, stamps, notes, etc.)."""
         ...
 
+    def close(self) -> None:
+        """ストレージリソースを解放する（デフォルト: 何もしない）。"""
+        pass
+
 
 class SQLiteStorage(StorageInterface):
     """SQLite storage implementation."""

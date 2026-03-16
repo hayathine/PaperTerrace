@@ -87,8 +87,8 @@ else:
         _url,
         pool_pre_ping=True,
         pool_recycle=300,
-        pool_size=2 if _is_postgres else 5,
-        max_overflow=2 if _is_postgres else 10,
+        pool_size=5 if _is_postgres else 5,
+        max_overflow=10 if _is_postgres else 10,
         connect_args=_connect_args,
     )
 
