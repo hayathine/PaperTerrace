@@ -236,8 +236,8 @@ class LayoutAnalysisService:
                 )
                 all_figures.extend(page_figures)
 
-        # 3. Save to DB ONLY for registered users
-        if all_figures and user_id:
+        # 3. Save to DB ONLY for registered users with a valid paper record
+        if all_figures and user_id and paper:
             logger.debug(
                 f"[analyze_layout_lazy] Saving {len(all_figures)} figures to DB for {paper_id}"
             )
