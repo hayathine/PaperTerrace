@@ -615,8 +615,19 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		}
 	}, [jumpTarget, mode]);
 
+	const MAX_FILE_SIZE_MB = 30;
+
 	const startAnalysis = async (file: File) => {
 		if (processingFileRef.current === file) return;
+
+		if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+			setStatus("error");
+			setErrorMsg(
+				t("common.errors.file_too_large", { maxMB: MAX_FILE_SIZE_MB }),
+			);
+			return;
+		}
+
 		processingFileRef.current = file;
 
 		setStatus("uploading");

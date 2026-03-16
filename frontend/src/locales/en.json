@@ -13,6 +13,7 @@
 			"unexpected": "An unexpected error occurred. Please try again later.",
 			"load_failed": "Failed to load. Please try again.",
 			"upload_failed": "Upload failed. Please try again.",
+			"file_too_large": "File is too large (max: {{maxMB}}MB). Please try a smaller PDF.",
 			"processing": "An error occurred during processing. Please try again.",
 			"network": "A network error occurred. Please check your connection."
 		},

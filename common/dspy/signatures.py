@@ -222,6 +222,7 @@ class UserProfileEstimation(dspy.Signature):
     paper_summary: str = dspy.InputField(desc="Summary of the paper")
     conversation_history: str = dspy.InputField(desc="Conversation history")
     word_clicks: str = dspy.InputField(desc="List of words clicked by the user")
+    created_at: str = dspy.InputField(desc="Timestamp when the trace was recorded (UTC)")
     knowledge_level: str = dspy.OutputField(desc="Beginner / Intermediate / Advanced")
     interests: list[str] = dspy.OutputField(desc="Interesting topics")
     unknown_concepts: list[str] = dspy.OutputField(desc="Concepts not yet understood")

@@ -136,6 +136,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 _initialized = False
 _init_lock = asyncio.Lock()
 _init_started_at: Optional[float] = None
+_http_client: httpx.AsyncClient | None = None
 
 
 # --------------------------------------------------
@@ -201,10 +202,27 @@ async def ensure_initialized():
 
 @app.on_event("startup")
 async def startup_event():
+    global _http_client
+    _http_client = httpx.AsyncClient(
+        timeout=httpx.Timeout(30.0, connect=10.0),
+        limits=httpx.Limits(
+            max_connections=20,
+            max_keepalive_connections=10,
+            keepalive_expiry=30.0,
+        ),
+    )
     # 環境変数 PRELOAD_MODELS=true の場合、バックグラウンドで直ちに初期化を開始
     if os.getenv("PRELOAD_MODELS", "false").lower() == "true":
         logger.info("PRELOAD_MODELS is enabled. Starting eager initialization...")
         asyncio.create_task(ensure_initialized())
+
+
+@app.on_event("shutdown")
+async def shutdown_event():
+    global _http_client
+    if _http_client:
+        await _http_client.aclose()
+        _http_client = None
 
 
 # --------------------------------------------------
@@ -414,9 +432,9 @@ if INFERENCE_TYPE in ["all", "layout"]:
         start_time = time.time()
 
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
-                tasks = [client.get(url) for url in req.image_urls]
-                responses = await asyncio.gather(*tasks, return_exceptions=True)
+            client = _http_client or httpx.AsyncClient(timeout=30.0)
+            tasks = [client.get(url) for url in req.image_urls]
+            responses = await asyncio.gather(*tasks, return_exceptions=True)
 
             images_bytes = []
             for i, resp in enumerate(responses):

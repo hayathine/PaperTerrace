@@ -295,7 +295,6 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	}, [selectionMenu]);
 
 	// --- コンテンツ: content が空なら lines フォールバック ---
-	// バックエンドが bbox ベースで ![label](bbox) マーカーを生成するため追加処理不要。
 	const processedMarkdown = useMemo(() => {
 		let content = "";
 		if (page.content && page.content.trim().length > 0) {
@@ -314,8 +313,60 @@ const TextModePage: React.FC<TextModePageProps> = ({
 			(_, label, x1, y1, x2, y2) => `![${label}](<${x1},${y1},${x2},${y2}>)`,
 		);
 
+		// フォールバック: content にマーカーがない figure を Y 座標で段落間に挿入する。
+		// 旧キャッシュ論文（マーカー未生成）や遅延レイアウト解析で追加された figure に対応。
+		if (page.figures && page.figures.length > 0) {
+			// content 内に既に存在する bbox を収集
+			const existingBboxes: number[][] = [];
+			const markerRe = /!\[[^\]]*\]\(<([\d.]+),([\d.]+),([\d.]+),([\d.]+)>\)/g;
+			let m: RegExpExecArray | null;
+			// biome-ignore lint/suspicious/noAssignInExpressions: iteration idiom
+			while ((m = markerRe.exec(content)) !== null) {
+				existingBboxes.push([
+					Number.parseFloat(m[1]),
+					Number.parseFloat(m[2]),
+					Number.parseFloat(m[3]),
+					Number.parseFloat(m[4]),
+				]);
+			}
+
+			const tol = 20;
+			const unmatched = page.figures.filter(
+				(fig) =>
+					!existingBboxes.some(
+						(eb) =>
+							Math.abs(eb[0] - fig.bbox[0]) < tol &&
+							Math.abs(eb[1] - fig.bbox[1]) < tol &&
+							Math.abs(eb[2] - fig.bbox[2]) < tol &&
+							Math.abs(eb[3] - fig.bbox[3]) < tol,
+					),
+			);
+
+			if (unmatched.length > 0) {
+				const pageHeight = page.height || 1;
+				const paragraphs = content.split("\n\n");
+				const refs = unmatched
+					.map((fig) => ({
+						y: fig.bbox[1],
+						ref: `![${fig.label || "figure"}](<${fig.bbox[0]},${fig.bbox[1]},${fig.bbox[2]},${fig.bbox[3]}>)`,
+					}))
+					.sort((a, b) => a.y - b.y);
+
+				let offset = 0;
+				for (const { y, ref } of refs) {
+					const insertIdx = Math.min(
+						Math.floor((y / pageHeight) * paragraphs.length) + offset,
+						paragraphs.length,
+					);
+					paragraphs.splice(insertIdx, 0, ref);
+					offset += 1;
+				}
+				content = paragraphs.join("\n\n");
+			}
+		}
+
 		return content;
-	}, [page.content, page.lines]);
+	}, [page.content, page.lines, page.figures, page.height]);
 
 	// --- react-markdown の components カスタマイズ ---
 	const mdComponents: Components = useMemo(() => {

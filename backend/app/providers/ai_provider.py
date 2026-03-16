@@ -912,9 +912,9 @@ class VertexAIProvider(AIProviderInterface):
             }
             if response_model:
                 config_params["response_mime_type"] = "application/json"
-                config_params["response_json_schema"] = (
-                    response_model.model_json_schema()
-                )
+                # Vertex AI マルチモーダルでは response_json_schema (dict) は
+                # 400 INVALID_ARGUMENT になるため response_schema (Pydantic model) を使用
+                config_params["response_schema"] = response_model
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction
@@ -998,9 +998,9 @@ class VertexAIProvider(AIProviderInterface):
             }
             if response_model:
                 config_params["response_mime_type"] = "application/json"
-                config_params["response_json_schema"] = (
-                    response_model.model_json_schema()
-                )
+                # Vertex AI マルチモーダルでは response_json_schema (dict) は
+                # 400 INVALID_ARGUMENT になるため response_schema (Pydantic model) を使用
+                config_params["response_schema"] = response_model
 
             if system_instruction:
                 config_params["system_instruction"] = system_instruction

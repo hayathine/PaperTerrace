@@ -40,6 +40,7 @@ class QueueWorker:
             self.redis = Redis.from_url(self.redis_url, socket_connect_timeout=2)
             self.redis.ping()
             logger.info(f"Connected to Redis at {self.redis_url}")
+            open("/tmp/ready", "w").close()
         except Exception as e:
             logger.error(f"Failed to connect to Redis: {e}")
             raise
@@ -213,6 +214,11 @@ class QueueWorker:
     def stop(self):
         """Stop the worker."""
         self.running = False
+        try:
+            import os
+            os.remove("/tmp/ready")
+        except FileNotFoundError:
+            pass
 
 
 async def main():

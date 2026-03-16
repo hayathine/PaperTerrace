@@ -13,8 +13,11 @@ from common.logger import ServiceLogger
 from common.prompts import (
     PAPER_SUMMARY_FROM_PDF_PROMPT,
 )
+from redis_provider.provider import RedisService
 
 log = ServiceLogger("Summary")
+
+CACHE_TTL_MINUTES = 60
 
 
 class SummaryError(Exception):
@@ -29,6 +32,7 @@ class SummaryService:
     def __init__(self, storage=None):
         self.ai_provider = get_ai_provider()
         self.storage = storage or get_storage_provider()  # Inject storage
+        self.redis = RedisService()
         self.model = os.getenv("MODEL_SUMMARY", "gemini-2.5-flash-lite")
         self.token_limit = int(os.getenv("MAX_INPUT_TOKENS", "900000"))
 
@@ -50,40 +54,47 @@ class SummaryService:
     ) -> tuple[str, str | None]:
         """
         論文全体の包括的な要約を生成する。
-        pdf_bytesが指定されている場合はPDF直接入力方式を使用。
+        優先的にPDF画像入力方式を使用し、PDF取得失敗時はテキスト方式にフォールバック。
         """
         # Check cache
+        paper_info = None
         if paper_id:
-            paper = self.storage.get_paper(paper_id)
-            if paper and paper.get("full_summary"):
+            paper_info = self.storage.get_paper(paper_id)
+            if paper_info and paper_info.get("full_summary"):
                 log.info("summarize_full", "Full summary cache HIT", paper_id=paper_id)
-                return paper["full_summary"], None
+                return paper_info["full_summary"], None
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
+        # pdf_bytes未指定の場合、GCSからPDFを取得して画像パスを試みる
+        if not pdf_bytes and paper_id:
+            try:
+                from app.providers import get_image_storage
+
+                info = paper_info or self.storage.get_paper(paper_id)
+                if info and info.get("file_hash"):
+                    img_storage = get_image_storage()
+                    pdf_bytes = img_storage.get_doc_bytes(
+                        img_storage.get_doc_path(info["file_hash"])
+                    )
+                    log.debug(
+                        "summarize_full",
+                        "PDF bytes fetched from GCS for image-based summary",
+                        paper_id=paper_id,
+                        pdf_size=len(pdf_bytes),
+                    )
+            except Exception as e:
+                log.warning(
+                    "summarize_full",
+                    "Failed to fetch PDF bytes, falling back to text-based summary",
+                    error=str(e),
+                    paper_id=paper_id,
+                )
+                pdf_bytes = None
+
         try:
             if pdf_bytes:
-                # Vision-based summary logic
-                import io
-
-                import pdfplumber
-
-                log.debug(
-                    "summarize_full",
-                    "Generating full summary from PDF images",
-                    pdf_size=len(pdf_bytes),
-                )
-
-                images = []
-                with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-                    max_pages = 50
-                    pages_to_process = pdf.pages[:max_pages]
-                    for page in pages_to_process:
-                        page_img = page.to_image(resolution=100)
-                        buf = io.BytesIO()
-                        page_img.original.save(buf, format="PNG")
-                        images.append(buf.getvalue())
-
+                # PDF-based summary with context cache
                 keyword_focus = ""
                 if key_word:
                     keyword_focus = f"[Topic Focus]\nPlease provide more details and context regarding the keyword: '{key_word}' within the summary if applicable."
@@ -91,8 +102,50 @@ class SummaryService:
                 prompt = PAPER_SUMMARY_FROM_PDF_PROMPT.format(
                     lang_name=lang_name, keyword_focus=keyword_focus
                 )
-                formatted_text = await self.ai_provider.generate_with_images(
-                    prompt, images, model=self.model
+
+                # コンテキストキャッシュを取得または作成（chatと共有）
+                pdf_cache_name = None
+                if paper_id:
+                    pdf_cache_key = f"paper_cache_pdf:{paper_id}"
+                    pdf_cache_name = self.redis.get(pdf_cache_key)
+                    if not pdf_cache_name:
+                        try:
+                            pdf_cache_name = await self.ai_provider.create_context_cache(
+                                model=self.model,
+                                contents=pdf_bytes,
+                                ttl_minutes=CACHE_TTL_MINUTES,
+                            )
+                            self.redis.set(
+                                pdf_cache_key,
+                                pdf_cache_name,
+                                expire=CACHE_TTL_MINUTES * 60,
+                            )
+                            log.info(
+                                "summarize_full",
+                                "PDF context cache created",
+                                paper_id=paper_id,
+                                cache_name=pdf_cache_name,
+                            )
+                        except Exception as e:
+                            log.warning(
+                                "summarize_full",
+                                "Failed to create context cache, proceeding without cache",
+                                error=str(e),
+                                paper_id=paper_id,
+                            )
+                            pdf_cache_name = None
+
+                log.debug(
+                    "summarize_full",
+                    "Generating full summary from PDF",
+                    pdf_size=len(pdf_bytes),
+                    cached=pdf_cache_name is not None,
+                )
+                formatted_text = await self.ai_provider.generate_with_pdf(
+                    prompt,
+                    pdf_bytes=pdf_bytes if not pdf_cache_name else None,
+                    cached_content_name=pdf_cache_name,
+                    model=self.model,
                 )
             else:
                 # Text-based summary logic (Restored)

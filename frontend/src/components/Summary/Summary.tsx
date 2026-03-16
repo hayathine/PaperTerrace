@@ -496,6 +496,7 @@ const Summary: React.FC<SummaryProps> = ({
 												sessionId={sessionId}
 												targetType="recommendation"
 												targetId={paper.title}
+												traceId={recommendationResponse.trace_id}
 											/>
 										</div>
 									))}

@@ -201,155 +201,148 @@ class LayoutAnalysisService:
                 await on_figures(batch_figures)
 
         # ----------------------------------------------------------------
-        # 署名付きURLを並列生成（GCS環境のみ有効、ローカルは None）
+        # バッチを先に構築し、バッチ単位で署名付きURLを生成して逐次送信
         # ----------------------------------------------------------------
-        signed_url_map: dict[int, str] = {}
-        url_results = await asyncio.gather(
-            *[asyncio.to_thread(get_signed_url, url) for _, url in pages_to_process]
-        )
-        for (pn, _), su in zip(pages_to_process, url_results):
-            if su is None:
-                signed_url_map = {}  # 1つでも失敗したらURL方式を使わない
-                break
-            signed_url_map[pn] = su
+        pages_list = list(pages_to_process)
+        first_n = min(3, len(pages_list))
+        batches_raw: list[list[tuple[int, str]]] = [pages_list[:first_n]]
+        for i in range(first_n, len(pages_list), 10):
+            batches_raw.append(pages_list[i : i + 10])
 
-        if signed_url_map:
-            # --- GCS署名付きURL方式 ---
-            log.info(
-                "analyze_layout_lazy",
-                f"Using signed URL approach for {len(pages_to_process)} pages",
+        async def _load_page(page_num: int, image_url: str) -> tuple[int, bytes]:
+            return page_num, await anyio.to_thread.run_sync(
+                get_image_bytes, image_url
             )
-            page_nums_list = [pn for pn, _ in pages_to_process]
-            signed_urls_list = [signed_url_map[pn] for pn in page_nums_list]
 
-            first = min(3, len(page_nums_list))
-            url_batches: list[tuple[list[str], list[int]]] = [
-                (signed_urls_list[:first], page_nums_list[:first])
-            ]
-            for i in range(first, len(signed_urls_list), 10):
-                url_batches.append(
-                    (signed_urls_list[i : i + 10], page_nums_list[i : i + 10])
+        async def _process_url_batch(
+            batch_urls: list[str], batch_pages: list[int]
+        ) -> list[dict]:
+            try:
+                (
+                    results,
+                    crops_per_page,
+                ) = await inference_client.analyze_images_batch_by_urls(
+                    batch_urls,
+                    page_nums=batch_pages,
+                    max_batch_size=len(batch_urls),
                 )
+                log.info(
+                    "analyze_layout_lazy", f"URL batch done: pages {batch_pages}"
+                )
+            except Exception as e:
+                log.error(
+                    "analyze_layout_lazy",
+                    f"URL batch failed pages {batch_pages}: {e}",
+                )
+                crops_per_page = [[] for _ in batch_urls]
 
-            async def _process_url_batch(
-                batch_urls: list[str], batch_pages: list[int]
-            ) -> list[dict]:
-                try:
-                    (
-                        results,
-                        crops_per_page,
-                    ) = await inference_client.analyze_images_batch_by_urls(
-                        batch_urls,
-                        page_nums=batch_pages,
-                        max_batch_size=len(batch_urls),
+            batch_figures: list[dict] = []
+            for page_num, crops in zip(batch_pages, crops_per_page):
+                if not crops:
+                    continue
+                page_figs = await self._save_crops_from_inference(
+                    page_num, crops, file_hash
+                )
+                batch_figures.extend(page_figs)
+
+            await _save_and_notify(batch_figures)
+            return batch_figures
+
+        async def _process_byte_batch(
+            batch_imgs: list[bytes], batch_pages: list[int]
+        ) -> list[dict]:
+            try:
+                (
+                    results,
+                    crops_per_page,
+                ) = await inference_client.analyze_images_batch(
+                    batch_imgs,
+                    page_nums=batch_pages,
+                    max_batch_size=len(batch_imgs),
+                )
+                log.info(
+                    "analyze_layout_lazy", f"Batch received: pages {batch_pages}"
+                )
+            except Exception as e:
+                log.error(
+                    "analyze_layout_lazy",
+                    f"Batch failed for pages {batch_pages}: {e}",
+                )
+                crops_per_page = [[] for _ in batch_imgs]
+
+            batch_figures: list[dict] = []
+            for page_num, crops in zip(batch_pages, crops_per_page):
+                if not crops:
+                    continue
+                page_figs = await self._save_crops_from_inference(
+                    page_num, crops, file_hash
+                )
+                batch_figures.extend(page_figs)
+
+            await _save_and_notify(batch_figures)
+            return batch_figures
+
+        all_figures: list[dict] = []
+        use_signed_urls = True  # 最初は署名付きURL方式を試みる
+
+        for batch_raw in batches_raw:
+            batch_page_nums = [pn for pn, _ in batch_raw]
+            batch_image_urls_raw = [url for _, url in batch_raw]
+
+            if use_signed_urls:
+                signed = list(
+                    await asyncio.gather(
+                        *[
+                            asyncio.to_thread(get_signed_url, url)
+                            for url in batch_image_urls_raw
+                        ]
                     )
+                )
+                if all(su is not None for su in signed):
                     log.info(
-                        "analyze_layout_lazy", f"URL batch done: pages {batch_pages}"
-                    )
-                except Exception as e:
-                    log.error(
                         "analyze_layout_lazy",
-                        f"URL batch failed pages {batch_pages}: {e}",
+                        f"Using signed URL approach for pages {batch_page_nums}",
                     )
-                    crops_per_page = [[] for _ in batch_urls]
-
-                batch_figures: list[dict] = []
-                for page_num, crops in zip(batch_pages, crops_per_page):
-                    if not crops:
-                        continue
-                    page_figs = await self._save_crops_from_inference(
-                        page_num, crops, file_hash
+                    batch_figs = await _process_url_batch(signed, batch_page_nums)
+                    all_figures.extend(batch_figs)
+                    continue
+                else:
+                    log.info(
+                        "analyze_layout_lazy",
+                        "Signed URL generation failed, switching to byte transfer",
                     )
-                    batch_figures.extend(page_figs)
+                    use_signed_urls = False
 
-                await _save_and_notify(batch_figures)
-                return batch_figures
-
-            batch_results = await asyncio.gather(
-                *[_process_url_batch(urls, pages) for urls, pages in url_batches]
-            )
-            all_figures = [f for figs in batch_results for f in figs]
-
-        else:
-            # --- バイト転送方式（ローカル開発環境 / GCS署名URL生成失敗時） ---
+            # バイト転送フォールバック
             log.info(
                 "analyze_layout_lazy",
-                f"Using byte transfer approach for {len(pages_to_process)} pages",
+                f"Using byte transfer approach for pages {batch_page_nums}",
             )
-
-            async def _load_page(page_num: int, image_url: str) -> tuple[int, bytes]:
-                return page_num, await anyio.to_thread.run_sync(
-                    get_image_bytes, image_url
-                )
-
             load_results = await asyncio.gather(
-                *[_load_page(pn, url) for pn, url in pages_to_process],
+                *[_load_page(pn, url) for pn, url in batch_raw],
                 return_exceptions=True,
             )
-            image_data_list = []
-            page_info_list = []
+            imgs: list[bytes] = []
+            pnums: list[int] = []
             for res in load_results:
                 if isinstance(res, Exception):
                     log.error("load_page", f"Failed to load page image: {res}")
                     continue
-                page_num, img_bytes = res
-                image_data_list.append(img_bytes)
-                page_info_list.append(page_num)
+                pn, img = res
+                imgs.append(img)
+                pnums.append(pn)
 
-            if not image_data_list:
+            if imgs:
+                batch_figs = await _process_byte_batch(imgs, pnums)
+                all_figures.extend(batch_figs)
+            else:
                 log.warning(
                     "analyze_layout_lazy",
-                    f"No valid images for paper {paper_id}",
-                )
-                raise Exception("No valid images to process")
-
-            first = min(3, len(image_data_list))
-            batches: list[tuple[list[bytes], list[int]]] = [
-                (image_data_list[:first], page_info_list[:first])
-            ]
-            for i in range(first, len(image_data_list), 10):
-                batches.append(
-                    (image_data_list[i : i + 10], page_info_list[i : i + 10])
+                    f"No valid images for pages {batch_page_nums}",
                 )
 
-            async def _process_byte_batch(
-                batch_imgs: list[bytes], batch_pages: list[int]
-            ) -> list[dict]:
-                try:
-                    (
-                        results,
-                        crops_per_page,
-                    ) = await inference_client.analyze_images_batch(
-                        batch_imgs,
-                        page_nums=batch_pages,
-                        max_batch_size=len(batch_imgs),
-                    )
-                    log.info(
-                        "analyze_layout_lazy", f"Batch received: pages {batch_pages}"
-                    )
-                except Exception as e:
-                    log.error(
-                        "analyze_layout_lazy",
-                        f"Batch failed for pages {batch_pages}: {e}",
-                    )
-                    crops_per_page = [[] for _ in batch_imgs]
-
-                batch_figures: list[dict] = []
-                for page_num, crops in zip(batch_pages, crops_per_page):
-                    if not crops:
-                        continue
-                    page_figs = await self._save_crops_from_inference(
-                        page_num, crops, file_hash
-                    )
-                    batch_figures.extend(page_figs)
-
-                await _save_and_notify(batch_figures)
-                return batch_figures
-
-            batch_results = await asyncio.gather(
-                *[_process_byte_batch(imgs, pages) for imgs, pages in batches]
-            )
-            all_figures = [f for figs in batch_results for f in figs]
+        if not all_figures and not pages_to_process:
+            raise Exception("No valid images to process")
 
         # 3. layout_json を全バッチ完了後に更新
         if all_figures and user_id and paper:

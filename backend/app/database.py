@@ -65,10 +65,20 @@ if _is_postgres:
 # 優先順位:
 #   1. DATABASE_POOL_URL 環境変数（明示的な pooler URL）
 #   2. DATABASE_URL が Neon URL の場合、自動的に pooler hostname に変換
-#   3. フォールバック: 通常の QueuePool
+#   3. DATABASE_URL が既に Neon pooler URL の場合、そのまま使用
+#   4. フォールバック: 通常の QueuePool
 _pool_url = os.getenv("DATABASE_POOL_URL", "")
 if not _pool_url and _is_postgres:
     _pool_url = _to_neon_pooler_url(_url) or ""
+    # DATABASE_URL が既に pooler エンドポイントの場合もNullPoolを使用
+    if not _pool_url:
+        try:
+            from urllib.parse import urlparse as _urlparse
+            _h = _urlparse(_url).hostname or ""
+            if ".neon.tech" in _h and "-pooler" in _h:
+                _pool_url = _url
+        except Exception:
+            pass
 
 _use_pgbouncer = bool(_pool_url)
 
