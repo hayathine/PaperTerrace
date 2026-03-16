@@ -68,7 +68,6 @@ jobs:
         id: plan
         run: |
           terraform plan -no-color -input=false \
-            -var="gemini_api_key=${{ secrets.GEMINI_API_KEY }}" \
             -var="db_password=${{ secrets.DB_PASSWORD }}" \
             -out=tfplan
         working-directory: ${{ env.WORKING_DIR }}

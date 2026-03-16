@@ -29,7 +29,7 @@ class SummaryService:
     def __init__(self, storage=None):
         self.ai_provider = get_ai_provider()
         self.storage = storage or get_storage_provider()  # Inject storage
-        self.model = os.getenv("MODEL_SUMMARY", "gemini-2.0-flash-lite")
+        self.model = os.getenv("MODEL_SUMMARY", "gemini-2.5-flash-lite")
         self.token_limit = int(os.getenv("MAX_INPUT_TOKENS", "900000"))
 
         # Initialize DSPy

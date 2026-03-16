@@ -4,19 +4,24 @@ import dspy
 
 
 def setup_dspy():
-    """Configure DSPy with Gemini."""
-    # Use gemini/ prefix for litellm
-    model_name = os.environ.get("DSPY_GEMINI_MODEL", "gemini/gemini-2.5-flash-lite")
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if api_key:
-        lm = dspy.LM(model_name, api_key=api_key)
-        dspy.configure(lm=lm)
-        return lm
-    else:
-        print("GEMINI_API_KEY is not set. DSPy not fully configured.")
-        lm = dspy.LM(model_name)
-        dspy.configure(lm=lm)
-        return lm
+    """Configure DSPy with Vertex AI."""
+    # Use vertex_ai/ prefix for litellm
+    model_name = os.environ.get("DSPY_MODEL", "vertex_ai/gemini-2.5-flash-lite")
+    project = os.environ.get("GCP_PROJECT_ID")
+    location = os.environ.get("GCP_LOCATION", "us-central1")
+    credentials = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+
+    kwargs: dict = {}
+    if project:
+        kwargs["vertex_project"] = project
+    if location:
+        kwargs["vertex_location"] = location
+    if credentials:
+        kwargs["vertex_credentials"] = credentials
+
+    lm = dspy.LM(model_name, **kwargs)
+    dspy.configure(lm=lm)
+    return lm
 
 
 def get_dspy_gcs_bucket():

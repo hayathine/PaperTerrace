@@ -118,12 +118,15 @@ async def explain_figure(
             )
             raise HTTPException(status_code=400, detail="No image URL")
 
-        # GCS 環境では URI を直接 Gemini に渡し、バイト転送を省略する
+        # GCS 環境かつ Vertex AI プロバイダーの場合のみ URI を直接渡す（Gemini API は gs:// 非対応）
+        import os
+
         import anyio
         from app.providers.image_storage import get_gcs_uri
 
         gcs_uri = await anyio.to_thread.run_sync(get_gcs_uri, image_url)
-        if gcs_uri:
+        use_vertex = os.getenv("AI_PROVIDER", "vertex").lower() == "vertex"
+        if gcs_uri and use_vertex:
             log.debug(
                 "explain_figure",
                 "Using GCS URI directly (no download)",

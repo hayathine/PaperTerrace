@@ -127,7 +127,7 @@ def _save_trace_sync(
             "session_id": context.session_id if context else None,
             "paper_id": context.paper_id if context else None,
             "model_name": os.environ.get(
-                "DSPY_GEMINI_MODEL", "gemini/gemini-2.5-flash-lite"
+                "DSPY_MODEL", "vertex_ai/gemini-2.5-flash-lite"
             ),
             "latency_ms": latency_ms,
             "is_success": is_success,

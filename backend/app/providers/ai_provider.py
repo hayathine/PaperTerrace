@@ -145,13 +145,14 @@ class GeminiProvider(AIProviderInterface):
         # コールドスタート最適化: 初回使用時のみインポート
         from google import genai
         from google.genai import types
+
         self._types = types
 
         api_key = os.getenv("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable is required")
         self.client = genai.Client(api_key=api_key, vertexai=False)
-        self.model = os.getenv("MODEL_OCR", "gemini-2.0-flash")
+        self.model = os.getenv("MODEL_OCR", "gemini-2.5-flash")
         self.temperature = float(os.getenv("AI_TEMPERATURE", "0.1"))
         self.max_tokens = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "1024"))
         log.info(
@@ -279,7 +280,10 @@ class GeminiProvider(AIProviderInterface):
             grounding_data = None
             if enable_search:
                 try:
-                    if response.candidates and response.candidates[0].grounding_metadata:
+                    if (
+                        response.candidates
+                        and response.candidates[0].grounding_metadata
+                    ):
                         gm = response.candidates[0].grounding_metadata
                         grounding_data = {}
 
@@ -392,9 +396,13 @@ class GeminiProvider(AIProviderInterface):
             if cached_content_name:
                 image_part = None
             elif image_uri:
-                image_part = self._types.Part.from_uri(file_uri=image_uri, mime_type=mime_type)
+                image_part = self._types.Part.from_uri(
+                    file_uri=image_uri, mime_type=mime_type
+                )
             else:
-                image_part = self._types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+                image_part = self._types.Part.from_bytes(
+                    data=image_bytes, mime_type=mime_type
+                )
 
             contents = [prompt] if cached_content_name else [image_part, prompt]
 
@@ -576,7 +584,9 @@ class GeminiProvider(AIProviderInterface):
                 [prompt]
                 if cached_content_name
                 else [
-                    self._types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+                    self._types.Part.from_bytes(
+                        data=pdf_bytes, mime_type="application/pdf"
+                    ),
                     prompt,
                 ]
             )
@@ -639,7 +649,9 @@ class GeminiProvider(AIProviderInterface):
             elif isinstance(contents, bytes):
                 # Assume PDF if bytes
                 parts = [
-                    self._types.Part.from_bytes(data=contents, mime_type="application/pdf")
+                    self._types.Part.from_bytes(
+                        data=contents, mime_type="application/pdf"
+                    )
                 ]
             else:
                 parts = contents
@@ -702,6 +714,7 @@ class VertexAIProvider(AIProviderInterface):
         # コールドスタート最適化: 初回使用時のみインポート
         from google import genai
         from google.genai import types
+
         self._types = types
 
         self.project_id = os.getenv("GCP_PROJECT_ID")
@@ -883,9 +896,13 @@ class VertexAIProvider(AIProviderInterface):
             if cached_content_name:
                 image_part = None
             elif image_uri:
-                image_part = self._types.Part.from_uri(file_uri=image_uri, mime_type=mime_type)
+                image_part = self._types.Part.from_uri(
+                    file_uri=image_uri, mime_type=mime_type
+                )
             else:
-                image_part = self._types.Part.from_bytes(data=image_bytes, mime_type=mime_type)
+                image_part = self._types.Part.from_bytes(
+                    data=image_bytes, mime_type=mime_type
+                )
 
             contents = [prompt] if cached_content_name else [image_part, prompt]
 
@@ -1043,7 +1060,9 @@ class VertexAIProvider(AIProviderInterface):
                 [prompt]
                 if cached_content_name
                 else [
-                    self._types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf"),
+                    self._types.Part.from_bytes(
+                        data=pdf_bytes, mime_type="application/pdf"
+                    ),
                     prompt,
                 ]
             )
@@ -1106,7 +1125,9 @@ class VertexAIProvider(AIProviderInterface):
                 parts = [self._types.Part.from_text(text=contents)]
             elif isinstance(contents, bytes):
                 parts = [
-                    self._types.Part.from_bytes(data=contents, mime_type="application/pdf")
+                    self._types.Part.from_bytes(
+                        data=contents, mime_type="application/pdf"
+                    )
                 ]
             else:
                 parts = contents
@@ -1158,7 +1179,7 @@ def get_ai_provider() -> AIProviderInterface:
     if _ai_provider_instance is not None:
         return _ai_provider_instance
 
-    provider_type = os.getenv("AI_PROVIDER", "gemini").lower()
+    provider_type = os.getenv("AI_PROVIDER", "vertex").lower()
 
     if provider_type == "vertex":
         _ai_provider_instance = VertexAIProvider()
