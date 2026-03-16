@@ -142,90 +142,140 @@ class LayoutAnalysisService:
         else:
             pages_to_process = list(enumerate(cached_images, 1))
 
-        image_data_list = []
-        page_info_list = []
+        from app.providers.image_storage import get_image_bytes, get_signed_url
 
-        from app.providers.image_storage import get_image_bytes
-
-        async def _load_page(page_num: int, image_url: str) -> tuple[int, bytes]:
-            return page_num, await anyio.to_thread.run_sync(get_image_bytes, image_url)
-
-        load_results = await asyncio.gather(
-            *[_load_page(pn, url) for pn, url in pages_to_process],
-            return_exceptions=True,
-        )
-        for res in load_results:
-            if isinstance(res, Exception):
-                logger.error(f"Failed to load page image: {res}")
-                continue
-            page_num, img_bytes = res
-            image_data_list.append(img_bytes)
-            page_info_list.append(page_num)
-
-        if not image_data_list:
-            logger.warning(
-                f"[analyze_layout_lazy] No valid images found to process for paper {paper_id}"
-            )
-            raise Exception("No valid images to process")
-
-        logger.info(
-            f"[analyze_layout_lazy] Sending {len(image_data_list)} images to inference service for paper {paper_id}"
-        )
         inference_client = await get_inference_client()
-
         all_figures = []
 
-        # バッチを収集（先頭3枚 + 以降10枚ずつ）
-        batches: list[tuple[list[bytes], list[int]]] = []
-        if image_data_list:
-            first_batch_size = min(3, len(image_data_list))
-            batches.append(
-                (image_data_list[:first_batch_size], page_info_list[:first_batch_size])
+        # 署名付きURLを生成（GCS環境のみ有効、ローカルは None）
+        signed_url_map: dict[int, str] = {}
+        for pn, url in pages_to_process:
+            su = await anyio.to_thread.run_sync(get_signed_url, url)
+            if su is None:
+                signed_url_map = {}  # 1つでも失敗したらURL方式を使わない
+                break
+            signed_url_map[pn] = su
+
+        if signed_url_map:
+            # --- GCS署名付きURL方式: バックエンドのメモリ転送を省略 ---
+            logger.info(
+                f"[analyze_layout_lazy] Using signed URL approach for {len(pages_to_process)} pages"
             )
-            for i in range(first_batch_size, len(image_data_list), 10):
+            page_nums_list = [pn for pn, _ in pages_to_process]
+            signed_urls_list = [signed_url_map[pn] for pn in page_nums_list]
+            orig_url_map = {pn: url for pn, url in pages_to_process}
+
+            # バッチ送信（先頭3枚並列 + 以降10枚ずつ）
+            first = min(3, len(page_nums_list))
+            url_batches: list[tuple[list[str], list[int]]] = [
+                (signed_urls_list[:first], page_nums_list[:first])
+            ]
+            for i in range(first, len(signed_urls_list), 10):
+                url_batches.append(
+                    (signed_urls_list[i : i + 10], page_nums_list[i : i + 10])
+                )
+
+            async def _send_url_batch(
+                batch_urls: list[str], batch_pages: list[int]
+            ) -> tuple[list[int], list]:
+                try:
+                    results = await inference_client.analyze_images_batch_by_urls(
+                        batch_urls,
+                        page_nums=batch_pages,
+                        max_batch_size=len(batch_urls),
+                    )
+                    logger.info(f"[analyze_layout_lazy] URL batch done: pages {batch_pages}")
+                    return batch_pages, results
+                except Exception as e:
+                    logger.error(f"[analyze_layout_lazy] URL batch failed pages {batch_pages}: {e}")
+                    return batch_pages, [[] for _ in batch_urls]
+
+            url_batch_results = await asyncio.gather(
+                *[_send_url_batch(urls, pages) for urls, pages in url_batches]
+            )
+
+            # 検出があったページのみ画像をダウンロードしてクロップ
+            for batch_page_nums, results in sorted(url_batch_results, key=lambda x: x[0][0]):
+                for page_num, page_results in zip(batch_page_nums, results):
+                    has_target = any(
+                        r.get("class_name", "").lower() in self.TARGET_CLASSES
+                        for r in page_results
+                    )
+                    if not has_target:
+                        continue
+                    img_bytes = await anyio.to_thread.run_sync(
+                        get_image_bytes, orig_url_map[page_num]
+                    )
+                    page_figures = await self._process_page_results(
+                        page_num, img_bytes, page_results, file_hash
+                    )
+                    all_figures.extend(page_figures)
+
+        else:
+            # --- バイト転送方式（ローカル開発環境 / GCS署名URL生成失敗時） ---
+            logger.info(
+                f"[analyze_layout_lazy] Using byte transfer approach for {len(pages_to_process)} pages"
+            )
+
+            async def _load_page(page_num: int, image_url: str) -> tuple[int, bytes]:
+                return page_num, await anyio.to_thread.run_sync(get_image_bytes, image_url)
+
+            load_results = await asyncio.gather(
+                *[_load_page(pn, url) for pn, url in pages_to_process],
+                return_exceptions=True,
+            )
+            image_data_list = []
+            page_info_list = []
+            for res in load_results:
+                if isinstance(res, Exception):
+                    logger.error(f"Failed to load page image: {res}")
+                    continue
+                page_num, img_bytes = res
+                image_data_list.append(img_bytes)
+                page_info_list.append(page_num)
+
+            if not image_data_list:
+                logger.warning(f"[analyze_layout_lazy] No valid images for paper {paper_id}")
+                raise Exception("No valid images to process")
+
+            first = min(3, len(image_data_list))
+            batches: list[tuple[list[bytes], list[int]]] = [
+                (image_data_list[:first], page_info_list[:first])
+            ]
+            for i in range(first, len(image_data_list), 10):
                 batches.append(
                     (image_data_list[i : i + 10], page_info_list[i : i + 10])
                 )
 
-        logger.info(
-            f"[analyze_layout_lazy] Sending {len(batches)} batches in parallel"
-        )
+            async def _send_batch(
+                batch_imgs: list[bytes], batch_pages: list[int]
+            ) -> tuple[list[int], list[bytes], list]:
+                try:
+                    results = await inference_client.analyze_images_batch(
+                        batch_imgs,
+                        page_nums=batch_pages,
+                        max_batch_size=len(batch_imgs),
+                    )
+                    logger.info(f"[analyze_layout_lazy] Batch received: pages {batch_pages}")
+                    return batch_pages, batch_imgs, results
+                except Exception as e:
+                    logger.error(f"[analyze_layout_lazy] Batch failed for pages {batch_pages}: {e}")
+                    return batch_pages, batch_imgs, [[] for _ in batch_imgs]
 
-        async def _send_batch(
-            batch_imgs: list[bytes], batch_pages: list[int]
-        ) -> tuple[list[int], list[bytes], list]:
-            """1バッチを推論サービスに並列送信し (page_nums, img_bytes, results) を返す"""
-            try:
-                results = await inference_client.analyze_images_batch(
-                    batch_imgs,
-                    page_nums=batch_pages,
-                    max_batch_size=len(batch_imgs),
-                )
-                logger.info(
-                    f"[analyze_layout_lazy] Batch received: pages {batch_pages}"
-                )
-                return batch_pages, batch_imgs, results
-            except Exception as e:
-                logger.error(
-                    f"[analyze_layout_lazy] Batch failed for pages {batch_pages}: {e}"
-                )
-                return batch_pages, batch_imgs, [[] for _ in batch_imgs]
+            batch_results = await asyncio.gather(
+                *[_send_batch(imgs, pages) for imgs, pages in batches]
+            )
 
-        batch_results = await asyncio.gather(
-            *[_send_batch(imgs, pages) for imgs, pages in batches]
-        )
-
-        # ページ順を保証して結果を処理
-        for batch_page_nums, batch_img_bytes, results in sorted(
-            batch_results, key=lambda x: x[0][0]
-        ):
-            for page_num, img_bytes, page_results in zip(
-                batch_page_nums, batch_img_bytes, results
+            for batch_page_nums, batch_img_bytes, results in sorted(
+                batch_results, key=lambda x: x[0][0]
             ):
-                page_figures = await self._process_page_results(
-                    page_num, img_bytes, page_results, file_hash
-                )
-                all_figures.extend(page_figures)
+                for page_num, img_bytes, page_results in zip(
+                    batch_page_nums, batch_img_bytes, results
+                ):
+                    page_figures = await self._process_page_results(
+                        page_num, img_bytes, page_results, file_hash
+                    )
+                    all_figures.extend(page_figures)
 
         # 3. Save to DB ONLY for registered users with a valid paper record
         if all_figures and user_id and paper:
@@ -248,30 +298,30 @@ class LayoutAnalysisService:
 
             from app.crud import save_figures_to_db
 
-            fids = await anyio.to_thread.run_sync(
-                save_figures_to_db,
-                paper_id,
-                batch_figures,
-            )
+            try:
+                fids = await anyio.to_thread.run_sync(
+                    save_figures_to_db,
+                    paper_id,
+                    batch_figures,
+                )
 
-            # DBで生成されたIDをall_figuresに付与してAPIレスポンスに含める
-            for fid, fig in zip(fids, all_figures):
-                fig["id"] = fid
+                # DBで生成されたIDをall_figuresに付与してAPIレスポンスに含める
+                for fid, fig in zip(fids, all_figures):
+                    fig["id"] = fid
 
-            # Start background analysis tasks
-            for fid, fig in zip(fids, all_figures):
-                if fig.get("image_url"):
-                    asyncio.create_task(
-                        process_figure_analysis_task(
-                            fid,
-                            fig["image_url"],
-                            user_id=user_id,
-                            session_id=session_id,
+                # Start background analysis tasks
+                for fid, fig in zip(fids, all_figures):
+                    if fig.get("image_url"):
+                        asyncio.create_task(
+                            process_figure_analysis_task(
+                                fid,
+                                fig["image_url"],
+                                user_id=user_id,
+                                session_id=session_id,
+                            )
                         )
-                    )
 
-            # Update layout_json (if paper exists in DB)
-            if paper:
+                # Update layout_json (if paper exists in DB)
                 try:
                     existing_layout = paper.get("layout_json")
                     if existing_layout:
@@ -303,6 +353,19 @@ class LayoutAnalysisService:
                         )
                 except Exception as e:
                     logger.warning(f"Failed to update layout_json: {e}")
+
+            except Exception as db_err:
+                # FK違反など DB 保存失敗時は transient UUID にフォールバックして
+                # ジョブを正常完了させる（"AIに聞く"ボタンが表示されるようにする）
+                logger.warning(
+                    f"[analyze_layout_lazy] DB save failed for paper {paper_id}, "
+                    f"falling back to transient UUIDs: {db_err}"
+                )
+                import uuid6
+
+                for fig in all_figures:
+                    if not fig.get("id"):
+                        fig["id"] = str(uuid6.uuid7())
         elif all_figures:
             # トランジェントセッション: DBには保存しないが、セッション内でAI解析できるよう
             # 一時的なUUIDを付与する（このIDはDBに存在しない）

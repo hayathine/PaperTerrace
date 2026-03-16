@@ -18,6 +18,7 @@ from app.providers import (
     get_storage_provider,
 )  # RedisService now uses in-memory cache
 from common.logger import ServiceLogger
+from redis_provider.provider import get_is_registered
 
 log = ServiceLogger("Chat")
 
@@ -51,26 +52,19 @@ class ChatRequest(BaseModel):
 @router.post("/chat")
 async def chat(request: ChatRequest, user: OptionalUser = None):
     storage = get_storage_provider()
-    # Check registration status
+    # Check registration status (Redis キャッシュ付き、DB フォールバック)
     user_id = user.uid if user else None
-    is_registered = False
-    if user_id:
-        if storage.get_user(user_id):
-            is_registered = True
+    is_registered = get_is_registered(user_id)
 
     # ユーザーメッセージをサニタイズ
     sanitized_message = _sanitize_message(request.message)
-
-    context = redis_service.get(f"session:{request.session_id}") or ""
 
     # Resolve paper_id
     paper_id = request.paper_id
     if not paper_id:
         paper_id = storage.get_session_paper_id(request.session_id)
 
-    # Get history from Redis
-    # Registered users: History linked to user_id and paper_id
-    # Guests: History linked to session_id and paper_id
+    # Get history key
     if is_registered:
         history_key = (
             f"chat:{user_id}:{request.paper_id if request.paper_id else 'global'}"
@@ -80,7 +74,13 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         history_key = f"chat:{request.session_id}:{request.paper_id if request.paper_id else 'global'}"
         expire = 3600  # 1 hour for guests (sliding window)
 
-    history = redis_service.get(history_key) or []
+    # セッションコンテキストと履歴を1往復で取得（Redis MGET）
+    session_key = f"session:{request.session_id}"
+    context_raw, history_raw = redis_service.mget(session_key, history_key)
+    context = context_raw or ""
+    history = history_raw or []
+    if context:
+        redis_service.expire(session_key, 3600)
 
     # Check chat limit (max 10 turns)
     user_msg_count = sum(1 for m in history if m.get("role") == "user")
@@ -108,25 +108,34 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
                 )
 
     # Fetch PDF bytes for grounding if paper_id exists
+    # キャッシュが既にある場合はGCSダウンロードをスキップ
     pdf_bytes = None
     if paper_id:
-        try:
-            paper_info = storage.get_paper(paper_id)
-            if paper_info and paper_info.get("file_hash"):
-                from app.providers import get_image_storage
-
-                img_storage = get_image_storage()
-                pdf_bytes = img_storage.get_doc_bytes(
-                    img_storage.get_doc_path(paper_info["file_hash"])
-                )
-                log.debug("chat", "PDF bytes loaded for grounding", paper_id=paper_id)
-        except Exception as e:
-            log.warning(
-                "chat",
-                "Failed to load PDF bytes for grounding",
-                error=str(e),
-                paper_id=paper_id,
+        pdf_cache_key = f"paper_cache_pdf:{paper_id}"
+        if redis_service.get(pdf_cache_key):
+            log.debug(
+                "chat", "PDF cache exists, skipping GCS download", paper_id=paper_id
             )
+        else:
+            try:
+                paper_info = storage.get_paper(paper_id)
+                if paper_info and paper_info.get("file_hash"):
+                    from app.providers import get_image_storage
+
+                    img_storage = get_image_storage()
+                    pdf_bytes = img_storage.get_doc_bytes(
+                        img_storage.get_doc_path(paper_info["file_hash"])
+                    )
+                    log.debug(
+                        "chat", "PDF bytes loaded for grounding", paper_id=paper_id
+                    )
+            except Exception as e:
+                log.warning(
+                    "chat",
+                    "Failed to load PDF bytes for grounding",
+                    error=str(e),
+                    paper_id=paper_id,
+                )
 
     # Calculate user_id (handling guest case)
     current_user_id = user_id if is_registered else f"guest:{request.session_id}"
@@ -190,10 +199,7 @@ async def get_chat_history(
 ):
     storage = get_storage_provider()
     user_id = user.uid if user else None
-    is_registered = False
-    if user_id:
-        if storage.get_user(user_id):
-            is_registered = True
+    is_registered = get_is_registered(user_id)
 
     if is_registered:
         history_key = f"chat:{user_id}:{paper_id if paper_id else 'global'}"
@@ -225,12 +231,8 @@ async def clear_chat(
     paper_id: str | None = Form(None),
     user: OptionalUser = None,
 ):
-    storage = get_storage_provider()
     user_id = user.uid if user else None
-    is_registered = False
-    if user_id:
-        if storage.get_user(user_id):
-            is_registered = True
+    is_registered = get_is_registered(user_id)
 
     if is_registered:
         history_key = f"chat:{user_id}:{paper_id if paper_id else 'global'}"

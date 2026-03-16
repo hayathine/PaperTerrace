@@ -49,6 +49,10 @@ class ImageStorageStrategy(ABC):
         """GCS URI (gs://bucket/blob) を返す。ローカルストレージでは None。"""
         return None
 
+    def generate_signed_url(self, image_url: str, expiration_seconds: int = 900) -> str | None:
+        """署名付きURLを生成する。ローカルストレージでは None。"""
+        return None
+
     @abstractmethod
     def save_doc(self, file_hash: str, doc_bytes: bytes) -> str:
         pass
@@ -343,6 +347,22 @@ class GCSImageStorage(ImageStorageStrategy):
 
             raise
 
+    def _to_blob_name(self, image_url: str) -> str | None:
+        """image_url を GCS blob 名に変換する。"""
+        if image_url.startswith("/static/"):
+            return image_url.replace("/static/", "", 1)
+        elif image_url.startswith("http"):
+            from urllib.parse import urlparse
+            parsed_path = urlparse(image_url).path
+            if parsed_path.startswith("/static/"):
+                return parsed_path.replace("/static/", "", 1)
+            elif len(parsed_path.strip("/").split("/")) == 2:
+                parts = parsed_path.strip("/").split("/")
+                return f"paper_images/{parts[0]}/{parts[1]}"
+        else:
+            return image_url
+        return None
+
     def get_gcs_uri(self, image_url: str) -> str | None:
         """image_url から gs://bucket/blob 形式の GCS URI を返す。"""
         try:
@@ -366,6 +386,29 @@ class GCSImageStorage(ImageStorageStrategy):
         except Exception as e:
             log.warning("get_gcs_uri", "Failed to build GCS URI", image_url=image_url, error=str(e))
         return None
+
+    def generate_signed_url(self, image_url: str, expiration_seconds: int = 900) -> str | None:
+        """image_url から署名付きGCS URLを生成する（v4署名、デフォルト15分）。"""
+        try:
+            blob_name = self._to_blob_name(image_url)
+            if not blob_name:
+                return None
+            from datetime import timedelta
+            blob = self.bucket.blob(blob_name)
+            url = blob.generate_signed_url(
+                expiration=timedelta(seconds=expiration_seconds),
+                method="GET",
+                version="v4",
+            )
+            return url
+        except Exception as e:
+            log.warning(
+                "generate_signed_url",
+                "Failed to generate signed URL",
+                image_url=image_url,
+                error=str(e),
+            )
+            return None
 
     def save_doc(self, file_hash: str, doc_bytes: bytes) -> str:
         try:
@@ -450,3 +493,7 @@ def get_image_bytes(image_url: str) -> bytes:
 
 def get_gcs_uri(image_url: str) -> str | None:
     return _get_instance().get_gcs_uri(image_url)
+
+
+def get_signed_url(image_url: str, expiration_seconds: int = 900) -> str | None:
+    return _get_instance().generate_signed_url(image_url, expiration_seconds)

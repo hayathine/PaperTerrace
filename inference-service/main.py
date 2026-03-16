@@ -6,6 +6,7 @@
 """
 
 import asyncio
+import httpx
 import os
 import time
 from typing import Optional
@@ -23,6 +24,7 @@ from common.logger import configure_logging, logger
 from common.schemas.inference import (
     LayoutAnalysisRequest,
     LayoutAnalysisResponse,
+    LayoutBatchByUrlsRequest,
     TokenizeRequest,
     TokenizeResponse,
     TranslationRequest,
@@ -341,6 +343,86 @@ if INFERENCE_TYPE in ["all", "layout"]:
                 str(e)
                 if app_env == "development"
                 else "Internal error during batch layout analysis"
+            )
+            return {
+                "success": False,
+                "results": [],
+                "processing_time": time.time() - start_time,
+                "message": error_msg,
+            }
+
+    @app.post("/api/v1/analyze-images-batch-by-urls")
+    @limiter.limit(os.getenv("RATE_LIMIT_LAYOUT_BATCH", "20/minute"))
+    async def analyze_images_batch_by_urls(
+        request: Request, req: LayoutBatchByUrlsRequest
+    ):
+        """
+        署名付きURL経由の一括レイアウト解析。
+        推論サービスが直接GCSから画像をダウンロードすることでバックエンドのメモリ転送を削減する。
+        """
+        await ensure_initialized()
+
+        if not layout_service:
+            raise HTTPException(status_code=503, detail="Layout service unavailable")
+
+        start_time = time.time()
+
+        try:
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                tasks = [client.get(url) for url in req.image_urls]
+                responses = await asyncio.gather(*tasks, return_exceptions=True)
+
+            images_bytes = []
+            for i, resp in enumerate(responses):
+                if isinstance(resp, Exception):
+                    logger.warning(f"Failed to download image {i}: {resp}")
+                    images_bytes.append(b"")
+                else:
+                    images_bytes.append(resp.content)
+
+            if hasattr(layout_service, "analyze_images_batch_from_bytes"):
+                batch_results = await layout_service.analyze_images_batch_from_bytes(
+                    images_bytes
+                )
+            elif hasattr(layout_service, "analyze_images_batch"):
+                batch_results = await layout_service.analyze_images_batch(images_bytes)
+            else:
+                batch_results = []
+                for img_bytes in images_bytes:
+                    res = await run_in_threadpool(layout_service.analyze_image, img_bytes)
+                    batch_results.append(res)
+
+            results = []
+            for page_results in batch_results:
+                serializable = [
+                    {
+                        "bbox": {
+                            "x_min": r.bbox.x_min,
+                            "y_min": r.bbox.y_min,
+                            "x_max": r.bbox.x_max,
+                            "y_max": r.bbox.y_max,
+                        },
+                        "class_name": r.class_name,
+                        "score": r.score,
+                    }
+                    for r in page_results
+                ]
+                results.append(serializable)
+
+            return {
+                "success": True,
+                "results": results,
+                "processing_time": time.time() - start_time,
+                "images_processed": len(req.image_urls),
+            }
+
+        except Exception as e:
+            logger.exception("URL-based batch layout analysis failed")
+            app_env = os.getenv("APP_ENV", "production")
+            error_msg = (
+                str(e)
+                if app_env == "development"
+                else "Internal error during layout analysis"
             )
             return {
                 "success": False,

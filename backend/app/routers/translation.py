@@ -626,10 +626,21 @@ async def explain_image(req: ExplainImageRequest, request: Request):
     model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
     prompt = f"[{lang_name}で回答してください]\n{req.prompt}"
 
+    url_lower = req.image_url.lower()
+    if url_lower.endswith(".jpg") or url_lower.endswith(".jpeg"):
+        img_mime_type = "image/jpeg"
+    elif url_lower.endswith(".webp"):
+        img_mime_type = "image/webp"
+    elif url_lower.endswith(".png"):
+        img_mime_type = "image/png"
+    else:
+        img_mime_type = "image/jpeg"
+
     try:
         explanation = await provider.generate_with_image(
             prompt=prompt,
             image_bytes=image_bytes,
+            mime_type=img_mime_type,
             model=model,
             system_instruction=CORE_SYSTEM_PROMPT,
         )

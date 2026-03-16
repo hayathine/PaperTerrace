@@ -810,7 +810,7 @@ class PDFOCRService:
             from common.prompts import PDF_EXTRACT_TEXT_OCR_PROMPT
 
             text = await self.ai_provider.generate_with_image(
-                PDF_EXTRACT_TEXT_OCR_PROMPT, img_bytes, "image/png", model=self.model
+                PDF_EXTRACT_TEXT_OCR_PROMPT, img_bytes, "image/webp", model=self.model
             )
             if text and text.strip():
                 log.info(

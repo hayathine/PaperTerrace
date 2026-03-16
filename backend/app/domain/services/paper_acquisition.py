@@ -2,6 +2,10 @@ from typing import Any, Dict, Optional
 
 import requests
 
+from common.logger import ServiceLogger
+
+log = ServiceLogger("PaperAcquisition")
+
 
 class PaperAcquisitionService:
     def __init__(self):
@@ -26,7 +30,12 @@ class PaperAcquisitionService:
                 if "data" in data and len(data["data"]) > 0:
                     return data["data"][0]
         except Exception as e:
-            print(f"Error fetching from Semantic Scholar: {e}")
+            log.error(
+                "fetch_metadata",
+                "Error fetching from Semantic Scholar",
+                error=str(e),
+                query=query,
+            )
 
         # Fallback to arxiv
         try:
@@ -40,21 +49,28 @@ class PaperAcquisitionService:
                 prefix = "{http://www.w3.org/2005/Atom}"
                 entry = root.find(f"{prefix}entry")
                 if entry is not None:
-                    title = entry.find(f"{prefix}title").text
-                    abstract = entry.find(f"{prefix}summary").text
+                    title_elem = entry.find(f"{prefix}title")
+                    abstract_elem = entry.find(f"{prefix}summary")
+                    title = title_elem.text if title_elem is not None else ""
+                    abstract = abstract_elem.text if abstract_elem is not None else ""
                     pdf_link = ""
                     for link in entry.findall(f"{prefix}link"):
                         if link.attrib.get("title") == "pdf":
                             pdf_link = link.attrib.get("href")
 
+                    id_elem = entry.find(f"{prefix}id")
+                    url = id_elem.text if id_elem is not None else ""
+
                     return {
                         "title": title,
                         "abstract": abstract,
                         "openAccessPdf": {"url": pdf_link} if pdf_link else None,
-                        "url": entry.find(f"{prefix}id").text,
+                        "url": url,
                     }
         except Exception as e:
-            print(f"Error fetching from ArXiv: {e}")
+            log.error(
+                "fetch_metadata", "Error fetching from ArXiv", error=str(e), query=query
+            )
 
         return None
 
@@ -75,7 +91,12 @@ class PaperAcquisitionService:
                 if "data" in data:
                     return data["data"]
         except Exception as e:
-            print(f"Error searching from Semantic Scholar: {e}")
+            log.error(
+                "search_papers",
+                "Error searching from Semantic Scholar",
+                error=str(e),
+                query=query,
+            )
 
         return []
 

@@ -1,7 +1,3 @@
-import os
-
-import httpx
-
 from app.domain.features.figure_insight import FigureInsightService
 from app.domain.features.summary import SummaryService
 from app.providers import get_storage_provider
@@ -43,34 +39,40 @@ async def process_figure_analysis_task(
             )
             return
 
-        # Retrieve image bytes
-        image_bytes = None
-        if image_url.startswith("/static/"):
-            file_path = f"src/{image_url.lstrip('/')}"
-            if os.path.exists(file_path):
-                with open(file_path, "rb") as f:
-                    image_bytes = f.read()
-        elif image_url.startswith("http"):
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(image_url, timeout=30.0)
-                if resp.status_code == 200:
-                    image_bytes = resp.content
+        import anyio
+        from app.providers.image_storage import get_gcs_uri, get_image_bytes
 
-        if not image_bytes:
-            log.warning(
-                "figure_task", "Could not retrieve image bytes", image_url=image_url
+        # GCS URI が取得できる場合はバイトダウンロードを省略
+        gcs_uri = await anyio.to_thread.run_sync(get_gcs_uri, image_url)
+        if gcs_uri:
+            explanation = await figure_insight.analyze_figure(
+                image_uri=gcs_uri,
+                caption=figure.get("caption", ""),
+                mime_type="image/jpeg",
+                target_lang=lang,
+                user_id=user_id,
+                session_id=session_id,
+                paper_id=figure.get("paper_id"),
             )
-            return
+        else:
+            # ローカル環境: ストレージ層から直接取得（HTTP経由ではなく）
+            try:
+                image_bytes = await anyio.to_thread.run_sync(get_image_bytes, image_url)
+            except Exception:
+                log.warning(
+                    "figure_task", "Could not retrieve image bytes", image_url=image_url
+                )
+                return
 
-        # All visual elements (figures, tables, equations) are handled via general AI analysis
-        explanation = await figure_insight.analyze_figure(
-            image_bytes,
-            caption=figure.get("caption", ""),
-            target_lang=lang,
-            user_id=user_id,
-            session_id=session_id,
-            paper_id=figure.get("paper_id"),
-        )
+            explanation = await figure_insight.analyze_figure(
+                image_bytes,
+                caption=figure.get("caption", ""),
+                mime_type="image/jpeg",
+                target_lang=lang,
+                user_id=user_id,
+                session_id=session_id,
+                paper_id=figure.get("paper_id"),
+            )
         storage.update_figure_explanation(figure_id, explanation)
 
         label = figure.get("label", "figure")

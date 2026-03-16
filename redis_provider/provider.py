@@ -190,3 +190,46 @@ class RedisService:
                 f"Expire called for memory key {key} (not supported, but key exists)",
             )
         return exists_in_mem
+
+    def mget(self, *keys: str) -> list:
+        """複数キーを1往復で取得する（Redis MGET）。失敗時は個別 get にフォールバック。"""
+        if self.client:
+            try:
+                raw_values = self.client.mget(*keys)
+                results = []
+                for v in raw_values:
+                    if v is None:
+                        results.append(None)
+                    else:
+                        try:
+                            results.append(json.loads(v))
+                        except (json.JSONDecodeError, TypeError):
+                            results.append(v)
+                return results
+            except Exception as e:
+                log.warning("mget", f"Redis mget failed, falling back to individual gets: {e}")
+        # メモリキャッシュ / fallback: 個別 get
+        return [self.get(k) for k in keys]
+
+
+def get_is_registered(user_id: str | None) -> bool:
+    """ユーザー登録状態を Redis キャッシュ付きで確認する（TTL: 5分）。
+    Redis / DB が失敗した場合は False を返す（フェイルセーフ）。
+    """
+    if not user_id:
+        return False
+    redis = RedisService()
+    cache_key = f"user_registered:{user_id}"
+    cached = redis.get(cache_key)
+    if cached is not None:
+        return bool(cached)
+    # DB fallback
+    try:
+        from app.providers import get_storage_provider
+        storage = get_storage_provider()
+        is_reg = bool(storage.get_user(user_id))
+        redis.set(cache_key, is_reg, expire=300)  # 5分キャッシュ
+        return is_reg
+    except Exception as e:
+        log.warning("get_is_registered", f"Failed to check registration for {user_id}: {e}")
+        return False

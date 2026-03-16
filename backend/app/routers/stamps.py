@@ -48,6 +48,8 @@ async def add_paper_stamp(paper_id: str, request: StampRequest, user: OptionalUs
             is_registered = True
 
     if is_registered:
+        if not storage.get_paper(paper_id):
+            raise HTTPException(status_code=404, detail="Paper not found")
         stamp_id = storage.add_paper_stamp(
             paper_id,
             request.stamp_type,
@@ -105,13 +107,17 @@ async def delete_paper_stamp(stamp_id: str):
 @router.post("/stamps/note/{note_id}")
 async def add_note_stamp(note_id: str, request: StampRequest):
     """Add a stamp to a note."""
-    stamp_id = get_storage_provider().add_note_stamp(
-        note_id,
-        request.stamp_type,
-        request.user_id,
-        x=request.x,
-        y=request.y,
-    )
+    from sqlalchemy.exc import IntegrityError
+    try:
+        stamp_id = get_storage_provider().add_note_stamp(
+            note_id,
+            request.stamp_type,
+            request.user_id,
+            x=request.x,
+            y=request.y,
+        )
+    except IntegrityError:
+        raise HTTPException(status_code=404, detail="Note not found")
     return JSONResponse(
         {
             "stamp_id": stamp_id,

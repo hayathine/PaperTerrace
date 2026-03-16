@@ -375,6 +375,67 @@ class InferenceServiceClient:
 
             raise
 
+    async def analyze_images_batch_by_urls(
+        self,
+        image_urls: list[str],
+        page_nums: list[int] | None = None,
+        max_batch_size: int = 10,
+    ) -> list[list[dict[str, Any]]]:
+        """
+        署名付きURL経由で複数画像を一括解析。
+        推論サービスが直接GCSからダウンロードするためバックエンドのメモリ転送が不要。
+        """
+        from common.schemas.inference import LayoutBatchByUrlsRequest
+
+        try:
+            log.debug(
+                "analyze_batch_by_urls",
+                "URL経由バッチレイアウト解析リクエスト",
+                image_count=len(image_urls),
+            )
+
+            all_results = []
+            for i in range(0, len(image_urls), max_batch_size):
+                batch_urls = image_urls[i : i + max_batch_size]
+                batch_page_nums = page_nums[i : i + max_batch_size] if page_nums else None
+
+                req = LayoutBatchByUrlsRequest(
+                    image_urls=batch_urls,
+                    page_nums=batch_page_nums,
+                )
+
+                target_url = self._next_layout_url()
+                response = await self._make_request_with_retry(
+                    target_url,
+                    "POST",
+                    "/api/v1/analyze-images-batch-by-urls",
+                    json=req.model_dump(),
+                )
+
+                if response.get("success"):
+                    batch_results = response.get("results", [])
+                    all_results.extend(batch_results)
+                    log.debug(
+                        "analyze_batch_by_urls",
+                        "サブバッチ完了",
+                        batch_size=len(batch_urls),
+                        processing_time=response.get("processing_time", 0),
+                    )
+                else:
+                    error_msg = response.get("message", "不明なエラー")
+                    raise InferenceServiceError(f"URL経由バッチ解析失敗: {error_msg}")
+
+            log.debug(
+                "analyze_batch_by_urls",
+                "全URL経由解析完了",
+                result_count=len(all_results),
+            )
+            return all_results
+
+        except Exception as e:
+            log.error("analyze_batch_by_urls", "URL経由バッチ解析エラー", error=str(e))
+            raise
+
     async def analyze_images_batch_streaming(
         self,
         images: list[bytes],

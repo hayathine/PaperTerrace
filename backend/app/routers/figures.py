@@ -131,7 +131,7 @@ async def explain_figure(
                 gcs_uri=gcs_uri,
             )
             explanation = await figure_service.analyze_figure(
-                image_uri=gcs_uri, caption=caption, target_lang="ja"
+                image_uri=gcs_uri, caption=caption, target_lang="ja", mime_type="image/jpeg"
             )
         else:
             image_bytes = await _fetch_image_bytes(image_url)
@@ -144,7 +144,7 @@ async def explain_figure(
                 )
                 raise HTTPException(status_code=404, detail="Image file not found")
             explanation = await figure_service.analyze_figure(
-                image_bytes=image_bytes, caption=caption, target_lang="ja"
+                image_bytes=image_bytes, caption=caption, target_lang="ja", mime_type="image/jpeg"
             )
 
         # DB登録済みfigureのみ解説をキャッシュする

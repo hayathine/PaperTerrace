@@ -257,28 +257,12 @@ class SummaryService:
             return ""
 
     async def _truncate_to_token_limit(self, text: str) -> str:
-        """トークン上限に合わせてテキストを切り詰める"""
+        """トークン上限に合わせてテキストを切り詰める（ローカル概算、API呼び出しなし）"""
         if not text:
             return ""
-        # 概算: 1トークン ≈ 4文字
-        if len(text) < self.token_limit * 2:
+        # 1トークン ≈ 4文字 の概算（Gemini の実測値に近い近似）
+        # 5% の安全マージンを取る
+        max_chars = int(self.token_limit * 4 * 0.95)
+        if len(text) <= max_chars:
             return text
-
-        current_tokens = await self.ai_provider.count_tokens(text)
-        if current_tokens <= self.token_limit:
-            return text
-
-        # バイナリサーチ的な切り詰め
-        low, high = 0, len(text)
-        best_text = ""
-        # 制限回数を抑えてテストの StopAsyncIteration を回避しつつ効率化
-        for _ in range(5):
-            mid = (low + high) // 2
-            test_text = text[:mid]
-            tokens = await self.ai_provider.count_tokens(test_text)
-            if tokens <= self.token_limit:
-                best_text = test_text
-                low = mid
-            else:
-                high = mid
-        return best_text or text[:100]  # フォールバック
+        return text[:max_chars]

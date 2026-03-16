@@ -80,22 +80,53 @@ class ChatService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         try:
-            # PDF直接入力方式
-            if pdf_bytes:
+            # PDFキャッシュの確認（pdf_bytes がなくてもキャッシュがあればPDFモードで応答できる）
+            pdf_cache_name = None
+            if paper_id:
+                pdf_cache_key = f"paper_cache_pdf:{paper_id}"
+                pdf_cache_name = self.redis.get(pdf_cache_key)
+
+            # PDF直接入力方式（初回はpdf_bytesあり、2回目以降はキャッシュのみ）
+            if pdf_bytes or pdf_cache_name:
                 logger.debug(
                     "Processing chat request with PDF",
                     extra={
                         "message_length": len(user_message),
-                        "pdf_size": len(pdf_bytes),
+                        "pdf_size": len(pdf_bytes) if pdf_bytes else 0,
+                        "using_cache": pdf_cache_name is not None,
                     },
                 )
+
+                # 初回: キャッシュを作成してRedisに保存
+                if not pdf_cache_name and pdf_bytes and paper_id:
+                    try:
+                        pdf_cache_name = await self.ai_provider.create_context_cache(
+                            model=self.model,
+                            contents=pdf_bytes,
+                            ttl_minutes=self.cache_ttl_minutes,
+                        )
+                        self.redis.set(
+                            f"paper_cache_pdf:{paper_id}",
+                            pdf_cache_name,
+                            expire=self.cache_ttl_minutes * 60,
+                        )
+                        logger.info(
+                            "PDF context cache created",
+                            extra={"paper_id": paper_id, "cache_name": pdf_cache_name},
+                        )
+                    except Exception as e:
+                        logger.warning(f"Failed to create PDF context cache for {paper_id}: {e}")
+
                 prompt = CHAT_GENERAL_FROM_PDF_PROMPT.format(
                     lang_name=lang_name,
                     history_text=history_text_for_prompt,
                     user_message=user_message,
                 )
                 response_data = await self.ai_provider.generate_with_pdf(
-                    prompt, pdf_bytes, model=self.model
+                    prompt,
+                    pdf_bytes=pdf_bytes if not pdf_cache_name else None,
+                    cached_content_name=pdf_cache_name,
+                    model=self.model,
                 )
             elif image_bytes:
                 # 画像付きチャット
@@ -114,7 +145,7 @@ class ChatService:
                     user_message=user_message,
                 )
                 response_data = await self.ai_provider.generate_with_image(
-                    prompt, image_bytes, "image/png", model=self.model
+                    prompt, image_bytes, "image/jpeg", model=self.model
                 )
             else:
                 # 従来のテキストベース方式

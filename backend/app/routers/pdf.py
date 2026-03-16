@@ -25,6 +25,7 @@ from app.providers import (
 )
 from app.utils import _get_file_hash
 from common.logger import ServiceLogger
+from redis_provider.provider import get_is_registered
 
 log = ServiceLogger("PDF")
 
@@ -124,13 +125,7 @@ async def analyze_pdf(
             raw_text = cached_paper["ocr_text"]
 
     # Check if user is registered (exists in our DB)
-    is_registered = False
-    if user_id:
-        try:
-            if storage.get_user(user_id):
-                is_registered = True
-        except Exception:
-            pass
+    is_registered = get_is_registered(user_id)
 
     task_id = str(uuid.uuid4())
 
@@ -270,21 +265,7 @@ async def analyze_pdf_json(
             raw_text = None
 
         # Check if user is registered (exists in our DB)
-        is_registered = False
-        if user_id:
-            try:
-                if storage.get_user(user_id):
-                    is_registered = True
-                    log.info("analyze_json", "User is registered", user_id=user_id)
-                else:
-                    log.info(
-                        "analyze_json", "User is a guest (not in DB)", user_id=user_id
-                    )
-
-            except Exception as e:
-                log.error(
-                    "analyze_json", "Failed to check user registration", error=str(e)
-                )
+        is_registered = get_is_registered(user_id)
 
         task_id = str(uuid.uuid4())
 
@@ -379,13 +360,7 @@ async def analyze_paper(
             )
 
         user_id = user.uid if user else (f"guest:{session_id}" if session_id else None)
-        is_registered = False
-        if user_id:
-            try:
-                if storage.get_user(user_id):
-                    is_registered = True
-            except Exception:
-                pass
+        is_registered = get_is_registered(user_id)
 
         task_id = str(uuid.uuid4())
         task_data = {

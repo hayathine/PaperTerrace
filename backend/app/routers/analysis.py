@@ -38,30 +38,31 @@ redis_service = RedisService()
 layout_analysis_service = LayoutAnalysisService()
 
 
-def _get_context(session_id: str) -> str | None:
-    """Get paper context from cache or DB fallback."""
-    # 1. Redis キャッシュを優先して確認（DB クエリを省略）
+def _get_context(session_id: str) -> tuple[str | None, str | None]:
+    """(context, paper_id) のタプルを返す。paper_id は取得できた場合のみ。"""
+    # 1. Redis キャッシュを優先
     context = redis_service.get(f"session:{session_id}")
     if context:
         log.debug("get_context", "Cache HIT", session_id=session_id)
         redis_service.expire(f"session:{session_id}", 3600)
-        return context
+        # paper_id も別キーでキャッシュしている場合は返す
+        paper_id = redis_service.get(f"session_pid:{session_id}")
+        return context, paper_id
 
-    # 2. DB から取得（キャッシュミス時のフォールバック）
+    # 2. DB から取得（キャッシュミス時）
     storage = get_storage_provider()
     paper_id = storage.get_session_paper_id(session_id)
     resolved_paper_id = paper_id or session_id
 
     paper = storage.get_paper(resolved_paper_id)
     if paper and paper.get("ocr_text"):
-        log.debug(
-            "get_context",
-            "Fetched FULL context from DB",
-            paper_id=resolved_paper_id,
-        )
-        return paper["ocr_text"]
+        log.debug("get_context", "Fetched FULL context from DB", paper_id=resolved_paper_id)
+        # 次回のために paper_id をキャッシュ
+        if paper_id:
+            redis_service.set(f"session_pid:{session_id}", paper_id, expire=3600)
+        return paper["ocr_text"], resolved_paper_id
 
-    return None
+    return None, None
 
 
 # ============================================================================
@@ -79,7 +80,7 @@ async def summarize(
     force: bool = Form(False),
     user: OptionalUser = None,
 ):
-    context = _get_context(session_id)
+    context, resolved_paper_id = _get_context(session_id)
     if not context:
         log.warning("summarize", "Context not found", session_id=session_id)
 
@@ -90,9 +91,9 @@ async def summarize(
 
     try:
         storage = get_storage_provider()
-        # Resolve paper_id if missing
+        # Resolve paper_id if missing（DBアクセスは _get_context で取得済みの場合は不要）
         if not paper_id:
-            paper_id = storage.get_session_paper_id(session_id)
+            paper_id = resolved_paper_id or storage.get_session_paper_id(session_id)
 
         # Clear cached summary if force=True
         if force and paper_id:
@@ -167,7 +168,7 @@ async def analyze_figure(
 async def critique(
     session_id: str = Form(...), lang: str = Form("ja"), user: OptionalUser = None
 ):
-    context = _get_context(session_id)
+    context, _ = _get_context(session_id)
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
@@ -317,37 +318,107 @@ async def stream_layout_job(job_id: str):
         raise HTTPException(status_code=503, detail="Redis unavailable")
 
     async def generate():
-        POLL_INTERVAL = 1.0
         TIMEOUT = 125.0
         HEARTBEAT_INTERVAL = 15.0
         deadline = asyncio.get_event_loop().time() + TIMEOUT
         last_heartbeat = asyncio.get_event_loop().time()
 
-        while asyncio.get_event_loop().time() < deadline:
-            now = asyncio.get_event_loop().time()
+        # 現在のステータスを即時チェック（ジョブが既に完了/失敗している場合に対応）
+        job = get_job_status(redis_client, job_id)
+        if job is None:
+            yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
+            return
 
-            if now - last_heartbeat >= HEARTBEAT_INTERVAL:
-                yield ": heartbeat\n\n"
-                last_heartbeat = now
+        status = job.get("status")
+        if status == "completed":
+            figures = job.get("result", [])
+            yield f"data: {json.dumps({'status': 'completed', 'figures': figures, 'figures_detected': len(figures)})}\n\n"
+            return
+        if status == "failed":
+            yield f"data: {json.dumps({'status': 'failed', 'error': job.get('error')})}\n\n"
+            return
 
-            job = get_job_status(redis_client, job_id)
-            if job is None:
-                yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
-                return
+        yield f"data: {json.dumps({'status': status})}\n\n"
 
-            status = job.get("status")
+        # Pub/Sub で完了通知を待つ（失敗時はポーリングにフォールバック）
+        pubsub = None
+        use_pubsub = False
+        from app.workers.layout_job import JOB_PUB_PREFIX
+        try:
+            pubsub = redis_client.pubsub()
+            await asyncio.to_thread(pubsub.subscribe, f"{JOB_PUB_PREFIX}{job_id}")
+            use_pubsub = True
+        except Exception as e:
+            log.warning("stream_layout", "Pub/Sub unavailable, falling back to polling", error=str(e))
+            if pubsub:
+                try:
+                    await asyncio.to_thread(pubsub.unsubscribe)
+                except Exception:
+                    pass
+                pubsub = None
 
-            if status == "completed":
-                figures = job.get("result", [])
-                yield f"data: {json.dumps({'status': 'completed', 'figures': figures, 'figures_detected': len(figures)})}\n\n"
-                return
+        try:
+            if use_pubsub:
+                # Pub/Sub モード
+                while asyncio.get_event_loop().time() < deadline:
+                    now = asyncio.get_event_loop().time()
+                    if now - last_heartbeat >= HEARTBEAT_INTERVAL:
+                        yield ": heartbeat\n\n"
+                        last_heartbeat = now
 
-            if status == "failed":
-                yield f"data: {json.dumps({'status': 'failed', 'error': job.get('error')})}\n\n"
-                return
+                    try:
+                        message = await asyncio.to_thread(
+                            pubsub.get_message, ignore_subscribe_messages=True, timeout=1.0
+                        )
+                    except Exception:
+                        message = None
 
-            yield f"data: {json.dumps({'status': status})}\n\n"
-            await asyncio.sleep(POLL_INTERVAL)
+                    if message and message.get("type") == "message":
+                        try:
+                            data = json.loads(message["data"])
+                            evt_status = data.get("status")
+                            if evt_status == "completed":
+                                figures = data.get("result", [])
+                                yield f"data: {json.dumps({'status': 'completed', 'figures': figures, 'figures_detected': len(figures)})}\n\n"
+                                return
+                            if evt_status == "failed":
+                                yield f"data: {json.dumps({'status': 'failed', 'error': data.get('error')})}\n\n"
+                                return
+                        except Exception:
+                            pass
+            else:
+                # ポーリングフォールバック
+                POLL_INTERVAL = 1.0
+                while asyncio.get_event_loop().time() < deadline:
+                    now = asyncio.get_event_loop().time()
+                    if now - last_heartbeat >= HEARTBEAT_INTERVAL:
+                        yield ": heartbeat\n\n"
+                        last_heartbeat = now
+
+                    job = get_job_status(redis_client, job_id)
+                    if job is None:
+                        yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
+                        return
+
+                    status = job.get("status")
+                    if status == "completed":
+                        figures = job.get("result", [])
+                        yield f"data: {json.dumps({'status': 'completed', 'figures': figures, 'figures_detected': len(figures)})}\n\n"
+                        return
+                    if status == "failed":
+                        yield f"data: {json.dumps({'status': 'failed', 'error': job.get('error')})}\n\n"
+                        return
+
+                    yield f"data: {json.dumps({'status': status})}\n\n"
+                    await asyncio.sleep(POLL_INTERVAL)
+
+        finally:
+            if pubsub:
+                try:
+                    await asyncio.to_thread(pubsub.unsubscribe)
+                    await asyncio.to_thread(pubsub.close)
+                except Exception:
+                    pass
 
         yield f"data: {json.dumps({'status': 'timeout'})}\n\n"
 

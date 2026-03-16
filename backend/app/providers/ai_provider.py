@@ -77,7 +77,7 @@ class AIProviderInterface(ABC):
     async def generate_with_pdf(
         self,
         prompt: str,
-        pdf_bytes: bytes,
+        pdf_bytes: bytes | None = None,
         model: str | None = None,
         cached_content_name: str | None = None,
     ) -> str:
@@ -275,55 +275,56 @@ class GeminiProvider(AIProviderInterface):
 
             result_text = str(response.text or "").strip()
 
-            # Extract grounding metadata
+            # Extract grounding metadata（Web検索が有効な場合のみ処理）
             grounding_data = None
-            try:
-                if response.candidates and response.candidates[0].grounding_metadata:
-                    gm = response.candidates[0].grounding_metadata
-                    grounding_data = {}
+            if enable_search:
+                try:
+                    if response.candidates and response.candidates[0].grounding_metadata:
+                        gm = response.candidates[0].grounding_metadata
+                        grounding_data = {}
 
-                    # Convert to serializable format
-                    if hasattr(gm, "grounding_chunks") and gm.grounding_chunks:
-                        grounding_data["chunks"] = []
-                        for chunk in gm.grounding_chunks:
-                            chunk_dict = {}
-                            if hasattr(chunk, "web") and chunk.web:
-                                chunk_dict["web"] = {
-                                    "uri": chunk.web.uri,
-                                    "title": chunk.web.title,
-                                }
-                            if (
-                                hasattr(chunk, "retrieved_context")
-                                and chunk.retrieved_context
-                            ):
-                                chunk_dict["retrieved_context"] = {
-                                    "uri": chunk.retrieved_context.uri,
-                                    "title": chunk.retrieved_context.title,
-                                    "text": chunk.retrieved_context.text,
-                                }
-                            grounding_data["chunks"].append(chunk_dict)
+                        # Convert to serializable format
+                        if hasattr(gm, "grounding_chunks") and gm.grounding_chunks:
+                            grounding_data["chunks"] = []
+                            for chunk in gm.grounding_chunks:
+                                chunk_dict = {}
+                                if hasattr(chunk, "web") and chunk.web:
+                                    chunk_dict["web"] = {
+                                        "uri": chunk.web.uri,
+                                        "title": chunk.web.title,
+                                    }
+                                if (
+                                    hasattr(chunk, "retrieved_context")
+                                    and chunk.retrieved_context
+                                ):
+                                    chunk_dict["retrieved_context"] = {
+                                        "uri": chunk.retrieved_context.uri,
+                                        "title": chunk.retrieved_context.title,
+                                        "text": chunk.retrieved_context.text,
+                                    }
+                                grounding_data["chunks"].append(chunk_dict)
 
-                    if hasattr(gm, "grounding_supports") and gm.grounding_supports:
-                        grounding_data["supports"] = []
-                        for support in gm.grounding_supports:
-                            support_dict = {
-                                "segment_text": support.segment.text
-                                if hasattr(support, "segment")
-                                else "",
-                                "indices": list(support.grounding_chunk_indices)
-                                if hasattr(support, "grounding_chunk_indices")
-                                else [],
-                                "confidence_scores": list(support.confidence_scores)
-                                if hasattr(support, "confidence_scores")
-                                else [],
-                            }
-                            grounding_data["supports"].append(support_dict)
-            except Exception as e:
-                log.warning(
-                    "gemini_generate",
-                    "Failed to extract grounding metadata",
-                    error=str(e),
-                )
+                        if hasattr(gm, "grounding_supports") and gm.grounding_supports:
+                            grounding_data["supports"] = []
+                            for support in gm.grounding_supports:
+                                support_dict = {
+                                    "segment_text": support.segment.text
+                                    if hasattr(support, "segment")
+                                    else "",
+                                    "indices": list(support.grounding_chunk_indices)
+                                    if hasattr(support, "grounding_chunk_indices")
+                                    else [],
+                                    "confidence_scores": list(support.confidence_scores)
+                                    if hasattr(support, "confidence_scores")
+                                    else [],
+                                }
+                                grounding_data["supports"].append(support_dict)
+                except Exception as e:
+                    log.warning(
+                        "gemini_generate",
+                        "Failed to extract grounding metadata",
+                        error=str(e),
+                    )
 
             log.debug(
                 "gemini_generate",
@@ -548,7 +549,7 @@ class GeminiProvider(AIProviderInterface):
     async def generate_with_pdf(
         self,
         prompt: str,
-        pdf_bytes: bytes,
+        pdf_bytes: bytes | None = None,
         model: str | None = None,
         cached_content_name: str | None = None,
     ) -> str:
@@ -1031,7 +1032,7 @@ class VertexAIProvider(AIProviderInterface):
     async def generate_with_pdf(
         self,
         prompt: str,
-        pdf_bytes: bytes,
+        pdf_bytes: bytes | None = None,
         model: str | None = None,
         cached_content_name: str | None = None,
     ) -> str:
