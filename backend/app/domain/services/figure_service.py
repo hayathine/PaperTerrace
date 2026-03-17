@@ -1,9 +1,11 @@
-import io
-from typing import Any
+from __future__ import annotations
 
-# pdfplumber related imports for type hinting and functionality
-from pdfplumber.display import PageImage
-from pdfplumber.page import Page
+import io
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from pdfplumber.display import PageImage
+    from pdfplumber.page import Page
 
 from app.providers.image_storage import async_save_page_image
 from common.logger import logger

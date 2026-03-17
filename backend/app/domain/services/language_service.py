@@ -1,6 +1,5 @@
 import io
 
-import pdfplumber
 from common.logger import get_service_logger
 
 log = get_service_logger("Language")
@@ -16,6 +15,7 @@ class LanguageService:
         language = "en"  # default
 
         try:
+            import pdfplumber  # noqa: PLC0415 (遅延インポート: 起動時メモリ削減)
             with pdfplumber.open(io.BytesIO(file_bytes)) as pdf:
                 # 1. Metadata check
                 metadata = pdf.metadata

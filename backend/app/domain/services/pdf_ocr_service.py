@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import asyncio
 import io
 import json
@@ -5,10 +7,10 @@ import os
 import re
 import tempfile
 from collections.abc import AsyncGenerator
+from typing import TYPE_CHECKING, Any
 
-import fitz  # PyMuPDF
-import pdfplumber
-import pymupdf4llm
+if TYPE_CHECKING:
+    pass
 
 from app.crud import get_ocr_from_db, save_ocr_to_db
 from app.providers import get_ai_provider
@@ -107,6 +109,7 @@ class PDFOCRService:
             )
 
             # Open PDF with PyMuPDF once (Keep it open)
+            import fitz  # noqa: PLC0415 (遅延インポート: 起動時メモリ削減)
             fitz_doc = fitz.open(stream=file_bytes, filetype="pdf")
             total_pages = len(fitz_doc)
 
@@ -116,6 +119,7 @@ class PDFOCRService:
                 tmp.write(file_bytes)
                 tmp_path = tmp.name
 
+            import pdfplumber  # noqa: PLC0415 (遅延インポート: 起動時メモリ削減)
             with pdfplumber.open(tmp_path) as pdf:
                 log.info(
                     "pdf_opened",
@@ -379,7 +383,7 @@ class PDFOCRService:
         self,
         page_data: dict,
         layout_blocks: list,
-        fitz_doc: fitz.Document,
+        fitz_doc: Any,
         page_idx: int,
         total_pages: int,
         file_hash: str,
@@ -588,9 +592,12 @@ class PDFOCRService:
         )
 
     def _extract_markdown_sequential(
-        self, doc: fitz.Document, idx: int, exclude_bboxes_pt: list
+        self, doc: Any, idx: int, exclude_bboxes_pt: list
     ) -> str:
         """Helper to run PyMuPDF4LLM extraction on a shared document object."""
+        import fitz  # noqa: PLC0415 (遅延インポート: 起動時メモリ削減)
+        import pymupdf4llm  # noqa: PLC0415 (遅延インポート: 起動時メモリ削減)
+
         # Note: Do not doc.close() here as it is shared across pages.
         # Apply redactions to the specific page
         page_obj = doc[idx]
