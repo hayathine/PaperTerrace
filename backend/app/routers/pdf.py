@@ -299,6 +299,14 @@ async def analyze_pdf_json(
         if raw_text is None:
             # Save PDF to disk instead of Redis to prevent OOM
             doc_path = img_storage.save_doc(file_hash, content)
+            log.info(
+                "analyze_json",
+                "PDFをストレージに保存しました",
+                file_hash=file_hash,
+                doc_path=doc_path,
+                content_size=len(content),
+                magic_hex=content[:8].hex() if content else "",
+            )
             task_data.update(
                 {
                     "pending_ocr": True,

@@ -110,6 +110,26 @@ class PDFOCRService:
 
             # Open PDF with PyMuPDF once (Keep it open)
             import fitz  # noqa: PLC0415 (遅延インポート: 起動時メモリ削減)
+
+            # PDFバイトの診断ログ（magic bytes確認）
+            magic = file_bytes[:8] if file_bytes else b""
+            is_valid_pdf = bool(file_bytes) and b"%PDF" in file_bytes[:16]
+            log.info(
+                "pdf_open",
+                "PDFを開きます",
+                file_hash=file_hash,
+                size=len(file_bytes),
+                magic_hex=magic.hex(),
+                is_valid_pdf=is_valid_pdf,
+            )
+            if not file_bytes:
+                raise ValueError("PDFバイトが空です (GCSからの取得に失敗した可能性)")
+            if not is_valid_pdf:
+                raise ValueError(
+                    f"無効なPDFフォーマット: magic bytes={magic.hex()}"
+                    f" size={len(file_bytes)}"
+                )
+
             fitz_doc = fitz.open(stream=file_bytes, filetype="pdf")
             total_pages = len(fitz_doc)
 
@@ -120,6 +140,7 @@ class PDFOCRService:
                 tmp_path = tmp.name
 
             import pdfplumber  # noqa: PLC0415 (遅延インポート: 起動時メモリ削減)
+
             with pdfplumber.open(tmp_path) as pdf:
                 log.info(
                     "pdf_opened",
@@ -144,15 +165,19 @@ class PDFOCRService:
                     )
 
                     # Step A: Prefetch Phase 1 & 2 for all pages in chunk (parallel)
-                    prefetched_pages = list(await asyncio.gather(*[
-                        self._prepare_page_phases_1_2(
-                            pdf.pages[page_idx],
-                            page_idx,
-                            total_pages,
-                            file_hash,
+                    prefetched_pages = list(
+                        await asyncio.gather(
+                            *[
+                                self._prepare_page_phases_1_2(
+                                    pdf.pages[page_idx],
+                                    page_idx,
+                                    total_pages,
+                                    file_hash,
+                                )
+                                for page_idx in range(chunk_start, chunk_end)
+                            ]
                         )
-                        for page_idx in range(chunk_start, chunk_end)
-                    ]))
+                    )
 
                     # Step B: Finalize each page (Phase 3) and yield sequentially
                     # Layout/figure analysis is handled lazily after OCR via analyze_layout_lazy
@@ -350,7 +375,9 @@ class PDFOCRService:
             pil.save(buf, format="JPEG", quality=85)
             return pil, buf.getvalue()
 
-        img_pil, img_bytes = await asyncio.to_thread(_render_and_encode, page, resolution)
+        img_pil, img_bytes = await asyncio.to_thread(
+            _render_and_encode, page, resolution
+        )
         image_url = await async_save_page_image(file_hash, page_num, img_bytes, "jpg")
 
         # Update layout data coordinates with actual image scale
@@ -522,9 +549,13 @@ class PDFOCRService:
                             if crop_box[2] > crop_box[0] and crop_box[3] > crop_box[1]:
                                 crop_img = img_pil.crop(crop_box)
                                 buf = io.BytesIO()
-                                crop_img.save(buf, format="JPEG", quality=85, optimize=True)
+                                crop_img.save(
+                                    buf, format="JPEG", quality=85, optimize=True
+                                )
                                 img_name = f"p{page_num}_{class_name.replace(' ', '_')}_{fig_idx}"
-                                fig_url = await async_save_page_image(file_hash, img_name, buf.getvalue(), "jpg")
+                                fig_url = await async_save_page_image(
+                                    file_hash, img_name, buf.getvalue(), "jpg"
+                                )
                                 fig_idx += 1
                                 layout_data["figures"].append(
                                     {
