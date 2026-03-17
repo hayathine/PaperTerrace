@@ -69,9 +69,18 @@ def enqueue_layout_job(
 
 
 def get_job_status(redis_client, job_id: str) -> dict | None:
-    """ジョブのステータス・結果を取得する"""
+    """ジョブのステータス・結果を取得する
+
+    Note: Redis cjson は空配列 [] を空オブジェクト {} にエンコードするため、
+    result フィールドがリストでない場合はリストに正規化する。
+    """
     data = redis_client.get(f"{JOB_KEY_PREFIX}{job_id}")
-    return json.loads(data) if data else None
+    if not data:
+        return None
+    job = json.loads(data)
+    if "result" in job and not isinstance(job["result"], list):
+        job["result"] = []
+    return job
 
 
 def _atomic_update(redis_client, job_id: str, updates: dict) -> None:

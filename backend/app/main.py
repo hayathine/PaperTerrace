@@ -481,7 +481,8 @@ async def health_check():
         status = "unhealthy"
         dependencies["database"] = f"error: {str(e)}"
 
-    # Check Redis
+    # Check Redis (ローカル環境では Redis 未接続でも healthy 扱い)
+    from app.core.config import is_local
     try:
         # redis_host = os.getenv("REDIS_HOST", "redis")
         # redis_port = int(os.getenv("REDIS_PORT", "6379"))
@@ -491,8 +492,11 @@ async def health_check():
         r.ping()
         dependencies["redis"] = "connected"
     except Exception as e:
-        status = "unhealthy"
-        dependencies["redis"] = f"error: {str(e)}"
+        if is_local():
+            dependencies["redis"] = "unavailable (local fallback active)"
+        else:
+            status = "unhealthy"
+            dependencies["redis"] = f"error: {str(e)}"
 
     health_status = {
         "status": status,

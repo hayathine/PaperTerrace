@@ -311,7 +311,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		paperId: string,
 		fileHash: string | null,
 	) => {
-		if (!figures || figures.length === 0) return;
+		if (!Array.isArray(figures) || figures.length === 0) return;
 
 		setPages((prevPages) => {
 			const nextPages = prevPages.map((page) => {

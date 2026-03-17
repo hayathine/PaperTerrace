@@ -379,9 +379,13 @@ async def stream_layout_job(job_id: str):
                             evt_status = data.get("status")
                             if evt_status == "partial":
                                 figures = data.get("figures", [])
+                                if not isinstance(figures, list):
+                                    figures = []
                                 yield f"data: {json.dumps({'status': 'partial', 'figures': figures})}\n\n"
                             elif evt_status == "completed":
                                 figures = data.get("result", [])
+                                if not isinstance(figures, list):
+                                    figures = []
                                 yield f"data: {json.dumps({'status': 'completed', 'figures': figures, 'figures_detected': len(figures)})}\n\n"
                                 return
                             elif evt_status == "failed":
