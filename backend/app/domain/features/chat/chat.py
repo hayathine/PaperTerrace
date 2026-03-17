@@ -89,7 +89,7 @@ class ChatService:
             # PDF直接入力方式（初回はpdf_bytesあり、2回目以降はキャッシュのみ）
             if pdf_bytes or pdf_cache_name:
                 logger.debug(
-                    "Processing chat request with PDF",
+                    "PDFを使用したチャットリクエストを処理中",
                     extra={
                         "message_length": len(user_message),
                         "pdf_size": len(pdf_bytes) if pdf_bytes else 0,
@@ -111,11 +111,11 @@ class ChatService:
                             expire=self.cache_ttl_minutes * 60,
                         )
                         logger.info(
-                            "PDF context cache created",
+                            "PDFコンテキストキャッシュを作成しました",
                             extra={"paper_id": paper_id, "cache_name": pdf_cache_name},
                         )
                     except Exception as e:
-                        logger.warning(f"Failed to create PDF context cache for {paper_id}: {e}")
+                        logger.warning(f"PDFコンテキストキャッシュの作成に失敗しました ({paper_id}): {e}")
 
                 prompt = CHAT_GENERAL_FROM_PDF_PROMPT.format(
                     lang_name=lang_name,
@@ -131,7 +131,7 @@ class ChatService:
             elif image_bytes:
                 # 画像付きチャット
                 logger.debug(
-                    "Processing chat request with image",
+                    "画像を使用したチャットリクエストを処理中",
                     extra={
                         "message_length": len(user_message),
                         "image_size": len(image_bytes),
@@ -150,7 +150,7 @@ class ChatService:
             else:
                 # 従来のテキストベース方式
                 logger.debug(
-                    "Processing chat request with text",
+                    "テキストベースのチャットリクエストを処理中",
                     extra={
                         "message_length": len(user_message),
                         "history_size": len(history),
@@ -180,7 +180,7 @@ class ChatService:
                             )
                         except Exception as e:
                             logger.warning(
-                                f"Failed to create context cache for {paper_id}: {e}"
+                                f"コンテキストキャッシュの作成に失敗しました ({paper_id}): {e}"
                             )
 
                 # DSPy version
@@ -212,11 +212,11 @@ class ChatService:
                 grounding = None
 
             if not response_text:
-                logger.warning("Empty chat response received")
-                raise ChatError("Empty response from AI")
+                logger.warning("チャットレスポンスが空です")
+                raise ChatError("AIからのレスポンスが空です")
 
             logger.info(
-                "Chat response generated",
+                "チャットレスポンスを生成しました",
                 extra={
                     "response_length": len(response_text),
                     "has_grounding": grounding is not None,
@@ -237,7 +237,7 @@ class ChatService:
             raise
         except Exception as e:
             logger.exception(
-                "Chat request failed",
+                "チャットリクエストに失敗しました",
                 extra={"error": str(e), "message_preview": user_message[:50]},
             )
             return {
@@ -253,6 +253,6 @@ class ChatService:
             try:
                 await self.ai_provider.delete_context_cache(cache_name)
                 self.redis.delete(cache_key)
-                logger.info(f"Deleted context cache for paper {paper_id}")
+                logger.info(f"論文 {paper_id} のコンテキストキャッシュを削除しました")
             except Exception as e:
-                logger.warning(f"Failed to delete context cache for {paper_id}: {e}")
+                logger.warning(f"コンテキストキャッシュの削除に失敗しました ({paper_id}): {e}")

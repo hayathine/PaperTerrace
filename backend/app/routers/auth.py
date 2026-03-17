@@ -32,7 +32,7 @@ async def register_user(
     # Check if user already exists
     existing_user = storage.get_user(user.uid)
     if existing_user:
-        log.info("register", "User already registered", uid=user.uid)
+        log.info("register", "ユーザーは既に登録されています", uid=user.uid)
         return UserInDB(**existing_user)
 
     # Create new user
@@ -54,7 +54,7 @@ async def register_user(
         storage.create_user(user_data)
         log.info(
             "register",
-            "User registered",
+            "ユーザーを登録しました",
             uid=user.uid,
             email=user.email,
             provider=user.provider,
@@ -62,7 +62,7 @@ async def register_user(
         return UserInDB(**user_data)
 
     except Exception as e:
-        log.exception("register", "Failed to register user", uid=user.uid, error=str(e))
+        log.exception("register", "ユーザー登録に失敗しました", uid=user.uid, error=str(e))
 
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -107,12 +107,12 @@ async def update_current_user_profile(
     try:
         storage.update_user(user.uid, update_dict)
         updated_user = storage.get_user(user.uid)
-        log.info("update_profile", "User profile updated", uid=user.uid)
+        log.info("update_profile", "ユーザープロファイルを更新しました", uid=user.uid)
         return UserInDB(**updated_user)
 
     except Exception as e:
         log.exception(
-            "update_profile", "Failed to update user", uid=user.uid, error=str(e)
+            "update_profile", "ユーザーの更新に失敗しました", uid=user.uid, error=str(e)
         )
 
         raise HTTPException(
@@ -130,7 +130,7 @@ async def get_current_user_stats(user: CurrentUser):
         stats = storage.get_user_stats(user.uid)
         return UserStats(**stats)
     except Exception as e:
-        log.exception("stats", "Failed to get user stats", uid=user.uid, error=str(e))
+        log.exception("stats", "ユーザー統計の取得に失敗しました", uid=user.uid, error=str(e))
         return UserStats()
 
 
@@ -146,10 +146,10 @@ async def delete_current_user(user: CurrentUser):
 
     try:
         storage.delete_user(user.uid)
-        log.info("delete_account", "User deleted", uid=user.uid)
+        log.info("delete_account", "ユーザーを削除しました", uid=user.uid)
     except Exception as e:
         log.exception(
-            "delete_account", "Failed to delete user", uid=user.uid, error=str(e)
+            "delete_account", "ユーザーの削除に失敗しました", uid=user.uid, error=str(e)
         )
 
         raise HTTPException(

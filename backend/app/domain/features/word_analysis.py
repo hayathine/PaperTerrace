@@ -77,6 +77,14 @@ class WordAnalysisService:
             self.translation_cache[word] = translation
             self.redis.set(f"trans:{lang}:{word}", translation, expire=604800)
 
+            log.debug(
+                "translate_with_context",
+                "単語の翻訳が完了しました",
+                word=word,
+                translation=translation,
+                trace_id=trace_id,
+            )
+
             return {
                 "word": word,
                 "translation": translation,
@@ -86,7 +94,7 @@ class WordAnalysisService:
         except Exception as e:
             log.error(
                 "translate_with_context",
-                "Context translation failed",
+                "文脈に応じた翻訳に失敗しました",
                 word=word,
                 error=str(e),
             )

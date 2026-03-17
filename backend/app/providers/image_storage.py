@@ -82,7 +82,7 @@ class LocalImageStorage(ImageStorageStrategy):
         image_path.write_bytes(image_bytes)
 
         relative_path = f"/static/paper_images/{file_hash}/page_{page_num}.{ext}"
-        log.debug("save_local", "Saved page image", path=relative_path)
+        log.debug("save_local", "ページ画像を保存しました", path=relative_path)
 
         return relative_path
 
@@ -91,7 +91,7 @@ class LocalImageStorage(ImageStorageStrategy):
         doc_dir.mkdir(parents=True, exist_ok=True)
         doc_path = doc_dir / f"{file_hash}.pdf"
         doc_path.write_bytes(doc_bytes)
-        log.debug("save_doc_local", "Saved PDF to disk", path=str(doc_path))
+        log.debug("save_doc_local", "PDFをディスクに保存しました", path=str(doc_path))
 
         return str(doc_path)
 
@@ -138,7 +138,7 @@ class LocalImageStorage(ImageStorageStrategy):
         hash_dir = self.images_dir / file_hash
         if hash_dir.exists():
             shutil.rmtree(hash_dir)
-            log.info("delete_local", "Deleted images", file_hash=file_hash)
+            log.info("delete_local", "画像を削除しました", file_hash=file_hash)
 
             return True
 
@@ -178,7 +178,7 @@ class GCSImageStorage(ImageStorageStrategy):
         self.bucket = self.client.bucket(self.bucket_name)
         self.storage_type = "gcs"
         log.debug(
-            "gcs_init", "GCSImageStorage initialized", bucket_name=self.bucket_name
+            "gcs_init", "GCSImageStorageを初期化しました", bucket_name=self.bucket_name
         )
 
     def save(self, file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp") -> str:
@@ -194,7 +194,7 @@ class GCSImageStorage(ImageStorageStrategy):
             # The frontend prepends API_URL, and the backend serves via /static/paper_images/ proxy.
             relative_path = f"/static/paper_images/{file_hash}/page_{page_num}.{ext}"
             log.debug(
-                "save_gcs", "Saved page image", blob_name=blob_name, path=relative_path
+                "save_gcs", "ページ画像を保存しました", blob_name=blob_name, path=relative_path
             )
 
             return relative_path
@@ -202,7 +202,7 @@ class GCSImageStorage(ImageStorageStrategy):
         except Exception as e:
             log.error(
                 "save_gcs",
-                "Error saving image to GCS",
+                "GCSへの画像保存中にエラーが発生しました",
                 file_hash=file_hash,
                 page_num=page_num,
                 error=str(e),
@@ -255,21 +255,21 @@ class GCSImageStorage(ImageStorageStrategy):
             if urls:
                 log.debug(
                     "get_list_gcs",
-                    "Retrieved images from GCS cache",
+                    "GCSキャッシュから画像を取得しました",
                     count=len(urls),
                     file_hash=file_hash,
                 )
 
             else:
                 log.debug(
-                    "get_list_gcs", "No images found in GCS cache", file_hash=file_hash
+                    "get_list_gcs", "GCSキャッシュに画像が見つかりませんでした", file_hash=file_hash
                 )
 
             return urls
         except Exception as e:
             log.error(
                 "get_list_gcs",
-                "Error listing images from GCS",
+                "GCSからの画像一覧取得中にエラーが発生しました",
                 file_hash=file_hash,
                 error=str(e),
                 exc_info=True,
@@ -288,14 +288,14 @@ class GCSImageStorage(ImageStorageStrategy):
                 deleted = True
 
             if deleted:
-                log.debug("delete_gcs", "Deleted images", file_hash=file_hash)
+                log.debug("delete_gcs", "画像を削除しました", file_hash=file_hash)
 
             return deleted
 
         except Exception as e:
             log.error(
                 "delete_gcs",
-                "Error deleting images from GCS",
+                "GCSからの画像削除中にエラーが発生しました",
                 file_hash=file_hash,
                 error=str(e),
                 exc_info=True,
@@ -334,7 +334,7 @@ class GCSImageStorage(ImageStorageStrategy):
         except Exception as e:
             log.error(
                 "get_image_bytes_gcs",
-                "Error getting image bytes from GCS",
+                "GCSからの画像データ取得中にエラーが発生しました",
                 image_url=image_url,
                 error=str(e),
                 exc_info=True,
@@ -382,7 +382,7 @@ class GCSImageStorage(ImageStorageStrategy):
             mime_type = "image/webp" if ext == "webp" else "image/jpeg"
             return f"gs://{self.bucket_name}/{blob_name}", mime_type
         except Exception as e:
-            log.warning("resolve_gcs_uri", "Failed to resolve GCS URI", image_url=image_url, error=str(e))
+            log.warning("resolve_gcs_uri", "GCS URIの解決に失敗しました", image_url=image_url, error=str(e))
         return None
 
     def generate_signed_url(self, image_url: str, expiration_seconds: int = 900) -> str | None:
@@ -402,7 +402,7 @@ class GCSImageStorage(ImageStorageStrategy):
         except Exception as e:
             log.warning(
                 "generate_signed_url",
-                "Failed to generate signed URL",
+                "署名付きURLの生成に失敗しました",
                 image_url=image_url,
                 error=str(e),
             )
@@ -439,7 +439,7 @@ class GCSImageStorage(ImageStorageStrategy):
         except Exception as e:
             log.error(
                 "get_doc_bytes_gcs",
-                "Error getting PDF bytes from GCS",
+                "GCSからのPDFデータ取得中にエラーが発生しました",
                 path=doc_path,
                 error=str(e),
                 exc_info=True,

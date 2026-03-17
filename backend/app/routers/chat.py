@@ -98,11 +98,11 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         if figure and figure.get("image_url"):
             try:
                 image_bytes = get_image_bytes(figure["image_url"])
-                log.debug("chat", "Image loaded", figure_id=request.figure_id)
+                log.debug("chat", "画像を読み込みました", figure_id=request.figure_id)
             except Exception as e:
                 log.error(
                     "chat",
-                    "Failed to load image",
+                    "画像の読み込みに失敗しました",
                     figure_id=request.figure_id,
                     error=str(e),
                 )
@@ -114,7 +114,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         pdf_cache_key = f"paper_cache_pdf:{paper_id}"
         if redis_service.get(pdf_cache_key):
             log.debug(
-                "chat", "PDF cache exists, skipping GCS download", paper_id=paper_id
+                "chat", "PDFキャッシュが存在するため、GCSからのダウンロードをスキップします", paper_id=paper_id
             )
         else:
             try:
@@ -127,12 +127,12 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
                         img_storage.get_doc_path(paper_info["file_hash"])
                     )
                     log.debug(
-                        "chat", "PDF bytes loaded for grounding", paper_id=paper_id
+                        "chat", "GroundingのためにPDFバイナリを読み込みました", paper_id=paper_id
                     )
             except Exception as e:
                 log.warning(
                     "chat",
-                    "Failed to load PDF bytes for grounding",
+                    "Grounding用のPDFバイナリの読み込みに失敗しました",
                     error=str(e),
                     paper_id=paper_id,
                 )
@@ -182,7 +182,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         try:
             storage.save_chat_history(user_id, paper_id, history)
         except Exception as e:
-            log.warning("chat", "Failed to persist chat history to DB", error=str(e))
+            log.warning("chat", "DBへのチャット履歴の永続化に失敗しました", error=str(e))
 
     return JSONResponse(
         {
@@ -219,7 +219,7 @@ async def get_chat_history(
                 )
         except Exception as e:
             log.warning(
-                "chat_history", "Failed to fetch chat history from DB", error=str(e)
+                "chat_history", "DBからのチャット履歴の取得に失敗しました", error=str(e)
             )
 
     return JSONResponse({"history": history})

@@ -74,6 +74,7 @@ class FigureInsightService:
                     model=self.model,
                     response_model=FigureAnalysisResponse,
                     image_uri=image_uri,
+                    max_tokens=4096,
                 )
             )
 

@@ -15,7 +15,6 @@ from common.dspy_seed_prompt import (
     VISION_FIGURE_SEED,
 )
 
-
 # =============================================================
 # System Layer
 # =============================================================
@@ -27,9 +26,7 @@ class SystemContextSignature(dspy.Signature):
     task_type: str = dspy.InputField(
         desc="Type of task being performed (e.g. 'translation', 'summarization', 'critical review')."
     )
-    lang_name: str = dspy.InputField(
-        desc="Target output language."
-    )
+    lang_name: str = dspy.InputField(desc="Target output language.")
 
     system_context: str = dspy.OutputField(
         desc=(
@@ -57,9 +54,7 @@ class PersonaAdapterSignature(dspy.Signature):
     task_description: str = dspy.InputField(
         desc="Brief description of the task type (e.g. 'translation', 'paper summary'). Not the content itself."
     )
-    lang_name: str = dspy.InputField(
-        desc="Target language name for the response."
-    )
+    lang_name: str = dspy.InputField(desc="Target language name for the response.")
 
     persona_instruction: str = dspy.OutputField(
         desc=(
@@ -116,6 +111,7 @@ class SolveTask(dspy.Signature):
 class PaperSummary(dspy.Signature):
     __doc__ = PAPER_SUMMARY_SEED
 
+    input_data: str = dspy.InputField(desc="The full paper text or abstract")
     overview: str = dspy.OutputField(
         desc="Overview and high-level summary (1-2 sentences)"
     )
@@ -132,6 +128,7 @@ class PaperSummary(dspy.Signature):
 class PaperSummarySections(dspy.Signature):
     __doc__ = PAPER_SUMMARY_SECTIONS_SEED
 
+    input_data: str = dspy.InputField(desc="The full paper text or section content")
     sections: list[dict] = dspy.OutputField(
         desc="Section-by-section summary list [{'section': '...', 'summary': '...'}]"
     )
@@ -153,6 +150,7 @@ class PaperSummaryContext(dspy.Signature):
 class ChatGeneral(dspy.Signature):
     __doc__ = CHAT_GENERAL_SEED
 
+    input_data: str = dspy.InputField(desc="The user's current question or message")
     document_context: str = dspy.InputField(
         desc="Contextual information from the paper"
     )
@@ -168,6 +166,7 @@ class ChatGeneral(dspy.Signature):
 class AdversarialCritique(dspy.Signature):
     __doc__ = ADVERSARIAL_CRITIQUE_SEED
 
+    input_data: str = dspy.InputField(desc="The paper text to critique")
     hidden_assumptions: list[dict] = dspy.OutputField(
         desc="Hidden assumptions and their risks [{'assumption': '...', 'risk': '...', 'severity': '...'}]"
     )
@@ -193,6 +192,7 @@ class AdversarialCritique(dspy.Signature):
 class VisionAnalyzeFigure(dspy.Signature):
     __doc__ = VISION_FIGURE_SEED
 
+    input_data: str = dspy.InputField(desc="Caption or textual hint about the figure")
     type_overview: str = dspy.OutputField(desc="Overview and type of the figure")
     key_findings: list[str] = dspy.OutputField(desc="Main trends or patterns")
     interpretation: str = dspy.OutputField(desc="Interpretation of data or trends")
@@ -208,6 +208,7 @@ class VisionAnalyzeFigure(dspy.Signature):
 class PaperRecommendation(dspy.Signature):
     __doc__ = PAPER_RECOMMENDATION_SEED
 
+    input_data: str = dspy.InputField(desc="Analysis of the current paper and user profile")
     recommendations: list[str] = dspy.OutputField(
         desc="List of recommended papers (including titles and reasons)"
     )
@@ -222,7 +223,9 @@ class UserProfileEstimation(dspy.Signature):
     paper_summary: str = dspy.InputField(desc="Summary of the paper")
     conversation_history: str = dspy.InputField(desc="Conversation history")
     word_clicks: str = dspy.InputField(desc="List of words clicked by the user")
-    created_at: str = dspy.InputField(desc="Timestamp when the trace was recorded (UTC)")
+    created_at: str = dspy.InputField(
+        desc="Timestamp when the trace was recorded (UTC)"
+    )
     knowledge_level: str = dspy.OutputField(desc="Beginner / Intermediate / Advanced")
     interests: list[str] = dspy.OutputField(desc="Interesting topics")
     unknown_concepts: list[str] = dspy.OutputField(desc="Concepts not yet understood")
@@ -239,6 +242,7 @@ class UserProfileEstimation(dspy.Signature):
 class ContextAwareTranslation(dspy.Signature):
     __doc__ = CONTEXT_AWARE_TRANSLATION_SEED
 
+    input_data: str = dspy.InputField(desc="The target word or phrase to translate")
     paper_context: str = dspy.InputField(
         desc="Academic paper context including surrounding sentences around the target word (paper summary and/or nearby text excerpt)"
     )
@@ -250,6 +254,7 @@ class ContextAwareTranslation(dspy.Signature):
 class SimpleTranslation(dspy.Signature):
     __doc__ = SIMPLE_TRANSLATION_SEED
 
+    input_data: str = dspy.InputField(desc="The word or phrase to translate")
     paper_context: str = dspy.InputField(desc="Academic context or summary")
     translation: str = dspy.OutputField(desc="Concise translation")
 
@@ -257,6 +262,7 @@ class SimpleTranslation(dspy.Signature):
 class DeepExplanation(dspy.Signature):
     __doc__ = DEEP_EXPLANATION_SEED
 
+    input_data: str = dspy.InputField(desc="The word or concept to explain")
     summary_context: str = dspy.InputField(desc="Abstract or summary of the paper")
     context: str = dspy.InputField(desc="Surrounding text context")
     explanation: str = dspy.OutputField(desc="Concise context-aware explanation")

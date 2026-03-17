@@ -61,7 +61,7 @@ class SummaryService:
         if paper_id:
             paper_info = self.storage.get_paper(paper_id)
             if paper_info and paper_info.get("full_summary"):
-                log.info("summarize_full", "Full summary cache HIT", paper_id=paper_id)
+                log.info("summarize_full", "全文要約のキャッシュがヒットしました", paper_id=paper_id)
                 return paper_info["full_summary"], None
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
@@ -79,14 +79,14 @@ class SummaryService:
                     )
                     log.debug(
                         "summarize_full",
-                        "PDF bytes fetched from GCS for image-based summary",
+                        "画像ベースの要約のためにGCSからPDFバイナリを取得しました",
                         paper_id=paper_id,
                         pdf_size=len(pdf_bytes),
                     )
             except Exception as e:
                 log.warning(
                     "summarize_full",
-                    "Failed to fetch PDF bytes, falling back to text-based summary",
+                    "PDFバイナリの取得に失敗しました。テキストベースの要約にフォールバックします",
                     error=str(e),
                     paper_id=paper_id,
                 )
@@ -122,14 +122,14 @@ class SummaryService:
                             )
                             log.info(
                                 "summarize_full",
-                                "PDF context cache created",
+                                "PDFコンテキストキャッシュを作成しました",
                                 paper_id=paper_id,
                                 cache_name=pdf_cache_name,
                             )
                         except Exception as e:
                             log.warning(
                                 "summarize_full",
-                                "Failed to create context cache, proceeding without cache",
+                                "コンテキストキャッシュの作成に失敗しました。キャッシュなしで続行します",
                                 error=str(e),
                                 paper_id=paper_id,
                             )
@@ -137,7 +137,7 @@ class SummaryService:
 
                 log.debug(
                     "summarize_full",
-                    "Generating full summary from PDF",
+                    "PDFから全文要約を生成中",
                     pdf_size=len(pdf_bytes),
                     cached=pdf_cache_name is not None,
                 )
@@ -206,7 +206,7 @@ class SummaryService:
 
             return formatted_text, locals().get("trace_id")
         except Exception as e:
-            log.exception("summarize_full", "Full summary generation failed")
+            log.exception("summarize_full", "全文要約の生成に失敗しました")
             return f"要約の生成に失敗しました: {str(e)}", None
 
     async def summarize_sections(
@@ -260,7 +260,7 @@ class SummaryService:
 
             return sections, trace_id
         except Exception as e:
-            log.exception("summarize_sections", "Section summary failed")
+            log.exception("summarize_sections", "セクション要約に失敗しました")
             return [{"section": "Error", "summary": f"要約生成に失敗: {e}"}], "error"
 
     async def summarize_abstract(self, text: str, target_lang: str = "ja") -> str:
@@ -297,14 +297,14 @@ class SummaryService:
             summary = res.summary
             log.info(
                 "summarize_context",
-                "Context summary generated",
+                "コンテキスト要約を生成しました",
                 summary_length=len(summary),
             )
 
             return summary[:max_length]
         except Exception as e:
             log.error(
-                "summarize_context", "Context summary generation failed", error=str(e)
+                "summarize_context", "コンテキスト要約の生成に失敗しました", error=str(e)
             )
 
             return ""

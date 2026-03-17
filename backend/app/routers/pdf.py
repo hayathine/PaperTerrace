@@ -54,7 +54,7 @@ async def update_session_context(
             redis_service.set(f"session:{session_id}", paper["ocr_text"], expire=3600)
         log.info(
             "session_context",
-            "Session context updated",
+            "セッションコンテキストを更新しました",
             session_id=session_id,
             paper_id=paper_id,
         )
@@ -62,7 +62,7 @@ async def update_session_context(
     except Exception as e:
         log.warning(
             "session_context",
-            "Failed to update session context",
+            "セッションコンテキストの更新に失敗しました",
             session_id=session_id,
             paper_id=paper_id,
             error=str(e),
@@ -106,7 +106,7 @@ async def analyze_pdf(
     # Language detection
     detected_lang = await service.ocr_service.language_service.detect_language(content)
     if detected_lang and detected_lang != "en":
-        log.warning("analyze", "Unsupported language detected", lang=detected_lang)
+        log.warning("analyze", "未対応の言語が検出されました", lang=detected_lang)
         return Response(
             "Error: Currently, only English papers are supported. / 現在、英語の論文のみサポートしています。",
             status_code=400,
@@ -189,17 +189,17 @@ async def analyze_pdf_json(
 
     storage = get_storage_provider()
     start_time = time.time()
-    log.info("analyze_json", "START", filename=file.filename, size=file.size)
+    log.info("analyze_json", "開始", filename=file.filename, size=file.size)
 
     # Capture user_id
     user_id = user.uid if user else (f"guest:{session_id}" if session_id else None)
     if user_id:
-        log.info("analyze_json", "Authenticated user", user_id=user_id)
+        log.info("analyze_json", "認証済みユーザー", user_id=user_id)
 
     content = await file.read()
     file_hash = _get_file_hash(content)
     log.info(
-        "analyze_json", "Input received", session_id=session_id, file_hash=file_hash
+        "analyze_json", "入力を受け取リました", session_id=session_id, file_hash=file_hash
     )
 
     # Detect PDF language
@@ -209,7 +209,7 @@ async def analyze_pdf_json(
         )
         if detected_lang and detected_lang != "en":
             log.warning(
-                "analyze_json", f"Unsupported language detected: {detected_lang}"
+                "analyze_json", f"未対応の言語が検出されました: {detected_lang}"
             )
             return JSONResponse(
                 {
@@ -240,7 +240,7 @@ async def analyze_pdf_json(
             if not cached_images:
                 log.info(
                     "analyze_json",
-                    "Cache HIT but images missing. Regenerating.",
+                    "キャッシュはヒットしましたが画像が見つかりません。再生成します。",
                     paper_id=paper_id,
                 )
                 raw_text = None
@@ -248,7 +248,7 @@ async def analyze_pdf_json(
                 storage_type = os.getenv("STORAGE_TYPE", "local").upper()
                 log.info(
                     "analyze_json",
-                    "Cache HIT",
+                    "キャッシュヒット",
                     storage_type=storage_type,
                     paper_id=paper_id,
                 )
@@ -261,7 +261,7 @@ async def analyze_pdf_json(
             import uuid6
 
             paper_id = str(uuid6.uuid7())
-            log.info("analyze_json", "Cache MISS", paper_id=paper_id)
+            log.info("analyze_json", "キャッシュミス", paper_id=paper_id)
             raw_text = None
 
         # Check if user is registered (exists in our DB)
@@ -275,7 +275,7 @@ async def analyze_pdf_json(
                 storage.save_session_context(session_id, paper_id)
                 log.info(
                     "analyze_json",
-                    "Pre-saved session context",
+                    "セッションコンテキストを事前保存しました",
                     session_id=session_id,
                     paper_id=paper_id,
                 )
@@ -318,7 +318,7 @@ async def analyze_pdf_json(
         total_elapsed = time.time() - start_time
         log.info(
             "analyze_json",
-            "Task created",
+            "タスクを作成しました",
             task_id=task_id,
             elapsed=f"{total_elapsed:.2f}s",
         )
@@ -328,7 +328,7 @@ async def analyze_pdf_json(
         )
 
     except Exception as e:
-        log.error("analyze_json", "Unexpected error", error=str(e), exc_info=True)
+        log.error("analyze_json", "予期せぬエラーが発生しました", error=str(e), exc_info=True)
 
         error_msg = (
             str(e)
@@ -393,7 +393,7 @@ async def analyze_paper(
     except Exception as e:
         log.error(
             "analyze_paper",
-            "Error starting paper analysis",
+            "論文解析の開始中にエラーが発生しました",
             error=str(e),
             paper_id=paper_id,
         )
@@ -411,7 +411,7 @@ async def stream(task_id: str):
     import time
 
     stream_start = time.time()
-    log.info("stream", "START", task_id=task_id)
+    log.info("stream", "開始", task_id=task_id)
 
     data = redis_service.get(f"task:{task_id}")
     if data:
@@ -420,7 +420,7 @@ async def stream(task_id: str):
 
     # Task not found - return proper error response instead of 204
     if not data:
-        log.warning("stream", "Task not found", task_id=task_id)
+        log.warning("stream", "タスクが見つからないか、期限切れです", task_id=task_id)
 
         return Response(
             content=f"data: {json.dumps({'type': 'error', 'message': 'Task not found or expired'})}\n\n",
@@ -466,7 +466,7 @@ async def stream(task_id: str):
 
                     pdf_content = base64.b64decode(pdf_b64)
                 else:
-                    log.error("stream", "No PDF source found", task_id=task_id)
+                    log.error("stream", "PDFソースが見つかりません", task_id=task_id)
 
                     yield f"data: {json.dumps({'type': 'error', 'message': 'PDF source not found'})}\n\n"
                     return
@@ -483,7 +483,7 @@ async def stream(task_id: str):
 
                 log.info(
                     "stream",
-                    "Starting OCR extraction",
+                    "OCR抽出を開始します",
                     task_id=task_id,
                     filename=filename,
                 )
@@ -604,7 +604,7 @@ async def stream(task_id: str):
 
                         log.info(
                             "stream",
-                            f"Paper saved to DB for user {user_id}",
+                            f"ユーザー {user_id} の論文をDBに保存しました",
                             task_id=task_id,
                             user_id=user_id,
                             paper_id=new_paper_id,
@@ -641,7 +641,7 @@ async def stream(task_id: str):
                     except Exception as db_err:
                         log.error(
                             "stream",
-                            f"Failed to save to DB: {db_err}",
+                            f"DBへの保存に失敗しました: {db_err}",
                             task_id=task_id,
                             paper_id=new_paper_id,
                         )
@@ -649,7 +649,7 @@ async def stream(task_id: str):
                 else:
                     log.info(
                         "stream",
-                        "Skipping DB save for guest/transient session",
+                        "ゲスト/一時セッションのためDBへの保存をスキップします",
                         task_id=task_id,
                     )
 
@@ -675,7 +675,7 @@ async def stream(task_id: str):
                             layout_list = json.loads(paper_data["layout_json"])
                             log.debug(
                                 "stream",
-                                "Loaded layout_list from DB",
+                                "DBからレイアウト情報を読み込みました",
                                 task_id=task_id,
                                 pages=len(layout_list),
                             )
@@ -709,7 +709,7 @@ async def stream(task_id: str):
                     cached_images = get_page_images(f_hash)
                     log.info(
                         "stream",
-                        "Found cached images",
+                        "キャッシュされた画像が見つかりました",
                         task_id=task_id,
                         count=len(cached_images),
                     )
@@ -732,7 +732,7 @@ async def stream(task_id: str):
 
                             log.debug(
                                 "stream",
-                                f"Page {i + 1} loaded from cache",
+                                f"ページ {i + 1} をキャッシュから読み込みました",
                                 task_id=task_id,
                                 page_num=i + 1,
                                 words=len(page_payload["words"]),
@@ -768,7 +768,7 @@ async def stream(task_id: str):
                     )  # Align TTL to 1 hour
                     log.info(
                         "stream",
-                        "Restored session context",
+                        "セッションコンテキストを復元しました",
                         s_id=s_id,
                     )
 
@@ -779,7 +779,7 @@ async def stream(task_id: str):
                     except Exception as e:
                         log.warning(
                             "stream",
-                            "Failed to save session context for cached paper",
+                            "キャッシュ論文のセッションコンテキスト保存に失敗しました",
                             session_id=session_id,
                             paper_id=paper_id,
                             error=str(e),
@@ -788,7 +788,7 @@ async def stream(task_id: str):
                 else:
                     log.warning(
                         "stream",
-                        "Failed to restore session context",
+                        "セッションコンテキストの復元に失敗しました",
                         session_id=session_id,
                         has_paper_data=paper_data is not None,
                     )
@@ -796,7 +796,7 @@ async def stream(task_id: str):
                 yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': paper_id, 'cached': True})}\n\n"
                 await asyncio.sleep(0.01)
 
-            log.info("stream", "json_generate finished", task_id=task_id)
+            log.info("stream", "JSON生成が完了しました", task_id=task_id)
 
             # Cleanup handled by wrapper
 

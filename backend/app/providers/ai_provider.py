@@ -64,6 +64,7 @@ class AIProviderInterface(ABC):
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
         image_uri: str | None = None,
+        max_tokens: int | None = None,
     ) -> Any:
         """Generate text or structured response from prompt with image input.
 
@@ -129,7 +130,7 @@ class AIProviderInterface(ABC):
                 if "MAX_TOKENS" in reason:
                     log.warning(
                         f"{method}_truncated",
-                        "AI response truncated (reached max_output_tokens)",
+                        "AIのレスポンスが途切れました（最大出力トークン数に達しました）",
                         model=model,
                         max_tokens=max_tokens,
                         finish_reason=reason,
@@ -157,7 +158,7 @@ class GeminiProvider(AIProviderInterface):
         self.max_tokens = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "1024"))
         log.info(
             "gemini_init",
-            "GeminiProvider initialized",
+            "GeminiProviderを初期化しました",
             model=self.model,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
@@ -179,7 +180,7 @@ class GeminiProvider(AIProviderInterface):
             full_prompt = f"{context}\n\n{prompt}" if context else prompt
             log.debug(
                 "gemini_generate",
-                "Gemini generate request",
+                "Gemini 生成リクエスト",
                 prompt_length=len(full_prompt),
                 model=target_model,
                 search=enable_search,
@@ -229,7 +230,7 @@ class GeminiProvider(AIProviderInterface):
                     gm = response.candidates[0].grounding_metadata
                     log.debug(
                         "gemini_generate",
-                        "Grounding Metadata found",
+                        "Groundingメタデータが見つかりました",
                         metadata_type=str(type(gm)),
                         has_chunks=bool(
                             hasattr(gm, "grounding_chunks") and gm.grounding_chunks
@@ -240,39 +241,38 @@ class GeminiProvider(AIProviderInterface):
                     )
             except Exception as e:
                 log.warning(
-                    "gemini_generate", "Failed to log grounding metadata", error=str(e)
+                    "gemini_generate", "Groundingメタデータのログ記録に失敗しました", error=str(e)
                 )
 
             if response_model:
-                # If parsed is available in the SDK version and it works for Pydantic
-                # Otherwise we might need to manual parse response.text
                 try:
                     # google-genai SDK 1.0.0+ supports .parsed for structured output
-                    if hasattr(response, "parsed") and response.parsed is not None:
+                    if (
+                        hasattr(response, "parsed")
+                        and response.parsed is not None
+                    ):
                         if isinstance(response.parsed, response_model):
                             return response.parsed
                         # If it's a dict (common when using response_json_schema), validate it
                         if isinstance(response.parsed, dict):
                             return response_model.model_validate(response.parsed)
-                        raise ValueError(
-                            f"Unexpected parsed type: {type(response.parsed)}"
-                        )
-                except Exception as parse_err:
-                    log.error(
-                        "gemini_generate",
-                        "Failed to parse structured output",
-                        error=str(parse_err),
-                    )
 
-                    # If it's wrapped in markdown, try to strip
-
-                    text_to_parse = response.text or ""
-                    text_to_parse = text_to_parse.strip()
+                    # fallback to response.text if parsed is None or not available
+                    text_to_parse = (response.text or "").strip()
                     if text_to_parse.startswith("```json"):
                         text_to_parse = text_to_parse[7:].strip("` \n")
                     elif text_to_parse.startswith("```"):
                         text_to_parse = text_to_parse[3:].strip("` \n")
                     return response_model.model_validate_json(text_to_parse)
+                except Exception as parse_err:
+                    log.error(
+                        "gemini_generate",
+                        "構造化出力のパースに失敗しました",
+                        error=str(parse_err),
+                    )
+                    raise AIGenerationError(
+                        f"Failed to parse structured output: {parse_err}"
+                    ) from parse_err
 
             result_text = str(response.text or "").strip()
 
@@ -326,13 +326,13 @@ class GeminiProvider(AIProviderInterface):
                 except Exception as e:
                     log.warning(
                         "gemini_generate",
-                        "Failed to extract grounding metadata",
+                        "Groundingメタデータの抽出に失敗しました",
                         error=str(e),
                     )
 
             log.debug(
                 "gemini_generate",
-                "Gemini generate response",
+                "Gemini 生成レスポンス",
                 response_length=len(result_text),
                 has_grounding=grounding_data is not None,
             )
@@ -343,7 +343,7 @@ class GeminiProvider(AIProviderInterface):
         except Exception as e:
             log.exception(
                 "gemini_generate",
-                "Gemini generation failed",
+                "Gemini 生成に失敗しました",
                 model=target_model,
             )
             raise AIGenerationError(f"Generation failed: {e}") from e
@@ -358,6 +358,7 @@ class GeminiProvider(AIProviderInterface):
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
         image_uri: str | None = None,
+        max_tokens: int | None = None,
     ) -> Any:
         """Generate text response from prompt with image input."""
         if image_bytes is None and image_uri is None:
@@ -367,7 +368,7 @@ class GeminiProvider(AIProviderInterface):
         try:
             log.debug(
                 "gemini_image",
-                "Gemini image request",
+                "Gemini 画像リクエスト",
                 image_size=len(image_bytes) if image_bytes else 0,
                 image_uri=image_uri,
                 mime_type=mime_type,
@@ -378,7 +379,7 @@ class GeminiProvider(AIProviderInterface):
             # Configure generation config
             config_params: GenConfig = {
                 "temperature": self.temperature,
-                "max_output_tokens": self.max_tokens,
+                "max_output_tokens": max_tokens or self.max_tokens,
             }
             if response_model:
                 config_params["response_mime_type"] = "application/json"
@@ -423,14 +424,9 @@ class GeminiProvider(AIProviderInterface):
                             return response.parsed
                         if isinstance(response.parsed, dict):
                             return response_model.model_validate(response.parsed)
-                        raise ValueError(
-                            f"Unexpected parsed type: {type(response.parsed)}"
-                        )
 
-                    # Method 2: Manual Parse
-                    text_to_parse = response.text or ""
-                    # Handle potential markdown wrapping
-                    text_to_parse = text_to_parse.strip()
+                    # Method 2: Manual Parse (from .text)
+                    text_to_parse = (response.text or "").strip()
                     if text_to_parse.startswith("```json"):
                         text_to_parse = text_to_parse[7:].strip("` \n")
                     elif text_to_parse.startswith("```"):
@@ -439,22 +435,17 @@ class GeminiProvider(AIProviderInterface):
                 except Exception as parse_err:
                     log.error(
                         "gemini_image",
-                        "Failed to parse structured image output",
+                        "構造化画像出力のパースに失敗しました",
                         error=str(parse_err),
                     )
-
-                    text_to_parse = response.text or ""
-
-                    # Try cleaning again just in case
-                    text_to_parse = text_to_parse.strip()
-                    if text_to_parse.startswith("```json"):
-                        text_to_parse = text_to_parse[7:].strip("` \n")
-                    return response_model.model_validate_json(text_to_parse)
+                    raise AIGenerationError(
+                        f"Failed to parse structured image output: {parse_err}"
+                    ) from parse_err
 
             result = (response.text or "").strip()
             log.debug(
                 "gemini_image",
-                "Gemini image response",
+                "Gemini 画像レスポンス",
                 response_length=len(result),
             )
             return result
@@ -462,7 +453,7 @@ class GeminiProvider(AIProviderInterface):
         except Exception as e:
             log.exception(
                 "gemini_image",
-                "Gemini image generation failed",
+                "Gemini 画像生成に失敗しました",
                 mime_type=mime_type,
             )
             raise AIGenerationError(f"Image analysis failed: {e}") from e
@@ -482,7 +473,7 @@ class GeminiProvider(AIProviderInterface):
         try:
             log.debug(
                 "gemini_multi_image",
-                "Gemini multi-image request",
+                "Gemini 複数画像リクエスト",
                 image_count=len(images_list),
                 model=target_model,
                 structured=response_model is not None,
@@ -543,7 +534,7 @@ class GeminiProvider(AIProviderInterface):
                 except Exception as parse_err:
                     log.error(
                         "gemini_multi_image",
-                        "Failed to parse structured multi-image output",
+                        "構造化複数画像出力のパースに失敗しました",
                         error=str(parse_err),
                     )
 
@@ -551,7 +542,7 @@ class GeminiProvider(AIProviderInterface):
 
             return (response.text or "").strip()
         except Exception as e:
-            log.exception("gemini_multi_image", "Gemini multi-image generation failed")
+            log.exception("gemini_multi_image", "Gemini 複数画像生成に失敗しました")
             raise AIGenerationError(f"Multi-image analysis failed: {e}") from e
 
     async def generate_with_pdf(
@@ -566,7 +557,7 @@ class GeminiProvider(AIProviderInterface):
         try:
             log.debug(
                 "gemini_pdf",
-                "Gemini PDF request",
+                "Gemini PDFリクエスト",
                 pdf_size=len(pdf_bytes) if pdf_bytes else 0,
                 model=target_model,
                 cached=cached_content_name is not None,
@@ -602,7 +593,7 @@ class GeminiProvider(AIProviderInterface):
             result = str(response.text or "").strip()
             log.debug(
                 "gemini_pdf",
-                "Gemini PDF response",
+                "Gemini PDFレスポンス",
                 response_length=len(result),
             )
             return result
@@ -610,7 +601,7 @@ class GeminiProvider(AIProviderInterface):
         except Exception as e:
             log.exception(
                 "gemini_pdf",
-                "Gemini PDF generation failed",
+                "Gemini PDF生成に失敗しました",
                 pdf_size=len(pdf_bytes),
             )
             raise AIGenerationError(f"PDF analysis failed: {e}") from e
@@ -624,7 +615,7 @@ class GeminiProvider(AIProviderInterface):
             )
             return int(resp.total_tokens or 0)
         except Exception as e:
-            log.error("count_tokens", "Token counting failed", error=str(e))
+            log.error("count_tokens", "トークン数のカウントに失敗しました", error=str(e))
             return 0
 
     async def create_context_cache(
@@ -638,7 +629,7 @@ class GeminiProvider(AIProviderInterface):
         try:
             log.info(
                 "create_context_cache",
-                "Creating Gemini context cache",
+                "Geminiコンテキストキャッシュを作成中",
                 model=model,
                 ttl_minutes=ttl_minutes,
             )
@@ -666,7 +657,7 @@ class GeminiProvider(AIProviderInterface):
             )
             log.info(
                 "create_context_cache",
-                "Created Gemini context cache",
+                "Geminiコンテキストキャッシュを作成しました",
                 cache_name=cache.name,
             )
 
@@ -674,7 +665,7 @@ class GeminiProvider(AIProviderInterface):
         except Exception as e:
             log.error(
                 "create_context_cache",
-                "Failed to create Gemini context cache",
+                "Geminiコンテキストキャッシュの作成に失敗しました",
                 error=str(e),
             )
 
@@ -686,14 +677,14 @@ class GeminiProvider(AIProviderInterface):
             await self.client.aio.caches.delete(name=cache_name)
             log.info(
                 "delete_context_cache",
-                "Deleted Gemini context cache",
+                "Geminiコンテキストキャッシュを削除しました",
                 cache_name=cache_name,
             )
 
         except Exception as e:
             log.error(
                 "delete_context_cache",
-                "Failed to delete Gemini context cache",
+                "Geminiコンテキストキャッシュの削除に失敗しました",
                 cache_name=cache_name,
                 error=str(e),
             )
@@ -724,7 +715,7 @@ class VertexAIProvider(AIProviderInterface):
         if not self.project_id:
             log.warning(
                 "vertex_init",
-                "GCP_PROJECT_ID not set for VertexAIProvider. Relying on default credentials/config.",
+                "GCP_PROJECT_ID が設定されていません。デフォルトの認証情報/設定を使用します。",
             )
 
         # Service Account認証の設定
@@ -732,7 +723,7 @@ class VertexAIProvider(AIProviderInterface):
         if credentials_path and os.path.exists(credentials_path):
             log.info(
                 "vertex_init",
-                "Using service account credentials",
+                "サービスアカウントの認証情報を使用します",
                 path=credentials_path,
             )
 
@@ -748,7 +739,7 @@ class VertexAIProvider(AIProviderInterface):
             if not self.project_id and project:
                 self.project_id = project
                 log.info(
-                    "vertex_init", "Using project ID from credentials", project=project
+                    "vertex_init", "認証情報からプロジェクトIDを取得しました", project=project
                 )
 
             # 認証情報を使用してクライアントを初期化
@@ -762,7 +753,7 @@ class VertexAIProvider(AIProviderInterface):
             )
         else:
             # デフォルト認証情報を使用（Application Default Credentials）
-            log.info("vertex_init", "Using Application Default Credentials (ADC)")
+            log.info("vertex_init", "アプリケーション デフォルト資格情報 (ADC) を使用します")
             self.client = genai.Client(
                 vertexai=True,
                 project=self.project_id,
@@ -774,7 +765,7 @@ class VertexAIProvider(AIProviderInterface):
 
         log.info(
             "vertex_init",
-            "VertexAIProvider initialized",
+            "VertexAIProviderを初期化しました",
             project=self.project_id,
             location=self.location,
             model=self.model,
@@ -829,7 +820,7 @@ class VertexAIProvider(AIProviderInterface):
 
             log.debug(
                 "vertex_generate",
-                "Vertex generate request",
+                "Vertex 生成リクエスト",
                 model=target_model,
                 structured=response_model is not None,
             )
@@ -858,7 +849,7 @@ class VertexAIProvider(AIProviderInterface):
                 except Exception as parse_err:
                     log.error(
                         "vertex_generate",
-                        "Failed to parse structured output from Vertex",
+                        "Vertexからの構造化出力のパースに失敗しました",
                         error=str(parse_err),
                     )
 
@@ -873,7 +864,7 @@ class VertexAIProvider(AIProviderInterface):
             return result
 
         except Exception as e:
-            log.exception("vertex_generate", "Vertex AI generation failed")
+            log.exception("vertex_generate", "Vertex AI 生成に失敗しました")
             raise AIGenerationError(f"Vertex generation failed: {e}") from e
 
     async def generate_with_image(
@@ -886,6 +877,7 @@ class VertexAIProvider(AIProviderInterface):
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
         image_uri: str | None = None,
+        max_tokens: int | None = None,
     ) -> Any:
         """Generate text response from prompt with image input."""
         if image_bytes is None and image_uri is None:
@@ -908,7 +900,7 @@ class VertexAIProvider(AIProviderInterface):
 
             config_params: GenConfig = {
                 "temperature": self.temperature,
-                "max_output_tokens": self.max_tokens,
+                "max_output_tokens": max_tokens or self.max_tokens,
             }
             if response_model:
                 config_params["response_mime_type"] = "application/json"
@@ -947,7 +939,7 @@ class VertexAIProvider(AIProviderInterface):
                 except Exception as parse_err:
                     log.error(
                         "vertex_image",
-                        "Failed to parse structured image output from Vertex",
+                        "Vertexからの構造化画像出力のパースに失敗しました",
                         error=str(parse_err),
                     )
 
@@ -965,7 +957,7 @@ class VertexAIProvider(AIProviderInterface):
         except Exception as e:
             log.exception(
                 "vertex_image",
-                "Vertex AI image generation failed",
+                "Vertex AI 画像生成に失敗しました",
             )
             raise AIGenerationError(f"Vertex image analysis failed: {e}") from e
 
@@ -1035,7 +1027,7 @@ class VertexAIProvider(AIProviderInterface):
                 except Exception as parse_err:
                     log.error(
                         "vertex_multi_image",
-                        "Failed to parse structured multi-image output from Vertex",
+                        "Vertexからの構造化複数画像出力のパースに失敗しました",
                         error=str(parse_err),
                     )
 
@@ -1043,7 +1035,7 @@ class VertexAIProvider(AIProviderInterface):
 
             return (response.text or "").strip()
         except Exception as e:
-            log.exception("vertex_multi_image", "Vertex multi-image generation failed")
+            log.exception("vertex_multi_image", "Vertex 複数画像生成に失敗しました")
             raise AIGenerationError(f"Vertex multi-image analysis failed: {e}") from e
 
     async def generate_with_pdf(
@@ -1087,7 +1079,7 @@ class VertexAIProvider(AIProviderInterface):
             return str(response.text or "").strip()
 
         except Exception as e:
-            log.exception("vertex_pdf", "Vertex AI PDF generation failed")
+            log.exception("vertex_pdf", "Vertex AI PDF 生成に失敗しました")
             raise AIGenerationError(f"Vertex PDF analysis failed: {e}") from e
 
     async def count_tokens(self, contents: Any, model: str | None = None) -> int:
@@ -1100,7 +1092,7 @@ class VertexAIProvider(AIProviderInterface):
             return int(resp.total_tokens or 0)
         except Exception as e:
             log.error(
-                "count_tokens_vertex", "Token counting failed (Vertex)", error=str(e)
+                "count_tokens_vertex", "トークン数のカウントに失敗しました (Vertex)", error=str(e)
             )
             return 0
 
@@ -1117,7 +1109,7 @@ class VertexAIProvider(AIProviderInterface):
         try:
             log.info(
                 "create_context_cache_vertex",
-                "Creating Vertex context cache",
+                "Vertexコンテキストキャッシュを作成中",
                 model=model,
             )
 
@@ -1144,7 +1136,7 @@ class VertexAIProvider(AIProviderInterface):
         except Exception as e:
             log.error(
                 "create_context_cache_vertex",
-                "Vertex cache creation failed",
+                "Vertexキャッシュの作成に失敗しました",
                 error=str(e),
             )
 
@@ -1157,7 +1149,7 @@ class VertexAIProvider(AIProviderInterface):
         except Exception as e:
             log.error(
                 "delete_context_cache_vertex",
-                "Vertex cache deletion failed",
+                "Vertexキャッシュの削除に失敗しました",
                 error=str(e),
             )
 
