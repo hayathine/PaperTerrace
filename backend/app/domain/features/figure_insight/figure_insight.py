@@ -17,7 +17,7 @@ class FigureInsightService:
 
     def __init__(self):
         self.ai_provider = get_ai_provider()
-        self.model = os.getenv("FIGURE_EXPLAIN_MODEL", "gemini-2.5-flash-lite")
+        self.model = os.getenv("FIGURE_EXPLAIN_MODEL", "gemini-2.5-flash")
         setup_dspy()
         self.figure_mod = VisionFigureModule()
 
