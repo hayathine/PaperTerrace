@@ -156,7 +156,7 @@ function findFigureByBbox(
 	bbox: number[],
 	tolerance = 20,
 ): Figure | undefined {
-	if (!figures || figures.length === 0) return undefined;
+	if (!Array.isArray(figures) || figures.length === 0) return undefined;
 	return figures.find((fig) => {
 		const [fx1, fy1, fx2, fy2] = fig.bbox;
 		return (
@@ -315,7 +315,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 
 		// フォールバック: content にマーカーがない figure を Y 座標で段落間に挿入する。
 		// 旧キャッシュ論文（マーカー未生成）や遅延レイアウト解析で追加された figure に対応。
-		if (page.figures && page.figures.length > 0) {
+		if (Array.isArray(page.figures) && page.figures.length > 0) {
 			// content 内に既に存在する bbox を収集
 			const existingBboxes: number[][] = [];
 			const markerRe = /!\[[^\]]*\]\(<([\d.]+),([\d.]+),([\d.]+),([\d.]+)>\)/g;

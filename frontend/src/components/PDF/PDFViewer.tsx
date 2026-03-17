@@ -719,7 +719,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						}
 
 						// Also prepend to figures if they exist
-						if (newData.figures && newData.figures.length > 0) {
+						if (Array.isArray(newData.figures) && newData.figures.length > 0) {
 							newData = {
 								...newData,
 								figures: newData.figures.map((f: any) => ({
