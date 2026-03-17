@@ -141,7 +141,7 @@ async def analyze_figure(
     user: OptionalUser = None,
 ):
     content = await file.read()
-    mime_type = file.content_type or "image/png"
+    mime_type = file.content_type or "image/jpeg"
     # Determine current user ID
     current_user_id = (
         user.uid if user else (f"guest:{session_id}" if session_id else None)

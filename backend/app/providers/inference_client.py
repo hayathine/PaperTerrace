@@ -278,7 +278,7 @@ class InferenceServiceClient:
             log.debug("analyze_image", "画像データによるレイアウト解析リクエスト")
 
             # multipart/form-dataで画像を送信
-            files = {"file": ("image.png", image_bytes, "image/png")}
+            files = {"file": ("image.jpg", image_bytes, "image/jpeg")}
 
             response = await self._make_request_with_retry(
                 self.layout_base_url, "POST", "/api/v1/analyze-image", service="layout", files=files

@@ -16,7 +16,6 @@ _EXT_CONTENT_TYPE: dict[str, str] = {
     "webp": "image/webp",
     "jpg": "image/jpeg",
     "jpeg": "image/jpeg",
-    "png": "image/png",
 }
 
 
@@ -121,9 +120,8 @@ class LocalImageStorage(ImageStorageStrategy):
                 return -1
 
         images = []
-        # JPEG優先（新形式）、次にWebP、次にPNG（旧形式・移行期対応）
         seen_page_nums: set[int] = set()
-        for ext in ("jpg", "jpeg", "webp", "png"):
+        for ext in ("jpg", "jpeg", "webp"):
             for p in hash_dir.glob(f"page_*.{ext}"):
                 num = extract_page_num(p)
                 if num >= 0 and num not in seen_page_nums:
@@ -147,8 +145,6 @@ class LocalImageStorage(ImageStorageStrategy):
         return False
 
     def get_image_bytes(self, image_url: str) -> bytes:
-        # e.g., /static/paper_images/HASH/page_1.png
-        # フロントエンドから渡されるフルURL (https://worker.example.com/...) も正規化して処理する
         resolved_url = image_url
         if image_url.startswith("http"):
             from urllib.parse import urlparse
@@ -222,8 +218,6 @@ class GCSImageStorage(ImageStorageStrategy):
                 self.bucket, prefix=f"paper_images/{file_hash}/"
             )
 
-            # ページ順にソートしたい
-            # page_1.png, page_2.png...
             def extract_page_num_and_filter(blob):
                 try:
                     basename = os.path.basename(blob.name)
@@ -235,8 +229,7 @@ class GCSImageStorage(ImageStorageStrategy):
                 except Exception:
                     return -1
 
-            # JPEG優先（新形式）、次にWebP、次にPNG（旧形式・移行期対応）
-            _EXT_PRIORITY = {"jpg": 0, "jpeg": 0, "webp": 1, "png": 2}
+            _EXT_PRIORITY = {"jpg": 0, "jpeg": 0, "webp": 1}
             seen: dict[int, object] = {}
             seen_priority: dict[int, int] = {}
             for b in blobs:
@@ -312,8 +305,6 @@ class GCSImageStorage(ImageStorageStrategy):
 
     def get_image_bytes(self, image_url: str) -> bytes:
         try:
-            # Convert relative URL back to GCS blob name
-            # /static/paper_images/{hash}/page_{num}.png -> paper_images/{hash}/page_{num}.png
             if image_url.startswith("/static/"):
                 blob_name = image_url.replace("/static/", "", 1)
             elif image_url.startswith("http"):
@@ -369,26 +360,29 @@ class GCSImageStorage(ImageStorageStrategy):
 
     def get_gcs_uri(self, image_url: str) -> str | None:
         """image_url から gs://bucket/blob 形式の GCS URI を返す。"""
+        result = self.resolve_gcs_uri(image_url)
+        return result[0] if result else None
+
+    def resolve_gcs_uri(self, image_url: str) -> tuple[str, str] | None:
+        """image_url を解決し (gs://URI, mime_type) を返す。
+
+        Returns:
+            (gcs_uri, mime_type) または None
+        """
         try:
-            blob_name: str | None = None
-            if image_url.startswith("/static/"):
-                blob_name = image_url.replace("/static/", "", 1)
-            elif image_url.startswith("http"):
-                from urllib.parse import urlparse
+            blob_name = self._to_blob_name(image_url)
+            if not blob_name:
+                return None
 
-                parsed_path = urlparse(image_url).path
-                if parsed_path.startswith("/static/"):
-                    blob_name = parsed_path.replace("/static/", "", 1)
-                elif len(parsed_path.strip("/").split("/")) == 2:
-                    parts = parsed_path.strip("/").split("/")
-                    blob_name = f"paper_images/{parts[0]}/{parts[1]}"
-            else:
-                blob_name = image_url
+            blob = self.bucket.blob(blob_name)
+            if not blob.exists():
+                return None
 
-            if blob_name:
-                return f"gs://{self.bucket_name}/{blob_name}"
+            ext = blob_name.rsplit(".", 1)[-1].lower()
+            mime_type = "image/webp" if ext == "webp" else "image/jpeg"
+            return f"gs://{self.bucket_name}/{blob_name}", mime_type
         except Exception as e:
-            log.warning("get_gcs_uri", "Failed to build GCS URI", image_url=image_url, error=str(e))
+            log.warning("resolve_gcs_uri", "Failed to resolve GCS URI", image_url=image_url, error=str(e))
         return None
 
     def generate_signed_url(self, image_url: str, expiration_seconds: int = 900) -> str | None:
@@ -497,6 +491,14 @@ def get_image_bytes(image_url: str) -> bytes:
 
 def get_gcs_uri(image_url: str) -> str | None:
     return _get_instance().get_gcs_uri(image_url)
+
+
+def resolve_gcs_uri(image_url: str) -> tuple[str, str] | None:
+    """image_url を解決し (gs://URI, mime_type) を返す。GCS モード以外では None。"""
+    inst = _get_instance()
+    if not isinstance(inst, GCSImageStorage):
+        return None
+    return inst.resolve_gcs_uri(image_url)
 
 
 def get_signed_url(image_url: str, expiration_seconds: int = 900) -> str | None:

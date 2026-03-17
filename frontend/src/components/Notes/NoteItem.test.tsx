@@ -64,13 +64,13 @@ describe("NoteItem Component", () => {
 	it("shows image when image_url is provided", () => {
 		const noteWithImage = {
 			...mockNote,
-			image_url: "http://example.com/img.png",
+			image_url: "http://example.com/img.jpg",
 		};
 		render(<NoteItem note={noteWithImage} onDelete={mockOnDelete} />);
 
 		const img = screen.getByAltText("Note Attachment");
 		expect(img).toBeDefined();
-		expect(img.getAttribute("src")).toBe("http://example.com/img.png");
+		expect(img.getAttribute("src")).toBe("http://example.com/img.jpg");
 	});
 
 	it("shows jump button when page_number is provided", () => {

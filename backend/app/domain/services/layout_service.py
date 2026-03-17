@@ -61,7 +61,7 @@ class LayoutAnalysisService:
                 timeout=30.0, verify=self.verify_ssl
             ) as client:
                 with open(image_path, "rb") as f:
-                    files = {"file": (os.path.basename(image_path), f, "image/png")}
+                    files = {"file": (os.path.basename(image_path), f, "image/jpeg")}
                     response = await client.post(url, files=files)
 
                     response.raise_for_status()

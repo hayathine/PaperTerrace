@@ -769,7 +769,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								links: p.links,
 							}));
 
-							// Extract file_hash from image_url (e.g. /static/paper_images/{hash}/page_1.png)
+							// Extract file_hash from image_url (e.g. /static/paper_images/{hash}/page_1.jpg)
 							let fileHash = "";
 							if (imageUrls.length > 0) {
 								const match = imageUrls[0].match(
@@ -938,7 +938,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				canvas.toBlob(async (blob) => {
 					if (!blob) return;
 					const formData = new FormData();
-					formData.append("file", blob, "crop.png");
+					formData.append("file", blob, "crop.jpg");
 
 					// We need token if auth is enabled
 					const headers: HeadersInit = {};
@@ -965,7 +965,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						error: e,
 					});
 				}
-			}, "image/png");
+			}, "image/jpeg");
 		},
 
 		[pages, onAreaSelect, token],
@@ -1107,7 +1107,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						const cachedPages: PageData[] = layoutList.map(
 							(layout: any, i: number) => ({
 								page_num: i + 1,
-								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.png`,
+								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.jpg`,
 								width: layout?.width || 0,
 								height: layout?.height || 0,
 								words: layout?.words || [],
@@ -1244,7 +1244,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						const fullPages: PageData[] = layoutList.map(
 							(layout: any, i: number) => ({
 								page_num: i + 1,
-								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.png`,
+								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.jpg`,
 								width: layout?.width || 0,
 								height: layout?.height || 0,
 								words: layout?.words || [],

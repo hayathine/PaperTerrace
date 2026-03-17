@@ -411,10 +411,8 @@ if _storage_type == "gcs":
                 return FastAPIResponse(status_code=404, content=b"Not Found")
 
             data = await asyncio.to_thread(blob.download_as_bytes)
-            ext = filename.rsplit(".", 1)[-1].lower()
-            content_type = {"webp": "image/webp", "png": "image/png"}.get(
-                ext, "image/jpeg"
-            )
+            ext = blob.name.rsplit(".", 1)[-1].lower()
+            content_type = "image/webp" if ext == "webp" else "image/jpeg"
             return FastAPIResponse(
                 content=data,
                 media_type=content_type,

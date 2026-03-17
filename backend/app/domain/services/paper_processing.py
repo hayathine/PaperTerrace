@@ -42,15 +42,16 @@ async def process_figure_analysis_task(
             return
 
         import anyio
-        from app.providers.image_storage import get_gcs_uri, get_image_bytes
+        from app.providers.image_storage import get_image_bytes, resolve_gcs_uri
 
         # GCS URI が取得できる場合はバイトダウンロードを省略
-        gcs_uri = await anyio.to_thread.run_sync(get_gcs_uri, image_url)
-        if gcs_uri:
+        gcs_result = await anyio.to_thread.run_sync(resolve_gcs_uri, image_url)
+        if gcs_result:
+            gcs_uri, mime_type = gcs_result
             explanation = await figure_insight.analyze_figure(
                 image_uri=gcs_uri,
                 caption=figure.get("caption", ""),
-                mime_type="image/jpeg",
+                mime_type=mime_type,
                 target_lang=lang,
                 user_id=user_id,
                 session_id=session_id,

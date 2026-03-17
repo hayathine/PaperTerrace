@@ -70,7 +70,7 @@ describe("usePaperCache", () => {
 	});
 
 	it("should fetch and cache images", async () => {
-		const mockBlob = new Blob(["test"], { type: "image/png" });
+		const mockBlob = new Blob(["test"], { type: "image/jpeg" });
 		const globalFetch = vi.fn().mockResolvedValue({
 			ok: true,
 			blob: vi.fn().mockResolvedValue(mockBlob),

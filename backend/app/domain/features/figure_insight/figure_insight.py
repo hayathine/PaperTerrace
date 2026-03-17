@@ -25,7 +25,7 @@ class FigureInsightService:
         self,
         image_bytes: bytes | None = None,
         caption: str = "",
-        mime_type: str = "image/png",
+        mime_type: str = "image/jpeg",
         target_lang: str = "ja",
         user_id: str | None = None,
         session_id: str | None = None,

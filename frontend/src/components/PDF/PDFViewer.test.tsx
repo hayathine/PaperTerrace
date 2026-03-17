@@ -130,7 +130,7 @@ describe("PDFViewer Component", () => {
 	it("loads and displays existing paper from paperId", async () => {
 		const mockPage = {
 			page_num: 1,
-			image_url: "page1.png",
+			image_url: "page1.jpg",
 			width: 100,
 			height: 100,
 			words: [],
@@ -187,7 +187,7 @@ describe("PDFViewer Component", () => {
 		act(() => {
 			mockES.emitMessage({
 				type: "page",
-				data: { page_num: 1, image_url: "p1.png", words: [] },
+				data: { page_num: 1, image_url: "p1.jpg", words: [] },
 			});
 		});
 
@@ -211,7 +211,7 @@ describe("PDFViewer Component", () => {
 	it("handles word clicks and forwards them to onWordClick prop", async () => {
 		const mockPage = {
 			page_num: 1,
-			image_url: "p1.png",
+			image_url: "p1.jpg",
 			words: [],
 		};
 		mockPaperCache.getCachedPaper.mockResolvedValue({
@@ -237,7 +237,7 @@ describe("PDFViewer Component", () => {
 	it("switches between PDF grid and plaintext mode", async () => {
 		const mockPage = {
 			page_num: 1,
-			image_url: "p1.png",
+			image_url: "p1.jpg",
 			words: [],
 		};
 		mockPaperCache.getCachedPaper.mockResolvedValue({

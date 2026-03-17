@@ -36,7 +36,7 @@ async def upload_image(file: UploadFile = File(...)):
             )
 
         # Generate unique filename
-        ext = file.filename.split(".")[-1] if "." in file.filename else "png"
+        ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
         filename = f"{uuid.uuid4()}_{int(time.time())}.{ext}"
         file_path = UPLOAD_DIR / filename
 

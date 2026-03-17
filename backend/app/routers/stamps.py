@@ -177,12 +177,11 @@ async def upload_custom_stamp(file: UploadFile = File(...)):
         max_size = (256, 256)
         image.thumbnail(max_size, Image.Resampling.LANCZOS)
 
-        # Save as PNG
-        ext = "png"
+        ext = "jpg"
         filename = f"{uuid.uuid4()}_{int(time.time())}.{ext}"
         file_path = STAMPS_UPLOAD_DIR / filename
 
-        image.save(file_path, format="PNG")
+        image.save(file_path, format="JPEG", quality=90)
         file_url = f"/static/user_uploads/stamps/{filename}"
 
         log.info("upload_custom", "Custom stamp uploaded", file_url=file_url)

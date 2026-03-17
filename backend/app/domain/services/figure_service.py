@@ -121,7 +121,6 @@ class FigureService:
                 # Crop from the already rendered PIL image
                 crop_pil = page_img.original.crop(pixel_bbox).convert("RGB")
 
-                # JPEG圧縮で転送サイズを削減（PNG比で90%削減）
                 buffer = io.BytesIO()
                 crop_pil.save(buffer, format="JPEG", quality=85, optimize=True)
 

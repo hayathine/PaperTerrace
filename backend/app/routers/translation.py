@@ -631,8 +631,6 @@ async def explain_image(req: ExplainImageRequest, request: Request):
         img_mime_type = "image/jpeg"
     elif url_lower.endswith(".webp"):
         img_mime_type = "image/webp"
-    elif url_lower.endswith(".png"):
-        img_mime_type = "image/png"
     else:
         img_mime_type = "image/jpeg"
 

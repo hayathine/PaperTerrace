@@ -122,19 +122,21 @@ async def explain_figure(
         import os
 
         import anyio
-        from app.providers.image_storage import get_gcs_uri
+        from app.providers.image_storage import resolve_gcs_uri
 
-        gcs_uri = await anyio.to_thread.run_sync(get_gcs_uri, image_url)
+        gcs_result = await anyio.to_thread.run_sync(resolve_gcs_uri, image_url)
         use_vertex = os.getenv("AI_PROVIDER", "vertex").lower() == "vertex"
-        if gcs_uri and use_vertex:
+        if gcs_result and use_vertex:
+            gcs_uri, mime_type = gcs_result
             log.debug(
                 "explain_figure",
                 "Using GCS URI directly (no download)",
                 figure_id=figure_id,
                 gcs_uri=gcs_uri,
+                mime_type=mime_type,
             )
             explanation = await figure_service.analyze_figure(
-                image_uri=gcs_uri, caption=caption, target_lang="ja", mime_type="image/jpeg"
+                image_uri=gcs_uri, caption=caption, target_lang="ja", mime_type=mime_type
             )
         else:
             image_bytes = await _fetch_image_bytes(image_url)

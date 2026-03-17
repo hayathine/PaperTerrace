@@ -35,7 +35,7 @@ class VisionOCRService:
         Detect text using Vision API and return full text and layout data (words + bboxes).
 
         Args:
-            image_bytes: PNG/JPEG image data
+            image_bytes: JPEG/WebP image data
 
         Returns:
             (full_text, layout_data_dict)

@@ -28,7 +28,7 @@ vi.mock("../../hooks/useIntersectionObserver", () => ({
 
 const mockPage: PageData = {
 	page_num: 1,
-	image_url: "http://example.com/page1.png",
+	image_url: "http://example.com/page1.jpg",
 	width: 612,
 	height: 792,
 	content: "Hello World",
