@@ -93,7 +93,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         log.warning("lifespan", "DB warmup failed (non-fatal)", error=str(e))
 
+    # ARQ pool 初期化（Redis 未接続環境では None になり、同期フォールバックが使われる）
+    from app.providers import close_arq_pool, get_arq_pool
+    await get_arq_pool()
+
     yield
+
+    await close_arq_pool()
 
 
 def _warmup_db(engine) -> None:
@@ -478,7 +484,7 @@ async def health_check():
         status = "unhealthy"
         dependencies["database"] = f"error: {str(e)}"
 
-    # Check Redis (ローカル環境では Redis 未接続でも healthy 扱い)
+    # Check Redis (ローカル環境または localhost 設定では Redis 未接続でも healthy 扱い)
     from app.core.config import is_local
     try:
         redis_url = settings.get("REDIS_URL", "redis://redis:6379")
@@ -487,8 +493,10 @@ async def health_check():
         r.ping()
         dependencies["redis"] = "connected"
     except Exception as e:
-        if is_local():
-            dependencies["redis"] = "unavailable (local fallback active)"
+        redis_url = settings.get("REDIS_URL", "redis://redis:6379")
+        is_redis_optional = is_local() or "localhost" in redis_url
+        if is_redis_optional:
+            dependencies["redis"] = "unavailable (optional in this environment)"
         else:
             status = "unhealthy"
             dependencies["redis"] = f"error: {str(e)}"

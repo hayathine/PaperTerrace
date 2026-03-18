@@ -3,7 +3,7 @@ Provider package for AI and Storage abstraction.
 Enables switching between local (SQLite) and cloud (Vertex AI/Cloud SQL) providers.
 """
 
-from redis_provider.provider import RedisService, get_redis_client
+from redis_provider.provider import RedisService, close_arq_pool, get_arq_pool, get_redis_client
 
 from .ai_provider import AIProviderInterface, GeminiProvider, VertexAIProvider, get_ai_provider
 from .image_storage import get_image_bytes, get_image_storage
@@ -23,4 +23,6 @@ __all__ = [
     "ORMStorageAdapter",
     "RedisService",
     "get_redis_client",
+    "get_arq_pool",
+    "close_arq_pool",
 ]

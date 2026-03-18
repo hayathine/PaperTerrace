@@ -19,6 +19,7 @@ from app.domain.features import (
 from app.domain.services.layout_analysis_service import LayoutAnalysisService
 from app.providers import (
     RedisService,
+    get_arq_pool,
     get_redis_client,
     get_storage_provider,
 )  # RedisService now uses in-memory cache
@@ -216,8 +217,10 @@ async def analyze_layout_lazy(
         user.uid if user else (f"guest:{session_id}" if session_id else None)
     )
 
+    arq_pool = await get_arq_pool()
     redis_client = get_redis_client()
-    if redis_client is None:
+
+    if arq_pool is None or redis_client is None:
         # Redis 未接続時はフォールバックとして同期処理
         log.warning(
             "layout_lazy",
@@ -245,7 +248,8 @@ async def analyze_layout_lazy(
             raise HTTPException(status_code=500, detail="Layout analysis failed.")
 
     try:
-        job_id = enqueue_layout_job(
+        job_id = await enqueue_layout_job(
+            arq_pool,
             redis_client,
             paper_id=paper_id,
             page_numbers=parsed_pages,

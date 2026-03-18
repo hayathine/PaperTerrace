@@ -21,6 +21,8 @@ _redis_client = None
 _redis_enabled = True
 _last_attempt_time: float = 0.0  # 0 = 未試行
 
+_arq_pool = None
+
 
 def get_redis_client():
     global _redis_client, _last_attempt_time
@@ -50,6 +52,34 @@ def get_redis_client():
             )
             _redis_client = None
     return _redis_client
+
+
+async def get_arq_pool():
+    """ARQ の async Redis pool を返す。未接続の場合は接続を試みる。接続不可なら None を返す。"""
+    global _arq_pool
+    if _arq_pool is not None:
+        return _arq_pool
+
+    try:
+        from arq import create_pool
+        from arq.connections import RedisSettings
+
+        _arq_pool = await create_pool(RedisSettings.from_dsn(REDIS_URL))
+        log.info("arq_pool", f"ARQ pool connected to {REDIS_URL}")
+    except Exception as e:
+        log.warning("arq_pool", f"Failed to create ARQ pool ({REDIS_URL}): {e}")
+        _arq_pool = None
+
+    return _arq_pool
+
+
+async def close_arq_pool() -> None:
+    """ARQ pool を閉じる（lifespan shutdown 時に呼ぶ）。"""
+    global _arq_pool
+    if _arq_pool is not None:
+        await _arq_pool.aclose()
+        _arq_pool = None
+        log.info("arq_pool", "ARQ pool closed")
 
 
 class DateTimeEncoder(json.JSONEncoder):

@@ -9,7 +9,6 @@ import uuid
 from datetime import datetime, timezone
 from typing import Any
 
-JOB_QUEUE_KEY = "layout_job_queue"
 JOB_KEY_PREFIX = "layout_job:"
 JOB_TTL = 3600  # 1時間
 JOB_PUB_PREFIX = "layout_job_pub:"
@@ -33,37 +32,36 @@ return 1
 """
 
 
-def enqueue_layout_job(
-    redis_client,
+async def enqueue_layout_job(
+    arq_pool,
+    sync_redis,
     paper_id: str,
     page_numbers: list[int] | None,
     user_id: str | None,
     file_hash: str | None,
     session_id: str | None,
 ) -> str:
-    """レイアウト解析ジョブをキューに追加し job_id を返す"""
+    """レイアウト解析ジョブを ARQ キューに追加し job_id を返す。"""
     job_id = str(uuid.uuid4())
     now = datetime.now(timezone.utc).isoformat()
 
-    job_payload = {
-        "job_id": job_id,
-        "type": "layout_analysis",
-        "paper_id": paper_id,
-        "page_numbers": page_numbers,
-        "user_id": user_id,
-        "file_hash": file_hash,
-        "session_id": session_id,
-        "created_at": now,
-    }
-
-    # ステータスキーを先に登録しておく（pending 状態）
+    # ステータスキーを先に登録しておく（queued 状態）
     status_data = {"status": "queued", "created_at": now}
-    redis_client.setex(
+    sync_redis.setex(
         f"{JOB_KEY_PREFIX}{job_id}", JOB_TTL, json.dumps(status_data)
     )
 
-    # キューの末尾にジョブを追加
-    redis_client.rpush(JOB_QUEUE_KEY, json.dumps(job_payload))
+    # ARQ にジョブを投入（_job_id で UUID を ARQ の job ID として使用）
+    await arq_pool.enqueue_job(
+        "process_layout_analysis",
+        job_id=job_id,
+        paper_id=paper_id,
+        page_numbers=page_numbers,
+        user_id=user_id,
+        file_hash=file_hash,
+        session_id=session_id,
+        _job_id=job_id,
+    )
 
     return job_id
 
