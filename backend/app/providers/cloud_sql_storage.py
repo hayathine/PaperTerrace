@@ -3,7 +3,7 @@ Cloud SQL Storage Provider
 """
 
 import json
-import os
+
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -26,13 +26,13 @@ class CloudSQLStorage(StorageInterface):
 
     def __init__(self):
         self.db_url = get_database_url()
-        self.db_user = os.getenv("DB_USER")
-        self.db_password = os.getenv("DB_PASSWORD")
-        self.db_name = os.getenv("DB_NAME")
+        self.db_user = settings.get("DB_USER")
+        self.db_password = settings.get("DB_PASSWORD")
+        self.db_name = settings.get("DB_NAME")
         # Connect via Unix socket (e.g. for Google Cloud SQL) or TCP for local
-        self.host = os.getenv("DB_HOST", "127.0.0.1")
-        self.port = os.getenv("DB_PORT", "5432")
-        self.instance_connection_name = os.getenv("CLOUDSQL_CONNECTION_NAME")
+        self.host = settings.get("DB_HOST", "127.0.0.1")
+        self.port = settings.get("DB_PORT", "5432")
+        self.instance_connection_name = settings.get("CLOUDSQL_CONNECTION_NAME")
 
         log.info(
             "init",

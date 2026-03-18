@@ -3,7 +3,7 @@ Storage Provider abstraction layer.
 Supports SQLite (current) and Cloud SQL/GCS (future GCP deployment).
 """
 
-import os
+
 import sqlite3
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -14,7 +14,7 @@ from common.logger import ServiceLogger
 log = ServiceLogger("Storage")
 
 
-DB_PATH = os.getenv("DB_PATH", "ocr_reader.db")
+DB_PATH = settings.get("DB_PATH", "ocr_reader.db")
 
 
 class StorageInterface(ABC):
@@ -1167,9 +1167,9 @@ def get_storage_provider() -> StorageInterface:
     """
     global _sqlite_singleton, _orm_mode
 
-    database_url = os.getenv("DATABASE_URL")
+    database_url = settings.get("DATABASE_URL")
     default_provider = "orm" if database_url else "sqlite"
-    provider_type = os.getenv("STORAGE_PROVIDER", default_provider).lower()
+    provider_type = str(settings.get("STORAGE_PROVIDER", default_provider)).lower()
 
     if provider_type in ["cloudsql", "postgresql", "neon", "orm"]:
         # Always create a fresh session per call so that a failed DB

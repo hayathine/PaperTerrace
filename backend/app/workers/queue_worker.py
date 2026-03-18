@@ -11,6 +11,8 @@ from datetime import datetime
 
 from redis import Redis
 
+from common.config import settings
+
 from app.domain.services.layout_analysis_service import LayoutAnalysisService
 from app.workers.layout_job import (
     JOB_QUEUE_KEY,
@@ -29,7 +31,7 @@ class QueueWorker:
     """Background job processor using Redis as queue."""
 
     def __init__(self):
-        self.redis_url = os.getenv("REDIS_URL", "redis://redis:6379/0")
+        self.redis_url = settings.get("REDIS_URL", "redis://redis:6379/0")
         self.redis = None
         self.running = False
 
@@ -215,7 +217,6 @@ class QueueWorker:
         """Stop the worker."""
         self.running = False
         try:
-            import os
             os.remove("/tmp/ready")
         except FileNotFoundError:
             pass

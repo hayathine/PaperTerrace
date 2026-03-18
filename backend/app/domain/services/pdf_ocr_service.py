@@ -16,6 +16,7 @@ from app.crud import get_ocr_from_db, save_ocr_to_db
 from app.providers import get_ai_provider
 from app.providers.image_storage import async_save_page_image, get_page_images
 from app.utils import _get_file_hash
+from common import settings
 from common.logger import ServiceLogger
 from common.utils.bbox import scale_bbox
 
@@ -89,7 +90,7 @@ class PDFOCRService:
             # 1. Cache handling
             cached_result = await self._handle_cache(file_hash)
             if cached_result:
-                storage_type = os.getenv("STORAGE_TYPE", "local").upper()
+                storage_type = settings.get("STORAGE_TYPE", "local").upper()
                 log.info(
                     "cache_hit",
                     "Using cached OCR",
@@ -154,7 +155,7 @@ class PDFOCRService:
                 all_layout_parts = []
 
                 # --- Chunked Processing (Batch AI + Persistent File) ---
-                CHUNK_SIZE = int(os.getenv("OCR_CHUNK_SIZE", "5"))
+                CHUNK_SIZE = int(settings.get("OCR_CHUNK_SIZE", "5"))
                 for chunk_start in range(0, total_pages, CHUNK_SIZE):
                     chunk_end = min(chunk_start + CHUNK_SIZE, total_pages)
                     log.info(
@@ -173,6 +174,7 @@ class PDFOCRService:
                                     page_idx,
                                     total_pages,
                                     file_hash,
+                                    fitz_doc,
                                 )
                                 for page_idx in range(chunk_start, chunk_end)
                             ]
@@ -249,7 +251,7 @@ class PDFOCRService:
             log.info("_handle_cache", "Cache miss", file_hash=file_hash)
             return None
 
-        storage_type = os.getenv("STORAGE_TYPE", "local").upper()
+        storage_type = settings.get("STORAGE_TYPE", "local").upper()
         log.info(
             "_handle_cache", "Cache hit", storage_type=storage_type, file_hash=file_hash
         )
@@ -310,7 +312,7 @@ class PDFOCRService:
         return pages
 
     async def _prepare_page_phases_1_2(
-        self, page, page_idx, total_pages, file_hash
+        self, page, page_idx, total_pages, file_hash, fitz_doc=None
     ) -> dict:
         """Execute Phase 1 & 2: Native text extraction and image rendering."""
         page_num = page_idx + 1
@@ -369,8 +371,25 @@ class PDFOCRService:
 
         # Phase 2: Page Image (CPU-bound rendering をスレッドで実行)
         def _render_and_encode(p, res):
-            page_img = p.to_image(resolution=res, antialias=True)
-            pil = page_img.original.convert("RGB")
+            try:
+                page_img = p.to_image(resolution=res, antialias=True)
+                pil = page_img.original.convert("RGB")
+            except Exception as render_err:
+                # pdfplumber (pypdfium2) が失敗した場合 PyMuPDF でフォールバック
+                log.warning(
+                    "_render_and_encode",
+                    "pdfplumber rendering failed, falling back to PyMuPDF",
+                    page_num=page_num,
+                    error=str(render_err),
+                )
+                if fitz_doc is None:
+                    raise
+                import fitz as _fitz  # noqa: PLC0415
+                from PIL import Image as _Image  # noqa: PLC0415
+                mat = _fitz.Matrix(res / 72.0, res / 72.0)
+                fitz_page = fitz_doc[page_idx]
+                pix = fitz_page.get_pixmap(matrix=mat)
+                pil = _Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
             buf = io.BytesIO()
             pil.save(buf, format="JPEG", quality=85)
             return pil, buf.getvalue()

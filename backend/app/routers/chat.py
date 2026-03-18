@@ -4,11 +4,11 @@ Handles chat interactions with the AI assistant.
 """
 
 import json
-import os
 
 from fastapi import APIRouter, Form
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
+from common import settings
 
 from app.auth import OptionalUser
 from app.domain.features import ChatService
@@ -30,7 +30,7 @@ chat_service = ChatService()
 redis_service = RedisService()
 
 
-_MAX_MESSAGE_LENGTH = int(os.getenv("MAX_CHAT_MESSAGE_LENGTH", "4000"))
+_MAX_MESSAGE_LENGTH = int(settings.get("MAX_CHAT_MESSAGE_LENGTH", "4000"))
 
 
 def _sanitize_message(message: str) -> str:

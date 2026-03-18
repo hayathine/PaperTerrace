@@ -9,7 +9,6 @@ import asyncio
 import base64
 import io
 import httpx
-import os
 import time
 from typing import Optional
 
@@ -22,6 +21,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.util import get_remote_address
 
+from common import settings
 from common.logger import configure_logging, logger
 from common.schemas.inference import (
     LayoutAnalysisRequest,
@@ -39,7 +39,7 @@ from common.schemas.inference import (
 
 configure_logging()
 
-INFERENCE_TYPE = os.getenv("INFERENCE_TYPE", "all").lower()
+INFERENCE_TYPE = str(settings.get("INFERENCE_TYPE", "all")).lower()
 
 # サービスインスタンス
 layout_service = None
@@ -49,7 +49,7 @@ translation_service = None
 
 if INFERENCE_TYPE in ["all", "layout"]:
     try:
-        if os.getenv("USE_OPENVINO", "true").lower() == "true":
+        if str(settings.get("USE_OPENVINO", "true")).lower() == "true":
             from services.layout_detection.openvino_layout_service import (
                 OpenVINOLayoutAnalysisService as LayoutAnalysisService,
             )
@@ -108,7 +108,7 @@ def _crop_page_figures(img_bytes: bytes, serialized_results: list) -> list[dict]
 
 limiter = Limiter(
 	key_func=get_remote_address,
-	enabled=os.getenv("ENABLE_RATE_LIMIT", "false").lower() == "true",
+	enabled=str(settings.get("ENABLE_RATE_LIMIT", "false")).lower() == "true",
 )
 
 app = FastAPI(
@@ -212,7 +212,7 @@ async def startup_event():
         ),
     )
     # 環境変数 PRELOAD_MODELS=true の場合、バックグラウンドで直ちに初期化を開始
-    if os.getenv("PRELOAD_MODELS", "false").lower() == "true":
+    if str(settings.get("PRELOAD_MODELS", "false")).lower() == "true":
         logger.info("PRELOAD_MODELS is enabled. Starting eager initialization...")
         asyncio.create_task(ensure_initialized())
 
@@ -261,7 +261,7 @@ async def health_check(request: Request):
 if INFERENCE_TYPE in ["all", "layout"]:
 
     @app.post("/api/v1/analyze-image")
-    @limiter.limit(os.getenv("RATE_LIMIT_LAYOUT", "60/minute"))
+    @limiter.limit(settings.get("RATE_LIMIT_LAYOUT", "60/minute"))
     async def analyze_layout_image(request: Request, file: UploadFile = File(...)):
         await ensure_initialized()
 
@@ -303,7 +303,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
 
         except Exception as e:
             logger.exception("Layout image analysis failed")
-            app_env = os.getenv("APP_ENV", "production")
+            app_env = settings.get("APP_ENV", "production")
             error_msg = (
                 str(e)
                 if app_env == "development"
@@ -317,7 +317,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
             }
 
     @app.post("/api/v1/analyze-images-batch")
-    @limiter.limit(os.getenv("RATE_LIMIT_LAYOUT_BATCH", "20/minute"))
+    @limiter.limit(settings.get("RATE_LIMIT_LAYOUT_BATCH", "20/minute"))
     async def analyze_images_batch(
         request: Request, files: list[UploadFile] = File(...)
     ):
@@ -402,7 +402,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
 
         except Exception as e:
             logger.exception("Batch layout analysis failed")
-            app_env = os.getenv("APP_ENV", "production")
+            app_env = settings.get("APP_ENV", "production")
             error_msg = (
                 str(e)
                 if app_env == "development"
@@ -416,7 +416,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
             }
 
     @app.post("/api/v1/analyze-images-batch-by-urls")
-    @limiter.limit(os.getenv("RATE_LIMIT_LAYOUT_BATCH", "20/minute"))
+    @limiter.limit(settings.get("RATE_LIMIT_LAYOUT_BATCH", "20/minute"))
     async def analyze_images_batch_by_urls(
         request: Request, req: LayoutBatchByUrlsRequest
     ):
@@ -486,7 +486,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
 
         except Exception as e:
             logger.exception("URL-based batch layout analysis failed")
-            app_env = os.getenv("APP_ENV", "production")
+            app_env = settings.get("APP_ENV", "production")
             error_msg = (
                 str(e)
                 if app_env == "development"
@@ -504,7 +504,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
     # --------------------------------------------------
 
     @app.post("/api/v1/layout-analysis", response_model=LayoutAnalysisResponse)
-    @limiter.limit(os.getenv("RATE_LIMIT_LAYOUT", "60/minute"))
+    @limiter.limit(settings.get("RATE_LIMIT_LAYOUT", "60/minute"))
     async def analyze_layout(request: Request, req: LayoutAnalysisRequest):
         await ensure_initialized()
 
@@ -521,7 +521,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
 
         except Exception as e:
             logger.exception("Layout analysis failed")
-            app_env = os.getenv("APP_ENV", "production")
+            app_env = settings.get("APP_ENV", "production")
             error_msg = (
                 str(e)
                 if app_env == "development"
@@ -543,7 +543,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
 if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
 
     @app.post("/api/v1/translate", response_model=TranslationResponse)
-    @limiter.limit(os.getenv("RATE_LIMIT_TRANSLATE", "300/minute"))
+    @limiter.limit(settings.get("RATE_LIMIT_TRANSLATE", "300/minute"))
     async def translate_text(request: Request, req: TranslationRequest):
         await ensure_initialized()
 
@@ -574,7 +574,7 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
                 raise HTTPException(status_code=503, detail="Qwen is busy")
 
             logger.exception("Translation failed")
-            app_env = os.getenv("APP_ENV", "production")
+            app_env = settings.get("APP_ENV", "production")
             error_msg = (
                 str(e)
                 if app_env == "development"
@@ -588,7 +588,7 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
             )
 
     @app.post("/api/v1/tokenize", response_model=TokenizeResponse)
-    @limiter.limit(os.getenv("RATE_LIMIT_TOKENIZE", "300/minute"))
+    @limiter.limit(settings.get("RATE_LIMIT_TOKENIZE", "300/minute"))
     async def tokenize_text_api(request: Request, req: TokenizeRequest):
         await ensure_initialized()
         from services.translation.nlp import NLPService

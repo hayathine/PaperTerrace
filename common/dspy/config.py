@@ -2,14 +2,16 @@ import os
 
 import dspy
 
+from common.config import settings
+
 
 def setup_dspy():
     """Configure DSPy with Vertex AI."""
     # Use vertex_ai/ prefix for litellm
-    model_name = os.environ.get("DSPY_MODEL", "vertex_ai/gemini-2.5-flash-lite")
-    project = os.environ.get("GCP_PROJECT_ID")
-    location = os.environ.get("GCP_LOCATION", "us-central1")
-    credentials = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    model_name = settings.get("DSPY_MODEL", "vertex_ai/gemini-2.5-flash-lite")
+    project = settings.get("GCP_PROJECT_ID")
+    location = settings.get("GCP_LOCATION", "us-central1")
+    credentials = settings.get("GOOGLE_APPLICATION_CREDENTIALS")
 
     kwargs: dict = {}
     if project:
@@ -27,7 +29,7 @@ def setup_dspy():
 def get_dspy_gcs_bucket():
     from google.cloud import storage
 
-    bucket_name = os.getenv("GCS_BUCKET_NAME") or os.getenv("STORAGE_BUCKET")
+    bucket_name = settings.get("GCS_BUCKET_NAME") or settings.get("STORAGE_BUCKET")
     if not bucket_name:
         return None
     client = storage.Client()

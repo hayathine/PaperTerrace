@@ -149,13 +149,13 @@ class GeminiProvider(AIProviderInterface):
 
         self._types = types
 
-        api_key = os.getenv("GEMINI_API_KEY")
+        api_key = settings.get("GEMINI_API_KEY")
         if not api_key:
             raise ValueError("GEMINI_API_KEY environment variable is required")
         self.client = genai.Client(api_key=api_key, vertexai=False)
-        self.model = os.getenv("MODEL_OCR", "gemini-2.5-flash")
-        self.temperature = float(os.getenv("AI_TEMPERATURE", "0.1"))
-        self.max_tokens = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "1024"))
+        self.model = settings.get("MODEL_OCR", "gemini-2.5-flash")
+        self.temperature = float(settings.get("AI_TEMPERATURE", "0.1"))
+        self.max_tokens = int(settings.get("AI_MAX_OUTPUT_TOKENS", "1024"))
         log.info(
             "gemini_init",
             "GeminiProviderを初期化しました",
@@ -708,9 +708,9 @@ class VertexAIProvider(AIProviderInterface):
 
         self._types = types
 
-        self.project_id = os.getenv("GCP_PROJECT_ID")
-        self.location = os.getenv("GCP_LOCATION", "us-central1")
-        self.model = os.getenv("VERTEX_MODEL", "gemini-2.5-flash-lite")
+        self.project_id = settings.get("GCP_PROJECT_ID")
+        self.location = settings.get("GCP_LOCATION", "us-central1")
+        self.model = settings.get("VERTEX_MODEL", "gemini-2.5-flash-lite")
 
         if not self.project_id:
             log.warning(
@@ -719,7 +719,7 @@ class VertexAIProvider(AIProviderInterface):
             )
 
         # Service Account認証の設定
-        credentials_path = os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
+        credentials_path = settings.get("GOOGLE_APPLICATION_CREDENTIALS")
         if credentials_path and os.path.exists(credentials_path):
             log.info(
                 "vertex_init",
@@ -760,8 +760,8 @@ class VertexAIProvider(AIProviderInterface):
                 location=self.location,
             )
 
-        self.temperature = float(os.getenv("AI_TEMPERATURE", "0.1"))
-        self.max_tokens = int(os.getenv("AI_MAX_OUTPUT_TOKENS", "1024"))
+        self.temperature = float(settings.get("AI_TEMPERATURE", "0.1"))
+        self.max_tokens = int(settings.get("AI_MAX_OUTPUT_TOKENS", "1024"))
 
         log.info(
             "vertex_init",
@@ -1171,7 +1171,7 @@ def get_ai_provider() -> AIProviderInterface:
     if _ai_provider_instance is not None:
         return _ai_provider_instance
 
-    provider_type = os.getenv("AI_PROVIDER", "vertex").lower()
+    provider_type = str(settings.get("AI_PROVIDER", "vertex")).lower()
 
     if provider_type == "vertex":
         _ai_provider_instance = VertexAIProvider()

@@ -5,7 +5,6 @@ Records input/output pairs to BigQuery for later use as DSPy training examples.
 
 import asyncio
 import json
-import os
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -13,6 +12,7 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from common.logger import get_logger
+from common import settings
 
 logger = get_logger(__name__)
 
@@ -30,6 +30,7 @@ class TraceContext:
     paper_id: str | None = None
     is_copied: bool = False
     comment: str | None = None
+    candidate_index: int | None = None
 
 
 def _truncate_values(d: dict, max_len: int = MAX_FIELD_LENGTH) -> dict:
@@ -111,6 +112,7 @@ def _save_trace_sync(
     is_copied: bool = False,
     prompt: str | None = None,
     answer: str | None = None,
+    candidate_index: int | None = None,
 ):
     """Synchronously write a trace record to BigQuery. Runs in background thread."""
     try:
@@ -126,7 +128,7 @@ def _save_trace_sync(
             "user_id": context.user_id if context else None,
             "session_id": context.session_id if context else None,
             "paper_id": context.paper_id if context else None,
-            "model_name": os.environ.get(
+            "model_name": settings.get(
                 "DSPY_MODEL", "vertex_ai/gemini-2.5-flash-lite"
             ),
             "latency_ms": latency_ms,
@@ -136,6 +138,7 @@ def _save_trace_sync(
             "comment": context.comment if context else None,
             "prompt": prompt,
             "answer": answer,
+            "candidate_index": candidate_index if candidate_index is not None else (context.candidate_index if context else None),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         bq.streaming_insert("dspy_traces", [row])
@@ -171,6 +174,7 @@ def save_trace(
         is_copied=context.is_copied if context else False,
         prompt=prompt,
         answer=answer,
+        candidate_index=context.candidate_index if context else None,
     )
     return trace_id
 

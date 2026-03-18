@@ -1,21 +1,19 @@
 import json
-import os
 import time
 from datetime import datetime
 from typing import Any
 
 import redis
 
+from common.config import settings
 from common.logger import get_service_logger
 
 log = get_service_logger("Cache")
 
 # Load Redis host/port from env
-# REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-# REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-REDIS_DB = int(os.getenv("REDIS_DB", 0))
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
+REDIS_URL = settings.get("REDIS_URL", "redis://localhost:6379/0")
+REDIS_DB = int(settings.get("REDIS_DB", 0))
+REDIS_PASSWORD = settings.get("REDIS_PASSWORD", None)
 
 _RETRY_INTERVAL = 30.0  # 接続失敗後のリトライ間隔（秒）
 

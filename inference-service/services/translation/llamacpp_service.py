@@ -6,6 +6,8 @@ from typing import Optional
 
 from llama_cpp import Llama
 
+from common import settings
+
 logger = logging.getLogger(__name__)
 
 
@@ -22,21 +24,21 @@ class LlamaCppTranslationService:
     def __init__(self):
         self.llm: Optional[Llama] = None
         # ローカルパスが優先される設定
-        self.model_path = os.getenv("LLAMACPP_MODEL_PATH")
+        self.model_path = settings.get("LLAMACPP_MODEL_PATH")
 
-        self.n_ctx = int(os.getenv("LLAMACPP_CTX_SIZE", "1024"))
+        self.n_ctx = int(settings.get("LLAMACPP_CTX_SIZE", "1024"))
         # 安全性のため、物理コア数(6)より少ないスレッド数(4)をデフォルトに設定します。
-        self.n_threads = int(os.getenv("LLAMACPP_THREADS", "4"))
+        self.n_threads = int(settings.get("LLAMACPP_THREADS", "4"))
         # Batch size controls peak memory during prompt evaluation.
         # Default reduced from 512 to 64 to prevent OOM on ~10GB Qwen3-30B model.
-        self.n_batch = int(os.getenv("LLAMACPP_BATCH_SIZE", "512"))
+        self.n_batch = int(settings.get("LLAMACPP_BATCH_SIZE", "512"))
         self.n_gpu_layers = int(
-            os.getenv("LLAMACPP_GPU_LAYERS", "0")
+            settings.get("LLAMACPP_GPU_LAYERS", "0")
         )  # CPU実行をデフォルトに
-        self.use_mlock = os.getenv("LLAMACPP_USE_MLOCK", "false").lower() == "true"
+        self.use_mlock = str(settings.get("LLAMACPP_USE_MLOCK", "false")).lower() == "true"
         # mmap allows the model to be loaded from disk on demand, reducing initial RAM usage.
-        self.use_mmap = os.getenv("LLAMACPP_USE_MMAP", "true").lower() == "true"
-        self.max_tokens = int(os.getenv("LLAMACPP_MAX_TOKENS", "2048"))
+        self.use_mmap = str(settings.get("LLAMACPP_USE_MMAP", "true")).lower() == "true"
+        self.max_tokens = int(settings.get("LLAMACPP_MAX_TOKENS", "2048"))
         self._is_busy = False
         logger.info(f"Llama-cpp モデルの初期化設定: {self.__dict__}")
 
@@ -93,7 +95,7 @@ class LlamaCppTranslationService:
             logger.info("ウォームアップ完了")
         except Exception as e:
             logger.error(f"Llama-cpp モデルの初期化中にエラーが発生しました: {e}")
-            if os.getenv("DEV_MODE", "false").lower() == "true":
+            if str(settings.get("DEV_MODE", "false")).lower() == "true":
                 logger.warning("開発モードのため継続します（推論時にエラーになります）")
                 return
             raise RuntimeError(f"Failed to load LLM: {e}")

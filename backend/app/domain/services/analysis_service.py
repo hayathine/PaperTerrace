@@ -11,17 +11,18 @@ class EnglishAnalysisService:
     """
 
     def __init__(self):
-        import os
+
 
         from app.domain.features.tokenization import TokenizationService
         from app.domain.features.word_analysis import WordAnalysisService
         from app.domain.services.pdf_ocr_service import PDFOCRService
+        from common.config import settings
 
         self.word_analysis = WordAnalysisService()
         self.tokenization = TokenizationService()
 
         # Initialize OCR service
-        self.model = os.getenv("MODEL_OCR", "gemini-2.5-flash-lite")
+        self.model = settings.get("MODEL_OCR", "gemini-2.5-flash-lite")
         self.ocr_service = PDFOCRService(self.model)
 
         # Maintain public properties if they were used outside

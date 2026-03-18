@@ -10,7 +10,7 @@ Usage:
 """
 
 import argparse
-import os
+
 import sys
 from datetime import date, datetime, timedelta
 
@@ -19,7 +19,7 @@ from google.cloud import bigquery
 
 from app.models.bigquery.schemas import PageViewLogData, UserEngagementData
 from app.providers.bigquery_log import BigQueryLogClient
-from common.config import settings  # noqa: F401  secrets/.env の一括ロードを保証
+from common.config import settings
 
 log = structlog.get_logger("GA4Sync")
 
@@ -27,9 +27,9 @@ log = structlog.get_logger("GA4Sync")
 # Configuration
 # ============================================================================
 
-GCP_PROJECT_ID = os.getenv("GCP_PROJECT_ID", "gen-lang-client-0800253336")
-GA4_DATASET_ID = os.getenv("GA4_DATASET_ID", "")
-BQ_LOCATION_ANALYTICS = os.getenv("BQ_LOCATION_ANALYTICS", "asia-northeast2")
+GCP_PROJECT_ID = settings.get("GCP_PROJECT_ID", "gen-lang-client-0800253336")
+GA4_DATASET_ID = settings.get("GA4_DATASET_ID", "")
+BQ_LOCATION_ANALYTICS = settings.get("BQ_LOCATION_ANALYTICS", "asia-northeast2")
 
 
 # ============================================================================

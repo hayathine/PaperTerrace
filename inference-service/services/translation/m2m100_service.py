@@ -11,6 +11,7 @@ import ctranslate2
 import sentencepiece as spm
 
 from .utils import LANG_CODES, get_m2m100_lang_code
+from common import settings
 
 logger = logging.getLogger(__name__)
 
@@ -23,27 +24,27 @@ class M2M100TranslationService:
         self.tokenizer: spm.SentencePieceProcessor | None = None
         self.src_lang: str | None = "en"
 
-        self.model_path = os.getenv("LOCAL_MODEL_PATH", "models/m2m100_ct2")
+        self.model_path = settings.get("LOCAL_MODEL_PATH", "models/m2m100_ct2")
         self.lang_codes = LANG_CODES
 
         # CTranslate2設定
-        self.ct2_inter_threads = int(os.getenv("CT2_INTER_THREADS", "1"))
-        self.ct2_intra_threads = int(os.getenv("CT2_INTRA_THREADS", "4"))
+        self.ct2_inter_threads = int(settings.get("CT2_INTER_THREADS", "1"))
+        self.ct2_intra_threads = int(settings.get("CT2_INTRA_THREADS", "4"))
         # int8 reduces working memory during inference without changing stored weights.
-        self.ct2_compute_type = os.getenv("CT2_COMPUTE_TYPE", "int8")
+        self.ct2_compute_type = settings.get("CT2_COMPUTE_TYPE", "int8")
 
         # 翻訳パラメータ (単語翻訳用に最適化)
-        self.beam_size = int(os.getenv("TRANSLATION_BEAM_SIZE", "5"))
+        self.beam_size = int(settings.get("TRANSLATION_BEAM_SIZE", "5"))
         self.repetition_penalty = float(
-            os.getenv("TRANSLATION_REPETITION_PENALTY", "1.0")
+            settings.get("TRANSLATION_REPETITION_PENALTY", "1.0")
         )
         self.no_repeat_ngram_size = int(
-            os.getenv("TRANSLATION_NO_REPEAT_NGRAM_SIZE", "0")
+            settings.get("TRANSLATION_NO_REPEAT_NGRAM_SIZE", "0")
         )
-        self.max_decoding_length = int(os.getenv("TRANSLATION_MAX_LENGTH", "1024"))
-        self.length_penalty = float(os.getenv("TRANSLATION_LENGTH_PENALTY", "1.0"))
-        self.temperature = float(os.getenv("TRANSLATION_TEMPERATURE", "1.0"))
-        self.coverage_penalty = float(os.getenv("TRANSLATION_COVERAGE_PENALTY", "0.0"))
+        self.max_decoding_length = int(settings.get("TRANSLATION_MAX_LENGTH", "1024"))
+        self.length_penalty = float(settings.get("TRANSLATION_LENGTH_PENALTY", "1.0"))
+        self.temperature = float(settings.get("TRANSLATION_TEMPERATURE", "1.0"))
+        self.coverage_penalty = float(settings.get("TRANSLATION_COVERAGE_PENALTY", "0.0"))
 
         logger.info(
             f"M2M100 parameters: beam_size={self.beam_size}, "
@@ -60,7 +61,7 @@ class M2M100TranslationService:
         logger.info("M2M100翻訳モデルの初期化を開始...")
 
         # 開発環境でのスキップオプション
-        if os.getenv("SKIP_MODEL_LOADING", "false").lower() == "true":
+        if str(settings.get("SKIP_MODEL_LOADING", "false")).lower() == "true":
             logger.info("翻訳モデル読み込みをスキップしました（開発モード）")
             return
 
@@ -96,7 +97,7 @@ class M2M100TranslationService:
             error_msg = f"M2M100翻訳モデルの読み込みに失敗しました: {e}"
             logger.error(error_msg)
 
-            if os.getenv("DEV_MODE", "false").lower() == "true":
+            if str(settings.get("DEV_MODE", "false")).lower() == "true":
                 logger.warning("開発モードのため、翻訳モデル読み込みエラーを無視します")
                 return
 
@@ -126,8 +127,8 @@ class M2M100TranslationService:
         """単一テキストの翻訳"""
         if not self.translator or not self.tokenizer:
             if (
-                os.getenv("DEV_MODE", "false").lower() == "true"
-                or os.getenv("SKIP_MODEL_LOADING", "false").lower() == "true"
+                str(settings.get("DEV_MODE", "false")).lower() == "true"
+                or str(settings.get("SKIP_MODEL_LOADING", "false")).lower() == "true"
             ):
                 return {
                     "translation": f"[翻訳ダミー] {text} -> {target_lang}",
@@ -184,7 +185,7 @@ class M2M100TranslationService:
         except Exception as e:
             logger.error(f"翻訳エラー: {e}")
             # 開発モードではダミー翻訳を返す
-            if os.getenv("DEV_MODE", "false").lower() == "true":
+            if str(settings.get("DEV_MODE", "false")).lower() == "true":
                 logger.warning("開発モード: 翻訳エラーのためダミー翻訳を返します")
                 return {
                     "translation": f"[翻訳エラー・ダミー] {text} -> {target_lang}",
@@ -209,8 +210,8 @@ class M2M100TranslationService:
         if not self.translator or not self.tokenizer:
             # 開発モードではダミー翻訳を返す
             if (
-                os.getenv("DEV_MODE", "false").lower() == "true"
-                or os.getenv("SKIP_MODEL_LOADING", "false").lower() == "true"
+                str(settings.get("DEV_MODE", "false")).lower() == "true"
+                or str(settings.get("SKIP_MODEL_LOADING", "false")).lower() == "true"
             ):
                 logger.warning("開発モード: ダミーバッチ翻訳を返します")
                 return [
@@ -281,7 +282,7 @@ class M2M100TranslationService:
         except Exception as e:
             logger.error(f"バッチ翻訳エラー: {e}")
             # 開発モードではダミー翻訳を返す
-            if os.getenv("DEV_MODE", "false").lower() == "true":
+            if str(settings.get("DEV_MODE", "false")).lower() == "true":
                 logger.warning("開発モード: バッチ翻訳エラーのためダミー翻訳を返します")
                 return [
                     {

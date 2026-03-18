@@ -9,6 +9,7 @@ from typing import Any
 import numpy as np
 import openvino as ov
 
+from common import settings
 from common.logger import logger
 from common.schemas.layout import LABELS, BBoxModel, LayoutItem
 from services.layout_detection.preprocess import (
@@ -26,7 +27,7 @@ class OpenVINOLayoutAnalysisService:
 
     def __init__(self, lang: str = "en", model_path: str | None = None):
         if model_path is None:
-            model_path = os.getenv(
+            model_path = settings.get(
                 "LAYOUT_OPENVINO_MODEL_PATH",
                 "/home/gwsgs/work_space/llm-server/models/paddl2vino/PP-DocLayout-L_infer.xml",
             )
@@ -49,7 +50,7 @@ class OpenVINOLayoutAnalysisService:
         self.engine = "OpenVINO"
 
         # Read threshold from environment variable
-        env_threshold = os.getenv("LAYOUT_THRESHOLD", "0.5")
+        env_threshold = settings.get("LAYOUT_THRESHOLD", "0.5")
         try:
             self.threshold = float(env_threshold)
         except ValueError:
@@ -73,7 +74,7 @@ class OpenVINOLayoutAnalysisService:
             core = ov.Core()
 
             # モデルロード高速化のためのキャッシュ設定
-            cache_dir = os.getenv("OV_CACHE_DIR", ".ov_cache")
+            cache_dir = settings.get("OV_CACHE_DIR", ".ov_cache")
             os.makedirs(cache_dir, exist_ok=True)
             core.set_property({"CACHE_DIR": cache_dir})
 

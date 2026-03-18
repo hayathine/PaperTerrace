@@ -4,7 +4,6 @@ Handles PDF upload, OCR processing, and streaming text analysis.
 """
 
 import asyncio
-import os
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
@@ -12,6 +11,7 @@ from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingRes
 
 from app.auth import OptionalUser
 from app.core.config import is_production
+from common import settings
 from app.domain.features import SummaryService
 from app.domain.services.analysis_service import EnglishAnalysisService
 from app.domain.services.paper_processing import (
@@ -90,7 +90,7 @@ async def analyze_pdf(
         return Response("Error: No file", status_code=400)
 
     # PDF ファイルサイズ上限チェック (デフォルト 50MB)
-    max_pdf_bytes = int(os.getenv("MAX_PDF_SIZE_MB", "50")) * 1024 * 1024
+    max_pdf_bytes = int(settings.get("MAX_PDF_SIZE_MB", "50")) * 1024 * 1024
     if file.size and file.size > max_pdf_bytes:
         return Response(
             f"Error: File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB.",
@@ -176,7 +176,7 @@ async def analyze_pdf_json(
         return JSONResponse({"error": "No file provided"}, status_code=400)
 
     # PDF ファイルサイズ上限チェック (デフォルト 50MB)
-    max_pdf_bytes = int(os.getenv("MAX_PDF_SIZE_MB", "50")) * 1024 * 1024
+    max_pdf_bytes = int(settings.get("MAX_PDF_SIZE_MB", "50")) * 1024 * 1024
     if file.size and file.size > max_pdf_bytes:
         return JSONResponse(
             {
@@ -245,7 +245,7 @@ async def analyze_pdf_json(
                 )
                 raw_text = None
             else:
-                storage_type = os.getenv("STORAGE_TYPE", "local").upper()
+                storage_type = settings.get("STORAGE_TYPE", "local").upper()
                 log.info(
                     "analyze_json",
                     "キャッシュヒット",

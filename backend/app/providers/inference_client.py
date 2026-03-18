@@ -10,6 +10,7 @@ from typing import Any
 
 import httpx
 
+from common.config import settings
 from common.logger import ServiceLogger
 from common.schemas.inference import LayoutAnalysisRequest
 
@@ -45,13 +46,13 @@ class InferenceServiceClient:
     """推論サービスクライアント（レイアウト解析専用）"""
 
     def __init__(self):
-        default_url = os.getenv("INFERENCE_SERVICE_URL", "http://localhost:8080")
-        primary_url = os.getenv("INFERENCE_LAYOUT_URL", default_url)
+        default_url = settings.get("INFERENCE_SERVICE_URL", "http://localhost:8080")
+        primary_url = settings.get("INFERENCE_LAYOUT_URL", default_url)
 
         # 追加エンドポイント（カンマ区切り）でラウンドロビン対応
         extra_urls = [
             u.strip()
-            for u in os.getenv("INFERENCE_LAYOUT_EXTRA_URLS", "").split(",")
+            for u in settings.get("INFERENCE_LAYOUT_EXTRA_URLS", "").split(",")
             if u.strip()
         ]
         self.layout_urls: list[str] = [primary_url] + extra_urls
@@ -60,12 +61,12 @@ class InferenceServiceClient:
         # 後方互換
         self.layout_base_url = primary_url
 
-        self.timeout = int(os.getenv("INFERENCE_SERVICE_TIMEOUT", "60"))
-        self.max_retries = int(os.getenv("INFERENCE_SERVICE_RETRIES", "2"))
+        self.timeout = int(settings.get("INFERENCE_SERVICE_TIMEOUT", "60"))
+        self.max_retries = int(settings.get("INFERENCE_SERVICE_RETRIES", "2"))
 
         # 無効化フラグ
         self.is_disabled = (
-            os.getenv("INFERENCE_SERVICE_DISABLED", "false").lower() == "true"
+            str(settings.get("INFERENCE_SERVICE_DISABLED", "false")).lower() == "true"
         )
 
         # 回路ブレーカー設定
@@ -77,7 +78,7 @@ class InferenceServiceClient:
         }
 
         # SSL検証設定
-        verify_env = os.getenv("INFERENCE_VERIFY_SSL", "true").lower()
+        verify_env = str(settings.get("INFERENCE_VERIFY_SSL", "true")).lower()
         if verify_env == "false":
             self.verify_ssl = False
         elif os.path.isfile(verify_env):

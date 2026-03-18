@@ -4,7 +4,6 @@ Main application entry point.
 """
 
 import contextlib
-import os
 import time
 import traceback
 from datetime import datetime
@@ -123,7 +122,7 @@ _default_origins = [
     "https://www.paperterrace.page",
     "https://paperterrace.page",
 ]
-_extra_origins_raw = os.getenv("CORS_EXTRA_ORIGINS", "")
+_extra_origins_raw = settings.get("CORS_EXTRA_ORIGINS", "")
 _extra_origins = [o.strip() for o in _extra_origins_raw.split(",") if o.strip()]
 _allowed_origins = _default_origins + _extra_origins
 
@@ -146,8 +145,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
 
     WINDOW_SECONDS = 60
-    REGISTERED_LIMIT = int(os.getenv("RATE_LIMIT_REGISTERED", "120"))
-    GUEST_LIMIT = int(os.getenv("RATE_LIMIT_GUEST", "30"))
+    REGISTERED_LIMIT = int(settings.get("RATE_LIMIT_REGISTERED", "120"))
+    GUEST_LIMIT = int(settings.get("RATE_LIMIT_GUEST", "30"))
     # レートリミット対象外のパス
     _SKIP_PATHS = frozenset(["/api/health", "/health", "/"])
     # レートリミット対象外のプレフィックス（ポーリング系エンドポイント）
@@ -155,7 +154,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app):
         super().__init__(app)
-        redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
+        redis_url = settings.get("REDIS_URL", "redis://redis:6379")
         try:
             from redis import Redis
 
@@ -344,7 +343,7 @@ async def init_db_manual():
             "message": "Storage provider does not support init_tables",
         }
     except Exception as e:
-        app_env = os.getenv("APP_ENV", "production")
+        app_env = settings.get("APP_ENV", "production")
         error_msg = str(e) if app_env == "local" else "Failed to initialize database"
         return JSONResponse(
             status_code=500, content={"status": "error", "message": error_msg}
@@ -384,7 +383,7 @@ app.include_router(client_errors_router, prefix="/api")
 # Static Files / Image Proxy (GCS-compatible)
 # ============================================================================
 
-_storage_type = os.getenv("STORAGE_TYPE", "local").lower()
+_storage_type = str(settings.get("STORAGE_TYPE", "local")).lower()
 
 if _storage_type == "gcs":
     # GCS mode: proxy image requests through the backend
@@ -432,7 +431,7 @@ else:
 
     from starlette.staticfiles import StaticFiles
 
-    _images_dir = PathLib(os.getenv("IMAGES_DIR", "src/static/paper_images"))
+    _images_dir = PathLib(settings.get("IMAGES_DIR", "src/static/paper_images"))
     _images_dir.mkdir(parents=True, exist_ok=True)
     app.mount(
         "/static/paper_images",
@@ -482,9 +481,7 @@ async def health_check():
     # Check Redis (ローカル環境では Redis 未接続でも healthy 扱い)
     from app.core.config import is_local
     try:
-        # redis_host = os.getenv("REDIS_HOST", "redis")
-        # redis_port = int(os.getenv("REDIS_PORT", "6379"))
-        redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
+        redis_url = settings.get("REDIS_URL", "redis://redis:6379")
         # socket_connect_timeout must be shorter than the liveness probe timeoutSeconds (10s)
         r = Redis.from_url(redis_url, socket_connect_timeout=1)
         r.ping()
@@ -504,7 +501,7 @@ async def health_check():
     }
 
     # Check Maintenance Mode
-    maintenance_mode = os.getenv("MAINTENANCE_MODE", "false").lower() == "true"
+    maintenance_mode = str(settings.get("MAINTENANCE_MODE", "false")).lower() == "true"
     if maintenance_mode:
         return JSONResponse(
             status_code=503,
@@ -518,7 +515,7 @@ async def health_check():
 
     # Return 503 if unhealthy, unless we are in a testing environment
     is_testing = (
-        os.getenv("ENV") == "testing" or os.getenv("PYTEST_CURRENT_TEST") is not None
+        settings.get("APP_ENV") == "testing" or settings.get("PYTEST_CURRENT_TEST") is not None
     )
     status_code = 200 if (status == "healthy" or is_testing) else 503
 

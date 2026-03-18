@@ -3,9 +3,10 @@ AIチャットアシスタント機能を提供するモジュール
 論文の内容に基づいて質問に回答する
 """
 
-import os
+
 
 from app.providers import get_ai_provider
+from common.config import settings
 from common.dspy.config import setup_dspy
 from common.dspy.modules import ChatModule
 from common.dspy.trace import TraceContext, trace_dspy_call
@@ -32,7 +33,7 @@ class ChatService:
     def __init__(self):
         self.ai_provider = get_ai_provider()
         self.redis = RedisService()
-        self.model = os.getenv("MODEL_CHAT", "gemini-2.5-flash")
+        self.model = settings.get("MODEL_CHAT", "gemini-2.5-flash")
         self.cache_ttl_minutes = 60
         setup_dspy()
         self.chat_mod = ChatModule()

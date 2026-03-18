@@ -10,6 +10,7 @@ from typing import List
 
 import httpx
 
+from common import settings
 from common.schemas.layout import BBoxModel, LayoutItem
 
 logger = logging.getLogger(__name__)
@@ -21,13 +22,13 @@ class LayoutAnalysisService:
     def __init__(self):
         # 推論サービスのURL (環境変数から取得)
         # デフォルトはK8sクラスター内のサービス名
-        self.inference_service_url = os.getenv(
+        self.inference_service_url = settings.get(
             "INFERENCE_SERVICE_URL", "http://paperterrace-inference:8080"
         )
         self.is_disabled = (
-            os.getenv("INFERENCE_SERVICE_DISABLED", "false").lower() == "true"
+            str(settings.get("INFERENCE_SERVICE_DISABLED", "false")).lower() == "true"
         )
-        self.verify_ssl = os.getenv("INFERENCE_VERIFY_SSL", "true").lower() == "true"
+        self.verify_ssl = str(settings.get("INFERENCE_VERIFY_SSL", "true")).lower() == "true"
 
         logger.info(
             f"Initialized LayoutAnalysisService with URL: {self.inference_service_url} (Disabled: {self.is_disabled})"

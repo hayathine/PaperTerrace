@@ -7,6 +7,7 @@ from app.auth import OptionalUser
 from app.core.config import is_production
 from app.crud import get_storage_provider
 from app.domain.features.figure_insight import FigureInsightService
+from common import settings
 from common.logger import ServiceLogger
 
 log = ServiceLogger("Figures")
@@ -119,13 +120,12 @@ async def explain_figure(
             raise HTTPException(status_code=400, detail="No image URL")
 
         # GCS 環境かつ Vertex AI プロバイダーの場合のみ URI を直接渡す（Gemini API は gs:// 非対応）
-        import os
 
         import anyio
         from app.providers.image_storage import resolve_gcs_uri
 
         gcs_result = await anyio.to_thread.run_sync(resolve_gcs_uri, image_url)
-        use_vertex = os.getenv("AI_PROVIDER", "vertex").lower() == "vertex"
+        use_vertex = str(settings.get("AI_PROVIDER", "vertex")).lower() == "vertex"
         if gcs_result and use_vertex:
             gcs_uri, mime_type = gcs_result
             log.debug(

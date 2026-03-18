@@ -4,7 +4,6 @@ Handles word translation, explanation, and language settings.
 """
 
 import asyncio
-import os
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -21,6 +20,7 @@ from common.dspy.modules import (
 )
 from common.dspy.trace import TraceContext, trace_dspy_call
 from common.logger import ServiceLogger
+from common import settings
 from common.prompts import (
     CORE_SYSTEM_PROMPT,
 )
@@ -324,7 +324,7 @@ async def explain(
             "explain", "Gemini fallback translation failed", error=str(e), lemma=lemma
         )
 
-        app_env = os.getenv("APP_ENV", "production")
+        app_env = settings.get("APP_ENV", "production")
         # 最終的にエラーの場合
         error_msg = (
             f"Translation failed: {str(e)}"
@@ -623,7 +623,7 @@ async def explain_image(req: ExplainImageRequest, request: Request):
     # Retrieve Paper Summary Context if paper_id is provided
     # ... Optional but left for future structure
 
-    model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
+    model = settings.get("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
     prompt = f"[{lang_name}で回答してください]\n{req.prompt}"
 
     url_lower = req.image_url.lower()

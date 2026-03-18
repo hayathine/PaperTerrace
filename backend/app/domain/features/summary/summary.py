@@ -1,7 +1,8 @@
-import os
+
 
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.providers import get_ai_provider, get_storage_provider
+from common.config import settings
 from common.dspy.config import setup_dspy
 from common.dspy.modules import (
     ContextSummaryModule,
@@ -33,8 +34,8 @@ class SummaryService:
         self.ai_provider = get_ai_provider()
         self.storage = storage or get_storage_provider()  # Inject storage
         self.redis = RedisService()
-        self.model = os.getenv("MODEL_SUMMARY", "gemini-2.5-flash-lite")
-        self.token_limit = int(os.getenv("MAX_INPUT_TOKENS", "900000"))
+        self.model = settings.get("MODEL_SUMMARY", "gemini-2.5-flash-lite")
+        self.token_limit = int(settings.get("MAX_INPUT_TOKENS", "900000"))
 
         # Initialize DSPy
         setup_dspy()

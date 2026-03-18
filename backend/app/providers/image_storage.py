@@ -67,7 +67,7 @@ class ImageStorageStrategy(ABC):
 
 class LocalImageStorage(ImageStorageStrategy):
     def __init__(self):
-        self.images_dir = Path(os.getenv("IMAGES_DIR", "src/static/paper_images"))
+        self.images_dir = Path(settings.get("IMAGES_DIR", "src/static/paper_images"))
         self._ensure_dir()
         self.storage_type = "local"
 
@@ -169,7 +169,7 @@ class GCSImageStorage(ImageStorageStrategy):
     def __init__(self):
         from google.cloud import storage
 
-        self.bucket_name = os.getenv("GCS_BUCKET_NAME") or os.getenv("STORAGE_BUCKET")
+        self.bucket_name = settings.get("GCS_BUCKET_NAME") or settings.get("STORAGE_BUCKET")
         if not self.bucket_name:
             raise ValueError(
                 "Either GCS_BUCKET_NAME or STORAGE_BUCKET env var is required for GCS storage"
@@ -450,7 +450,7 @@ class GCSImageStorage(ImageStorageStrategy):
 
 # Factory
 def get_image_storage() -> ImageStorageStrategy:
-    storage_type = os.getenv("STORAGE_TYPE", "local").lower()
+    storage_type = str(settings.get("STORAGE_TYPE", "local")).lower()
     if storage_type == "gcs":
         return GCSImageStorage()
     return LocalImageStorage()

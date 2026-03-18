@@ -12,6 +12,7 @@ import cv2
 import numpy as np
 import onnxruntime as ort
 
+from common import settings
 from common.logger import logger
 from common.schemas.layout import LABELS, BBoxModel, LayoutItem
 from services.layout_detection.preprocess import (
@@ -39,7 +40,7 @@ class LayoutAnalysisService:
         """
         if model_path is None:
             # デフォルトモデルパス
-            model_path = os.getenv(
+            model_path = settings.get(
                 "LAYOUT_MODEL_PATH",
                 "/app/models/paddle2onnx/PP-DocLayout-L_infer.onnx",
             )
@@ -52,7 +53,7 @@ class LayoutAnalysisService:
         self.engine = "ONNX"
 
         # Read threshold from environment variable
-        env_threshold = os.getenv("LAYOUT_THRESHOLD", "0.5")
+        env_threshold = settings.get("LAYOUT_THRESHOLD", "0.5")
         try:
             self.threshold = float(env_threshold)
         except ValueError:

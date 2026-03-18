@@ -7,12 +7,13 @@ Usage:
 """
 
 import argparse
-import os
+
 import sys
 
 from google.cloud import bigquery
 
 from app.models.bigquery.schemas import TABLE_SCHEMAS
+from common.config import settings
 
 
 def create_dataset_and_tables(project_id: str, dataset_id: str):
@@ -22,7 +23,7 @@ def create_dataset_and_tables(project_id: str, dataset_id: str):
     # Create dataset
     dataset_ref = f"{project_id}.{dataset_id}"
     dataset = bigquery.Dataset(dataset_ref)
-    dataset.location = os.getenv("BQ_LOCATION_LOGS", "asia-northeast1")
+    dataset.location = settings.get("BQ_LOCATION_LOGS", "asia-northeast1")
     dataset.description = "PaperTerrace behavioral logs"
 
     try:
@@ -83,14 +84,14 @@ def main():
     )
     args = parser.parse_args()
 
-    project_id = os.getenv("GCP_PROJECT_ID", "gen-lang-client-0800253336")
+    project_id = settings.get("GCP_PROJECT_ID", "gen-lang-client-0800253336")
 
     if args.env == "prod":
-        dataset_id = os.getenv("BQ_LOG_DATASET", "paperterrace_logs")
+        dataset_id = settings.get("BQ_LOG_DATASET", "paperterrace_logs")
     elif args.env == "staging":
-        dataset_id = os.getenv("BQ_LOG_DATASET_STAGING", "paperterrace_logs_staging")
+        dataset_id = settings.get("BQ_LOG_DATASET_STAGING", "paperterrace_logs_staging")
     else:
-        dataset_id = os.getenv("BQ_LOG_DATASET_LOCAL", "paperterrace_logs_local")
+        dataset_id = settings.get("BQ_LOG_DATASET_LOCAL", "paperterrace_logs_local")
 
     print(f"Initializing BigQuery tables for {args.env} environment")
     print(f"  Project: {project_id}")

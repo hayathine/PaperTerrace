@@ -1,6 +1,8 @@
-import os
+
 from contextlib import contextmanager
 from urllib.parse import urlparse, urlunparse
+
+from common.config import settings
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -8,17 +10,17 @@ from sqlalchemy.pool import NullPool
 
 
 def get_url():
-    url = os.getenv("DATABASE_URL")
+    url = settings.get("DATABASE_URL")
     if not url:
-        user = os.getenv("DB_USER")
-        password = os.getenv("DB_PASSWORD")
-        host = os.getenv("DB_HOST")
-        dbname = os.getenv("DB_NAME")
+        user = settings.get("DB_USER")
+        password = settings.get("DB_PASSWORD")
+        host = settings.get("DB_HOST")
+        dbname = settings.get("DB_NAME")
 
         if all([user, password, host, dbname]):
             return f"postgresql://{user}:{password}@{host}/{dbname}"
 
-        db_path = os.getenv("DB_PATH", "ocr_reader.db")
+        db_path = settings.get("DB_PATH", "ocr_reader.db")
         url = f"sqlite:///{db_path}"
 
     # SQLAlchemy requires postgresql:// instead of postgres://
@@ -67,7 +69,7 @@ if _is_postgres:
 #   2. DATABASE_URL が Neon URL の場合、自動的に pooler hostname に変換
 #   3. DATABASE_URL が既に Neon pooler URL の場合、そのまま使用
 #   4. フォールバック: 通常の QueuePool
-_pool_url = os.getenv("DATABASE_POOL_URL", "")
+_pool_url = settings.get("DATABASE_POOL_URL", "")
 if not _pool_url and _is_postgres:
     _pool_url = _to_neon_pooler_url(_url) or ""
     # DATABASE_URL が既に pooler エンドポイントの場合もNullPoolを使用
@@ -110,7 +112,10 @@ def get_db():
     try:
         yield db
     except Exception:
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            pass  # SSL切断等でロールバック自体が失敗しても無視
         raise
     finally:
         db.close()
@@ -122,7 +127,10 @@ def get_db_context():
     try:
         yield db
     except Exception:
-        db.rollback()
+        try:
+            db.rollback()
+        except Exception:
+            pass  # SSL切断等でロールバック自体が失敗しても無視
         raise
     finally:
         db.close()

@@ -1,8 +1,9 @@
-import os
+
 from concurrent.futures import ThreadPoolExecutor
 
 from app.providers import RedisService, get_ai_provider
 from app.providers.dictionary_provider import get_dictionary_provider
+from common.config import settings
 from common.logger import ServiceLogger
 from common.utils.text import truncate_context
 
@@ -16,7 +17,7 @@ class WordAnalysisService:
         self.ai_provider = get_ai_provider()
         self.dict_provider = get_dictionary_provider()
         self.redis = RedisService()
-        self.translate_model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
+        self.translate_model = settings.get("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
         self.executor = ThreadPoolExecutor(max_workers=4)
 
         self.word_cache = {}  # lemma -> bool (exists in dictionary)
@@ -49,7 +50,7 @@ class WordAnalysisService:
         """
         Translate word using document context.
         """
-        max_context_length = int(os.getenv("MAX_CONTEXT_LENGTH", "800"))
+        max_context_length = int(settings.get("MAX_CONTEXT_LENGTH", "800"))
         truncated = truncate_context(context, word, max_context_length)
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 

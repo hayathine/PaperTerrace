@@ -1,3 +1,6 @@
+import random
+from typing import Callable
+
 import dspy
 
 from common.dspy.signatures import (
@@ -17,6 +20,58 @@ from common.dspy.signatures import (
     SystemContextSignature,
     VisionAnalyzeFigure,
 )
+
+
+class PromptCandidatePool:
+    """GEPA の Pareto フロントから生成された複数の最適化済みプロンプト候補を管理するプール。
+
+    呼び出しのたびにランダムに1つの候補を選択することで、
+    各候補のパフォーマンスをオンラインで比較・評価できる。
+    選択された候補インデックスは TraceContext.candidate_index に記録する。
+
+    使用例::
+
+        pool = PromptCandidatePool.from_bigquery(PaperSummaryModule, "paper_summary")
+        module, idx = pool.select()
+        context.candidate_index = idx
+        result, trace_id = await trace_dspy_call(..., module_callable=module, context=context)
+    """
+
+    def __init__(self, candidates: list[dspy.Module]) -> None:
+        if not candidates:
+            raise ValueError("candidates must not be empty")
+        self.candidates = candidates
+
+    def select(self) -> tuple[dspy.Module, int]:
+        """候補をランダムに1つ選択して返す。
+
+        Returns:
+            (選択されたモジュール, そのインデックス) のタプル。
+        """
+        idx = random.randrange(len(self.candidates))
+        return self.candidates[idx], idx
+
+    def __len__(self) -> int:
+        return len(self.candidates)
+
+    @classmethod
+    def from_bigquery(
+        cls,
+        module_factory: Callable[[], dspy.Module],
+        program_name: str,
+    ) -> "PromptCandidatePool":
+        """BigQuery の prompt_candidates テーブルから最新の Pareto 候補をロードしてプールを生成する。
+
+        候補が存在しない場合は module_factory() による単一モジュールで初期化する。
+
+        Args:
+            module_factory: 新規モジュールインスタンスを生成する callable。
+            program_name: BigQuery 上の識別子（例: 'paper_summary'）。
+        """
+        from common.dspy.prompt_store import load_candidates_from_bigquery
+
+        candidates = load_candidates_from_bigquery(module_factory, program_name)
+        return cls(candidates)
 
 
 class UserPersonaModule(dspy.Module):

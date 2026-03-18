@@ -1,4 +1,4 @@
-import os
+
 
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import (
@@ -7,6 +7,7 @@ from app.schemas.gemini_schema import (
 from common.dspy.config import setup_dspy
 from common.dspy.modules import VisionFigureModule
 from common.dspy.trace import TraceContext, save_trace
+from common import settings
 from common.logger import ServiceLogger
 
 log = ServiceLogger("FigureInsight")
@@ -17,7 +18,7 @@ class FigureInsightService:
 
     def __init__(self):
         self.ai_provider = get_ai_provider()
-        self.model = os.getenv("FIGURE_EXPLAIN_MODEL", "gemini-2.5-flash")
+        self.model = settings.get("FIGURE_EXPLAIN_MODEL", "gemini-2.5-flash")
         setup_dspy()
         self.figure_mod = VisionFigureModule()
 

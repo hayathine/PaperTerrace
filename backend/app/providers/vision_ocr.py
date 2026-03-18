@@ -3,11 +3,12 @@ Google Cloud Vision API OCR Provider
 Handles coordinate-based text extraction for image-based PDFs.
 """
 
-import os
+
 from typing import Any
 
 from google.cloud import vision
 
+from common.config import settings
 from common.logger import ServiceLogger
 
 log = ServiceLogger("VisionOCR")
@@ -17,7 +18,7 @@ class VisionOCRService:
     def __init__(self):
         self.client = None
         # Initialize client lazily or check env
-        if os.getenv("GOOGLE_APPLICATION_CREDENTIALS") or os.getenv("GCP_PROJECT"):
+        if settings.get("GOOGLE_APPLICATION_CREDENTIALS") or settings.get("GCP_PROJECT"):
             try:
                 self.client = vision.ImageAnnotatorClient()
             except Exception as e:
