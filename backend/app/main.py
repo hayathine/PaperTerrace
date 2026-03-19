@@ -17,7 +17,7 @@ from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.cors import CORSMiddleware
 
-from app.core.config import get_app_env, get_neon_auth_url, is_production
+from app.core.config import get_app_env, get_neon_auth_url, get_redis_url, is_production
 from app.routers import (
     analysis_router,
     auth_router,
@@ -160,12 +160,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app):
         super().__init__(app)
-        redis_url = settings.get("REDIS_URL", "redis://redis:6379")
         try:
             from redis import Redis
 
             self._redis = Redis.from_url(
-                redis_url, socket_connect_timeout=1, decode_responses=True
+                get_redis_url(), socket_connect_timeout=1, decode_responses=True
             )
             # ping() は行わない — 接続確立はリクエスト時に遅延させてコールドスタートを高速化
         except Exception:
@@ -487,14 +486,14 @@ async def health_check():
     # Check Redis (ローカル環境または localhost 設定では Redis 未接続でも healthy 扱い)
     from app.core.config import is_local
     try:
-        redis_url = settings.get("REDIS_URL", "redis://redis:6379")
+        _redis_url = get_redis_url()
         # socket_connect_timeout must be shorter than the liveness probe timeoutSeconds (10s)
-        r = Redis.from_url(redis_url, socket_connect_timeout=1)
+        r = Redis.from_url(_redis_url, socket_connect_timeout=1)
         r.ping()
         dependencies["redis"] = "connected"
     except Exception as e:
-        redis_url = settings.get("REDIS_URL", "redis://redis:6379")
-        is_redis_optional = is_local() or "localhost" in redis_url
+        _redis_url = get_redis_url()
+        is_redis_optional = is_local() or "localhost" in _redis_url
         if is_redis_optional:
             dependencies["redis"] = "unavailable (optional in this environment)"
         else:

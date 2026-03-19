@@ -15,7 +15,7 @@ from app.workers.layout_job import (
     set_job_failed,
     set_job_processing,
 )
-from common.config import settings
+from app.core.config import get_redis_url
 from common.logger import configure_logging, logger
 
 configure_logging()
@@ -77,9 +77,8 @@ async def process_layout_analysis(
 
 async def startup(ctx: dict) -> None:
     """ワーカー起動時の初期化処理。"""
-    redis_url = settings.get("REDIS_URL", "redis://redis:6379/0")
     ctx["sync_redis"] = sync_redis_lib.Redis.from_url(
-        redis_url,
+        get_redis_url(),
         decode_responses=True,
         socket_timeout=5.0,
         socket_connect_timeout=5.0,
@@ -108,9 +107,7 @@ class WorkerSettings:
     on_startup = startup
     on_shutdown = shutdown
 
-    redis_settings = RedisSettings.from_dsn(
-        settings.get("REDIS_URL", "redis://redis:6379/0")
-    )
+    redis_settings = RedisSettings.from_dsn(get_redis_url())
 
     max_jobs = 3          # Pod 1台あたりの同時処理ジョブ数
     job_timeout = JOB_TIMEOUT

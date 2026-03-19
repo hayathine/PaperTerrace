@@ -5,13 +5,13 @@ from typing import Any
 
 import redis
 
-from common.config import settings
+from common.config import get_redis_url, settings
 from common.logger import get_service_logger
 
 log = get_service_logger("Cache")
 
-# Load Redis host/port from env
-REDIS_URL = settings.get("REDIS_URL", "redis://localhost:6379/0")
+# 環境に応じた Redis URL を取得（prod/staging/local で接続先を切り替え）
+REDIS_URL = get_redis_url()
 REDIS_DB = int(settings.get("REDIS_DB", 0))
 REDIS_PASSWORD = settings.get("REDIS_PASSWORD", None)
 

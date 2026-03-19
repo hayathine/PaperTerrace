@@ -169,10 +169,12 @@ class GCSImageStorage(ImageStorageStrategy):
     def __init__(self):
         from google.cloud import storage
 
-        self.bucket_name = settings.get("GCS_BUCKET_NAME") or settings.get("STORAGE_BUCKET")
+        from app.core.config import get_gcs_bucket_name
+        self.bucket_name = get_gcs_bucket_name() or settings.get("STORAGE_BUCKET")
         if not self.bucket_name:
             raise ValueError(
-                "Either GCS_BUCKET_NAME or STORAGE_BUCKET env var is required for GCS storage"
+                "Either GCS_BUCKET_NAME / GCS_BUCKET_NAME_STAGING / GCS_BUCKET_NAME_LOCAL "
+                "or STORAGE_BUCKET env var is required for GCS storage"
             )
         self.client = storage.Client()
         self.bucket = self.client.bucket(self.bucket_name)

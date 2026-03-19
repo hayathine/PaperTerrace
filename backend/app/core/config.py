@@ -10,7 +10,7 @@ APP_ENV 環境変数 (prod | staging | local) に応じて、Neon・BigQuery の
 
 
 
-from common.config import settings
+from common.config import get_redis_url, settings
 from common.logger import ServiceLogger
 
 log = ServiceLogger("Config")
@@ -92,3 +92,41 @@ def get_bq_log_dataset() -> str:
     if is_staging():
         return settings.get("BQ_LOG_DATASET_STAGING", "paperterrace_logs_staging")
     return settings.get("BQ_LOG_DATASET_LOCAL", "paperterrace_logs_local")
+
+
+def get_gcs_bucket_name() -> str | None:
+    """環境に応じた GCS バケット名を返す。
+
+    環境別の優先順位:
+      prod    : GCS_BUCKET_NAME
+      staging : GCS_BUCKET_NAME_STAGING → GCS_BUCKET_NAME
+      local   : GCS_BUCKET_NAME_LOCAL   → GCS_BUCKET_NAME
+    """
+    if is_production():
+        return settings.get("GCS_BUCKET_NAME")
+    if is_staging():
+        return settings.get("GCS_BUCKET_NAME_STAGING") or settings.get("GCS_BUCKET_NAME")
+    return settings.get("GCS_BUCKET_NAME_LOCAL") or settings.get("GCS_BUCKET_NAME")
+
+
+def get_worker_api_url() -> str | None:
+    """Worker API の URL を返す。未設定の場合は None（Redis 直接モード）。
+
+    環境別の優先順位:
+      prod    : WORKER_API_URL
+      staging : WORKER_API_URL_STAGING → WORKER_API_URL
+      local   : WORKER_API_URL_LOCAL   → None（ローカルは Redis 直接）
+    """
+    if is_production():
+        return settings.get("WORKER_API_URL") or None
+    if is_staging():
+        return (
+            settings.get("WORKER_API_URL_STAGING")
+            or settings.get("WORKER_API_URL")
+            or None
+        )
+    return settings.get("WORKER_API_URL_LOCAL") or None
+
+
+# get_redis_url は common.config から re-export
+__all__ = ["get_redis_url"]

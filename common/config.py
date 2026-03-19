@@ -39,3 +39,30 @@ settings = Dynaconf(
     environments=True,
     env_switcher="APP_ENV",
 )
+
+
+def _get_app_env() -> str:
+    """現在の環境を正規化して返す（prod / staging / local）。"""
+    env = str(settings.get("APP_ENV", "local")).lower()
+    if env in ("production", "prod"):
+        return "prod"
+    if env == "staging":
+        return "staging"
+    return "local"
+
+
+def get_redis_url() -> str:
+    """環境に応じた Redis URL を返す。
+
+    環境別の優先順位:
+      prod    : REDIS_URL
+      staging : REDIS_URL_STAGING → REDIS_URL
+      local   : REDIS_URL_LOCAL   → REDIS_URL → redis://localhost:6379/0
+    """
+    _default = "redis://localhost:6379/0"
+    env = _get_app_env()
+    if env == "prod":
+        return settings.get("REDIS_URL", _default)
+    if env == "staging":
+        return settings.get("REDIS_URL_STAGING") or settings.get("REDIS_URL", _default)
+    return settings.get("REDIS_URL_LOCAL") or settings.get("REDIS_URL", _default)

@@ -379,9 +379,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		jobId: string,
 		paperId: string,
 		fileHash: string | null,
+		streamUrl: string,
 	): Promise<void> => {
 		return new Promise((resolve) => {
-			const es = new EventSource(`${API_URL}/api/layout-jobs/${jobId}/stream`);
+			const fullStreamUrl = streamUrl.startsWith("http")
+				? streamUrl
+				: `${API_URL}${streamUrl}`;
+			const es = new EventSource(fullStreamUrl);
 
 			const timeout = setTimeout(() => {
 				log.error("poll_layout_job", "Job timed out", { job_id: jobId });
@@ -443,7 +447,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		batchPages: number[],
 		fileHash: string | null,
 		headers: HeadersInit,
-	): Promise<string | null> => {
+	): Promise<{ jobId: string; streamUrl: string } | null> => {
 		const formData = new URLSearchParams();
 		formData.append("paper_id", paperId);
 		formData.append("page_numbers", batchPages.join(","));
@@ -472,7 +476,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			return null;
 		}
 
-		return result.job_id ?? null;
+		if (!result.job_id) return null;
+		const streamUrl =
+			result.stream_url ?? `/api/layout-jobs/${result.job_id}/stream`;
+		return { jobId: result.job_id, streamUrl };
 	};
 
 	const triggerLazyLayoutAnalysis = async (
@@ -514,26 +521,21 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 			// バッチを順番に（少しディレイをおいて）キューに投入
 			// ゲートウェイへの負荷集中を避けつつ、バックグラウンドの3ワーカーに仕事を渡す
-			const jobIds: (string | null)[] = [];
+			const jobs: { jobId: string; streamUrl: string }[] = [];
 			for (const batchPages of batches) {
-				const jobId = await enqueueBatch(
-					paperId,
-					batchPages,
-					fileHash,
-					headers,
-				);
-				jobIds.push(jobId);
+				const job = await enqueueBatch(paperId, batchPages, fileHash, headers);
+				if (job) jobs.push(job);
 				if (batches.length > 1) {
 					// 3ワーカーが順次取り出せる程度の適度な間隔
 					await new Promise((resolve) => setTimeout(resolve, 500));
 				}
 			}
 
-			// 各ジョブをSSEで並列待機（ポーリング不要・レート制限なし）
+			// Worker API へ直接 SSE 接続（Cloud Run を経由しない・イベント駆動）
 			await Promise.all(
-				jobIds
-					.filter((id): id is string => id !== null)
-					.map((jobId) => pollLayoutJob(jobId, paperId, fileHash)),
+				jobs.map(({ jobId, streamUrl }) =>
+					pollLayoutJob(jobId, paperId, fileHash, streamUrl),
+				),
 			);
 
 			log.info(

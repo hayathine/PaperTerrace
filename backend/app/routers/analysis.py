@@ -7,10 +7,12 @@ figure/table analysis, layout detection, and adversarial review.
 import asyncio
 import json
 
+import httpx
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.auth import OptionalUser
+from app.core.config import get_worker_api_url
 from app.domain.features import (
     AdversarialReviewService,
     FigureInsightService,
@@ -22,7 +24,7 @@ from app.providers import (
     get_arq_pool,
     get_redis_client,
     get_storage_provider,
-)  # RedisService now uses in-memory cache
+)
 from app.workers.layout_job import enqueue_layout_job, get_job_status
 from common.logger import ServiceLogger
 
@@ -194,7 +196,9 @@ async def analyze_layout_lazy(
 ):
     """
     レイアウト解析ジョブをキューに投入し、job_id を即時返却する。
-    結果は GET /layout-jobs/{job_id} でポーリングして取得する。
+
+    Worker API が利用可能な場合は HTTP 経由で投入（Redis 直接接続不要）。
+    Worker API が未設定の場合は Redis 直接モード（ローカル開発用）にフォールバック。
     """
     log.info(
         "layout_lazy",
@@ -203,29 +207,50 @@ async def analyze_layout_lazy(
         pages=page_numbers,
     )
 
-    # Parse page numbers
     parsed_pages = None
     if page_numbers:
         try:
             parsed_pages = [int(p.strip()) for p in page_numbers.split(",")]
         except ValueError:
-            raise HTTPException(
-                status_code=400, detail="Invalid page_numbers format"
-            )
+            raise HTTPException(status_code=400, detail="Invalid page_numbers format")
 
     current_user_id = (
         user.uid if user else (f"guest:{session_id}" if session_id else None)
     )
 
+    worker_api_url = get_worker_api_url()
+
+    # --- Worker API モード（staging / prod）---
+    if worker_api_url:
+        try:
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{worker_api_url}/jobs",
+                    json={
+                        "paper_id": paper_id,
+                        "page_numbers": parsed_pages,
+                        "user_id": current_user_id,
+                        "file_hash": file_hash,
+                        "session_id": session_id,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            job_id = data.get("job_id")
+            log.info("layout_lazy", "Job enqueued via Worker API", job_id=job_id)
+            # フロントエンドが Worker API へ直接 SSE 接続できるよう stream_url を返す
+            stream_url = f"{worker_api_url}/jobs/{job_id}/stream"
+            return JSONResponse({"success": True, **data, "stream_url": stream_url})
+        except Exception as e:
+            log.error("layout_lazy", "Worker API call failed", error=str(e))
+            raise HTTPException(status_code=502, detail="Worker API unavailable.")
+
+    # --- Redis 直接モード（ローカル開発）---
     arq_pool = await get_arq_pool()
     redis_client = get_redis_client()
 
     if arq_pool is None or redis_client is None:
-        # Redis 未接続時はフォールバックとして同期処理
-        log.warning(
-            "layout_lazy",
-            "Redis unavailable, falling back to synchronous processing",
-        )
+        log.warning("layout_lazy", "Redis unavailable, falling back to synchronous processing")
         try:
             service = LayoutAnalysisService()
             all_figures = await service.analyze_layout_lazy(
@@ -235,14 +260,12 @@ async def analyze_layout_lazy(
                 file_hash=file_hash,
                 session_id=session_id,
             )
-            return JSONResponse(
-                {
-                    "success": True,
-                    "paper_id": paper_id,
-                    "figures_detected": len(all_figures),
-                    "figures": all_figures,
-                }
-            )
+            return JSONResponse({
+                "success": True,
+                "paper_id": paper_id,
+                "figures_detected": len(all_figures),
+                "figures": all_figures,
+            })
         except Exception as e:
             log.error("layout_lazy", "Synchronous fallback failed", error=str(e))
             raise HTTPException(status_code=500, detail="Layout analysis failed.")
@@ -257,14 +280,10 @@ async def analyze_layout_lazy(
             file_hash=file_hash,
             session_id=session_id,
         )
-        log.info("layout_lazy", "Job enqueued", job_id=job_id, paper_id=paper_id)
-        return JSONResponse(
-            {
-                "success": True,
-                "job_id": job_id,
-                "status": "queued",
-            }
-        )
+        log.info("layout_lazy", "Job enqueued via Redis", job_id=job_id)
+        # ローカル開発: Cloud Run 経由のSSEエンドポイントを返す
+        stream_url = f"/api/layout-jobs/{job_id}/stream"
+        return JSONResponse({"success": True, "job_id": job_id, "status": "queued", "stream_url": stream_url})
     except Exception as e:
         log.error("layout_lazy", "Failed to enqueue job", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to enqueue layout analysis job.")
@@ -275,8 +294,24 @@ async def get_layout_job_status(job_id: str):
     """
     レイアウト解析ジョブのステータスと結果を返す。
 
-    status: "queued" | "processing" | "completed" | "failed"
+    Worker API 経由または Redis 直接のどちらかで取得する。
     """
+    worker_api_url = get_worker_api_url()
+
+    if worker_api_url:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{worker_api_url}/jobs/{job_id}")
+                if resp.status_code == 404:
+                    raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+                resp.raise_for_status()
+                return JSONResponse(resp.json())
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.error("get_job", "Worker API call failed", error=str(e))
+            raise HTTPException(status_code=502, detail="Worker API unavailable.")
+
     redis_client = get_redis_client()
     if redis_client is None:
         raise HTTPException(status_code=503, detail="Redis unavailable")
@@ -286,37 +321,53 @@ async def get_layout_job_status(job_id: str):
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
     status = job.get("status")
-
     if status == "completed":
         figures = job.get("result", [])
-        return JSONResponse(
-            {
-                "success": True,
-                "job_id": job_id,
-                "status": "completed",
-                "figures_detected": len(figures),
-                "figures": figures,
-            }
-        )
-
-    return JSONResponse(
-        {
+        return JSONResponse({
             "success": True,
             "job_id": job_id,
-            "status": status,
-            "error": job.get("error"),
-        }
-    )
+            "status": "completed",
+            "figures_detected": len(figures),
+            "figures": figures,
+        })
+
+    return JSONResponse({
+        "success": True,
+        "job_id": job_id,
+        "status": status,
+        "error": job.get("error"),
+    })
 
 
 @router.get("/layout-jobs/{job_id}/stream")
 async def stream_layout_job(job_id: str):
     """
-    レイアウト解析ジョブの完了をSSEでプッシュ通知する。
+    レイアウト解析ジョブの完了を SSE でプッシュ通知する。
 
-    クライアントはポーリングせず、この接続を維持するだけでよい。
-    status: "queued" | "processing" | "completed" | "failed" | "timeout" | "not_found"
+    Worker API 経由の場合は SSE をそのままプロキシする。
     """
+    worker_api_url = get_worker_api_url()
+
+    if worker_api_url:
+        async def proxy_stream():
+            try:
+                async with httpx.AsyncClient(timeout=None) as client:
+                    async with client.stream(
+                        "GET", f"{worker_api_url}/jobs/{job_id}/stream"
+                    ) as resp:
+                        async for chunk in resp.aiter_bytes():
+                            yield chunk
+            except Exception as e:
+                log.error("stream_proxy", "Worker API stream failed", error=str(e))
+                yield f"data: {json.dumps({'status': 'failed', 'error': 'Worker API disconnected'})}\n\n"
+
+        return StreamingResponse(
+            proxy_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    # Redis 直接モード（ローカル開発）
     redis_client = get_redis_client()
     if redis_client is None:
         raise HTTPException(status_code=503, detail="Redis unavailable")
@@ -327,7 +378,6 @@ async def stream_layout_job(job_id: str):
         deadline = asyncio.get_event_loop().time() + TIMEOUT
         last_heartbeat = asyncio.get_event_loop().time()
 
-        # 現在のステータスを即時チェック（ジョブが既に完了/失敗している場合に対応）
         job = get_job_status(redis_client, job_id)
         if job is None:
             yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
@@ -344,10 +394,9 @@ async def stream_layout_job(job_id: str):
 
         yield f"data: {json.dumps({'status': status})}\n\n"
 
-        # Pub/Sub で完了通知を待つ（失敗時はポーリングにフォールバック）
+        from app.workers.layout_job import JOB_PUB_PREFIX
         pubsub = None
         use_pubsub = False
-        from app.workers.layout_job import JOB_PUB_PREFIX
         try:
             pubsub = redis_client.pubsub()
             await asyncio.to_thread(pubsub.subscribe, f"{JOB_PUB_PREFIX}{job_id}")
@@ -363,7 +412,6 @@ async def stream_layout_job(job_id: str):
 
         try:
             if use_pubsub:
-                # Pub/Sub モード
                 while asyncio.get_event_loop().time() < deadline:
                     now = asyncio.get_event_loop().time()
                     if now - last_heartbeat >= HEARTBEAT_INTERVAL:
@@ -398,8 +446,6 @@ async def stream_layout_job(job_id: str):
                         except Exception:
                             pass
             else:
-                # ポーリングフォールバック
-                POLL_INTERVAL = 1.0
                 while asyncio.get_event_loop().time() < deadline:
                     now = asyncio.get_event_loop().time()
                     if now - last_heartbeat >= HEARTBEAT_INTERVAL:
@@ -421,7 +467,7 @@ async def stream_layout_job(job_id: str):
                         return
 
                     yield f"data: {json.dumps({'status': status})}\n\n"
-                    await asyncio.sleep(POLL_INTERVAL)
+                    await asyncio.sleep(1.0)
 
         finally:
             if pubsub:
@@ -436,8 +482,5 @@ async def stream_layout_job(job_id: str):
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
