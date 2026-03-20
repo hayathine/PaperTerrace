@@ -154,7 +154,9 @@ class OpenVINOLayoutAnalysisService:
     async def analyze_image_from_bytes(
         self, image_bytes: bytes, target_classes: list[str] | None = None
     ) -> list[LayoutItem]:
-        results = await self.analyze_images_batch_from_bytes([image_bytes], target_classes)
+        results = await self.analyze_images_batch_from_bytes(
+            [image_bytes], target_classes
+        )
         return results[0]
 
     async def analyze_images_batch_from_bytes(
@@ -206,7 +208,9 @@ class OpenVINOLayoutAnalysisService:
                     class_id = int(result["class_id"])
                     class_name = self.LABELS.get(class_id, f"Unknown({class_id})")
                     layout_items.append(
-                        LayoutItem(bbox=bbox, class_name=class_name, score=result["score"])
+                        LayoutItem(
+                            bbox=bbox, class_name=class_name, score=result["score"]
+                        )
                     )
                 batch_results.append(layout_items)
 
@@ -418,17 +422,8 @@ class OpenVINOLayoutAnalysisService:
             scores = valid_predictions[:, 1]
             boxes = valid_predictions[:, 2:6].copy()
 
-            logger.info(
-                f"Postprocess - scale_h: {scale_h:.4f}, scale_w: {scale_w:.4f}, pad_h: {pad_h}, pad_w: {pad_w}"
-            )
-            logger.info(
-                f"Postprocess - sample raw bbox (first 3): {predictions[:3, 2:6]}"
-            )
-
             boxes[:, [0, 2]] = (boxes[:, [0, 2]] - pad_w) / scale_w
             boxes[:, [1, 3]] = (boxes[:, [1, 3]] - pad_h) / scale_h
-
-            logger.info(f"Postprocess - sample transformed bbox (first 3): {boxes[:3]}")
 
             boxes = np.round(boxes).astype(int)
             boxes = np.maximum(boxes, 0)

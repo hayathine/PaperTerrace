@@ -493,8 +493,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			const finalPages = initialPages ?? pagesRef.current;
 			if (!finalPages || finalPages.length === 0) return;
 
-			const BATCH_SIZE = 10;
-
 			// Important for transient sessions: provide file_hash explicitly
 			const firstImgUrl = finalPages[0]?.image_url || "";
 			const hashMatch = firstImgUrl.match(/\/static\/paper_images\/([^/]+)\//);
@@ -505,31 +503,16 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			};
 			if (token) headers.Authorization = `Bearer ${token}`;
 
-			// バッチに分割
-			const batches: number[][] = [];
-			for (let i = 0; i < finalPages.length; i += BATCH_SIZE) {
-				batches.push(
-					finalPages.slice(i, i + BATCH_SIZE).map((p) => p.page_num),
-				);
-			}
+			// 1つのジョブで全ページを投げる（バックエンド側の「最初の3枚、その後10枚ずつ」ロジックに任せる）
+			const pageNumbers = finalPages.map((p) => p.page_num);
 
-			log.info("trigger_lazy_layout_analysis", "Enqueuing batches", {
+			log.info("trigger_lazy_layout_analysis", "Enqueuing analysis job", {
 				paper_id: paperId,
 				total_pages: finalPages.length,
-				batches: batches.length,
 			});
 
-			// バッチを順番に（少しディレイをおいて）キューに投入
-			// ゲートウェイへの負荷集中を避けつつ、バックグラウンドの3ワーカーに仕事を渡す
-			const jobs: { jobId: string; streamUrl: string }[] = [];
-			for (const batchPages of batches) {
-				const job = await enqueueBatch(paperId, batchPages, fileHash, headers);
-				if (job) jobs.push(job);
-				if (batches.length > 1) {
-					// 3ワーカーが順次取り出せる程度の適度な間隔
-					await new Promise((resolve) => setTimeout(resolve, 500));
-				}
-			}
+			const job = await enqueueBatch(paperId, pageNumbers, fileHash, headers);
+			const jobs = job ? [job] : [];
 
 			// Worker API へ直接 SSE 接続（Cloud Run を経由しない・イベント駆動）
 			await Promise.all(
