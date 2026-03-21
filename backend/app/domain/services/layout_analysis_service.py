@@ -34,39 +34,39 @@ class LayoutAnalysisService:
         crops: list[dict],
         file_hash: str,
     ) -> list[dict]:
-        """推論podから受け取ったクロップ済み画像をGCSに保存してfiguresリストを返す。"""
-        page_figures = []
-        for fig_idx, crop in enumerate(crops):
+        """推論podから受け取ったクロップ済み画像をGCSに並列保存してfiguresリストを返す。"""
+        async def _save_one(fig_idx: int, crop: dict) -> dict | None:
             class_name = crop.get("class_name", "figure")
             img_b64 = crop.get("image_b64", "")
             bbox_dict = crop.get("bbox", {})
             if not img_b64:
-                continue
+                return None
             try:
                 img_bytes = base64.b64decode(img_b64)
                 img_name = f"p{page_num}_{class_name}_{fig_idx}"
                 figure_image_url = await async_save_page_image(
                     file_hash, img_name, img_bytes, "jpg"
                 )
-                page_figures.append(
-                    {
-                        "page_num": page_num,
-                        "bbox": [
-                            bbox_dict.get("x_min", 0),
-                            bbox_dict.get("y_min", 0),
-                            bbox_dict.get("x_max", 0),
-                            bbox_dict.get("y_max", 0),
-                        ],
-                        "label": class_name,
-                        "image_url": figure_image_url,
-                    }
-                )
+                return {
+                    "page_num": page_num,
+                    "bbox": [
+                        bbox_dict.get("x_min", 0),
+                        bbox_dict.get("y_min", 0),
+                        bbox_dict.get("x_max", 0),
+                        bbox_dict.get("y_max", 0),
+                    ],
+                    "label": class_name,
+                    "image_url": figure_image_url,
+                }
             except Exception as e:
                 log.warning(
                     "_save_crops_from_inference",
                     f"Failed to save crop {class_name} on page {page_num}: {e}",
                 )
-        return page_figures
+                return None
+
+        results = await asyncio.gather(*[_save_one(i, crop) for i, crop in enumerate(crops)])
+        return [r for r in results if r is not None]
 
     async def analyze_layout_lazy(
         self,

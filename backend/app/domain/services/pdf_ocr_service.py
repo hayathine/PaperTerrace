@@ -85,7 +85,6 @@ class PDFOCRService:
         )
 
         tmp_path = None
-        fitz_doc = None
         try:
             # 1. Cache handling
             cached_result = await self._handle_cache(file_hash)
@@ -109,9 +108,6 @@ class PDFOCRService:
                 file_hash=file_hash,
             )
 
-            # Open PDF with PyMuPDF once (Keep it open)
-            import fitz  # noqa: PLC0415 (遅延インポート: 起動時メモリ削減)
-
             # PDFバイトの診断ログ（magic bytes確認）
             magic = file_bytes[:8] if file_bytes else b""
             is_valid_pdf = bool(file_bytes) and b"%PDF" in file_bytes[:16]
@@ -131,11 +127,7 @@ class PDFOCRService:
                     f" size={len(file_bytes)}"
                 )
 
-            fitz_doc = fitz.open(stream=file_bytes, filetype="pdf")
-            total_pages = len(fitz_doc)
-
-            # Save to temporary file only if absolutely needed for other libs
-            # We'll use it for pdfplumber and potentially other fallbacks
+            # Save to temporary file for pdfplumber (text extraction)
             with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
                 tmp.write(file_bytes)
                 tmp_path = tmp.name
@@ -143,6 +135,7 @@ class PDFOCRService:
             import pdfplumber  # noqa: PLC0415 (遅延インポート: 起動時メモリ削減)
 
             with pdfplumber.open(tmp_path) as pdf:
+                total_pages = len(pdf.pages)
                 log.info(
                     "pdf_opened",
                     "PDF opened successfully",
@@ -165,7 +158,8 @@ class PDFOCRService:
                         total=total_pages,
                     )
 
-                    # Step A: Prefetch Phase 1 & 2 for all pages in chunk (parallel)
+                    # Step A: Phase 1 & 2 を chunk 内全ページ並列実行
+                    # 各ページが独立した fitz doc でレンダリングするため真の並列動作する
                     prefetched_pages = list(
                         await asyncio.gather(
                             *[
@@ -174,40 +168,39 @@ class PDFOCRService:
                                     page_idx,
                                     total_pages,
                                     file_hash,
-                                    fitz_doc,
+                                    file_bytes,
                                 )
                                 for page_idx in range(chunk_start, chunk_end)
                             ]
                         )
                     )
 
-                    # Step B: Finalize each page (Phase 3) and yield sequentially
-                    # Layout/figure analysis is handled lazily after OCR via analyze_layout_lazy
-                    for i, page_idx in enumerate(range(chunk_start, chunk_end)):
-                        page_data = prefetched_pages[i]
-                        layout_blocks = []
-
-                        # Yield Phase 1 (Initial UI update)
+                    # Step B: Phase 1 を全ページ先行 yield → Phase 3 を chunk 内並列実行
+                    # Phase 3 も独立 fitz doc を使うため並列化可能
+                    for page_data in prefetched_pages:
                         yield page_data["phase1_result"]
 
-                        # Process Phase 3 (Markdown & Figures)
-                        # We use the open fitz_doc here sequentially
-                        final_result = await self._finalize_page_phase_3(
-                            page_data,
-                            layout_blocks,
-                            fitz_doc,
-                            page_idx,
-                            total_pages,
-                            file_hash,
-                            pdf_path=tmp_path,
+                    finalize_tasks = [
+                        asyncio.create_task(
+                            self._finalize_page_phase_3(
+                                prefetched_pages[i],
+                                [],
+                                None,
+                                chunk_start + i,
+                                total_pages,
+                                file_hash,
+                                pdf_path=tmp_path,
+                                file_bytes=file_bytes,
+                            )
                         )
+                        for i in range(len(prefetched_pages))
+                    ]
 
-                        # Accumulate results for Finalize phase
+                    for final_result in await asyncio.gather(*finalize_tasks):
                         page_text = final_result[2]
                         layout_data = final_result[6]
                         all_text_parts.append(page_text)
                         all_layout_parts.append(layout_data)
-
                         yield final_result
 
             # 2. Finalize and save to DB
@@ -238,8 +231,6 @@ class PDFOCRService:
                 error_msg = "Internal Server Error during OCR"
             yield (0, 0, f"ERROR_API_FAILED: {error_msg}", True, file_hash, None, None)
         finally:
-            if fitz_doc:
-                fitz_doc.close()
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
 
@@ -312,12 +303,12 @@ class PDFOCRService:
         return pages
 
     async def _prepare_page_phases_1_2(
-        self, page, page_idx, total_pages, file_hash, fitz_doc=None
+        self, page, page_idx, total_pages, file_hash, file_bytes: bytes = b""
     ) -> dict:
         """Execute Phase 1 & 2: Native text extraction and image rendering."""
         page_num = page_idx + 1
         is_last = page_idx == total_pages - 1
-        resolution = 300
+        resolution = 200
         zoom = resolution / 72.0
 
         log.debug("_prepare_page_phases_1_2", "Phase 1 & 2 start", page_num=page_num)
@@ -369,33 +360,25 @@ class PDFOCRService:
             layout_data,
         )
 
-        # Phase 2: Page Image (CPU-bound rendering をスレッドで実行)
-        def _render_and_encode(p, res):
+        # Phase 2: Page Image (各スレッドで独立した fitz doc を開いて並列レンダリング)
+        def _render_and_encode(file_bytes_inner: bytes, page_idx_inner: int, res: int):
+            import fitz as _fitz  # noqa: PLC0415
+            from PIL import Image as _Image  # noqa: PLC0415
+
+            _doc = _fitz.open(stream=file_bytes_inner, filetype="pdf")
             try:
-                page_img = p.to_image(resolution=res, antialias=True)
-                pil = page_img.original.convert("RGB")
-            except Exception as render_err:
-                # pdfplumber (pypdfium2) が失敗した場合 PyMuPDF でフォールバック
-                log.warning(
-                    "_render_and_encode",
-                    "pdfplumber rendering failed, falling back to PyMuPDF",
-                    page_num=page_num,
-                    error=str(render_err),
-                )
-                if fitz_doc is None:
-                    raise
-                import fitz as _fitz  # noqa: PLC0415
-                from PIL import Image as _Image  # noqa: PLC0415
                 mat = _fitz.Matrix(res / 72.0, res / 72.0)
-                fitz_page = fitz_doc[page_idx]
-                pix = fitz_page.get_pixmap(matrix=mat)
+                _page = _doc[page_idx_inner]
+                pix = _page.get_pixmap(matrix=mat)
                 pil = _Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+            finally:
+                _doc.close()
             buf = io.BytesIO()
             pil.save(buf, format="JPEG", quality=85)
             return pil, buf.getvalue()
 
         img_pil, img_bytes = await asyncio.to_thread(
-            _render_and_encode, page, resolution
+            _render_and_encode, file_bytes, page_idx, resolution
         )
         image_url = await async_save_page_image(file_hash, page_num, img_bytes, "jpg")
 
@@ -434,6 +417,7 @@ class PDFOCRService:
         total_pages: int,
         file_hash: str,
         pdf_path: str | None = None,
+        file_bytes: bytes = b"",
     ) -> tuple:
         """Execute Phase 3: Layout refinement, Markdown generation, and Figure cropping."""
         page_num = page_data["page_num"]
@@ -475,12 +459,10 @@ class PDFOCRService:
                                 ]
                             )
 
-                # 2. Markdown extraction (sequential in executor using existing fitz_doc)
-                loop = asyncio.get_running_loop()
-                raw_md = await loop.run_in_executor(
-                    None,
+                # 2. Markdown extraction (独立した fitz doc でスレッド実行)
+                raw_md = await asyncio.to_thread(
                     self._extract_markdown_sequential,
-                    fitz_doc,
+                    file_bytes,
                     page_idx,
                     figure_table_bboxes_pt,
                 )
@@ -642,14 +624,23 @@ class PDFOCRService:
         )
 
     def _extract_markdown_sequential(
+        self, file_bytes: bytes, idx: int, exclude_bboxes_pt: list
+    ) -> str:
+        """各スレッドで独立した fitz doc を開いて PyMuPDF4LLM で Markdown 抽出する。"""
+        import fitz  # noqa: PLC0415 (遅延インポート: 起動時メモリ削減)
+
+        doc = fitz.open(stream=file_bytes, filetype="pdf")
+        try:
+            return self._extract_markdown_inner(doc, idx, exclude_bboxes_pt)
+        finally:
+            doc.close()
+
+    def _extract_markdown_inner(
         self, doc: Any, idx: int, exclude_bboxes_pt: list
     ) -> str:
-        """Helper to run PyMuPDF4LLM extraction on a shared document object."""
-        import fitz  # noqa: PLC0415 (遅延インポート: 起動時メモリ削減)
-        import pymupdf4llm  # noqa: PLC0415 (遅延インポート: 起動時メモリ削減)
+        import fitz  # noqa: PLC0415
+        import pymupdf4llm  # noqa: PLC0415
 
-        # Note: Do not doc.close() here as it is shared across pages.
-        # Apply redactions to the specific page
         page_obj = doc[idx]
         page_area = page_obj.rect.width * page_obj.rect.height
 
