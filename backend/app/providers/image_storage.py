@@ -24,12 +24,17 @@ class ImageStorageStrategy(ABC):
         self.storage_type = "base"
 
     @abstractmethod
-    def save(self, file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp") -> str:
+    def save(
+        self, file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp"
+    ) -> str:
         pass
 
-    async def async_save(self, file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp") -> str:
+    async def async_save(
+        self, file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp"
+    ) -> str:
         """非同期でsave()を実行する（イベントループをブロックしない）。"""
         import asyncio
+
         return await asyncio.to_thread(self.save, file_hash, page_num, image_bytes, ext)
 
     @abstractmethod
@@ -48,7 +53,9 @@ class ImageStorageStrategy(ABC):
         """GCS URI (gs://bucket/blob) を返す。ローカルストレージでは None。"""
         return None
 
-    def generate_signed_url(self, image_url: str, expiration_seconds: int = 900) -> str | None:
+    def generate_signed_url(
+        self, image_url: str, expiration_seconds: int = 900
+    ) -> str | None:
         """署名付きURLを生成する。ローカルストレージでは None。"""
         return None
 
@@ -74,7 +81,9 @@ class LocalImageStorage(ImageStorageStrategy):
     def _ensure_dir(self):
         self.images_dir.mkdir(parents=True, exist_ok=True)
 
-    def save(self, file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp") -> str:
+    def save(
+        self, file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp"
+    ) -> str:
         hash_dir = self.images_dir / file_hash
         hash_dir.mkdir(exist_ok=True)
 
@@ -82,7 +91,6 @@ class LocalImageStorage(ImageStorageStrategy):
         image_path.write_bytes(image_bytes)
 
         relative_path = f"/static/paper_images/{file_hash}/page_{page_num}.{ext}"
-        log.debug("save_local", "ページ画像を保存しました", path=relative_path)
 
         return relative_path
 
@@ -170,6 +178,7 @@ class GCSImageStorage(ImageStorageStrategy):
         from google.cloud import storage
 
         from app.core.config import get_gcs_bucket_name
+
         self.bucket_name = get_gcs_bucket_name() or settings.get("STORAGE_BUCKET")
         if not self.bucket_name:
             raise ValueError(
@@ -183,7 +192,9 @@ class GCSImageStorage(ImageStorageStrategy):
             "gcs_init", "GCSImageStorageを初期化しました", bucket_name=self.bucket_name
         )
 
-    def save(self, file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp") -> str:
+    def save(
+        self, file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp"
+    ) -> str:
         try:
             blob_name = f"paper_images/{file_hash}/page_{page_num}.{ext}"
             blob = self.bucket.blob(blob_name)
@@ -196,7 +207,10 @@ class GCSImageStorage(ImageStorageStrategy):
             # The frontend prepends API_URL, and the backend serves via /static/paper_images/ proxy.
             relative_path = f"/static/paper_images/{file_hash}/page_{page_num}.{ext}"
             log.debug(
-                "save_gcs", "ページ画像を保存しました", blob_name=blob_name, path=relative_path
+                "save_gcs",
+                "ページ画像を保存しました",
+                blob_name=blob_name,
+                path=relative_path,
             )
 
             return relative_path
@@ -264,7 +278,9 @@ class GCSImageStorage(ImageStorageStrategy):
 
             else:
                 log.debug(
-                    "get_list_gcs", "GCSキャッシュに画像が見つかりませんでした", file_hash=file_hash
+                    "get_list_gcs",
+                    "GCSキャッシュに画像が見つかりませんでした",
+                    file_hash=file_hash,
                 )
 
             return urls
@@ -350,6 +366,7 @@ class GCSImageStorage(ImageStorageStrategy):
             return image_url.replace("/static/", "", 1)
         elif image_url.startswith("http"):
             from urllib.parse import urlparse
+
             parsed_path = urlparse(image_url).path
             if parsed_path.startswith("/static/"):
                 return parsed_path.replace("/static/", "", 1)
@@ -384,16 +401,24 @@ class GCSImageStorage(ImageStorageStrategy):
             mime_type = "image/webp" if ext == "webp" else "image/jpeg"
             return f"gs://{self.bucket_name}/{blob_name}", mime_type
         except Exception as e:
-            log.warning("resolve_gcs_uri", "GCS URIの解決に失敗しました", image_url=image_url, error=str(e))
+            log.warning(
+                "resolve_gcs_uri",
+                "GCS URIの解決に失敗しました",
+                image_url=image_url,
+                error=str(e),
+            )
         return None
 
-    def generate_signed_url(self, image_url: str, expiration_seconds: int = 900) -> str | None:
+    def generate_signed_url(
+        self, image_url: str, expiration_seconds: int = 900
+    ) -> str | None:
         """image_url から署名付きGCS URLを生成する（v4署名、デフォルト15分）。"""
         try:
             blob_name = self._to_blob_name(image_url)
             if not blob_name:
                 return None
             from datetime import timedelta
+
             blob = self.bucket.blob(blob_name)
             url = blob.generate_signed_url(
                 expiration=timedelta(seconds=expiration_seconds),
@@ -470,11 +495,15 @@ def _get_instance():
 
 
 # 既存APIとの互換レイヤー
-def save_page_image(file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp") -> str:
+def save_page_image(
+    file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp"
+) -> str:
     return _get_instance().save(file_hash, page_num, image_bytes, ext)
 
 
-async def async_save_page_image(file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp") -> str:
+async def async_save_page_image(
+    file_hash: str, page_num: int | str, image_bytes: bytes, ext: str = "webp"
+) -> str:
     """非同期でページ画像を保存する（asyncコンテキスト用）。"""
     return await _get_instance().async_save(file_hash, page_num, image_bytes, ext)
 

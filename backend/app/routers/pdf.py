@@ -432,7 +432,7 @@ async def stream(task_id: str):
 
         return Response(
             content=f"data: {json.dumps({'type': 'error', 'message': 'Task not found or expired'})}\n\n",
-            media_type="text/plain",
+            media_type="text/event-stream",
             status_code=200,
             headers={"Cache-Control": "no-cache", "Connection": "keep-alive"},
         )

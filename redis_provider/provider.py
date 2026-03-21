@@ -15,7 +15,7 @@ REDIS_URL = get_redis_url()
 REDIS_DB = int(settings.get("REDIS_DB", 0))
 REDIS_PASSWORD = settings.get("REDIS_PASSWORD", None)
 
-_RETRY_INTERVAL = 30.0  # 接続失敗後のリトライ間隔（秒）
+_RETRY_INTERVAL = 5.0  # 接続失敗後のリトライ間隔（秒）
 
 _redis_client = None
 _redis_enabled = True
@@ -98,10 +98,10 @@ class RedisService:
     _shared_cache: dict[str, Any] = {}
 
     def __init__(self):
-        self.client = get_redis_client()
         self.memory_cache = RedisService._shared_cache
         if not hasattr(RedisService, "_initialized"):
-            if self.client:
+            client = get_redis_client()
+            if client:
                 log.info("init", f"RedisService initialized with host: {REDIS_URL}")
             else:
                 log.warning(
@@ -117,15 +117,16 @@ class RedisService:
         else:
             value_str = str(value)
 
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
                 if expire:
-                    self.client.setex(key, expire, value_str)
+                    client.setex(key, expire, value_str)
                     log.info(
                         "set_ex", f"Value set in Redis: {key} (expires: {expire}s)"
                     )
                 else:
-                    self.client.set(key, value_str)
+                    client.set(key, value_str)
                     log.info("set", f"Value set in Redis: {key}")
                 return True
             except Exception as e:
@@ -140,9 +141,10 @@ class RedisService:
     def get(self, key: str) -> Any | None:
         """Get a value from cache."""
         value_str = None
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
-                value_str = self.client.get(key)
+                value_str = client.get(key)
                 if value_str is not None:
                     log.info("get_hit", f"Cache HIT (Redis): {key}")
                 else:
@@ -170,9 +172,10 @@ class RedisService:
     def delete(self, key: str) -> int:
         """Delete a key from cache."""
         deleted_count = 0
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
-                deleted_count = self.client.delete(key)
+                deleted_count = client.delete(key)
                 if deleted_count > 0:
                     log.info("delete_success", f"Key deleted from Redis: {key}")
             except Exception as e:
@@ -190,9 +193,10 @@ class RedisService:
 
     def exists(self, key: str) -> bool:
         """Check if key exists in cache."""
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
-                return self.client.exists(key) > 0
+                return client.exists(key) > 0
             except Exception as e:
                 log.warning("exists", f"Redis error: {e}. Falling back to memory.")
 
@@ -200,9 +204,10 @@ class RedisService:
 
     def expire(self, key: str, time: int) -> bool:
         """Set a timeout on key."""
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
-                success = bool(self.client.expire(key, time))
+                success = bool(client.expire(key, time))
                 if success:
                     log.info("expire_success", f"TTL set for {key}: {time}s")
                 return success
@@ -221,9 +226,10 @@ class RedisService:
 
     def mget(self, *keys: str) -> list:
         """複数キーを1往復で取得する（Redis MGET）。失敗時は個別 get にフォールバック。"""
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
-                raw_values = self.client.mget(*keys)
+                raw_values = client.mget(*keys)
                 results = []
                 for v in raw_values:
                     if v is None:

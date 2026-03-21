@@ -217,5 +217,7 @@ async def stream_job(job_id: str):
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Headers": "*",
         },
     )

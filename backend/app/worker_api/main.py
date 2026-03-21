@@ -68,7 +68,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["https://paperterrace.page", "https://www.paperterrace.page"],
-    allow_origin_regex=r"https://.*\.paperterrace\.page",
+    allow_origin_regex=r"https://(.*\.paperterrace\.page|.*\.pages\.dev)",
     allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
