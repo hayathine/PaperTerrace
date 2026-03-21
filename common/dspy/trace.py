@@ -116,6 +116,11 @@ def _save_trace_sync(
 ):
     """Synchronously write a trace record to BigQuery. Runs in background thread."""
     try:
+        env = settings.get("APP_ENV", "local")
+        if env in ("local", "testing"):
+            logger.debug("Skipping DSPy trace recording in %s environment.", env)
+            return
+
         from app.providers.bigquery_log import BigQueryLogClient
 
         bq = BigQueryLogClient.get_instance()
