@@ -39,6 +39,9 @@ OCR_CHUNK_SIZE = 5
 PDF_DPI = 200
 MAX_CHAT_PDF_SIZE_MB = 50
 
+# ストレージ設定
+GCS_BUCKET_NAME = "paperterrace-papers"
+
 # 推論サービス
 INFERENCE_SERVICE_TIMEOUT = 200
 INFERENCE_SERVICE_RETRIES = 2
@@ -56,7 +59,6 @@ INFERENCE_OCR_DISABLED = false
 RATE_LIMIT_OCR = "120/minute"
 
 # Sentry / GlitchTip
-SENTRY_DSN = ""
 SENTRY_ENABLED = false
 SENTRY_TRACES_SAMPLE_RATE = 0.1
 SENTRY_PROFILES_SAMPLE_RATE = 0.1
@@ -66,6 +68,9 @@ RATE_LIMIT_REGISTERED = 120
 RATE_LIMIT_GUEST = 30
 RATE_LIMIT_LAYOUT = "60/minute"
 RATE_LIMIT_TRANSLATE = "300/minute"
+
+# BigQuery
+BQ_LOCATION_LOGS = "asia-northeast1"
 
 # CORS
 CORS_EXTRA_ORIGINS = ""
@@ -77,6 +82,10 @@ STORAGE_PROVIDER = "sqlite"
 IMAGES_DIR = "src/static/paper_images"
 BQ_LOG_DATASET = "paperterrace_logs_local"
 
+# Local 特定設定
+GCS_BUCKET_NAME_LOCAL = "paperterrace-papers-local"
+INFERENCE_VERIFY_SSL = false
+
 [staging]
 LOG_LEVEL = "DEBUG"
 SENTRY_ENABLED = true
@@ -84,6 +93,9 @@ STORAGE_TYPE = "gcs"
 STORAGE_PROVIDER = "neon"
 IMAGES_DIR = "app/static/paper_images"
 BQ_LOG_DATASET = "paperterrace_logs_staging"
+
+# Staging 特定設定
+GCS_BUCKET_NAME_STAGING = "paperterrace-papers-staging"
 INFERENCE_VERIFY_SSL = false
 
 [prod]
