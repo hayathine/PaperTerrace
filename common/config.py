@@ -41,6 +41,84 @@ settings = Dynaconf(
 )
 
 
+def _log_overrides():
+    """設定のソース（環境変数、TOMLセクション、デフォルト）を判定してログ出力する。"""
+    import os
+    import sys
+    import tomllib
+
+    try:
+        # settings.toml を読み込んで各セクションの定義を把握
+        with open(_SETTINGS_TOML, "rb") as f:
+            toml_data = tomllib.load(f)
+
+        app_env = str(settings.get("APP_ENV", "local")).lower()
+        if app_env in ("production", "prod"):
+            env_section = "prod"
+        elif app_env == "staging":
+            env_section = "staging"
+        else:
+            env_section = "local"
+
+        # セクションごとにキーを抽出
+        default_keys = set(toml_data.get("default", {}).keys())
+        env_keys = set(toml_data.get(env_section, {}).keys())
+        
+        # .env に書かれているキーを抽出
+        env_file_keys = set()
+        if _SECRETS_ENV.exists():
+            with open(_SECRETS_ENV, "r", encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if line and not line.startswith("#") and "=" in line:
+                        env_file_keys.add(line.split("=", 1)[0].strip().upper())
+
+        # 全ての既知のアプリ設定キー
+        all_app_keys = (default_keys | env_keys | env_file_keys)
+        
+        # ソースを判定
+        messages = []
+        for key in sorted(all_app_keys, key=str.upper):
+            key_upper = key.upper()
+            val = settings.get(key_upper)
+            if val is None:
+                continue
+
+            # ソース判定
+            if key_upper in os.environ:
+                source = "ENV"
+            elif key_upper in [k.upper() for k in env_keys]:
+                source = f"TOML:[{env_section}]"
+            elif key_upper in [k.upper() for k in default_keys]:
+                source = "TOML:[default]"
+            else:
+                source = "UNKNOWN"
+
+            # 秘密情報のマスク
+            str_val = str(val)
+            if any(s in key_upper for s in ["KEY", "SECRET", "PASSWORD", "TOKEN", "URL"]):
+                display_val = (
+                    str_val[:4] + "..." + str_val[-4:]
+                    if len(str_val) > 8 else "****"
+                )
+            else:
+                display_val = str_val
+            
+            messages.append(f"{key_upper}={display_val} ({source})")
+
+        if messages:
+            print("--- Effective Configuration ---", file=sys.stdout)
+            for msg in messages:
+                print(f"  {msg}", file=sys.stdout)
+            print("-------------------------------", file=sys.stdout, flush=True)
+
+    except Exception:
+        pass
+
+
+_log_overrides()
+
+
 def _get_app_env() -> str:
     """現在の環境を正規化して返す（prod / staging / local）。"""
     env = str(settings.get("APP_ENV", "local")).lower()
