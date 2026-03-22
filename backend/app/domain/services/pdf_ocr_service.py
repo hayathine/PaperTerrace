@@ -308,7 +308,7 @@ class PDFOCRService:
         """Execute Phase 1 & 2: Native text extraction and image rendering."""
         page_num = page_idx + 1
         is_last = page_idx == total_pages - 1
-        resolution = 200
+        resolution = int(settings.get("PDF_DPI", "200"))
         zoom = resolution / 72.0
 
         log.debug("_prepare_page_phases_1_2", "Phase 1 & 2 start", page_num=page_num)

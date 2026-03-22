@@ -588,9 +588,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 								</div>
 							)}
 							<div className="flex justify-between items-start mb-3">
-								<h2 className="text-lg font-bold text-slate-800">
+								<div className="text-sm font-semibold text-slate-800 leading-relaxed">
 									{entry.word}
-								</h2>
+								</div>
 								<div className="flex items-center gap-2">
 									<CopyButton
 										text={`${entry.word}\n${entry.translation}`}

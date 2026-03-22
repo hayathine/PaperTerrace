@@ -204,10 +204,9 @@ class LayoutAnalysisService:
         # バッチを先に構築し、バッチ単位で署名付きURLを生成して逐次送信
         # ----------------------------------------------------------------
         pages_list = list(pages_to_process)
-        first_n = min(3, len(pages_list))
-        batches_raw: list[list[tuple[int, str]]] = [pages_list[:first_n]]
-        for i in range(first_n, len(pages_list), 10):
-            batches_raw.append(pages_list[i : i + 10])
+        batches_raw: list[list[tuple[int, str]]] = [
+            pages_list[i : i + 10] for i in range(0, len(pages_list), 10)
+        ]
 
         async def _load_page(page_num: int, image_url: str) -> tuple[int, bytes]:
             return page_num, await anyio.to_thread.run_sync(
