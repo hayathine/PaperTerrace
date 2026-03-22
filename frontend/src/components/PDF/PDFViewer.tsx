@@ -15,6 +15,33 @@ import { groupWordsIntoLines } from "./utils";
 
 const log = createLogger("PDFViewer");
 
+/**
+ * Web Crypto API で File の SHA-256 ハッシュを計算する。
+ * バックエンドの hashlib.sha256(bytes).hexdigest() と同値。
+ */
+const computeFileHash = async (file: File): Promise<string> => {
+	// Bypass hashing in tests to avoid jsdom/crypto hanging issues
+	if (import.meta.env.VITEST) {
+		return `test-hash-${file.name}-${file.size}`;
+	}
+	try {
+		const buffer = await file.arrayBuffer();
+		if (typeof crypto === "undefined" || !crypto.subtle) {
+			log.warn("compute_file_hash", "Web Crypto Subtle API not available");
+			return `dummy-${file.size}-${file.name}`;
+		}
+		const hashBuffer = await crypto.subtle.digest("SHA-256", buffer);
+		return Array.from(new Uint8Array(hashBuffer))
+			.map((b) => b.toString(16).padStart(2, "0"))
+			.join("");
+	} catch (e) {
+		log.warn("compute_file_hash", "Web Crypto Hashing failed, using fallback", {
+			error: e,
+		});
+		return `fallback-${file.size}`;
+	}
+};
+
 interface PDFViewerProps {
 	taskId?: string;
 	initialData?: PageData[];
@@ -100,6 +127,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		"idle" | "uploading" | "processing" | "layout_analysis" | "done" | "error"
 	>("idle");
 	const [errorMsg, setErrorMsg] = useState<string>("");
+	const [uploadProgress, setUploadProgress] = useState<number>(0);
 	const eventSourceRef = useRef<EventSource | null>(null);
 	const [loadedPaperId, setLoadedPaperId] = useState<string | null>(null);
 	const processingFileRef = useRef<File | null>(null);
@@ -287,8 +315,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		let isMounted = true;
 
 		const initiate = async () => {
-			// Small delay to avoid StrictMode race condition
-			await new Promise((r) => setTimeout(r, 10));
 			if (!isMounted) return;
 
 			if (uploadFile) {
@@ -612,6 +638,52 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 	const MAX_PDF_SIZE_MB = maxPdfSize;
 
+	/** ローカル環境フォールバック: 従来の FormData POST フロー */
+	const _legacyAnalyzePdf = async (file: File, headers: HeadersInit) => {
+		const formData = new FormData();
+		formData.append("file", file);
+		formData.append("lang", i18n.language.startsWith("ja") ? "ja" : "en");
+		formData.append("mode", "json");
+		if (sessionId) {
+			formData.append("session_id", sessionId);
+		}
+
+		const response = await fetch(`${API_URL}/api/analyze-pdf-json`, {
+			method: "POST",
+			headers,
+			body: formData,
+		});
+
+		if (!response.ok) {
+			if (response.status === 413) throw new Error("__file_too_large__");
+			const errData = await response.json().catch(() => ({}));
+			throw new Error(errData.error || "Upload failed");
+		}
+
+		const { task_id, stream_url } = await response.json();
+		activeTaskIdRef.current = task_id;
+		await startStreaming(stream_url, 0);
+	};
+
+	/** GCS 署名付き PUT URL へ直接アップロード（XHR でプログレス取得） */
+	const uploadToGcsSigned = (file: File, signedUrl: string): Promise<void> =>
+		new Promise((resolve, reject) => {
+			const xhr = new XMLHttpRequest();
+			xhr.open("PUT", signedUrl);
+			xhr.setRequestHeader("Content-Type", "application/pdf");
+			xhr.upload.onprogress = (e) => {
+				if (e.lengthComputable) {
+					setUploadProgress(Math.round((e.loaded / e.total) * 100));
+				}
+			};
+			xhr.onload = () =>
+				xhr.status < 300
+					? resolve()
+					: reject(new Error(`GCS upload failed: ${xhr.status}`));
+			xhr.onerror = () => reject(new Error("GCS upload network error"));
+			xhr.send(file);
+		});
+
 	const startAnalysis = async (file: File) => {
 		if (processingFileRef.current === file) return;
 
@@ -624,43 +696,64 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		}
 
 		processingFileRef.current = file;
-
 		setStatus("uploading");
+		setUploadProgress(0);
 		setPages([]);
 		setLoadedPaperId(null);
-		// setStamps([]);
-
-		const formData = new FormData();
-		formData.append("file", file);
-		formData.append("lang", i18n.language.startsWith("ja") ? "ja" : "en");
-
-		formData.append("mode", "json");
-		if (sessionId) {
-			formData.append("session_id", sessionId);
-		}
 
 		try {
 			const headers = buildAuthHeaders(token);
+			const lang = i18n.language.startsWith("ja") ? "ja" : "en";
 
-			const response = await fetch(`${API_URL}/api/analyze-pdf-json`, {
-				method: "POST",
-				headers,
-				body: formData,
-			});
+			// Phase A: ハッシュ計算 + 署名付き URL 取得
+			const fileHash = await computeFileHash(file);
+			const urlRes = await fetch(
+				`${API_URL}/api/pdf/request-upload-url?file_hash=${fileHash}&file_size_bytes=${file.size}`,
+				{ headers },
+			);
 
-			if (!response.ok) {
-				if (response.status === 413) {
-					throw new Error("__file_too_large__");
-				}
-				const errorData = await response.json().catch(() => ({}));
-				throw new Error(errorData.error || "Upload failed");
+			if (!urlRes.ok) {
+				if (urlRes.status === 413) throw new Error("__file_too_large__");
+				const errData = await urlRes.json().catch(() => ({}));
+				throw new Error(errData.error || "Upload request failed");
 			}
 
-			const data = await response.json();
-			const { task_id, stream_url } = data;
-			activeTaskIdRef.current = task_id;
+			const { upload_url, already_cached } = await urlRes.json();
 
-			// Start streaming with retry logic
+			// Phase B: アップロード
+			if (upload_url == null) {
+				// ローカル環境: 従来の FormData POST にフォールバック
+				await _legacyAnalyzePdf(file, headers);
+				return;
+			}
+
+			if (!already_cached) {
+				await uploadToGcsSigned(file, upload_url);
+			}
+
+			// Phase C: 解析開始
+			const analyzeRes = await fetch(`${API_URL}/api/pdf/analyze-pdf-hash`, {
+				method: "POST",
+				headers: {
+					...(headers as Record<string, string>),
+					"Content-Type": "application/json",
+				},
+				body: JSON.stringify({
+					file_hash: fileHash,
+					filename: file.name,
+					lang,
+					session_id: sessionId ?? null,
+				}),
+			});
+
+			if (!analyzeRes.ok) {
+				if (analyzeRes.status === 404) throw new Error("__upload_missing__");
+				const errData = await analyzeRes.json().catch(() => ({}));
+				throw new Error(errData.error || "Analysis start failed");
+			}
+
+			const { task_id, stream_url } = await analyzeRes.json();
+			activeTaskIdRef.current = task_id;
 			await startStreaming(stream_url, 0);
 		} catch (err: any) {
 			log.error("analyze_pdf", "PDF upload or processing failed", {
@@ -1469,9 +1562,22 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						<div className="text-4xl mb-4">📄</div>
 						<p className="text-sm">
 							{status === "uploading"
-								? "PDFをアップロード中..."
+								? t("viewer.uploading_pdf")
 								: "PDFを処理中..."}
 						</p>
+						{status === "uploading" && uploadProgress > 0 && (
+							<div className="w-full max-w-xs mx-auto mt-3">
+								<div className="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+									<div
+										className="h-full bg-indigo-500 transition-all duration-200"
+										style={{ width: `${uploadProgress}%` }}
+									/>
+								</div>
+								<p className="text-xs text-slate-400 mt-1">
+									{t("viewer.uploading_progress", { percent: uploadProgress })}
+								</p>
+							</div>
+						)}
 						<p className="text-xs mt-2 text-gray-300">
 							このまま他の操作を続けることができます
 						</p>

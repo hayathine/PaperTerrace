@@ -71,6 +71,16 @@ class ImageStorageStrategy(ABC):
     def get_doc_bytes(self, doc_path: str) -> bytes:
         pass
 
+    def generate_upload_signed_url(
+        self, file_hash: str, expiration_seconds: int = 900
+    ) -> str | None:
+        """PDF PUT 用の署名付き URL を生成する。ローカルストレージでは None。"""
+        return None
+
+    def pdf_exists(self, file_hash: str) -> bool:
+        """指定ハッシュの PDF がストレージに存在するか確認する。"""
+        return False
+
 
 class LocalImageStorage(ImageStorageStrategy):
     def __init__(self):
@@ -109,6 +119,10 @@ class LocalImageStorage(ImageStorageStrategy):
         if path.exists():
             return str(path)
         raise FileNotFoundError(f"PDF not found for hash: {file_hash}")
+
+    def pdf_exists(self, file_hash: str) -> bool:
+        doc_dir = self.images_dir.parent / "pdfs"
+        return (doc_dir / f"{file_hash}.pdf").exists()
 
     def get_doc_bytes(self, doc_path: str) -> bytes:
         return Path(doc_path).read_bytes()
@@ -435,6 +449,48 @@ class GCSImageStorage(ImageStorageStrategy):
             )
             return None
 
+    def generate_upload_signed_url(
+        self, file_hash: str, expiration_seconds: int = 900
+    ) -> str | None:
+        """pdfs/{file_hash}.pdf への PUT 用署名付き URL を生成する（v4署名）。"""
+        try:
+            from datetime import timedelta
+
+            blob = self.bucket.blob(f"pdfs/{file_hash}.pdf")
+            url = blob.generate_signed_url(
+                expiration=timedelta(seconds=expiration_seconds),
+                method="PUT",
+                content_type="application/pdf",
+                version="v4",
+            )
+            log.debug(
+                "generate_upload_signed_url",
+                "PUT 用署名付き URL を生成しました",
+                file_hash=file_hash,
+            )
+            return url
+        except Exception as e:
+            log.warning(
+                "generate_upload_signed_url",
+                "PUT 署名付き URL の生成に失敗しました",
+                file_hash=file_hash,
+                error=str(e),
+            )
+            return None
+
+    def pdf_exists(self, file_hash: str) -> bool:
+        """GCS 上に pdfs/{file_hash}.pdf が存在するか確認する。"""
+        try:
+            return self.bucket.blob(f"pdfs/{file_hash}.pdf").exists()
+        except Exception as e:
+            log.warning(
+                "pdf_exists",
+                "GCS 存在確認に失敗しました",
+                file_hash=file_hash,
+                error=str(e),
+            )
+            return False
+
     def save_doc(self, file_hash: str, doc_bytes: bytes) -> str:
         try:
             blob_name = f"pdfs/{file_hash}.pdf"
@@ -534,3 +590,13 @@ def resolve_gcs_uri(image_url: str) -> tuple[str, str] | None:
 
 def get_signed_url(image_url: str, expiration_seconds: int = 900) -> str | None:
     return _get_instance().generate_signed_url(image_url, expiration_seconds)
+
+
+def get_upload_signed_url(file_hash: str, expiration_seconds: int = 900) -> str | None:
+    """PDF PUT 用の署名付き URL を返す。ローカル環境では None。"""
+    return _get_instance().generate_upload_signed_url(file_hash, expiration_seconds)
+
+
+def pdf_blob_exists(file_hash: str) -> bool:
+    """指定ハッシュの PDF がストレージに存在するか確認する。"""
+    return _get_instance().pdf_exists(file_hash)

@@ -4,9 +4,11 @@ Handles PDF upload, OCR processing, and streaming text analysis.
 """
 
 import asyncio
+import re
 import uuid
 
-from fastapi import APIRouter, BackgroundTasks, File, Form, UploadFile
+from fastapi import APIRouter, BackgroundTasks, File, Form, Query, UploadFile
+from pydantic import BaseModel
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
 
 from app.auth import OptionalUser
@@ -23,6 +25,7 @@ from app.providers import (
     get_image_storage,
     get_storage_provider,
 )
+from app.providers.image_storage import get_upload_signed_url, pdf_blob_exists
 from app.utils import _get_file_hash
 from common.logger import ServiceLogger
 from redis_provider.provider import get_is_registered
@@ -356,6 +359,170 @@ async def analyze_pdf_json(
             else "An error occurred while analyzing the document."
         )
         return JSONResponse({"error": error_msg}, status_code=500)
+
+
+class AnalyzePdfHashRequest(BaseModel):
+    """GCS 直接アップロード済み PDF の解析開始リクエスト。"""
+
+    file_hash: str
+    filename: str
+    lang: str = "ja"
+    session_id: str | None = None
+
+
+@router.get("/pdf/request-upload-url")
+async def request_upload_url(
+    file_hash: str = Query(...),
+    file_size_bytes: int = Query(...),
+    _user: OptionalUser = None,
+):
+    """
+    GCS への直接 PUT アップロード用の署名付き URL を返す。
+    STORAGE_TYPE=local の場合は upload_url=None を返し、
+    フロントエンドは従来の /api/analyze-pdf-json にフォールバックする。
+    """
+    # file_hash 形式検証（64文字の16進数）
+    if not re.fullmatch(r"[0-9a-f]{64}", file_hash):
+        return JSONResponse({"error": "Invalid file_hash format"}, status_code=422)
+
+    # ファイルサイズ検証
+    max_pdf_bytes = int(settings.get("MAX_PDF_SIZE_MB", "50")) * 1024 * 1024
+    if file_size_bytes > max_pdf_bytes:
+        return JSONResponse(
+            {
+                "error": f"File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB."
+            },
+            status_code=413,
+        )
+    if file_size_bytes <= 0:
+        return JSONResponse({"error": "file_size_bytes must be positive"}, status_code=422)
+
+    # キャッシュ確認
+    storage = get_storage_provider()
+    cached_paper = storage.get_paper_by_hash(file_hash)
+    already_cached = cached_paper is not None
+
+    # 署名付き URL 生成（LocalImageStorage なら None が返る）
+    upload_url = get_upload_signed_url(file_hash)
+
+    log.info(
+        "request_upload_url",
+        "アップロード URL リクエスト",
+        file_hash=file_hash,
+        already_cached=already_cached,
+        has_upload_url=upload_url is not None,
+    )
+
+    return JSONResponse(
+        {
+            "upload_url": upload_url,
+            "already_cached": already_cached,
+        }
+    )
+
+
+@router.post("/pdf/analyze-pdf-hash")
+async def analyze_pdf_hash(
+    req: AnalyzePdfHashRequest,
+    user: OptionalUser = None,
+):
+    """
+    GCS に直接アップロード済みの PDF の解析を開始する。
+    ファイル受取・ハッシュ計算・GCS 保存をスキップした analyze-pdf-json の変種。
+    """
+    import time
+
+    start_time = time.time()
+
+    # file_hash 形式検証
+    if not re.fullmatch(r"[0-9a-f]{64}", req.file_hash):
+        return JSONResponse({"error": "Invalid file_hash format"}, status_code=422)
+
+    # GCS 上のファイル存在確認
+    if not pdf_blob_exists(req.file_hash):
+        return JSONResponse(
+            {"error": "PDF not found in storage. Please re-upload."},
+            status_code=404,
+        )
+
+    storage = get_storage_provider()
+    user_id = user.uid if user else (f"guest:{req.session_id}" if req.session_id else None)
+    is_registered = get_is_registered(user_id)
+
+    # キャッシュ確認
+    cached_paper = storage.get_paper_by_hash(req.file_hash)
+    raw_text = None
+    paper_id: str
+
+    if cached_paper:
+        paper_id = cached_paper["paper_id"]
+        try:
+            from app.providers.image_storage import get_page_images
+
+            cached_images = get_page_images(req.file_hash)
+        except ImportError:
+            cached_images = []
+
+        if not cached_images:
+            import uuid6
+
+            paper_id = str(uuid6.uuid7())
+            log.info("analyze_hash", "キャッシュはヒットしましたが画像が見つかりません。再生成します。", paper_id=paper_id)
+            raw_text = None
+        else:
+            log.info("analyze_hash", "キャッシュヒット", paper_id=paper_id)
+            if cached_paper.get("html_content"):
+                raw_text = "CACHED_HTML:" + cached_paper["html_content"]
+            else:
+                raw_text = cached_paper.get("ocr_text")
+    else:
+        import uuid6
+
+        paper_id = str(uuid6.uuid7())
+        log.info("analyze_hash", "キャッシュミス", paper_id=paper_id)
+
+    task_id = str(uuid.uuid4())
+
+    # セッションコンテキストの事前保存
+    if is_registered and req.session_id and paper_id and paper_id != "pending":
+        try:
+            storage.save_session_context(req.session_id, paper_id)
+        except Exception as e:
+            log.error("analyze_hash", "Failed to pre-save session context", error=str(e))
+
+    task_data = {
+        "format": "json",
+        "lang": req.lang,
+        "session_id": req.session_id,
+        "filename": req.filename,
+        "file_hash": req.file_hash,
+        "user_id": user_id,
+        "is_registered": is_registered,
+        "paper_id": paper_id,
+    }
+
+    if raw_text is None:
+        # GCS の blob 名を pdf_path として記録（stream ハンドラが get_doc_bytes で読み込む）
+        task_data.update(
+            {
+                "pending_ocr": True,
+                "pdf_path": img_storage.get_doc_path(req.file_hash),
+            }
+        )
+    else:
+        task_data.update({"text": raw_text})
+
+    redis_service.set(f"task:{task_id}", task_data, expire=3600)
+
+    elapsed = time.time() - start_time
+    log.info(
+        "analyze_hash",
+        "タスクを作成しました",
+        task_id=task_id,
+        elapsed=f"{elapsed:.2f}s",
+    )
+
+    return JSONResponse({"task_id": task_id, "stream_url": f"/api/stream/{task_id}"})
 
 
 @router.post("/analyze-paper/{paper_id}")

@@ -83,6 +83,7 @@
 	"viewer": {
 		"waiting_pdf": "PDFを待機中...",
 		"uploading_pdf": "PDFをアップロード中...",
+		"uploading_progress": "アップロード中... {{percent}}%",
 		"processing_pdf": "PDFを解析中...",
 		"analyzing_layout": "図・表を検出中...",
 		"select_pdf": "PDFを選択してください",

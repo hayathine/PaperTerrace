@@ -106,9 +106,17 @@ describe("PDFViewer Component", () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		global.fetch = vi.fn().mockResolvedValue({
-			ok: true,
-			json: async () => ({ task_id: "test-task", stream_url: "/stream" }),
+		global.fetch = vi.fn().mockImplementation(async (url) => {
+			if (url.includes("/request-upload-url")) {
+				return {
+					ok: true,
+					json: async () => ({ upload_url: null, already_cached: false }),
+				};
+			}
+			return {
+				ok: true,
+				json: async () => ({ task_id: "test-task", stream_url: "/stream" }),
+			};
 		});
 
 		mockES = new MockEventSource("/stream");
@@ -168,7 +176,6 @@ describe("PDFViewer Component", () => {
 		);
 
 		await waitFor(() => {
-			// It might transition through uploading to processing very fast
 			const statuses = onStatusChange.mock.calls.map((c) => c[0]);
 			expect(
 				statuses.some((s) => s === "uploading" || s === "processing"),
