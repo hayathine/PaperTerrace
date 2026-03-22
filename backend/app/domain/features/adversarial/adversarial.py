@@ -11,7 +11,7 @@ from common.dspy.config import setup_dspy
 from common.dspy.modules import AdversarialModule
 from common.dspy.trace import trace_dspy_call
 from common.logger import logger
-from common.prompts import ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT
+from common.dspy_seed_prompt import ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT
 
 
 class AdversarialError(Exception):

@@ -22,7 +22,7 @@ from common.dspy.trace import TraceContext, trace_dspy_call
 from common.logger import ServiceLogger
 from app.core.config import is_local
 from common import settings
-from common.prompts import (
+from common.dspy_seed_prompt import (
     CORE_SYSTEM_PROMPT,
 )
 

@@ -11,7 +11,7 @@ from common.dspy.modules import (
 )
 from common.dspy.trace import TraceContext, trace_dspy_call
 from common.logger import ServiceLogger
-from common.prompts import (
+from common.dspy_seed_prompt import (
     PAPER_SUMMARY_FROM_PDF_PROMPT,
 )
 from redis_provider.provider import RedisService

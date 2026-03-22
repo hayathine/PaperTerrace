@@ -50,7 +50,7 @@ class FigureInsightService:
         caption_hint = f"\n[Caption]\n{caption}" if caption else ""
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
-        from common.prompts import VISION_ANALYZE_FIGURE_PROMPT
+        from common.dspy_seed_prompt import VISION_ANALYZE_FIGURE_PROMPT
 
         prompt = VISION_ANALYZE_FIGURE_PROMPT.format(
             lang_name=lang_name, caption_hint=caption_hint

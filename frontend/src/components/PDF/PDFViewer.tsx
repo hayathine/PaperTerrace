@@ -649,6 +649,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			});
 
 			if (!response.ok) {
+				if (response.status === 413) {
+					throw new Error("__file_too_large__");
+				}
 				const errorData = await response.json().catch(() => ({}));
 				throw new Error(errorData.error || "Upload failed");
 			}
@@ -664,7 +667,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				error: err,
 			});
 			setStatus("error");
-			setErrorMsg(t("common.errors.upload_failed"));
+			if (err?.message === "__file_too_large__") {
+				setErrorMsg(
+					t("common.errors.file_too_large", { maxMB: MAX_PDF_SIZE_MB }),
+				);
+			} else {
+				setErrorMsg(t("common.errors.upload_failed"));
+			}
 			processingFileRef.current = null;
 			activeTaskIdRef.current = null;
 		}

@@ -56,16 +56,21 @@ If the term is a proper noun, acronym, or project name that should remain in Eng
 Output ONLY the translated word or a concise translation with a brief context-aware explanation.
 Do NOT include meta-comments like "(そのまま)" or "(As-is)" in your output.
 
-Examples:
-- Context: correlation between variables. Target: significant → 有意な (Japanese)
-- Context: outperforms SOTA models. Target: SOTA → 最先端の (Japanese)
-- Context: project name NAP4 is described. Target: NAP4 → NAP4 (Japanese)"""
+Examples(Japanese):
+- Context: correlation between variables. Target: significant → 有意な 
+- Context: outperforms SOTA models. Target: SOTA → 最先端の 
+- Context: Large Language Models (LLMs). Target: LLMs → 大規模言語モデル """
 
 SIMPLE_TRANSLATION_SEED = """Translate the target word or phrase concisely based on the academic context.
 Respond entirely in the language specified by `lang_name`.
 If the term is a proper noun or acronym, output the original term.
 Output ONLY the translation (1-3 words).
-Do NOT include meta-comments like "(そのまま)" or "(As-is)" in your output."""
+Do NOT include meta-comments like "(そのまま)" or "(As-is)" in your output.
+
+Examples(Japanese):
+- Context: correlation between variables. Target: significant → 有意な 
+- Context: outperforms SOTA models. Target: SOTA → 最先端の 
+- Context: Large Language Models (LLMs). Target: LLMs → 大規模言語モデル """
 
 DEEP_EXPLANATION_SEED = """Explain the target word or phrase in the context of the academic paper.
 Respond entirely in the language specified by `lang_name`.
@@ -115,3 +120,133 @@ USER_PROFILE_ESTIMATION_SEED = """Estimate the user's understanding, interests, 
 - Extract interesting topics
 - Identify concepts the user might not understand
 - Recommended direction: Deep dive / Broadening / Application / Fundamentals"""
+
+# ==========================================
+# Direct API Prompts (with template variables)
+# ==========================================
+# Gemini Vision API や Llamacpp など、DSPy を介さず直接 LLM に渡すプロンプト
+
+CORE_SYSTEM_PROMPT = """You are an expert academic research assistant.
+Your goal is to help users understand complex academic papers, translate technical terms accurately within context, and summarize research findings clearly.
+
+# Global Rules
+1. CRITICAL: Always output in the requested language (e.g., if asked for Japanese, answer in Japanese). However, maintain original notation for proper nouns, acronyms, and technical terms that are commonly used as-is in that language's academic community.
+2. When translating, prioritize accuracy and academic context. For specific terms, provide both a translation (or original term if appropriate) and a brief context-aware explanation.
+3. capture the core essence, methods, and contributions in summaries.
+4. If the user asks for JSON, output ONLY valid JSON without Markdown formatting.
+5. Do NOT add meta-comments like "(そのまま)" or "(Translation: ...)" to the output.
+"""
+
+DICT_TRANSLATE_QWEN_PROMPT = """[Academic Context]
+{paper_context}
+
+[Target Text]
+{target_word}
+
+Based on the context above, translate the English text into {lang_name}.
+Output ONLY the translated word.
+
+Examples:
+- Context: We found a significant correlation between the two variables.
+  Target: significant
+  Language: Japanese
+  Output: 有意な
+- Context: Our approach outperforms existing SOTA models.
+  Target: SOTA
+  Language: Japanese
+  Output: 最先端の
+- Context: Large Language Models (LLMs) have revolutionized the field.
+  Target: LLMs
+  Language: Japanese
+  Output: 大規模言語モデル"""
+
+VISION_ANALYZE_FIGURE_PROMPT = """Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.
+{caption_hint}
+
+1. **Type & Overview**: What this figure represents.
+2. **Key Findings**: Main trends or patterns observed.
+3. **Interpretation**: Meaning of the numbers or trends.
+4. **Implications**: How this supports the paper's claims.
+5. **Highlights**: Notable points or anomalies.
+
+Verbalize visual information so it can be understood without seeing the figure.
+Output in {lang_name}.
+"""
+
+ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT = """You are a rigorous reviewer. Analyze the attached PDF paper from a critical perspective and identify potential issues.
+
+Please output in the following JSON format in {lang_name}.
+IMPORTANT: Limit each category (hidden_assumptions, unverified_conditions, etc.) to a maximum of 3 most significant items. Keep descriptions concise to ensure the total response is under 1000 tokens.
+
+{{
+  "hidden_assumptions": [
+    {{"assumption": "Hidden assumption", "risk": "Why it is a problem", "severity": "high/medium/low"}}
+  ],
+  "unverified_conditions": [
+    {{"condition": "Unverified condition", "impact": "Impact if not verified", "severity": "high/medium/low"}}
+  ],
+  "reproducibility_risks": [
+    {{"risk": "Reproducibility risk", "detail": "Detailed explanation", "severity": "high/medium/low"}}
+  ],
+  "methodology_concerns": [
+    {{"concern": "Methodological concern", "suggestion": "Suggestion for improvement", "severity": "high/medium/low"}}
+  ],
+  "overall_assessment": "Short overall assessment (2-3 sentences)"
+}}
+
+Be constructive but critical. Analyze figures and tables as well. Output ONLY valid JSON.
+"""
+
+PAPER_SUMMARY_FROM_PDF_PROMPT = """TASK: Summarize the attached PDF paper in {lang_name}
+OUTPUT_LANGUAGE: {lang_name}
+
+{keyword_focus}
+
+IMPORTANT: You MUST respond ENTIRELY in {lang_name} language only. However, for the Key Words section, output technical keywords in English.
+
+# Instructions
+- Analyze the entire PDF including text, figures, tables, and equations.
+- Pay attention to visual elements and their captions.
+- Extract key information comprehensively but concisely.
+- Write everything in {lang_name} language, including all section headers (except English keywords).
+
+# Output Format
+Provide 5 sections with ## markdown headers, ALL written in {lang_name}:
+1. Overview section: 1-2 sentences summarizing the main theme
+2. Key Contributions section: 2-4 clear bullet points
+3. Methodology section: Concise explanation of methods used
+4. Conclusion section: Key findings and implications
+5. Key Words section: 5-10 technical keywords (MUST be in English)
+
+All section headers and content MUST be written in {lang_name}. Never use English headers like "Overview" or "Key Contributions".
+For example, if {lang_name} is Japanese, use headers like "## 概要", "## 主な貢献", "## 手法", "## 結論", "## キーワード".
+"""
+
+CHAT_GENERAL_FROM_PDF_PROMPT = """You are an AI assistant helping a researcher read the attached academic paper.
+Based on the PDF content and the conversation history, answer the user's question in {lang_name}.
+
+[Chat History]
+{history_text}
+
+[User's Question]
+{user_message}
+
+Please provide a clear and concise answer in {lang_name}, referencing specific parts of the paper when relevant.
+"""
+
+CHAT_WITH_FIGURE_PROMPT = """You are an AI assistant helping a researcher understand a specific figure or table in an academic paper.
+Based on the provided image and paper context, answer the user's question in {lang_name}.
+
+[Paper Context]
+{document_context}
+
+[Chat History]
+{history_text}
+
+[User's Question]
+{user_message}
+
+Please provide a clear and easy-to-understand explanation in {lang_name}.
+"""
+
+PDF_EXTRACT_TEXT_OCR_PROMPT = "Transcribe the text from this PDF page preserving the structure as much as possible."

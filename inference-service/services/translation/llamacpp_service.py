@@ -120,7 +120,7 @@ class LlamaCppTranslationService:
             )
         self._is_busy = True
 
-        from common.prompts import DICT_TRANSLATE_QWEN_PROMPT
+        from common.dspy_seed_prompt import DICT_TRANSLATE_QWEN_PROMPT
 
         user_content = DICT_TRANSLATE_QWEN_PROMPT.format(
             paper_context=paper_context,

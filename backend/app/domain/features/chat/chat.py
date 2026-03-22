@@ -11,7 +11,7 @@ from common.dspy.config import setup_dspy
 from common.dspy.modules import ChatModule
 from common.dspy.trace import TraceContext, trace_dspy_call
 from common.logger import logger
-from common.prompts import (
+from common.dspy_seed_prompt import (
     CHAT_GENERAL_FROM_PDF_PROMPT,
     CHAT_WITH_FIGURE_PROMPT,
     CORE_SYSTEM_PROMPT,
