@@ -101,6 +101,12 @@ async def analyze_pdf(
     user_id = user.uid if user else (f"guest:{session_id}" if session_id else None)
 
     content = await file.read()
+    # file.size が None（Content-Length 未送信）の場合に備え、読み込み後にもサイズを検証する
+    if len(content) > max_pdf_bytes:
+        return Response(
+            f"Error: File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB.",
+            status_code=413,
+        )
     file_hash = _get_file_hash(content)
 
     # Language detection
@@ -197,6 +203,12 @@ async def analyze_pdf_json(
         log.info("analyze_json", "認証済みユーザー", user_id=user_id)
 
     content = await file.read()
+    # file.size が None（Content-Length 未送信）の場合に備え、読み込み後にもサイズを検証する
+    if len(content) > max_pdf_bytes:
+        return JSONResponse(
+            {"error": f"File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB."},
+            status_code=413,
+        )
     file_hash = _get_file_hash(content)
     log.info(
         "analyze_json", "入力を受け取リました", session_id=session_id, file_hash=file_hash

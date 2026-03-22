@@ -25,6 +25,9 @@ from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Callable
 
 import dspy
+from common.logger import get_logger
+
+log = get_logger(__name__)
 
 if TYPE_CHECKING:
     pass
@@ -153,9 +156,12 @@ def save_candidates_to_bigquery(
         )
 
     bq.streaming_insert(_BQ_TABLE, rows)
-    print(
-        f"✅ Saved {len(rows)} candidates for '{program_name}' "
-        f"to BigQuery (optimization_id={optimization_id})"
+    log.info(
+        "save_candidates_to_bigquery",
+        "Saved candidates to BigQuery",
+        program_name=program_name,
+        count=len(rows),
+        optimization_id=optimization_id,
     )
     return optimization_id
 
@@ -197,7 +203,7 @@ def load_candidates_from_bigquery(
     )
 
     if not row:
-        print(f"⚠️ No candidates found in BigQuery for '{program_name}'. Using default module.")
+        log.warning("load_candidates_from_bigquery", "No candidates found, using default module", program_name=program_name)
         return [module_factory()]
 
     optimization_id: str = row["optimization_id"]
@@ -224,14 +230,23 @@ def load_candidates_from_bigquery(
             mod = _deserialize_module(module_factory(), r["module_state"])
             modules.append(mod)
         except Exception as e:
-            print(f"⚠️ Failed to deserialize candidate {r['candidate_index']} for '{program_name}': {e}")
+            log.warning(
+                "load_candidates_from_bigquery",
+                "Failed to deserialize candidate",
+                program_name=program_name,
+                candidate_index=r["candidate_index"],
+                error=str(e),
+            )
 
     if not modules:
-        print(f"⚠️ All candidates failed to deserialize for '{program_name}'. Using default module.")
+        log.warning("load_candidates_from_bigquery", "All candidates failed to deserialize, using default module", program_name=program_name)
         return [module_factory()]
 
-    print(
-        f"✅ Loaded {len(modules)} candidates for '{program_name}' "
-        f"(optimization_id={optimization_id})"
+    log.info(
+        "load_candidates_from_bigquery",
+        "Loaded candidates",
+        program_name=program_name,
+        count=len(modules),
+        optimization_id=optimization_id,
     )
     return modules

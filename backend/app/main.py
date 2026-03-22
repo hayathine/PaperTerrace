@@ -163,10 +163,11 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         try:
             from redis import Redis
 
-            self._redis = Redis.from_url(
+            client = Redis.from_url(
                 get_redis_url(), socket_connect_timeout=1, decode_responses=True
             )
-            # ping() は行わない — 接続確立はリクエスト時に遅延させてコールドスタートを高速化
+            client.ping()
+            self._redis = client
         except Exception:
             self._redis = None
 

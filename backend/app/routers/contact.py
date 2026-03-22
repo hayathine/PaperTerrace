@@ -26,7 +26,7 @@ log = ServiceLogger("Contact")
 
 router = APIRouter(prefix="/contact", tags=["Contact"])
 
-DESTINATION_EMAIL = "gwsgsgdas@gmail.com"
+DESTINATION_EMAIL = settings.get("CONTACT_DESTINATION_EMAIL", "gwsgsgdas@gmail.com")
 
 
 def _send_email(record_id: str, req: ContactRequest) -> None:

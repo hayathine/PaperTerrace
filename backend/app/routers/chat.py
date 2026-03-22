@@ -4,6 +4,7 @@ Handles chat interactions with the AI assistant.
 """
 
 import json
+import re
 from typing import Literal
 
 from fastapi import APIRouter, Form
@@ -31,12 +32,23 @@ chat_service = ChatService()
 redis_service = RedisService()
 
 
+_SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]{1,128}$")
+
+
 class ChatRequest(BaseModel):
     message: str
     session_id: str
     lang: str = "ja"
     paper_id: str | None = None
     figure_id: str | None = None
+
+    @field_validator("session_id")
+    @classmethod
+    def validate_session_id(cls, v: str) -> str:
+        """セッションIDが英数字・ハイフン・アンダースコアのみで構成されているか検証する。"""
+        if not _SESSION_ID_RE.match(v):
+            raise ValueError("session_id contains invalid characters")
+        return v
 
     @field_validator("lang")
     @classmethod
