@@ -489,17 +489,16 @@ const PDFPage: React.FC<PDFPageProps> = ({
 									/^[.,;!?(){}[\]"']+|[.,;!?(){}[\]"']+$/g,
 									"",
 								);
+								const isPhraseTerm = !!jumpTarget?.term?.includes(" ");
 								const isJumpHighlight =
 									jumpTarget &&
 									jumpTarget.page === page_num &&
-									((jumpTarget.term &&
-										(cleanWord
-											.toLowerCase()
-											.includes(jumpTarget.term.toLowerCase()) ||
-											jumpTarget.term
-												.toLowerCase()
-												.includes(cleanWord.toLowerCase())) &&
-										Math.abs(centerX - jumpTarget.x) < 0.1 &&
+									((jumpTarget.term
+										?.toLowerCase()
+										.includes(cleanWord.toLowerCase()) &&
+										// フレーズ翻訳の場合: X許容範囲を広く取る（句全体をカバー）
+										Math.abs(centerX - jumpTarget.x) <
+											(isPhraseTerm ? 0.5 : 0.1) &&
 										Math.abs(centerY - jumpTarget.y) < 0.05) ||
 										(Math.abs(centerX - jumpTarget.x) < 0.005 &&
 											Math.abs(centerY - jumpTarget.y) < 0.005));

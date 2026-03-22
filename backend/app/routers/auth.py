@@ -33,6 +33,28 @@ async def register_user(
     existing_user = storage.get_user(user.uid)
     if not existing_user and user.email:
         existing_user = storage.get_user_by_email(user.email)
+        if existing_user and existing_user.get("id") != user.uid:
+            # 認証プロバイダー移行 (Firebase → Neon Auth) による UID 変更を検出。
+            # DB の id を新しい UID に更新することで以降の処理を正常化する。
+            old_uid = existing_user["id"]
+            try:
+                storage.migrate_user_uid(old_uid, user.uid)
+                existing_user["id"] = user.uid
+                log.warning(
+                    "register",
+                    "UID移行: 旧UIDを新UIDで上書きしました",
+                    old_uid=old_uid,
+                    new_uid=user.uid,
+                    email=user.email,
+                )
+            except Exception as migrate_err:
+                log.error(
+                    "register",
+                    "UID移行に失敗しました",
+                    old_uid=old_uid,
+                    new_uid=user.uid,
+                    error=str(migrate_err),
+                )
     if existing_user:
         log.info("register", "ユーザーは既に登録されています", uid=user.uid)
         return UserInDB(**existing_user)

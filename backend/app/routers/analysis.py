@@ -12,7 +12,7 @@ import httpx
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.auth import OptionalUser
+from app.auth import OptionalUser, get_user_identifier
 from app.core.config import get_worker_api_url
 from app.domain.features import (
     AdversarialReviewService,
@@ -127,7 +127,7 @@ async def summarize(
         force=force,
     )
 
-    current_user_id = user.uid if user else f"guest:{session_id}"
+    current_user_id = get_user_identifier(user, session_id)
 
     summary, trace_id = await summary_service.summarize_full(
         context,
@@ -185,7 +185,7 @@ async def critique(
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
-    current_user_id = user.uid if user else f"guest:{session_id}"
+    current_user_id = get_user_identifier(user, session_id)
     critique = await adversarial_service.critique(
         context, target_lang=lang, user_id=current_user_id, session_id=session_id
     )

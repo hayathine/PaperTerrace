@@ -3,7 +3,7 @@ Users API router.
 Handles public user profile viewing.
 """
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Query, status
 
 from app.models.paper import PaperListResponse, PaperPublic
 from app.models.user import UserPublic
@@ -56,8 +56,8 @@ async def get_user_profile(user_id: str):
 @router.get("/{user_id}/papers", response_model=PaperListResponse)
 async def get_user_papers(
     user_id: str,
-    page: int = 1,
-    per_page: int = 20,
+    page: int = Query(default=1, ge=1),
+    per_page: int = Query(default=20, ge=1, le=100),
 ):
     """
     Get a user's public papers.

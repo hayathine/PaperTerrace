@@ -20,6 +20,7 @@ from common.dspy.modules import (
 )
 from common.dspy.trace import TraceContext, trace_dspy_call
 from common.logger import ServiceLogger
+from app.core.config import is_local
 from common import settings
 from common.prompts import (
     CORE_SYSTEM_PROMPT,
@@ -365,11 +366,10 @@ async def explain(
             "explain", "Gemini fallback translation failed", error=str(e), lemma=lemma
         )
 
-        app_env = settings.get("APP_ENV", "production")
         # 最終的にエラーの場合
         error_msg = (
             f"Translation failed: {str(e)}"
-            if app_env == "development"
+            if is_local()
             else "Translation failed"
         )
         if not is_htmx:
@@ -505,10 +505,8 @@ async def explain_deep(
         log.error(
             "explain_deep", "Gemini translation failed", error=str(e), lemma=lemma
         )
-        from app.core.config import is_production
-
         error_msg = (
-            str(e) if not is_production() else "An error occurred during translation."
+            str(e) if is_local() else "An error occurred during translation."
         )
         if not is_htmx:
             return JSONResponse(

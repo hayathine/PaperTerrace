@@ -400,6 +400,9 @@ class ORMStorageAdapter(StorageInterface):
     def update_user(self, user_id: str, data: dict) -> bool:
         return self._with_recovery(lambda: self.users.update(user_id, data))
 
+    def migrate_user_uid(self, old_uid: str, new_uid: str) -> bool:
+        return self._with_recovery(lambda: self.users.migrate_uid(old_uid, new_uid))
+
     def delete_user(self, user_id: str) -> bool:
         return self._with_recovery(lambda: self.users.delete(user_id))
 

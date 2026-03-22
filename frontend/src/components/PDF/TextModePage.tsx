@@ -54,6 +54,7 @@ interface TextModePageProps {
 		contextText?: string,
 	) => void;
 	searchTerm?: string;
+	jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
 }
 
 /**
@@ -185,6 +186,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	onTextSelect,
 	onAskAI,
 	searchTerm,
+	jumpTarget,
 }) => {
 	const { t } = useTranslation();
 
@@ -584,6 +586,19 @@ const TextModePage: React.FC<TextModePageProps> = ({
 					Page {page.page_num}
 				</span>
 			</div>
+
+			{/* Jump target indicator: Y座標にパルスアニメーションで場所を示す */}
+			{jumpTarget && (
+				<div
+					className="pointer-events-none absolute left-0 right-0 z-20"
+					style={{ top: `${jumpTarget.y * 100}%` }}
+				>
+					<div className="h-0.5 bg-orange-400 animate-pulse opacity-80" />
+					<div className="absolute left-2 -top-3 bg-orange-400 text-white text-[9px] px-1.5 py-0.5 rounded font-bold animate-pulse">
+						↓
+					</div>
+				</div>
+			)}
 
 			{/* Markdown Content - lazy render when off-screen to save React/browser work */}
 			{isVisible ? (

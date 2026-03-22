@@ -8,6 +8,7 @@ import { usePaperCache } from "../../db/hooks";
 // TODO (suspended): db import used by handleAreaSelect - restore when area mode re-enabled.
 // import { db } from "../../db";
 import { isDbAvailable } from "../../db/index";
+import type { Grounding } from "../Chat/types";
 import PDFPage from "./PDFPage";
 import TextModeViewer from "./TextModeViewer";
 import type { PageData, PageWithLines, SelectedFigure } from "./types";
@@ -48,7 +49,7 @@ interface PDFViewerProps {
 	onAskAI?: (
 		prompt: string,
 		imageUrl?: string,
-		coords?: any,
+		coords?: { page: number; x: number; y: number },
 		originalText?: string,
 		contextText?: string,
 	) => void;
@@ -60,7 +61,7 @@ interface PDFViewerProps {
 		matches: Array<{ page: number; wordIndex: number }>,
 	) => void;
 	currentSearchMatch?: { page: number; wordIndex: number } | null;
-	evidence?: any;
+	evidence?: Grounding;
 	appEnv?: string;
 	mode?: "text" | "stamp" | "area" | "plaintext";
 }
@@ -118,7 +119,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 	const pagesRef = useRef<PageData[]>([]);
 	const [evidenceHighlights, setEvidenceHighlights] = useState<
-		Record<number, any[]>
+		Record<
+			number,
+			Array<{ x: number; y: number; width: number; height: number }>
+		>
 	>({});
 
 	useEffect(() => {
@@ -133,10 +137,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			return;
 		}
 
-		const highlights: Record<number, any[]> = {};
+		const highlights: Record<
+			number,
+			Array<{ x: number; y: number; width: number; height: number }>
+		> = {};
 
 		if (evidence.supports) {
-			evidence.supports.forEach((support: any) => {
+			evidence.supports.forEach((support) => {
 				const text = support.segment_text;
 				if (!text || text.length < 5) return;
 
@@ -1492,6 +1499,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							onTextSelect={handleTextSelect}
 							onAskAI={onAskAI}
 							searchTerm={searchTerm}
+							jumpTarget={mode === "plaintext" ? jumpTarget : null}
 						/>
 					</div>
 

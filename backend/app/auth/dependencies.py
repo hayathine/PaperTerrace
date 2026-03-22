@@ -142,3 +142,20 @@ async def get_optional_user(
 # Type aliases for cleaner dependency injection
 CurrentUser = Annotated[AuthenticatedUser, Depends(get_current_user)]
 OptionalUser = Annotated[AuthenticatedUser | None, Depends(get_optional_user)]
+
+
+def get_user_identifier(
+    user: AuthenticatedUser | None,
+    session_id: str | None,
+) -> str | None:
+    """
+    ユーザーまたはゲストの識別子を返す共通ヘルパー。
+
+    認証済みユーザーの場合は uid を、ゲストの場合は "guest:{session_id}" を返す。
+    session_id も存在しない場合は None を返す。
+    """
+    if user:
+        return user.uid
+    if session_id:
+        return f"guest:{session_id}"
+    return None

@@ -3,7 +3,7 @@ Papers Router
 Handles paper management (list, get, delete, claim).
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
@@ -56,7 +56,7 @@ async def claim_paper(body: ClaimPaperRequest, user: CurrentUser):
 
 
 @router.get("/papers")
-async def list_papers(user: OptionalUser = None, limit: int = 50):
+async def list_papers(user: OptionalUser = None, limit: int = Query(default=50, ge=1, le=100)):
     """
     List papers for the current user.
 

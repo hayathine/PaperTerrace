@@ -52,16 +52,20 @@ For each section, produce a concise summary of 2-3 sentences."""
 CONTEXT_AWARE_TRANSLATION_SEED = """Translate the target word or phrase using the surrounding academic paper context.
 Respond entirely in the language specified by `lang_name`.
 Prioritize domain-specific accuracy over literal translation.
+If the term is a proper noun, acronym, or project name that should remain in English, use the original term as the translation.
 Output ONLY the translated word or a concise translation with a brief context-aware explanation.
+Do NOT include meta-comments like "(そのまま)" or "(As-is)" in your output.
 
 Examples:
 - Context: correlation between variables. Target: significant → 有意な (Japanese)
 - Context: outperforms SOTA models. Target: SOTA → 最先端の (Japanese)
-- Context: Large Language Models. Target: LLMs → 大規模言語モデル (Japanese)"""
+- Context: project name NAP4 is described. Target: NAP4 → NAP4 (Japanese)"""
 
 SIMPLE_TRANSLATION_SEED = """Translate the target word or phrase concisely based on the academic context.
 Respond entirely in the language specified by `lang_name`.
-Output ONLY the translation (1-3 words)."""
+If the term is a proper noun or acronym, output the original term.
+Output ONLY the translation (1-3 words).
+Do NOT include meta-comments like "(そのまま)" or "(As-is)" in your output."""
 
 DEEP_EXPLANATION_SEED = """Explain the target word or phrase in the context of the academic paper.
 Respond entirely in the language specified by `lang_name`.

@@ -7,7 +7,7 @@ import { useAuth } from "../../contexts/AuthContext";
 import { useLoading } from "../../contexts/LoadingContext";
 import InputArea from "./InputArea";
 import MessageList from "./MessageList";
-import type { Message } from "./types";
+import type { Grounding, Message } from "./types";
 
 const log = createLogger("Chat");
 
@@ -19,7 +19,7 @@ interface ChatWindowProps {
 	onInitialChatSent?: () => void;
 	initialPrompt?: string | null;
 	onInitialPromptSent?: () => void;
-	onEvidenceClick?: (grounding: any) => void;
+	onEvidenceClick?: (grounding: Grounding) => void;
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({

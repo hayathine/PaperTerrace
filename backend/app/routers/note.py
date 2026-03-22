@@ -8,7 +8,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
-from app.auth import OptionalUser
+from app.auth import OptionalUser, get_user_identifier
 from app.core.config import is_production
 from app.domain.features import SidebarNoteService
 from app.providers import get_storage_provider
@@ -31,7 +31,7 @@ class NoteRequest(BaseModel):
 
 @router.get("/note/{session_id}")
 async def get_notes(session_id: str, user: OptionalUser, paper_id: str | None = None):
-    user_id = user.uid if user else f"guest:{session_id}"
+    user_id = get_user_identifier(user, session_id)
 
     # Resolve paper_id if not provided
     if not paper_id:
@@ -45,7 +45,7 @@ async def get_notes(session_id: str, user: OptionalUser, paper_id: str | None = 
 
 @router.post("/note")
 async def add_note(request: NoteRequest, user: OptionalUser):
-    user_id = user.uid if user else f"guest:{request.session_id}"
+    user_id = get_user_identifier(user, request.session_id)
 
     # Resolve paper_id if not provided
     paper_id = request.paper_id
@@ -68,7 +68,7 @@ async def add_note(request: NoteRequest, user: OptionalUser):
 
 @router.put("/note/{note_id}")
 async def update_note(note_id: str, request: NoteRequest, user: OptionalUser = None):
-    user_id = user.uid if user else f"guest:{request.session_id}"
+    user_id = get_user_identifier(user, request.session_id)
     # We reuse the add_note logic or storage save logic which handles upsert
     # But usually we want a specific update method in service.
     # For now, let's assume upsert or create a new service method.
@@ -103,7 +103,7 @@ async def delete_note(
     session_id: str | None = None,
     paper_id: str | None = None,
 ):
-    user_id = user.uid if user else (f"guest:{session_id}" if session_id else None)
+    user_id = get_user_identifier(user, session_id)
     deleted = sidebar_note_service.delete_note(
         note_id, user_id=user_id, paper_id=paper_id
     )

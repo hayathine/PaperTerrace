@@ -246,6 +246,10 @@ class StorageInterface(ABC):
         """Update user data."""
         ...
 
+    def migrate_user_uid(self, old_uid: str, new_uid: str) -> bool:
+        """Migrate user primary key from old UID to new UID (auth provider migration)."""
+        return False
+
     @abstractmethod
     def delete_user(self, user_id: str) -> bool:
         """Delete a user."""
