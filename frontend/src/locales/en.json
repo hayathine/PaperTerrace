@@ -82,6 +82,7 @@
 		"waiting_pdf": "Waiting for PDF...",
 		"uploading_pdf": "Uploading PDF...",
 		"processing_pdf": "Analyzing PDF...",
+		"analyzing_layout": "Detecting figures and tables...",
 		"select_pdf": "Select a PDF to view",
 		"page": "Page",
 		"toolbar": {

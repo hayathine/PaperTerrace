@@ -36,7 +36,13 @@ interface PDFViewerProps {
 	) => void;
 	jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
 	onStatusChange?: (
-		status: "idle" | "uploading" | "processing" | "done" | "error",
+		status:
+			| "idle"
+			| "uploading"
+			| "processing"
+			| "layout_analysis"
+			| "done"
+			| "error",
 	) => void;
 	onPaperLoaded?: (paperId: string | null) => void;
 	onAskAI?: (
@@ -91,7 +97,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	// syncStatus lifted to App.tsx
 	const [pages, setPages] = useState<PageData[]>([]);
 	const [status, setStatus] = useState<
-		"idle" | "uploading" | "processing" | "done" | "error"
+		"idle" | "uploading" | "processing" | "layout_analysis" | "done" | "error"
 	>("idle");
 	const [errorMsg, setErrorMsg] = useState<string>("");
 	const eventSourceRef = useRef<EventSource | null>(null);
@@ -732,7 +738,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						return [...prev, newData];
 					});
 				} else if (eventData.type === "done") {
-					setStatus("done");
 					if (eventData.paper_id) {
 						const pId = eventData.paper_id;
 						setLoadedPaperId(pId);
@@ -779,14 +784,29 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							);
 						})();
 
-						// Trigger lazy layout analysis in background (non-blocking)
+						// レイアウト解析中は "layout_analysis" ステータスを維持し、
+						// 完了後に "done" へ遷移することで GlobalLoading を正しいタイミングで消す
 						// finalPages を明示的に渡す: pagesRef は useEffect 経由で同期されるため、
 						// "done" イベント時点では stale な可能性がある
-						triggerLazyLayoutAnalysis(pId, finalPages).catch((err) =>
-							log.warn("trigger_lazy_layout_analysis", "Lazy analysis failed", {
-								error: err,
-							}),
-						);
+						// 30秒のタイムアウト: Worker API が応答しない場合でも UI がブロックされないよう
+						setStatus("layout_analysis");
+						const layoutTimeout = setTimeout(() => setStatus("done"), 30_000);
+						triggerLazyLayoutAnalysis(pId, finalPages)
+							.catch((err) =>
+								log.warn(
+									"trigger_lazy_layout_analysis",
+									"Lazy analysis failed",
+									{
+										error: err,
+									},
+								),
+							)
+							.finally(() => {
+								clearTimeout(layoutTimeout);
+								setStatus("done");
+							});
+					} else {
+						setStatus("done");
 					}
 					es.close();
 					processingFileRef.current = null;
@@ -1112,7 +1132,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 						if (cachedPages.length > 0) {
 							setPages(cachedPages);
-							setStatus("done");
 							// Cached papers: preserved current mode
 
 							// Trigger lazy layout analysis to fetch figures if not already present
@@ -1135,13 +1154,25 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 									);
 									setPages(pagesForAnalysis);
 								}
-								triggerLazyLayoutAnalysis(id, pagesForAnalysis).catch((err) =>
-									log.warn(
-										"trigger_lazy_layout_analysis",
-										"Lazy layout analysis failed",
-										{ error: err },
-									),
+								setStatus("layout_analysis");
+								const layoutTimeoutCached = setTimeout(
+									() => setStatus("done"),
+									30_000,
 								);
+								triggerLazyLayoutAnalysis(id, pagesForAnalysis)
+									.catch((err) =>
+										log.warn(
+											"trigger_lazy_layout_analysis",
+											"Lazy layout analysis failed",
+											{ error: err },
+										),
+									)
+									.finally(() => {
+										clearTimeout(layoutTimeoutCached);
+										setStatus("done");
+									});
+							} else {
+								setStatus("done");
 							}
 
 							// セッション→論文マッピングをバックエンドに通知
@@ -1249,7 +1280,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 						if (fullPages.length > 0) {
 							setPages(fullPages);
-							setStatus("done");
 							// Full paper data has coordinates ready
 
 							// Cache images in background for all users (CORS avoidance, fast reload)
@@ -1279,13 +1309,25 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 									);
 									setPages(pagesForAnalysis);
 								}
-								triggerLazyLayoutAnalysis(id, pagesForAnalysis).catch((err) =>
-									log.warn(
-										"trigger_lazy_layout_analysis",
-										"Lazy analysis failed",
-										{ error: err },
-									),
+								setStatus("layout_analysis");
+								const layoutTimeoutFull = setTimeout(
+									() => setStatus("done"),
+									30_000,
 								);
+								triggerLazyLayoutAnalysis(id, pagesForAnalysis)
+									.catch((err) =>
+										log.warn(
+											"trigger_lazy_layout_analysis",
+											"Lazy analysis failed",
+											{ error: err },
+										),
+									)
+									.finally(() => {
+										clearTimeout(layoutTimeoutFull);
+										setStatus("done");
+									});
+							} else {
+								setStatus("done");
 							}
 
 							// セッション→論文マッピングをバックエンドに通知

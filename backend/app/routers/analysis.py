@@ -6,6 +6,7 @@ figure/table analysis, layout detection, and adversarial review.
 
 import asyncio
 import json
+from typing import Literal
 
 import httpx
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
@@ -76,7 +77,7 @@ def _get_context(session_id: str) -> tuple[str | None, str | None]:
 async def summarize(
     session_id: str = Form(...),
     mode: str = Form("full"),
-    lang: str = Form("ja"),
+    lang: Literal["ja", "en"] = Form("ja"),
     paper_id: str | None = Form(None),
     key_word: str | None = Form(None),
     force: bool = Form(False),
@@ -168,7 +169,7 @@ async def analyze_figure(
 
 @router.post("/critique")
 async def critique(
-    session_id: str = Form(...), lang: str = Form("ja"), user: OptionalUser = None
+    session_id: str = Form(...), lang: Literal["ja", "en"] = Form("ja"), user: OptionalUser = None
 ):
     context, _ = _get_context(session_id)
     if not context:

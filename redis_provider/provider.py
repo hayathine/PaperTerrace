@@ -262,7 +262,8 @@ def get_is_registered(user_id: str | None) -> bool:
         from app.providers import get_storage_provider
         storage = get_storage_provider()
         is_reg = bool(storage.get_user(user_id))
-        redis.set(cache_key, is_reg, expire=300)  # 5分キャッシュ
+        if is_reg:
+            redis.set(cache_key, is_reg, expire=300)  # 5分キャッシュ（登録済みのみ）
         return is_reg
     except Exception as e:
         log.warning("get_is_registered", f"Failed to check registration for {user_id}: {e}")

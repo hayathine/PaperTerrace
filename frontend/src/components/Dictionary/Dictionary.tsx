@@ -353,12 +353,24 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	const handleDeepTranslate = useCallback(
 		async (entry: DictionaryEntryWithCoords) => {
 			if (!entry) return;
-			const setter =
-				currentSubTab === "explanation" ? setExplanationEntries : setEntries;
+
+			// Switch to explanation tab
+			onSubTabChange?.("explanation");
+
+			// Always use explanationEntries setter for "AI解説" results
+			const setter = setExplanationEntries;
+
 			const updateEntry = (updates: Partial<DictionaryEntryWithCoords>) =>
-				setter((prev) =>
-					prev.map((e) => (e.word === entry.word ? { ...e, ...updates } : e)),
-				);
+				setter((prev) => {
+					const exists = prev.some((e) => e.word === entry.word);
+					if (exists) {
+						return prev.map((e) =>
+							e.word === entry.word ? { ...e, ...updates } : e,
+						);
+					}
+					// If it doesn't exist in explanation tab yet, add it
+					return [{ ...entry, ...updates }, ...prev];
+				});
 
 			updateEntry({ is_analyzing: true });
 			setLoading(true);

@@ -29,8 +29,10 @@ async def register_user(
     """
     storage = get_storage_provider()
 
-    # Check if user already exists
+    # Check if user already exists (by UID or email)
     existing_user = storage.get_user(user.uid)
+    if not existing_user and user.email:
+        existing_user = storage.get_user_by_email(user.email)
     if existing_user:
         log.info("register", "ユーザーは既に登録されています", uid=user.uid)
         return UserInDB(**existing_user)
@@ -62,8 +64,23 @@ async def register_user(
         return UserInDB(**user_data)
 
     except Exception as e:
-        log.exception("register", "ユーザー登録に失敗しました", uid=user.uid, error=str(e))
+        # レースコンディション（複数インスタンスの同時リクエスト等）による
+        # UniqueViolation の場合は、既存ユーザーを返す
+        error_str = str(e).lower()
+        if "unique" in error_str or "duplicate" in error_str:
+            log.warning(
+                "register",
+                "UniqueViolation: 既存ユーザーとして処理",
+                uid=user.uid,
+                email=user.email,
+            )
+            recovered = storage.get_user(user.uid) or (
+                user.email and storage.get_user_by_email(user.email)
+            )
+            if recovered:
+                return UserInDB(**recovered)
 
+        log.exception("register", "ユーザー登録に失敗しました", uid=user.uid, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="ユーザー登録に失敗しました",

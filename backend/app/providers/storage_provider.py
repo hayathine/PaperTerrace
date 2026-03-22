@@ -237,6 +237,11 @@ class StorageInterface(ABC):
         ...
 
     @abstractmethod
+    def get_user_by_email(self, email: str) -> dict | None:
+        """Get a user by email address."""
+        ...
+
+    @abstractmethod
     def update_user(self, user_id: str, data: dict) -> bool:
         """Update user data."""
         ...
@@ -897,6 +902,27 @@ class SQLiteStorage(StorageInterface):
         with self._get_connection() as conn:
             row = conn.execute(
                 "SELECT * FROM users WHERE id = ?", (user_id,)
+            ).fetchone()
+            if row:
+                data = dict(row)
+                data["is_public"] = bool(data.get("is_public", 1))
+                if data.get("research_fields"):
+                    try:
+                        data["research_fields"] = json.loads(data["research_fields"])
+                    except json.JSONDecodeError:
+                        data["research_fields"] = []
+                else:
+                    data["research_fields"] = []
+                return data
+            return None
+
+    def get_user_by_email(self, email: str) -> dict | None:
+        """Get a user by email address."""
+        import json
+
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM users WHERE email = ?", (email,)
             ).fetchone()
             if row:
                 data = dict(row)

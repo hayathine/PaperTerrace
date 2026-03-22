@@ -393,6 +393,10 @@ class ORMStorageAdapter(StorageInterface):
         user = self._with_recovery(lambda: self.users.get_by_id(user_id))
         return _user_to_dict(user) if user else None
 
+    def get_user_by_email(self, email: str) -> Optional[dict]:
+        user = self._with_recovery(lambda: self.users.get_by_email(email))
+        return _user_to_dict(user) if user else None
+
     def update_user(self, user_id: str, data: dict) -> bool:
         return self._with_recovery(lambda: self.users.update(user_id, data))
 

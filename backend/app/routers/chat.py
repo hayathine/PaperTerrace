@@ -4,10 +4,11 @@ Handles chat interactions with the AI assistant.
 """
 
 import json
+from typing import Literal
 
 from fastapi import APIRouter, Form
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from common import settings
 
 from app.auth import OptionalUser
@@ -30,23 +31,20 @@ chat_service = ChatService()
 redis_service = RedisService()
 
 
-_MAX_MESSAGE_LENGTH = int(settings.get("MAX_CHAT_MESSAGE_LENGTH", "4000"))
-
-
-def _sanitize_message(message: str) -> str:
-    """ユーザーメッセージの基本的なサニタイズを行う。NULバイト除去と長さ制限を適用する。"""
-    message = message.replace("\0", "")
-    if len(message) > _MAX_MESSAGE_LENGTH:
-        message = message[:_MAX_MESSAGE_LENGTH]
-    return message
-
-
 class ChatRequest(BaseModel):
     message: str
     session_id: str
-    lang: str = "ja"
+    lang: Literal["ja", "en"] = "ja"
     paper_id: str | None = None
     figure_id: str | None = None
+
+    @field_validator("message")
+    @classmethod
+    def sanitize_message(cls, v: str) -> str:
+        """NULバイト除去と長さ制限を適用する。"""
+        v = v.replace("\0", "")
+        max_len = int(settings.get("MAX_CHAT_MESSAGE_LENGTH", "4000"))
+        return v[:max_len]
 
 
 @router.post("/chat")
@@ -56,8 +54,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
     user_id = user.uid if user else None
     is_registered = get_is_registered(user_id)
 
-    # ユーザーメッセージをサニタイズ
-    sanitized_message = _sanitize_message(request.message)
+    sanitized_message = request.message  # @field_validator でサニタイズ済み
 
     # Resolve paper_id
     paper_id = request.paper_id

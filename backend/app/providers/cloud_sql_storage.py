@@ -649,6 +649,29 @@ class CloudSQLStorage(StorageInterface):
                     return data
                 return None
 
+    def get_user_by_email(self, email: str) -> dict | None:
+        """メールアドレスでユーザーを取得する。"""
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+                row = cur.fetchone()
+                if row:
+                    data = dict(row)
+                    data["is_public"] = bool(data.get("is_public", 1))
+                    data["plan"] = data.get("plan", "free")
+                    if data.get("research_fields"):
+                        try:
+                            if isinstance(data["research_fields"], str):
+                                data["research_fields"] = json.loads(
+                                    data["research_fields"]
+                                )
+                        except json.JSONDecodeError:
+                            data["research_fields"] = []
+                    else:
+                        data["research_fields"] = []
+                    return data
+                return None
+
     def update_user(self, user_id: str, data: dict) -> bool:
         fields = []
         values = []

@@ -30,7 +30,7 @@ CT2_INTER_THREADS = 1
 CT2_INTRA_THREADS = 1
 
 # レイアウト解析
-LAYOUT_THRESHOLD = 0.7
+LAYOUT_THRESHOLD = 0.5
 
 # アプリケーション設定
 BATCH_WORDS_LIMIT = 100
@@ -73,7 +73,7 @@ BQ_LOG_DATASET = "paperterrace_logs_local"
 
 [staging]
 LOG_LEVEL = "DEBUG"
-SENTRY_ENABLED = false
+SENTRY_ENABLED = true
 STORAGE_TYPE = "gcs"
 STORAGE_PROVIDER = "neon"
 IMAGES_DIR = "app/static/paper_images"
