@@ -9,6 +9,8 @@ export type DictionaryEntryWithCoords = DictionaryEntry & {
 
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { buildAuthHeaders } from "@/lib/auth";
+import { APP_EVENTS } from "@/lib/events";
 import { createLogger } from "@/lib/logger";
 import { useAuth } from "../../contexts/AuthContext";
 import CopyButton from "../Common/CopyButton";
@@ -130,6 +132,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 		const isLink = (s: string) => {
 			const clean = s.trim();
+			if (clean.includes(" ") || clean.includes("\n")) return false;
 			return (
 				/^(https?:\/\/|\/\/|www\.)/i.test(clean) ||
 				clean.includes("doi.org/") ||
@@ -174,8 +177,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			});
 
 			try {
-				const headers: HeadersInit = {};
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token);
 
 				let res: Response;
 				if (imageUrl) {
@@ -338,8 +340,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 	const fetchSavedNotes = useCallback(async () => {
 		try {
-			const headers: HeadersInit = {};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			const headers = buildAuthHeaders(token);
 
 			const baseUrl = API_URL || window.location.origin;
 			const url = new URL(`/api/note/${sessionId}`, baseUrl);
@@ -372,9 +373,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			if (sessionId && paperId) fetchSavedNotes();
 		};
 
-		window.addEventListener("notes-updated", handleNotesUpdated);
+		window.addEventListener(APP_EVENTS.NOTES_UPDATED, handleNotesUpdated);
 		return () => {
-			window.removeEventListener("notes-updated", handleNotesUpdated);
+			window.removeEventListener(APP_EVENTS.NOTES_UPDATED, handleNotesUpdated);
 		};
 	}, [sessionId, paperId, fetchSavedNotes]);
 
@@ -405,8 +406,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			setError(null);
 
 			try {
-				const headers: HeadersInit = { "Content-Type": "application/json" };
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token, {
+					"Content-Type": "application/json",
+				});
 
 				let res: Response;
 				if (context) {
@@ -463,8 +465,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 		if (!entry) return;
 		const targetCoords = entry.coords || coordinates;
 		try {
-			const headers: HeadersInit = { "Content-Type": "application/json" };
-			if (token) headers.Authorization = `Bearer ${token}`;
+			const headers = buildAuthHeaders(token, {
+				"Content-Type": "application/json",
+			});
 
 			const res = await fetch(`${API_URL}/api/note`, {
 				method: "POST",
@@ -483,7 +486,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			if (res.ok) {
 				const key = entry.word;
 				setSavedItems((prev) => new Set(prev).add(key));
-				window.dispatchEvent(new Event("notes-updated"));
+				window.dispatchEvent(new Event(APP_EVENTS.NOTES_UPDATED));
 			}
 		} catch (e) {
 			log.error("save_to_note", "Failed to save note", {
@@ -495,6 +498,8 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 	const isUrl =
 		term &&
+		!term.trim().includes(" ") &&
+		!term.trim().includes("\n") &&
 		(/^(https?:\/\/|\/\/|www\.)/i.test(term) || term.includes("doi.org/"));
 
 	const activeEntries =

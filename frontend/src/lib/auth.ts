@@ -15,3 +15,20 @@ const _neonAuthInternal = createInternalNeonAuth(
 // Neon Auth JWT を返す（CF Workers / バックエンドの Bearer 認証に使用）
 export const getNeonJWT = (): Promise<string | null> =>
 	_neonAuthInternal.getJWTToken();
+
+/**
+ * Bearer トークンから Authorization ヘッダーを構築する。
+ * token が null/undefined の場合は空オブジェクトを返す。
+ */
+export const buildAuthHeaders = (
+	token: string | null | undefined,
+	extra?: HeadersInit,
+): HeadersInit => {
+	const headers: Record<string, string> = {
+		...(extra as Record<string, string>),
+	};
+	if (token) {
+		headers.Authorization = `Bearer ${token}`;
+	}
+	return headers;
+};

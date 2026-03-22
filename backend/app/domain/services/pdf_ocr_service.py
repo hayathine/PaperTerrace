@@ -26,6 +26,24 @@ from .language_service import LanguageService
 log = ServiceLogger("OCR")
 
 
+def _is_garbled_text(text: str) -> bool:
+    """
+    (cid:N) やフォントエンコーディング由来の文字化けが含まれるか判定する。
+
+    PDFのToUnicode CMAPが欠損・破損している場合、pdfplumberやPyMuPDFは
+    グリフをUnicodeにマッピングできず (cid:N) をそのまま出力する。
+    5個以上、またはテキスト全体の0.5%以上を占める場合に化けと判定する。
+    """
+    if not text:
+        return False
+    cid_count = text.count("(cid:")
+    if cid_count >= 5:
+        return True
+    if cid_count > 0 and cid_count / max(len(text), 1) > 0.005:
+        return True
+    return False
+
+
 def _fix_indentation_artifacts(text: str) -> str:
     """
     2段組みPDFから生じるインデントアーティファクトを修正する。
@@ -472,6 +490,20 @@ class PDFOCRService:
                 # 2段組みレイアウトによるインデントアーティファクトを修正
                 page_text = _fix_indentation_artifacts(page_text)
 
+                # (cid:N) 等の文字化けを検出したら OCR フォールバックへ
+                if _is_garbled_text(page_text):
+                    log.warning(
+                        "_finalize_page_phase_3",
+                        "Garbled text detected (cid: pattern), attempting OCR fallback",
+                        page_num=page_num,
+                        cid_count=page_text.count("(cid:"),
+                    )
+                    fallback = await self._ocr_fallback(
+                        page_data["img_bytes"], page_num
+                    )
+                    if fallback:
+                        page_text = fallback
+
                 # 3. Post-process layout blocks (equations, figures)
                 # y座標を保持して後で本文中の適切な位置に挿入するため、リストで管理する
                 figures_with_y: list[tuple[float, str]] = []
@@ -622,6 +654,60 @@ class PDFOCRService:
             image_url,
             layout_data,
         )
+
+    async def _ocr_fallback(self, img_bytes: bytes, page_num: int) -> str:
+        """
+        フォントエンコーディング問題でテキスト抽出が失敗した場合に
+        Vision OCR → Gemini OCR の順でフォールバックしてプレーンテキストを返す。
+        """
+        # 1. Vision OCR
+        try:
+            from app.providers.vision_ocr import VisionOCRService
+
+            vision = VisionOCRService()
+            if vision.is_available():
+                log.info(
+                    "_ocr_fallback",
+                    "Falling back to Vision OCR due to garbled text",
+                    page_num=page_num,
+                )
+                text, _ = await vision.detect_text_with_layout(img_bytes)
+                if text and text.strip():
+                    return text
+        except Exception as e:
+            log.warning(
+                "_ocr_fallback",
+                "Vision OCR fallback failed",
+                page_num=page_num,
+                error=str(e),
+            )
+
+        # 2. Gemini OCR
+        try:
+            from common.prompts import PDF_EXTRACT_TEXT_OCR_PROMPT
+
+            log.info(
+                "_ocr_fallback",
+                "Falling back to Gemini OCR due to garbled text",
+                page_num=page_num,
+            )
+            text = await self.ai_provider.generate_with_image(
+                PDF_EXTRACT_TEXT_OCR_PROMPT,
+                img_bytes,
+                "image/jpeg",
+                model=self.model,
+            )
+            if text and text.strip():
+                return text
+        except Exception as e:
+            log.warning(
+                "_ocr_fallback",
+                "Gemini OCR fallback failed",
+                page_num=page_num,
+                error=str(e),
+            )
+
+        return ""
 
     def _extract_markdown_sequential(
         self, file_bytes: bytes, idx: int, exclude_bboxes_pt: list

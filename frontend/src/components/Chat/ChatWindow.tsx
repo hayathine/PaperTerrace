@@ -2,6 +2,7 @@ import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { v4 as uuidv4 } from "uuid";
 import { API_URL } from "@/config";
+import { buildAuthHeaders } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLoading } from "../../contexts/LoadingContext";
@@ -53,8 +54,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 				url.searchParams.append("session_id", sessionId);
 				url.searchParams.append("paper_id", paperId);
 
-				const headers: HeadersInit = {};
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token);
 
 				const res = await fetch(url.toString(), { headers });
 				if (res.ok) {

@@ -2,11 +2,10 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { buildAuthHeaders } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { useAuth } from "../../contexts/AuthContext";
 import { usePaperCache } from "../../db/hooks";
-// TODO (suspended): db import used by handleAreaSelect - restore when area mode re-enabled.
-// import { db } from "../../db";
 import { isDbAvailable } from "../../db/index";
 import type { Grounding } from "../Chat/types";
 import PDFPage from "./PDFPage";
@@ -71,8 +70,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	paperId: propPaperId,
 	onWordClick,
 	onTextSelect,
-	// TODO (suspended): onAreaSelect prop kept for interface compatibility, not forwarded.
-	// onAreaSelect,
 	sessionId,
 	jumpTarget,
 	onStatusChange,
@@ -511,10 +508,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			const hashMatch = firstImgUrl.match(/\/static\/paper_images\/([^/]+)\//);
 			const fileHash = hashMatch ? hashMatch[1] : null;
 
-			const headers: HeadersInit = {
+			const headers = buildAuthHeaders(token, {
 				"Content-Type": "application/x-www-form-urlencoded",
-			};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			});
 
 			// 1つのジョブで全ページを投げる（バックエンド側の「最初の3枚、その後10枚ずつ」ロジックに任せる）
 			const pageNumbers = finalPages.map((p) => p.page_num);
@@ -549,8 +545,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	/* TODO (suspended): fetchStamps removed - stamp mode suspended.
 	const fetchStamps = async (id: string) => {
 		try {
-			const headers: HeadersInit = {};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			const headers = buildAuthHeaders(token);
 
 			const res = await fetch(`${API_URL}/api/stamps/paper/${id}`, { headers });
 			if (res.ok) {
@@ -643,8 +638,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		}
 
 		try {
-			const headers: HeadersInit = {};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			const headers = buildAuthHeaders(token);
 
 			const response = await fetch(`${API_URL}/api/analyze-pdf-json`, {
 				method: "POST",
@@ -954,8 +948,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					formData.append("file", blob, "crop.jpg");
 
 					// We need token if auth is enabled
-					const headers: HeadersInit = {};
-					if (token) headers.Authorization = `Bearer ${token}`;
+					const headers = buildAuthHeaders(token);
 
 					const res = await fetch(`${API_URL}/api/upload/image`, {
 						method: "POST",
@@ -1005,8 +998,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			setStamps((prev) => [...prev, newStamp]);
 
 			try {
-				const headers: HeadersInit = { "Content-Type": "application/json" };
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token, { "Content-Type": "application/json" });
 
 				const res = await fetch(
 					`${API_URL}/api/stamps/paper/${loadedPaperId}`,
@@ -1053,8 +1045,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			// Optimistic update
 			setStamps((prev) => prev.filter((s) => s.id !== stampId));
 			try {
-				const headers: HeadersInit = {};
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token);
 				await fetch(`${API_URL}/api/stamps/paper/${stampId}`, {
 					method: "DELETE",
 					headers,
@@ -1190,9 +1181,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								fd.append("paper_id", id);
 								fetch(`${API_URL}/api/session-context`, {
 									method: "POST",
-									headers: token
-										? { Authorization: `Bearer ${token}` }
-										: undefined,
+									headers: buildAuthHeaders(token),
 									body: fd,
 								}).catch((err) =>
 									log.warn(
@@ -1217,8 +1206,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				}
 			}
 
-			const headers: HeadersInit = {};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			const headers = buildAuthHeaders(token);
 
 			// 1. Try to fetch full paper data directly first (Fast Load)
 			const paperRes = await fetch(`${API_URL}/api/papers/${id}`, { headers });
@@ -1345,9 +1333,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								fd.append("paper_id", id);
 								fetch(`${API_URL}/api/session-context`, {
 									method: "POST",
-									headers: token
-										? { Authorization: `Bearer ${token}` }
-										: undefined,
+									headers: buildAuthHeaders(token),
 									body: fd,
 								}).catch((err) =>
 									log.warn(

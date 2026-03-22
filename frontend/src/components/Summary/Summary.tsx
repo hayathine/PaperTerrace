@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { buildAuthHeaders } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import {
 	generateRecommendations,
@@ -93,8 +94,7 @@ const Summary: React.FC<SummaryProps> = ({
 				if (paperId) formData.append("paper_id", paperId);
 				if (force) formData.append("force", "true");
 
-				const headers: HeadersInit = {};
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token);
 
 				const res = await fetch(`${API_URL}/api/summarize`, {
 					method: "POST",
@@ -162,8 +162,7 @@ const Summary: React.FC<SummaryProps> = ({
 			const formData = new FormData();
 			formData.append("session_id", sessionId);
 			formData.append("lang", i18n.language.startsWith("ja") ? "ja" : "en");
-			const headers: HeadersInit = {};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			const headers = buildAuthHeaders(token);
 
 			const res = await fetch(`${API_URL}/api/critique`, {
 				method: "POST",
