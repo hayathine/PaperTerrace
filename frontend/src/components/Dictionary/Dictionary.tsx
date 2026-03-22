@@ -60,6 +60,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token } = useAuth();
+	const lang = i18n.language.startsWith("ja") ? "ja" : "en";
 
 	// Sub-tab is controlled from parent (App.tsx -> Sidebar.tsx)
 	// No local state needed for activeSubTab to avoid sync issues/double fetches
@@ -184,7 +185,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 							prompt: term || "この画像を解説してください",
 							session_id: sessionId,
 							paper_id: paperId || "",
-							lang: i18n.language,
+							lang: lang,
 						}),
 					});
 				} else if (currentSubTab === "explanation" && context) {
@@ -196,7 +197,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 							word: term,
 							context: context,
 							session_id: sessionId,
-							lang: i18n.language,
+							lang: lang,
 						}),
 					});
 				} else if (term.length > 50) {
@@ -210,7 +211,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 								word: term,
 								context: context || term,
 								session_id: sessionId,
-								lang: i18n.language,
+								lang: lang,
 							}),
 						});
 					} else {
@@ -222,13 +223,13 @@ const Dictionary: React.FC<DictionaryProps> = ({
 								context: context || term,
 								session_id: sessionId,
 								paper_id: paperId || "",
-								lang: i18n.language,
+								lang: lang,
 							}),
 						});
 					}
 				} else {
 					const queryParams = new URLSearchParams({
-						lang: i18n.language,
+						lang: lang,
 						paper_id: paperId || "",
 						session_id: sessionId || "",
 					});
@@ -403,12 +404,12 @@ const Dictionary: React.FC<DictionaryProps> = ({
 							word: entry.word,
 							context: context,
 							session_id: sessionId,
-							lang: i18n.language,
+							lang: lang,
 						}),
 					});
 				} else {
 					res = await fetch(
-						`${API_URL}/api/translate-deep/${encodeURIComponent(entry.word)}?lang=${i18n.language}&paper_id=${paperId || ""}&session_id=${sessionId || ""}`,
+						`${API_URL}/api/translate-deep/${encodeURIComponent(entry.word)}?lang=${lang}&paper_id=${paperId || ""}&session_id=${sessionId || ""}`,
 						{ headers },
 					);
 				}

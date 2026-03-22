@@ -128,7 +128,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 						session_id: sessionId,
 						paper_id: paperId,
 						figure_id: figureId,
-						lang: i18n.language,
+						lang: i18n.language.startsWith("ja") ? "ja" : "en",
 					}),
 				});
 

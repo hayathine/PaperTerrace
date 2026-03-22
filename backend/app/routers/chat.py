@@ -34,9 +34,17 @@ redis_service = RedisService()
 class ChatRequest(BaseModel):
     message: str
     session_id: str
-    lang: Literal["ja", "en"] = "ja"
+    lang: str = "ja"
     paper_id: str | None = None
     figure_id: str | None = None
+
+    @field_validator("lang")
+    @classmethod
+    def normalize_lang(cls, v: str) -> Literal["ja", "en"]:
+        """'ja-JP' などのロケール文字列を 'ja'/'en' に正規化する。"""
+        if v.startswith("ja"):
+            return "ja"
+        return "en"
 
     @field_validator("message")
     @classmethod

@@ -29,6 +29,14 @@ from app.providers import (
 from app.workers.layout_job import enqueue_layout_job, get_job_status
 from common.logger import ServiceLogger
 
+
+def _normalize_lang(lang: str) -> Literal["ja", "en"]:
+    """'ja-JP' などのロケール文字列を 'ja'/'en' に正規化する。"""
+    if lang.startswith("ja"):
+        return "ja"
+    return "en"
+
+
 log = ServiceLogger("Analysis")
 
 
@@ -77,12 +85,13 @@ def _get_context(session_id: str) -> tuple[str | None, str | None]:
 async def summarize(
     session_id: str = Form(...),
     mode: str = Form("full"),
-    lang: Literal["ja", "en"] = Form("ja"),
+    lang: str = Form("ja"),
     paper_id: str | None = Form(None),
     key_word: str | None = Form(None),
     force: bool = Form(False),
     user: OptionalUser = None,
 ):
+    lang = _normalize_lang(lang)
     context, resolved_paper_id = _get_context(session_id)
     if not context:
         log.warning("summarize", "Context not found", session_id=session_id)
@@ -169,8 +178,9 @@ async def analyze_figure(
 
 @router.post("/critique")
 async def critique(
-    session_id: str = Form(...), lang: Literal["ja", "en"] = Form("ja"), user: OptionalUser = None
+    session_id: str = Form(...), lang: str = Form("ja"), user: OptionalUser = None
 ):
+    lang = _normalize_lang(lang)
     context, _ = _get_context(session_id)
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)

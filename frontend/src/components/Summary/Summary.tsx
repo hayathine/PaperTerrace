@@ -88,7 +88,8 @@ const Summary: React.FC<SummaryProps> = ({
 			try {
 				const formData = new FormData();
 				formData.append("session_id", sessionId);
-				formData.append("lang", i18n.language);
+				const lang = i18n.language.startsWith("ja") ? "ja" : "en";
+				formData.append("lang", lang);
 				if (paperId) formData.append("paper_id", paperId);
 				if (force) formData.append("force", "true");
 
@@ -160,7 +161,7 @@ const Summary: React.FC<SummaryProps> = ({
 		try {
 			const formData = new FormData();
 			formData.append("session_id", sessionId);
-			formData.append("lang", i18n.language);
+			formData.append("lang", i18n.language.startsWith("ja") ? "ja" : "en");
 			const headers: HeadersInit = {};
 			if (token) headers.Authorization = `Bearer ${token}`;
 

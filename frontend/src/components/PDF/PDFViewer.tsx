@@ -628,7 +628,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 		const formData = new FormData();
 		formData.append("file", file);
-		formData.append("lang", i18n.language);
+		formData.append("lang", i18n.language.startsWith("ja") ? "ja" : "en");
 
 		formData.append("mode", "json");
 		if (sessionId) {

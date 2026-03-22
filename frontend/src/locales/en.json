@@ -70,7 +70,7 @@
 			"notes": "Dictionary",
 			"analysis": "Analysis",
 			"chat": "Chat",
-			"comments": "Comments",
+			"comments": "Notes",
 			"figures": "Figures",
 			"translation": "Translation",
 			"explanation": "Explanation",
@@ -100,7 +100,7 @@
 			"open_link": "Open Link",
 			"ask_ai": "AI Commentary",
 			"ask_in_chat": "Ask in Chat",
-			"save_note": "Save Comment",
+			"save_note": "Save Note",
 			"saved": "Saved",
 			"jump": "Jump to Location",
 			"error_unavailable": "This feature is currently unavailable.",
@@ -130,14 +130,14 @@
 		"reproducibility": "Reproducibility Risks"
 	},
 	"notes": {
-		"title": "Comments",
+		"title": "Notes",
 		"placeholder_term": "Term / Keyword",
-		"placeholder_content": "Write your comment here...",
-		"add": "Add Comment",
-		"update": "Update Comment",
+		"placeholder_content": "Write your note here...",
+		"add": "Add Note",
+		"update": "Update Note",
 		"adding": "Adding...",
 		"updating": "Updating...",
-		"no_notes": "No comments yet. Add one above!",
+		"no_notes": "No notes yet. Add one above!",
 		"jump_to_page": "Jump to Page {{page}}"
 	},
 	"stack": {
@@ -161,7 +161,7 @@
 	},
 	"menu": {
 		"translate": "Translate",
-		"note": "Comment",
+		"note": "Note",
 		"ask_ai": "Ask AI",
 		"explain": "Explain",
 		"close": "Close"

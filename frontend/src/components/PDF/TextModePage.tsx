@@ -659,7 +659,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 						}}
 						className="px-4 py-2.5 sm:py-2 hover:bg-slate-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors rounded-r-lg min-h-[44px] sm:min-h-0"
 					>
-						<span>📝</span> {t("menu.note", "Comment")}
+						<span>📝</span> {t("menu.note", "Note")}
 					</button>
 
 					{/* Triangle arrow */}

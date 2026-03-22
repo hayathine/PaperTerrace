@@ -70,7 +70,7 @@
 			"notes": "辞書",
 			"analysis": "分析",
 			"chat": "チャット",
-			"comments": "コメント",
+			"comments": "ノート",
 			"figures": "図解",
 			"translation": "翻訳",
 			"explanation": "解説",
@@ -100,7 +100,7 @@
 			"open_link": "リンクを開く",
 			"ask_ai": "AI解説",
 			"ask_in_chat": "チャットで質問",
-			"save_note": "コメントに保存",
+			"save_note": "ノートに保存",
 			"saved": "保存済み",
 			"jump": "場所へ移動",
 			"error_unavailable": "現在この機能はご利用いただけません。",
@@ -130,14 +130,14 @@
 		"reproducibility": "再現性のリスク"
 	},
 	"notes": {
-		"title": "コメント",
+		"title": "ノート",
 		"placeholder_term": "用語 / キーワード",
 		"placeholder_content": "メモを入力...",
-		"add": "コメントを追加",
-		"update": "コメントを更新",
+		"add": "ノートを追加",
+		"update": "ノートを更新",
 		"adding": "追加中...",
 		"updating": "更新中...",
-		"no_notes": "コメントがまだありません。上のフォームから追加してください。",
+		"no_notes": "ノートがまだありません。上のフォームから追加してください。",
 		"jump_to_page": "ページ {{page}} へ移動"
 	},
 	"stack": {
@@ -161,7 +161,7 @@
 	},
 	"menu": {
 		"translate": "翻訳",
-		"note": "コメント",
+		"note": "ノート",
 		"ask_ai": "AIに聞く",
 		"explain": "解説",
 		"close": "閉じる"
