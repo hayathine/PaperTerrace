@@ -202,16 +202,30 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				} else if (term.length > 50) {
 					// 長文テキスト（文章・段落）はPOSTエンドポイントで処理
 					// GETパスパラメータに長文を含めると500エラーになるため
-					res = await fetch(`${API_URL}/api/explain/context`, {
-						method: "POST",
-						headers: { ...headers, "Content-Type": "application/json" },
-						body: JSON.stringify({
-							word: term,
-							context: context || term,
-							session_id: sessionId,
-							lang: i18n.language,
-						}),
-					});
+					if (currentSubTab === "explanation") {
+						res = await fetch(`${API_URL}/api/explain/context`, {
+							method: "POST",
+							headers: { ...headers, "Content-Type": "application/json" },
+							body: JSON.stringify({
+								word: term,
+								context: context || term,
+								session_id: sessionId,
+								lang: i18n.language,
+							}),
+						});
+					} else {
+						res = await fetch(`${API_URL}/api/translate`, {
+							method: "POST",
+							headers: { ...headers, "Content-Type": "application/json" },
+							body: JSON.stringify({
+								word: term,
+								context: context || term,
+								session_id: sessionId,
+								paper_id: paperId || "",
+								lang: i18n.language,
+							}),
+						});
+					}
 				} else {
 					const queryParams = new URLSearchParams({
 						lang: i18n.language,
@@ -226,7 +240,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					}
 
 					res = await fetch(
-						`${API_URL}/api/explain/${encodeURIComponent(term)}?${queryParams.toString()}`,
+						`${API_URL}/api/translate/${encodeURIComponent(term)}?${queryParams.toString()}`,
 						{ headers },
 					);
 				}
@@ -394,7 +408,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					});
 				} else {
 					res = await fetch(
-						`${API_URL}/api/explain-deep/${encodeURIComponent(entry.word)}?lang=${i18n.language}&paper_id=${paperId || ""}&session_id=${sessionId || ""}`,
+						`${API_URL}/api/translate-deep/${encodeURIComponent(entry.word)}?lang=${i18n.language}&paper_id=${paperId || ""}&session_id=${sessionId || ""}`,
 						{ headers },
 					);
 				}

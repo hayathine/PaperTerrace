@@ -179,14 +179,25 @@ class UniversalTaskModule(dspy.Module):
         self.system_module = SystemModule()
         # Layer 2: ペルソナアダプター（GEPA最適化対象）
         self.persona_adapter = PersonaAdapter()
-        # Layer 3: 下流シグネチャに persona_instruction を動的追加（固定・最適化対象外）
-        extended_sig = signature.append(
-            "persona_instruction",
-            dspy.InputField(
-                desc="Behavioral policy from PersonaAdapter: tone, terminology, and explanation depth guidelines"
-            ),
-            type_=str,
-        )
+        # Layer 3: 下流シグネチャに persona_instruction と lang_name を動的追加（固定・最適化対象外）
+        # 既にフィールドが存在するシグネチャへの重複追加を防止
+        extended_sig = signature
+        if "persona_instruction" not in signature.input_fields:
+            extended_sig = extended_sig.append(
+                "persona_instruction",
+                dspy.InputField(
+                    desc="Behavioral policy from PersonaAdapter: tone, terminology, and explanation depth guidelines"
+                ),
+                type_=str,
+            )
+        if "lang_name" not in extended_sig.input_fields:
+            extended_sig = extended_sig.append(
+                "lang_name",
+                dspy.InputField(
+                    desc="Target language name for the response"
+                ),
+                type_=str,
+            )
         self.solve = dspy.Predict(extended_sig)
 
     def _get_task_description(self) -> str:

@@ -106,6 +106,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
 
     # Fetch PDF bytes for grounding if paper_id exists
     # キャッシュが既にある場合はGCSダウンロードをスキップ
+    MAX_CHAT_PDF_BYTES = int(settings.get("MAX_CHAT_PDF_SIZE_MB", "30")) * 1024 * 1024
     pdf_bytes = None
     if paper_id:
         pdf_cache_key = f"paper_cache_pdf:{paper_id}"
@@ -123,9 +124,19 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
                     pdf_bytes = img_storage.get_doc_bytes(
                         img_storage.get_doc_path(paper_info["file_hash"])
                     )
-                    log.debug(
-                        "chat", "GroundingのためにPDFバイナリを読み込みました", paper_id=paper_id
-                    )
+                    if len(pdf_bytes) > MAX_CHAT_PDF_BYTES:
+                        log.warning(
+                            "chat",
+                            "PDFサイズが上限を超えたため、テキストコンテキストのみで処理します",
+                            paper_id=paper_id,
+                            pdf_size_mb=f"{len(pdf_bytes) / 1024 / 1024:.1f}",
+                            limit_mb=settings.get("MAX_CHAT_PDF_SIZE_MB", "30"),
+                        )
+                        pdf_bytes = None
+                    else:
+                        log.debug(
+                            "chat", "GroundingのためにPDFバイナリを読み込みました", paper_id=paper_id
+                        )
             except Exception as e:
                 log.warning(
                     "chat",

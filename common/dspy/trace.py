@@ -184,6 +184,33 @@ def save_trace(
     return trace_id
 
 
+_TRANSIENT_ERROR_NAMES = frozenset({
+    "ResourceExhausted",
+    "ServiceUnavailable",
+    "DeadlineExceeded",
+    "InternalServerError",
+    "TooManyRequests",
+    "GatewayTimeout",
+})
+
+_MAX_RETRIES = 3
+_BASE_DELAY = 1.0  # seconds
+
+
+def _is_transient(exc: Exception) -> bool:
+    """一時的なエラー（リトライ対象）かどうかを判定する。"""
+    if isinstance(exc, (ConnectionError, TimeoutError, OSError)):
+        return True
+    exc_name = type(exc).__name__
+    if exc_name in _TRANSIENT_ERROR_NAMES:
+        return True
+    # litellm / google-api-core がラップしたエラーの status_code を確認
+    status = getattr(exc, "status_code", None) or getattr(exc, "code", None)
+    if isinstance(status, int) and status in (429, 500, 502, 503, 504):
+        return True
+    return False
+
+
 async def trace_dspy_call(
     module_name: str,
     signature_name: str,
@@ -193,6 +220,7 @@ async def trace_dspy_call(
 ):
     """
     Call a DSPy module and record the trace (Async version).
+    一時的なエラー（レート制限・タイムアウト・接続障害）は最大3回リトライする。
 
     Args:
         module_name: e.g. "ChatModule"
@@ -204,36 +232,66 @@ async def trace_dspy_call(
     Returns:
         Tuple of (DSPy Prediction result, trace_id string)
     """
-    start = time.perf_counter()
-    trace_id = "error"
-    try:
-        # Run sync DSPy module in a separate thread to avoid event loop issues
-        result = await asyncio.to_thread(module_callable, **inputs)
-        elapsed_ms = int((time.perf_counter() - start) * 1000)
-        outputs = _prediction_to_dict(result)
-        prompt = _get_last_prompt()
-        answer = _extract_answer(outputs)
-        trace_id = save_trace(
-            module_name=module_name,
-            signature=signature_name,
-            inputs=inputs,
-            outputs=outputs,
-            latency_ms=elapsed_ms,
-            context=context,
-            prompt=prompt,
-            answer=answer,
-        )
-        return result, trace_id
-    except Exception as e:
-        elapsed_ms = int((time.perf_counter() - start) * 1000)
-        trace_id = save_trace(
-            module_name=module_name,
-            signature=signature_name,
-            inputs=inputs,
-            outputs={},
-            latency_ms=elapsed_ms,
-            is_success=False,
-            error_msg=str(e),
-            context=context,
-        )
-        raise
+    last_exception: Exception | None = None
+
+    for attempt in range(_MAX_RETRIES):
+        start = time.perf_counter()
+        trace_id = "error"
+        try:
+            # Run sync DSPy module in a separate thread to avoid event loop issues
+            result = await asyncio.to_thread(module_callable, **inputs)
+            elapsed_ms = int((time.perf_counter() - start) * 1000)
+            outputs = _prediction_to_dict(result)
+            prompt = _get_last_prompt()
+            answer = _extract_answer(outputs)
+            trace_id = save_trace(
+                module_name=module_name,
+                signature=signature_name,
+                inputs=inputs,
+                outputs=outputs,
+                latency_ms=elapsed_ms,
+                context=context,
+                prompt=prompt,
+                answer=answer,
+            )
+            return result, trace_id
+        except Exception as e:
+            elapsed_ms = int((time.perf_counter() - start) * 1000)
+            last_exception = e
+
+            is_last_attempt = attempt == _MAX_RETRIES - 1
+            if not is_last_attempt and _is_transient(e):
+                delay = _BASE_DELAY * (2 ** attempt)
+                logger.warning(
+                    "DSPy call %s.%s failed (attempt %d/%d), retrying in %.1fs: %s",
+                    module_name, signature_name, attempt + 1, _MAX_RETRIES, delay, e,
+                )
+                # 失敗トレースも記録（is_success=False）
+                save_trace(
+                    module_name=module_name,
+                    signature=signature_name,
+                    inputs=inputs,
+                    outputs={},
+                    latency_ms=elapsed_ms,
+                    is_success=False,
+                    error_msg=f"[retry {attempt + 1}/{_MAX_RETRIES}] {e}",
+                    context=context,
+                )
+                await asyncio.sleep(delay)
+                continue
+
+            # 恒久的エラー or 最終試行 → トレース記録して raise
+            trace_id = save_trace(
+                module_name=module_name,
+                signature=signature_name,
+                inputs=inputs,
+                outputs={},
+                latency_ms=elapsed_ms,
+                is_success=False,
+                error_msg=str(e),
+                context=context,
+            )
+            raise
+
+    # Should not reach here, but safety net
+    raise last_exception  # type: ignore[misc]

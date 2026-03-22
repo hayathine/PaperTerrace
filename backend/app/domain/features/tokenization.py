@@ -84,7 +84,7 @@ class TokenizationService:
                 # 先頭 800 文字に制限してコンテキスト過大によるURL肥大化を防ぐ。
                 p_tokens_html.append(
                     f'<span id="{token_id}" class="cursor-pointer border-b transition-colors {color}'
-                    f'" hx-get="/explain/{lemma}?lang={lang}{paper_param}{session_param}&element_id={token_id}" hx-trigger="click" '
+                    f'" hx-get="/translate/{lemma}?lang={lang}{paper_param}{session_param}&element_id={token_id}" hx-trigger="click" '
                     f'hx-vals=\'js:{{context: (document.getElementById("{token_id}").closest(".paragraph-container, p") || document.getElementById("{token_id}").parentElement)?.innerText?.slice(0, 800) || ""}}\' '
                     f'hx-indicator="#dict-loading" '
                     f'hx-target="#dict-stack" hx-swap="afterbegin">{text}</span>{whitespace}'

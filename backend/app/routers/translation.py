@@ -70,7 +70,7 @@ def build_dict_card_html(
     if show_deep_btn:
         deep_btn = f"""
         <button 
-            hx-get="/explain-deep/{lemma}?lang={lang}{paper_param}{element_param}"
+            hx-get="/translate-deep/{lemma}?lang={lang}{paper_param}{element_param}"
             hx-target="closest .dict-card"
             hx-swap="outerHTML"
             hx-indicator="#dict-loading"
@@ -159,7 +159,32 @@ def build_dict_card_html(
     """
 
 
-@router.get("/explain/{word}")
+class ExplainRequest(BaseModel):
+    word: str
+    lang: str = "ja"
+    paper_id: str | None = None
+    session_id: str | None = None
+    element_id: str | None = None
+    conf: str | None = None
+    context: str | None = None
+
+
+@router.post("/translate")
+async def explain_post(payload: ExplainRequest, req: Request):
+    """POST版の解説・翻訳エンドポイント (URI長制限への対応)"""
+    return await explain(
+        req=req,
+        word=payload.word,
+        lang=payload.lang,
+        paper_id=payload.paper_id,
+        session_id=payload.session_id,
+        element_id=payload.element_id,
+        conf=payload.conf,
+        context=payload.context,
+    )
+
+
+@router.get("/translate/{word}")
 async def explain(
     req: Request,
     word: str,
@@ -355,7 +380,7 @@ async def explain(
         )
 
 
-@router.get("/explain-deep/{word}")
+@router.get("/translate-deep/{word}")
 async def explain_deep(
     req: Request,
     word: str,

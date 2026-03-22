@@ -964,7 +964,8 @@ async def stream(task_id: str):
                         words_html.append(
                             f'<a id="{word_id}" class="absolute cursor-pointer hover:bg-yellow-300/30 transition-colors rounded-sm group"'
                             f' style="left:{left}%; top:{top}%; width:{width}%; height:{height}%;"'
-                            f' hx-get="/explain/{word_text}?lang={lang}&element_id={word_id}"'
+                            f' hx-get="/translate/{word_text}?lang={lang}&element_id={word_id}"'
+                            f' hx-vals=\'js:{{context: document.getElementById("{word_id}").closest(".text-line")?.innerText?.slice(0, 300) || ""}}\''
                             f' hx-trigger="click"'
                             f' hx-target="#dict-stack"'
                             f' hx-swap="afterbegin">'
