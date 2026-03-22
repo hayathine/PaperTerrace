@@ -4,6 +4,7 @@
 """
 
 import asyncio
+import json
 import os
 import time
 from typing import Any
@@ -523,6 +524,83 @@ class InferenceServiceClient:
             raise
 
 
+class OcrInferenceClient:
+    """ローカル OCR 推論サービスクライアント（PaddleOCR / OpenVINO）。"""
+
+    def __init__(self) -> None:
+        self.ocr_url: str = settings.get("INFERENCE_OCR_URL", "")
+        self.timeout: int = int(settings.get("INFERENCE_OCR_TIMEOUT", "30"))
+        self.is_disabled: bool = not self.ocr_url or str(
+            settings.get("INFERENCE_OCR_DISABLED", "false")
+        ).lower() == "true"
+
+        # 回路ブレーカー（InferenceServiceClient と同構造）
+        self._cb: dict = {
+            "failure_count": 0,
+            "last_failure_time": None,
+            "circuit_open": False,
+        }
+        self.failure_threshold: int = 5
+        self.recovery_timeout: int = 60
+
+        self.client = httpx.AsyncClient(
+            timeout=httpx.Timeout(self.timeout, connect=10.0),
+            limits=httpx.Limits(max_connections=5, max_keepalive_connections=3),
+        )
+
+    def is_available(self) -> bool:
+        """OCR サービスが利用可能かを確認する。"""
+        if self.is_disabled:
+            return False
+        if self._cb["circuit_open"]:
+            last_fail = self._cb["last_failure_time"]
+            if last_fail and time.time() - last_fail > self.recovery_timeout:
+                self._cb.update({"circuit_open": False, "failure_count": 0})
+                return True
+            return False
+        return True
+
+    async def ocr_page(
+        self, img_bytes: bytes, bboxes: list[dict] | None = None
+    ) -> str:
+        """画像バイトを OCR サービスに送り、認識テキストを返す。
+
+        Args:
+            img_bytes: ページ画像バイト（JPEG/PNG 等）
+            bboxes: テキスト領域 bbox のリスト（省略時は自動検出）
+        Returns:
+            認識テキスト文字列
+        """
+        if not self.is_available():
+            raise InferenceServiceDownError("OCR service circuit open or disabled")
+
+        try:
+            files = {"file": ("page.jpg", img_bytes, "image/jpeg")}
+            data = {"bboxes_json": json.dumps(bboxes)} if bboxes else {}
+
+            resp = await self.client.post(
+                f"{self.ocr_url}/api/v1/ocr-page",
+                files=files,
+                data=data,
+            )
+            resp.raise_for_status()
+            result = resp.json()
+
+            if result.get("success"):
+                self._cb["failure_count"] = 0
+                return result.get("text", "")
+
+            raise InferenceServiceError(result.get("message", "OCR failed"))
+
+        except httpx.HTTPError as e:
+            self._cb["failure_count"] += 1
+            self._cb["last_failure_time"] = time.time()
+            if self._cb["failure_count"] >= self.failure_threshold:
+                self._cb["circuit_open"] = True
+                log.error("ocr_page", "OCR サービスの回路ブレーカーを開きました")
+            raise InferenceServiceDownError(f"OCR request failed: {e}") from e
+
+
 # シングルトンインスタンス
 _inference_client: InferenceServiceClient | None = None
 
@@ -544,3 +622,15 @@ async def cleanup_inference_client():
     if _inference_client:
         await _inference_client.client.aclose()
         _inference_client = None
+
+
+# OCR クライアントのシングルトン
+_ocr_client: OcrInferenceClient | None = None
+
+
+async def get_ocr_client() -> OcrInferenceClient:
+    """OCR 推論サービスクライアントの取得"""
+    global _ocr_client
+    if _ocr_client is None:
+        _ocr_client = OcrInferenceClient()
+    return _ocr_client

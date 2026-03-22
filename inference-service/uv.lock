@@ -539,6 +539,11 @@ layout = [
     { name = "openvino" },
     { name = "pillow" },
 ]
+ocr = [
+    { name = "opencv-python-headless" },
+    { name = "openvino" },
+    { name = "pillow" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -567,6 +572,11 @@ dev = [
 layout = [
     { name = "onnx-graphsurgeon", specifier = ">=0.5.8" },
     { name = "onnxruntime", specifier = ">=1.23.2" },
+    { name = "opencv-python-headless", specifier = ">=4.13.0.92" },
+    { name = "openvino", specifier = ">=2024.0.0" },
+    { name = "pillow", specifier = ">=11.0.0" },
+]
+ocr = [
     { name = "opencv-python-headless", specifier = ">=4.13.0.92" },
     { name = "openvino", specifier = ">=2024.0.0" },
     { name = "pillow", specifier = ">=11.0.0" },

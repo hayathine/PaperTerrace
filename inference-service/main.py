@@ -8,11 +8,12 @@
 import asyncio
 import base64
 import io
+import json
 import httpx
 import time
 from typing import Optional
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.concurrency import run_in_threadpool
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
@@ -27,6 +28,7 @@ from common.schemas.inference import (
     LayoutAnalysisRequest,
     LayoutAnalysisResponse,
     LayoutBatchByUrlsRequest,
+    OcrPageResponse,
     TokenizeRequest,
     TokenizeResponse,
     TranslationRequest,
@@ -46,6 +48,7 @@ layout_service = None
 m2m100_service = None
 llamacpp_service = None
 translation_service = None
+ocr_service = None
 
 if INFERENCE_TYPE in ["all", "layout"]:
     try:
@@ -65,6 +68,12 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
         from services.translation.translation_service import TranslationService
     except ImportError:
         logger.warning("Translation dependencies not found, skipping import")
+
+if INFERENCE_TYPE in ["all", "ocr"]:
+    try:
+        from services.ocr.ocr_service import PaddleOpenVinoOcrService
+    except ImportError:
+        logger.warning("OCR dependencies not found, skipping import")
 
 _CROP_TARGET_CLASSES = {"table", "figure", "picture", "formula", "chart", "algorithm", "equation"}
 
@@ -150,6 +159,7 @@ async def ensure_initialized():
         m2m100_service, \
         llamacpp_service, \
         translation_service, \
+        ocr_service, \
         _initialized, \
         _init_started_at
 
@@ -187,6 +197,10 @@ async def ensure_initialized():
                 inference_type=INFERENCE_TYPE,
             )
             logger.info("TranslationService orchestrator initialized")
+
+        if INFERENCE_TYPE in ["all", "ocr"]:
+            ocr_service = PaddleOpenVinoOcrService()
+            logger.info("PaddleOpenVinoOcrService initialized")
 
         _initialized = True
         logger.info(
@@ -606,6 +620,46 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
             return TokenizeResponse(
                 success=False,
                 tokens=[],
+                processing_time=time.time() - start_time,
+                message=str(e),
+            )
+
+
+# --------------------------------------------------
+# OCR（PaddleOCR / OpenVINO）
+# --------------------------------------------------
+
+
+if INFERENCE_TYPE in ["all", "ocr"]:
+
+    @app.post("/api/v1/ocr-page")
+    @limiter.limit(settings.get("RATE_LIMIT_OCR", "120/minute"))
+    async def ocr_page(
+        request: Request,
+        file: UploadFile = File(...),
+        bboxes_json: str = Form(None),
+    ):
+        """ページ画像をローカル OCR サービスで解析してテキストを返す。"""
+        await ensure_initialized()
+
+        if not ocr_service:
+            raise HTTPException(status_code=503, detail="OCR service unavailable")
+
+        start_time = time.time()
+        try:
+            image_bytes = await file.read()
+            bboxes = json.loads(bboxes_json) if bboxes_json else None
+            text = await run_in_threadpool(ocr_service.ocr_page, image_bytes, bboxes)
+            return OcrPageResponse(
+                success=True,
+                text=text,
+                processing_time=time.time() - start_time,
+            )
+        except Exception as e:
+            logger.exception("OCR page failed")
+            return OcrPageResponse(
+                success=False,
+                text="",
                 processing_time=time.time() - start_time,
                 message=str(e),
             )

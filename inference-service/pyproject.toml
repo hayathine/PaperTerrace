@@ -28,6 +28,11 @@ layout = [
     "onnx-graphsurgeon>=0.5.8",
     "Pillow>=11.0.0",
 ]
+ocr = [
+    "openvino>=2024.0.0",
+    "opencv-python-headless>=4.13.0.92",
+    "Pillow>=11.0.0",
+]
 dev = [
     "pyright>=1.1.408",
     "pytest>=9.0.2",

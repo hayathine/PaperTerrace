@@ -658,51 +658,25 @@ class PDFOCRService:
     async def _ocr_fallback(self, img_bytes: bytes, page_num: int) -> str:
         """
         フォントエンコーディング問題でテキスト抽出が失敗した場合に
-        Vision OCR → Gemini OCR の順でフォールバックしてプレーンテキストを返す。
+        ローカル OCR サービス（PaddleOCR / OpenVINO）にフォールバックしてプレーンテキストを返す。
         """
-        # 1. Vision OCR
         try:
-            from app.providers.vision_ocr import VisionOCRService
+            from app.providers.inference_client import get_ocr_client
 
-            vision = VisionOCRService()
-            if vision.is_available():
+            ocr_client = await get_ocr_client()
+            if ocr_client.is_available():
                 log.info(
                     "_ocr_fallback",
-                    "Falling back to Vision OCR due to garbled text",
+                    "Falling back to local OCR service",
                     page_num=page_num,
                 )
-                text, _ = await vision.detect_text_with_layout(img_bytes)
+                text = await ocr_client.ocr_page(img_bytes)
                 if text and text.strip():
                     return text
         except Exception as e:
             log.warning(
                 "_ocr_fallback",
-                "Vision OCR fallback failed",
-                page_num=page_num,
-                error=str(e),
-            )
-
-        # 2. Gemini OCR
-        try:
-            from common.prompts import PDF_EXTRACT_TEXT_OCR_PROMPT
-
-            log.info(
-                "_ocr_fallback",
-                "Falling back to Gemini OCR due to garbled text",
-                page_num=page_num,
-            )
-            text = await self.ai_provider.generate_with_image(
-                PDF_EXTRACT_TEXT_OCR_PROMPT,
-                img_bytes,
-                "image/jpeg",
-                model=self.model,
-            )
-            if text and text.strip():
-                return text
-        except Exception as e:
-            log.warning(
-                "_ocr_fallback",
-                "Gemini OCR fallback failed",
+                "Local OCR fallback failed",
                 page_num=page_num,
                 error=str(e),
             )

@@ -51,6 +51,11 @@ USE_OPENVINO = true
 PRELOAD_MODELS = false
 ENABLE_RATE_LIMIT = false
 
+# OCR 推論サービス（ローカル PaddleOCR / OpenVINO）
+INFERENCE_OCR_TIMEOUT = 30
+INFERENCE_OCR_DISABLED = false
+RATE_LIMIT_OCR = "120/minute"
+
 # Sentry / GlitchTip
 SENTRY_DSN = ""
 SENTRY_ENABLED = false
