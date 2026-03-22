@@ -1,10 +1,12 @@
 import * as Sentry from "@sentry/react";
 import { Component, type ErrorInfo, type ReactNode } from "react";
+import { type WithTranslation, withTranslation } from "react-i18next";
+import { ERROR_KEYS } from "@/lib/errors";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("ErrorBoundary");
 
-interface Props {
+interface Props extends WithTranslation {
 	children: ReactNode;
 }
 
@@ -80,10 +82,10 @@ class ErrorBoundary extends Component<Props, State> {
 						</div>
 
 						<h1 className="text-3xl font-black text-slate-800 mb-4 tracking-tight">
-							メンテナンス中
+							{this.props.t(ERROR_KEYS.errorBoundary.title)}
 						</h1>
 						<p className="text-lg text-slate-600 font-medium leading-relaxed mb-10 max-w-sm">
-							現在システムを調整中です。しばらく時間をおいてから再度お試しください。
+							{this.props.t(ERROR_KEYS.errorBoundary.description)}
 						</p>
 
 						<button
@@ -105,7 +107,7 @@ class ErrorBoundary extends Component<Props, State> {
 										d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
 									/>
 								</svg>
-								再読み込み
+								{this.props.t(ERROR_KEYS.errorBoundary.reload)}
 							</span>
 						</button>
 					</div>
@@ -117,4 +119,4 @@ class ErrorBoundary extends Component<Props, State> {
 	}
 }
 
-export default ErrorBoundary;
+export default withTranslation()(ErrorBoundary);

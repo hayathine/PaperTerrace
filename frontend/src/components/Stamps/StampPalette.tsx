@@ -1,6 +1,8 @@
 import type React from "react";
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { ERROR_KEYS } from "@/lib/errors";
 import { createLogger } from "@/lib/logger";
 import { STAMP_CATEGORIES, type StampType } from "./types";
 
@@ -21,8 +23,10 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 	onSelectStamp,
 	token,
 }) => {
+	const { t } = useTranslation();
 	const [activeCategory, setActiveCategory] = useState(STAMP_CATEGORIES[0].id);
 	const [customStamps, setCustomStamps] = useState<StampType[]>([]);
+	const [imageError, setImageError] = useState<string | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	useEffect(() => {
@@ -45,9 +49,10 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 
 		// Check initial file size limit before upload (e.g. 5MB to be safe, exact limit is 512KB on backend)
 		if (file.size > 5 * 1024 * 1024) {
-			alert("File is too large. Please select a smaller image.");
+			setImageError(t(ERROR_KEYS.common.imageTooLarge));
 			return;
 		}
+		setImageError(null);
 
 		const formData = new FormData();
 		formData.append("file", file);
@@ -88,6 +93,11 @@ const StampPalette: React.FC<StampPaletteProps> = ({
 
 	return (
 		<div className="fixed bottom-8 left-1/2 transform -translate-x-1/2 z-50 flex flex-col items-center gap-4 w-full max-w-sm sm:max-w-md px-4">
+			{imageError && (
+				<p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2 font-medium">
+					{imageError}
+				</p>
+			)}
 			{/* Main Toggle Button */}
 			<button
 				type="button"

@@ -64,7 +64,7 @@ describe("FigureInsight Component", () => {
 
 		await waitFor(() => {
 			expect(
-				screen.getByText("図の解析に失敗しました (ネットワークエラー)"),
+				screen.getByText("viewer.figure_analysis_network_error"),
 			).toBeDefined();
 		});
 	});

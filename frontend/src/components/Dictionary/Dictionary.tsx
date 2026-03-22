@@ -87,6 +87,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [isTruncated, setIsTruncated] = useState(false);
 
 	// Reset when paperId changes (but not when transitioning from null to a real ID)
 	const prevPaperIdRef = React.useRef<string | null | undefined>(paperId);
@@ -153,6 +154,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			setLoading(true);
 
 			setError(null);
+			setIsTruncated(false);
 
 			// Add a temporary entry to show analyzing indicator for the new word
 			const tempEntry: DictionaryEntryWithCoords = {
@@ -203,13 +205,24 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				} else if (term.length > 50) {
 					// 長文テキスト（文章・段落）はPOSTエンドポイントで処理
 					// GETパスパラメータに長文を含めると500エラーになるため
+					// バックエンドのバリデーション上限に合わせてトリム（テキストモードの段落選択対応）
+					const truncatedWord =
+						term.length > 2000 ? `${term.slice(0, 2000)}…` : term;
+					const rawContext = context || term;
+					const truncatedContext =
+						rawContext.length > 5000
+							? `${rawContext.slice(0, 5000)}…`
+							: rawContext;
+					if (truncatedWord !== term || truncatedContext !== rawContext) {
+						setIsTruncated(true);
+					}
 					if (currentSubTab === "explanation") {
 						res = await fetch(`${API_URL}/api/explain/context`, {
 							method: "POST",
 							headers: { ...headers, "Content-Type": "application/json" },
 							body: JSON.stringify({
-								word: term,
-								context: context || term,
+								word: truncatedWord,
+								context: truncatedContext,
 								session_id: sessionId,
 								lang: lang,
 							}),
@@ -219,8 +232,8 @@ const Dictionary: React.FC<DictionaryProps> = ({
 							method: "POST",
 							headers: { ...headers, "Content-Type": "application/json" },
 							body: JSON.stringify({
-								word: term,
-								context: context || term,
+								word: truncatedWord,
+								context: truncatedContext,
 								session_id: sessionId,
 								paper_id: paperId || "",
 								lang: lang,
@@ -585,6 +598,18 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				{error && (
 					<div className="text-xs text-red-400 bg-red-50 p-3 rounded-lg border border-red-100 mb-4">
 						{error}
+					</div>
+				)}
+
+				{isTruncated && !error && (
+					<div className="text-xs text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-100 mb-4 flex items-start gap-2">
+						<span className="mt-0.5 shrink-0">⚠</span>
+						<span>
+							{t(
+								"viewer.dictionary.truncated_notice",
+								"選択テキストが長すぎるため、先頭部分のみを翻訳しています。",
+							)}
+						</span>
 					</div>
 				)}
 

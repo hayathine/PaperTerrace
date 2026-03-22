@@ -5,15 +5,17 @@
 		"loading_description": "少々お待ちください...",
 		"error": "エラー",
 		"error_boundary": {
-			"title": "予期しないエラーが発生しました",
-			"description": "問題が報告されました。ページを再読み込みするか、しばらく時間をおいてからお試しください。",
-			"reload": "ページを再読み込み"
+			"title": "メンテナンス中",
+			"description": "現在システムを調整中です。しばらく時間をおいてから再度お試しください。",
+			"reload": "再読み込み"
 		},
 		"errors": {
 			"unexpected": "予期しないエラーが発生しました。しばらく時間をおいてからお試しください。",
 			"load_failed": "読み込みに失敗しました。再試行してください。",
 			"upload_failed": "アップロードに失敗しました。再試行してください。",
 			"file_too_large": "ファイルサイズが大きすぎます（上限: {{maxMB}}MB）。より小さいPDFをお試しください。",
+			"file_type_invalid": "PDFファイルのみアップロード可能です。",
+			"image_too_large": "画像ファイルが大きすぎます。より小さい画像を選択してください。",
 			"processing": "処理中にエラーが発生しました。再試行してください。",
 			"network": "ネットワークエラーが発生しました。接続を確認してください。"
 		},
@@ -92,6 +94,8 @@
 			"stamp_mode": "スタンプ"
 		},
 		"image_not_available": "画像を読み込めません",
+		"figure_analysis_failed": "図の解析に失敗しました。",
+		"figure_analysis_network_error": "図の解析に失敗しました。接続を確認してください。",
 		"text_mode_hint": "テキストモードでコンテンツを表示できます",
 		"dictionary": {
 			"ready": "辞書の準備ができました！",
@@ -105,6 +109,7 @@
 			"jump": "場所へ移動",
 			"error_unavailable": "現在この機能はご利用いただけません。",
 			"error_translation_unavailable": "翻訳機能は現在ご利用いただけません。",
+			"truncated_notice": "選択テキストが長すぎるため、先頭の2000文字のみを翻訳しています。",
 			"history_empty": "保存済み用語なし",
 			"history_hint": "単語を辞書に保存すると用語一覧に表示されます。"
 		}

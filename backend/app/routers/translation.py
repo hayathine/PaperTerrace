@@ -168,7 +168,7 @@ def build_dict_card_html(
 
 
 class ExplainRequest(BaseModel):
-    word: str = Field(..., min_length=1, max_length=500)
+    word: str = Field(..., min_length=1, max_length=2000)
     lang: str = Field(default="ja")
     paper_id: str | None = None
     session_id: str | None = None
@@ -535,7 +535,7 @@ async def explain_deep(
 
 
 class ExplainContextRequest(BaseModel):
-    word: str = Field(..., min_length=1, max_length=500)
+    word: str = Field(..., min_length=1, max_length=2000)
     context: str = Field(..., min_length=1, max_length=5000)
     session_id: str | None = None
     lang: str = Field(default="ja")

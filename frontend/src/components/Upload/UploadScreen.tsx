@@ -1,12 +1,16 @@
 import type React from "react";
 import { useCallback, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
+import { ERROR_KEYS } from "@/lib/errors";
 
 interface UploadScreenProps {
 	onFileSelect: (file: File) => void;
 }
 
 const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
+	const { t } = useTranslation();
 	const [isDragging, setIsDragging] = useState(false);
+	const [fileTypeError, setFileTypeError] = useState<string | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
 	const handleDragOver = useCallback((e: React.DragEvent) => {
@@ -30,9 +34,10 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 			if (e.dataTransfer.files?.[0]) {
 				const file = e.dataTransfer.files[0];
 				if (file.type === "application/pdf") {
+					setFileTypeError(null);
 					onFileSelect(file);
 				} else {
-					alert("PDFファイルのみアップロード可能です。");
+					setFileTypeError(t(ERROR_KEYS.common.fileTypeInvalid));
 				}
 			}
 		},
@@ -180,9 +185,9 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 				</div>
 			</button>
 
-			<p className="mt-8 text-[clamp(0.7rem,1.5vw,0.8rem)] text-slate-400 max-w-[min(90vw,500px)] text-center leading-relaxed opacity-80">
-				<br />
-			</p>
+			{fileTypeError && (
+				<p className="mt-4 text-xs text-red-500 font-medium">{fileTypeError}</p>
+			)}
 		</div>
 	);
 };

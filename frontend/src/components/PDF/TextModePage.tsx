@@ -6,6 +6,17 @@ import { useIntersectionObserver } from "../../hooks/useIntersectionObserver";
 import MarkdownContent from "../Common/MarkdownContent";
 import type { Figure, PageWithLines } from "./types";
 
+/** 一度でも viewport に入ったら true のままにする（スクロール高さ変化によるジャンプ防止） */
+function useVisibleOnce(
+	ref: React.RefObject<Element | null>,
+	options?: IntersectionObserverInit,
+): boolean {
+	const isIntersecting = useIntersectionObserver(ref, options);
+	const hasBeenVisible = useRef(false);
+	if (isIntersecting) hasBeenVisible.current = true;
+	return hasBeenVisible.current;
+}
+
 const KNOWN_SECTIONS = [
 	"abstract",
 	"introduction",
@@ -179,7 +190,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 
 	// Intersection Observer: delay heavy Markdown rendering until page is near viewport
 	const containerRef = useRef<HTMLDivElement>(null);
-	const isVisible = useIntersectionObserver(containerRef, {
+	const isVisible = useVisibleOnce(containerRef, {
 		rootMargin: "400px",
 	});
 
@@ -384,20 +395,22 @@ const TextModePage: React.FC<TextModePageProps> = ({
 							? figure.image_url
 							: `${API_URL}${figure.image_url}`;
 
-						const isEquation =
-							figure.label?.toLowerCase() === "equation" ||
-							(typeof alt === "string" &&
-								alt.toLowerCase().includes("equation"));
+						// bbox と page.width から元のサイズ比率を計算
+						const figWidthPercent = page.width
+							? ((figure.bbox[2] - figure.bbox[0]) / page.width) * 100
+							: null;
 
 						return (
 							<img
 								src={imgSrc}
 								alt={alt || figure.label || "Figure"}
 								onClick={() => setZoomedImage(imgSrc)}
-								className={`
-									mx-auto my-4 rounded shadow-sm border border-slate-200 object-contain cursor-zoom-in hover:brightness-[0.98] transition-all
-									${isEquation ? "max-h-24 w-auto max-w-[90%]" : "max-w-full h-auto"}
-								`.trim()}
+								className="mx-auto my-4 rounded shadow-sm border border-slate-200 object-contain cursor-zoom-in hover:brightness-[0.98] transition-all"
+								style={
+									figWidthPercent
+										? { width: `${figWidthPercent}%`, height: "auto" }
+										: { width: "50%", height: "auto" }
+								}
 								loading="lazy"
 								{...rest}
 							/>
@@ -408,18 +421,13 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				}
 			}
 			// 通常の画像
-			const isEquationGeneric =
-				typeof alt === "string" && alt.toLowerCase().includes("equation");
-
 			return (
 				<img
 					src={src}
 					alt={alt}
 					onClick={() => src && setZoomedImage(src)}
-					className={`
-						mx-auto my-4 rounded shadow-sm object-contain cursor-zoom-in hover:brightness-[0.98] transition-all
-						${isEquationGeneric ? "max-h-24 w-auto max-w-[90%]" : "max-w-full h-auto"}
-					`.trim()}
+					className="mx-auto my-4 rounded shadow-sm object-contain cursor-zoom-in hover:brightness-[0.98] transition-all"
+					style={{ width: "50%", height: "auto" }}
 					loading="lazy"
 					{...rest}
 				/>

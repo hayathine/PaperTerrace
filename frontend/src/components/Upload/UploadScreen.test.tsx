@@ -61,7 +61,6 @@ describe("UploadScreen Component", () => {
 
 	it("shows alert for non-pdf files on drop", () => {
 		const onFileSelect = vi.fn();
-		const alertMock = vi.spyOn(window, "alert").mockImplementation(() => {});
 		const { container } = render(<UploadScreen onFileSelect={onFileSelect} />);
 		const dropZone = container.querySelector("button");
 		if (!dropZone) throw new Error("Button not found");
@@ -76,10 +75,8 @@ describe("UploadScreen Component", () => {
 			},
 		});
 
-		expect(alertMock).toHaveBeenCalledWith(
-			"PDFファイルのみアップロード可能です。",
-		);
+		expect(screen.getByText("common.errors.file_type_invalid")).toBeDefined();
 		expect(onFileSelect).not.toHaveBeenCalled();
-		alertMock.mockRestore();
+		expect(onFileSelect).not.toHaveBeenCalled();
 	});
 });

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { ERROR_KEYS } from "@/lib/errors";
 import { createLogger } from "@/lib/logger";
 import CopyButton from "../Common/CopyButton";
 import FeedbackSection from "../Common/FeedbackSection";
@@ -41,6 +43,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 	initSessionCache(sessionId);
 
 	// スタックされた解析済み図表の配列（新しいものが先頭）
+	const { t } = useTranslation();
 	const [stackState, setStackState] = useState<FigureResult[]>(
 		globalStackCache[sessionId],
 	);
@@ -124,7 +127,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 							? {
 									...r,
 									isLoading: false,
-									error: `図の解析に失敗しました (${detail})`,
+									error: t(ERROR_KEYS.figure.analysisFailed),
 								}
 							: r,
 					),
@@ -159,7 +162,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 							? {
 									...r,
 									isLoading: false,
-									error: "図の解析に失敗しました (ネットワークエラー)",
+									error: t(ERROR_KEYS.figure.analysisNetworkError),
 								}
 							: r,
 					),

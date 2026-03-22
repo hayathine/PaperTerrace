@@ -855,9 +855,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				}, retryDelay);
 			} else {
 				setStatus("error");
-				setErrorMsg(
-					`ネットワークエラーが発生しました。接続を確認して再度お試しください。(URL: ${stream_url})`,
-				);
+				log.error("stream_retry_exhausted", "Max retries reached", {
+					stream_url,
+				});
+				setErrorMsg(t("common.errors.network"));
 				processingFileRef.current = null;
 				activeTaskIdRef.current = null;
 			}
