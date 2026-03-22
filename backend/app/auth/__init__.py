@@ -9,6 +9,7 @@ from .dependencies import (
     OptionalUser,
     get_current_user,
     get_optional_user,
+    get_user_identifier,
 )
 
 __all__ = [
@@ -17,4 +18,5 @@ __all__ = [
     "OptionalUser",
     "get_current_user",
     "get_optional_user",
+    "get_user_identifier",
 ]

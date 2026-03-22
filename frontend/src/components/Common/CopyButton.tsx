@@ -8,6 +8,8 @@ interface CopyButtonProps {
 	size?: number;
 	/** 追加のCSSクラス */
 	className?: string;
+	/** DSPyトレースID。指定するとコピー時に is_copied シグナルを送信する */
+	traceId?: string;
 }
 
 /**
@@ -18,13 +20,22 @@ const CopyButton: React.FC<CopyButtonProps> = ({
 	text,
 	size = 15,
 	className = "",
+	traceId,
 }) => {
 	const [copied, setCopied] = useState(false);
+
+	const markTraceCopied = useCallback(() => {
+		if (!traceId) return;
+		fetch(`/api/dspy/trace/${traceId}/copy`, { method: "POST" }).catch(
+			() => undefined,
+		);
+	}, [traceId]);
 
 	const handleCopy = useCallback(async () => {
 		try {
 			await navigator.clipboard.writeText(text);
 			setCopied(true);
+			markTraceCopied();
 			setTimeout(() => setCopied(false), 2000);
 		} catch {
 			// フォールバック: 古いブラウザ対応
@@ -37,9 +48,10 @@ const CopyButton: React.FC<CopyButtonProps> = ({
 			document.execCommand("copy");
 			document.body.removeChild(textarea);
 			setCopied(true);
+			markTraceCopied();
 			setTimeout(() => setCopied(false), 2000);
 		}
-	}, [text]);
+	}, [text, markTraceCopied]);
 
 	return (
 		<button

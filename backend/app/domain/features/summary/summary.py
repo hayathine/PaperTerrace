@@ -1,7 +1,8 @@
-import os
+
 
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.providers import get_ai_provider, get_storage_provider
+from common.config import settings
 from common.dspy.config import setup_dspy
 from common.dspy.modules import (
     ContextSummaryModule,
@@ -13,8 +14,11 @@ from common.logger import ServiceLogger
 from common.prompts import (
     PAPER_SUMMARY_FROM_PDF_PROMPT,
 )
+from redis_provider.provider import RedisService
 
 log = ServiceLogger("Summary")
+
+CACHE_TTL_MINUTES = 60
 
 
 class SummaryError(Exception):
@@ -29,8 +33,9 @@ class SummaryService:
     def __init__(self, storage=None):
         self.ai_provider = get_ai_provider()
         self.storage = storage or get_storage_provider()  # Inject storage
-        self.model = os.getenv("MODEL_SUMMARY", "gemini-2.0-flash-lite")
-        self.token_limit = int(os.getenv("MAX_INPUT_TOKENS", "900000"))
+        self.redis = RedisService()
+        self.model = settings.get("MODEL_SUMMARY", "gemini-2.5-flash-lite")
+        self.token_limit = int(settings.get("MAX_INPUT_TOKENS", "900000"))
 
         # Initialize DSPy
         setup_dspy()
@@ -50,40 +55,47 @@ class SummaryService:
     ) -> tuple[str, str | None]:
         """
         論文全体の包括的な要約を生成する。
-        pdf_bytesが指定されている場合はPDF直接入力方式を使用。
+        優先的にPDF画像入力方式を使用し、PDF取得失敗時はテキスト方式にフォールバック。
         """
         # Check cache
+        paper_info = None
         if paper_id:
-            paper = self.storage.get_paper(paper_id)
-            if paper and paper.get("full_summary"):
-                log.info("summarize_full", "Full summary cache HIT", paper_id=paper_id)
-                return paper["full_summary"], None
+            paper_info = self.storage.get_paper(paper_id)
+            if paper_info and paper_info.get("full_summary"):
+                log.info("summarize_full", "全文要約のキャッシュがヒットしました", paper_id=paper_id)
+                return paper_info["full_summary"], None
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
+        # pdf_bytes未指定の場合、GCSからPDFを取得して画像パスを試みる
+        if not pdf_bytes and paper_id:
+            try:
+                from app.providers import get_image_storage
+
+                info = paper_info or self.storage.get_paper(paper_id)
+                if info and info.get("file_hash"):
+                    img_storage = get_image_storage()
+                    pdf_bytes = img_storage.get_doc_bytes(
+                        img_storage.get_doc_path(info["file_hash"])
+                    )
+                    log.debug(
+                        "summarize_full",
+                        "画像ベースの要約のためにGCSからPDFバイナリを取得しました",
+                        paper_id=paper_id,
+                        pdf_size=len(pdf_bytes),
+                    )
+            except Exception as e:
+                log.warning(
+                    "summarize_full",
+                    "PDFバイナリの取得に失敗しました。テキストベースの要約にフォールバックします",
+                    error=str(e),
+                    paper_id=paper_id,
+                )
+                pdf_bytes = None
+
         try:
             if pdf_bytes:
-                # Vision-based summary logic
-                import io
-
-                import pdfplumber
-
-                log.debug(
-                    "summarize_full",
-                    "Generating full summary from PDF images",
-                    pdf_size=len(pdf_bytes),
-                )
-
-                images = []
-                with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
-                    max_pages = 50
-                    pages_to_process = pdf.pages[:max_pages]
-                    for page in pages_to_process:
-                        page_img = page.to_image(resolution=100)
-                        buf = io.BytesIO()
-                        page_img.original.save(buf, format="PNG")
-                        images.append(buf.getvalue())
-
+                # PDF-based summary with context cache
                 keyword_focus = ""
                 if key_word:
                     keyword_focus = f"[Topic Focus]\nPlease provide more details and context regarding the keyword: '{key_word}' within the summary if applicable."
@@ -91,8 +103,50 @@ class SummaryService:
                 prompt = PAPER_SUMMARY_FROM_PDF_PROMPT.format(
                     lang_name=lang_name, keyword_focus=keyword_focus
                 )
-                formatted_text = await self.ai_provider.generate_with_images(
-                    prompt, images, model=self.model
+
+                # コンテキストキャッシュを取得または作成（chatと共有）
+                pdf_cache_name = None
+                if paper_id:
+                    pdf_cache_key = f"paper_cache_pdf:{paper_id}"
+                    pdf_cache_name = self.redis.get(pdf_cache_key)
+                    if not pdf_cache_name:
+                        try:
+                            pdf_cache_name = await self.ai_provider.create_context_cache(
+                                model=self.model,
+                                contents=pdf_bytes,
+                                ttl_minutes=CACHE_TTL_MINUTES,
+                            )
+                            self.redis.set(
+                                pdf_cache_key,
+                                pdf_cache_name,
+                                expire=CACHE_TTL_MINUTES * 60,
+                            )
+                            log.info(
+                                "summarize_full",
+                                "PDFコンテキストキャッシュを作成しました",
+                                paper_id=paper_id,
+                                cache_name=pdf_cache_name,
+                            )
+                        except Exception as e:
+                            log.warning(
+                                "summarize_full",
+                                "コンテキストキャッシュの作成に失敗しました。キャッシュなしで続行します",
+                                error=str(e),
+                                paper_id=paper_id,
+                            )
+                            pdf_cache_name = None
+
+                log.debug(
+                    "summarize_full",
+                    "PDFから全文要約を生成中",
+                    pdf_size=len(pdf_bytes),
+                    cached=pdf_cache_name is not None,
+                )
+                formatted_text = await self.ai_provider.generate_with_pdf(
+                    prompt,
+                    pdf_bytes=pdf_bytes if not pdf_cache_name else None,
+                    cached_content_name=pdf_cache_name,
+                    model=self.model,
                 )
             else:
                 # Text-based summary logic (Restored)
@@ -153,7 +207,7 @@ class SummaryService:
 
             return formatted_text, locals().get("trace_id")
         except Exception as e:
-            log.exception("summarize_full", "Full summary generation failed")
+            log.exception("summarize_full", "全文要約の生成に失敗しました")
             return f"要約の生成に失敗しました: {str(e)}", None
 
     async def summarize_sections(
@@ -207,7 +261,7 @@ class SummaryService:
 
             return sections, trace_id
         except Exception as e:
-            log.exception("summarize_sections", "Section summary failed")
+            log.exception("summarize_sections", "セクション要約に失敗しました")
             return [{"section": "Error", "summary": f"要約生成に失敗: {e}"}], "error"
 
     async def summarize_abstract(self, text: str, target_lang: str = "ja") -> str:
@@ -244,41 +298,25 @@ class SummaryService:
             summary = res.summary
             log.info(
                 "summarize_context",
-                "Context summary generated",
+                "コンテキスト要約を生成しました",
                 summary_length=len(summary),
             )
 
             return summary[:max_length]
         except Exception as e:
             log.error(
-                "summarize_context", "Context summary generation failed", error=str(e)
+                "summarize_context", "コンテキスト要約の生成に失敗しました", error=str(e)
             )
 
             return ""
 
     async def _truncate_to_token_limit(self, text: str) -> str:
-        """トークン上限に合わせてテキストを切り詰める"""
+        """トークン上限に合わせてテキストを切り詰める（ローカル概算、API呼び出しなし）"""
         if not text:
             return ""
-        # 概算: 1トークン ≈ 4文字
-        if len(text) < self.token_limit * 2:
+        # 1トークン ≈ 4文字 の概算（Gemini の実測値に近い近似）
+        # 5% の安全マージンを取る
+        max_chars = int(self.token_limit * 4 * 0.95)
+        if len(text) <= max_chars:
             return text
-
-        current_tokens = await self.ai_provider.count_tokens(text)
-        if current_tokens <= self.token_limit:
-            return text
-
-        # バイナリサーチ的な切り詰め
-        low, high = 0, len(text)
-        best_text = ""
-        # 制限回数を抑えてテストの StopAsyncIteration を回避しつつ効率化
-        for _ in range(5):
-            mid = (low + high) // 2
-            test_text = text[:mid]
-            tokens = await self.ai_provider.count_tokens(test_text)
-            if tokens <= self.token_limit:
-                best_text = test_text
-                low = mid
-            else:
-                high = mid
-        return best_text or text[:100]  # フォールバック
+        return text[:max_chars]

@@ -1,50 +1,85 @@
 import json
-import os
+import time
 from datetime import datetime
 from typing import Any
 
 import redis
 
+from common.config import get_redis_url, settings
 from common.logger import get_service_logger
 
 log = get_service_logger("Cache")
 
-# Load Redis host/port from env
-# REDIS_HOST = os.getenv("REDIS_HOST", "localhost")
-# REDIS_PORT = int(os.getenv("REDIS_PORT", 6379))
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379/0")
-REDIS_DB = int(os.getenv("REDIS_DB", 0))
-REDIS_PASSWORD = os.getenv("REDIS_PASSWORD", None)
+# 環境に応じた Redis URL を取得（prod/staging/local で接続先を切り替え）
+REDIS_URL = get_redis_url()
+REDIS_DB = int(settings.get("REDIS_DB", 0))
+REDIS_PASSWORD = settings.get("REDIS_PASSWORD", None)
+
+_RETRY_INTERVAL = 5.0  # 接続失敗後のリトライ間隔（秒）
 
 _redis_client = None
 _redis_enabled = True
-_redis_attempted = False
+_last_attempt_time: float = 0.0  # 0 = 未試行
+
+_arq_pool = None
 
 
 def get_redis_client():
-    global _redis_client, _redis_attempted
+    global _redis_client, _last_attempt_time
     if not _redis_enabled:
         return None
 
-    if _redis_client is None and not _redis_attempted:
-        _redis_attempted = True
+    now = time.monotonic()
+    should_attempt = _redis_client is None and (now - _last_attempt_time) >= _RETRY_INTERVAL
+
+    if should_attempt:
+        _last_attempt_time = now
         try:
-            _redis_client = redis.Redis.from_url(
+            client = redis.Redis.from_url(
                 REDIS_URL,
                 decode_responses=True,
                 socket_timeout=5.0,
                 socket_connect_timeout=5.0,
             )
             # test connection
-            _redis_client.ping()
+            client.ping()
+            _redis_client = client
             log.info("init", f"Connected to Redis at {REDIS_URL}")
         except Exception as e:
             log.warning(
                 "init",
-                f"Failed to connect to Redis ({REDIS_URL}): {e}. Using in-memory fallback.",
+                f"Failed to connect to Redis ({REDIS_URL}): {e}. Will retry in {_RETRY_INTERVAL:.0f}s.",
             )
             _redis_client = None
     return _redis_client
+
+
+async def get_arq_pool():
+    """ARQ の async Redis pool を返す。未接続の場合は接続を試みる。接続不可なら None を返す。"""
+    global _arq_pool
+    if _arq_pool is not None:
+        return _arq_pool
+
+    try:
+        from arq import create_pool
+        from arq.connections import RedisSettings
+
+        _arq_pool = await create_pool(RedisSettings.from_dsn(REDIS_URL))
+        log.info("arq_pool", f"ARQ pool connected to {REDIS_URL}")
+    except Exception as e:
+        log.warning("arq_pool", f"Failed to create ARQ pool ({REDIS_URL}): {e}")
+        _arq_pool = None
+
+    return _arq_pool
+
+
+async def close_arq_pool() -> None:
+    """ARQ pool を閉じる（lifespan shutdown 時に呼ぶ）。"""
+    global _arq_pool
+    if _arq_pool is not None:
+        await _arq_pool.aclose()
+        _arq_pool = None
+        log.info("arq_pool", "ARQ pool closed")
 
 
 class DateTimeEncoder(json.JSONEncoder):
@@ -63,10 +98,10 @@ class RedisService:
     _shared_cache: dict[str, Any] = {}
 
     def __init__(self):
-        self.client = get_redis_client()
         self.memory_cache = RedisService._shared_cache
         if not hasattr(RedisService, "_initialized"):
-            if self.client:
+            client = get_redis_client()
+            if client:
                 log.info("init", f"RedisService initialized with host: {REDIS_URL}")
             else:
                 log.warning(
@@ -82,15 +117,16 @@ class RedisService:
         else:
             value_str = str(value)
 
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
                 if expire:
-                    self.client.setex(key, expire, value_str)
+                    client.setex(key, expire, value_str)
                     log.info(
                         "set_ex", f"Value set in Redis: {key} (expires: {expire}s)"
                     )
                 else:
-                    self.client.set(key, value_str)
+                    client.set(key, value_str)
                     log.info("set", f"Value set in Redis: {key}")
                 return True
             except Exception as e:
@@ -105,9 +141,10 @@ class RedisService:
     def get(self, key: str) -> Any | None:
         """Get a value from cache."""
         value_str = None
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
-                value_str = self.client.get(key)
+                value_str = client.get(key)
                 if value_str is not None:
                     log.info("get_hit", f"Cache HIT (Redis): {key}")
                 else:
@@ -135,9 +172,10 @@ class RedisService:
     def delete(self, key: str) -> int:
         """Delete a key from cache."""
         deleted_count = 0
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
-                deleted_count = self.client.delete(key)
+                deleted_count = client.delete(key)
                 if deleted_count > 0:
                     log.info("delete_success", f"Key deleted from Redis: {key}")
             except Exception as e:
@@ -155,9 +193,10 @@ class RedisService:
 
     def exists(self, key: str) -> bool:
         """Check if key exists in cache."""
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
-                return self.client.exists(key) > 0
+                return client.exists(key) > 0
             except Exception as e:
                 log.warning("exists", f"Redis error: {e}. Falling back to memory.")
 
@@ -165,9 +204,10 @@ class RedisService:
 
     def expire(self, key: str, time: int) -> bool:
         """Set a timeout on key."""
-        if self.client:
+        client = get_redis_client()
+        if client:
             try:
-                success = bool(self.client.expire(key, time))
+                success = bool(client.expire(key, time))
                 if success:
                     log.info("expire_success", f"TTL set for {key}: {time}s")
                 return success
@@ -183,3 +223,48 @@ class RedisService:
                 f"Expire called for memory key {key} (not supported, but key exists)",
             )
         return exists_in_mem
+
+    def mget(self, *keys: str) -> list:
+        """複数キーを1往復で取得する（Redis MGET）。失敗時は個別 get にフォールバック。"""
+        client = get_redis_client()
+        if client:
+            try:
+                raw_values = client.mget(*keys)
+                results = []
+                for v in raw_values:
+                    if v is None:
+                        results.append(None)
+                    else:
+                        try:
+                            results.append(json.loads(v))
+                        except (json.JSONDecodeError, TypeError):
+                            results.append(v)
+                return results
+            except Exception as e:
+                log.warning("mget", f"Redis mget failed, falling back to individual gets: {e}")
+        # メモリキャッシュ / fallback: 個別 get
+        return [self.get(k) for k in keys]
+
+
+def get_is_registered(user_id: str | None) -> bool:
+    """ユーザー登録状態を Redis キャッシュ付きで確認する（TTL: 5分）。
+    Redis / DB が失敗した場合は False を返す（フェイルセーフ）。
+    """
+    if not user_id:
+        return False
+    redis = RedisService()
+    cache_key = f"user_registered:{user_id}"
+    cached = redis.get(cache_key)
+    if cached is not None:
+        return bool(cached)
+    # DB fallback
+    try:
+        from app.providers import get_storage_provider
+        storage = get_storage_provider()
+        is_reg = bool(storage.get_user(user_id))
+        if is_reg:
+            redis.set(cache_key, is_reg, expire=300)  # 5分キャッシュ（登録済みのみ）
+        return is_reg
+    except Exception as e:
+        log.warning("get_is_registered", f"Failed to check registration for {user_id}: {e}")
+        return False

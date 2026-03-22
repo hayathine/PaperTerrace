@@ -7,6 +7,7 @@ from app.auth import OptionalUser
 from app.core.config import is_production
 from app.crud import get_storage_provider
 from app.domain.features.figure_insight import FigureInsightService
+from common import settings
 from common.logger import ServiceLogger
 
 log = ServiceLogger("Figures")
@@ -118,20 +119,24 @@ async def explain_figure(
             )
             raise HTTPException(status_code=400, detail="No image URL")
 
-        # GCS 環境では URI を直接 Gemini に渡し、バイト転送を省略する
-        import anyio
-        from app.providers.image_storage import get_gcs_uri
+        # GCS 環境かつ Vertex AI プロバイダーの場合のみ URI を直接渡す（Gemini API は gs:// 非対応）
 
-        gcs_uri = await anyio.to_thread.run_sync(get_gcs_uri, image_url)
-        if gcs_uri:
+        import anyio
+        from app.providers.image_storage import resolve_gcs_uri
+
+        gcs_result = await anyio.to_thread.run_sync(resolve_gcs_uri, image_url)
+        use_vertex = str(settings.get("AI_PROVIDER", "vertex")).lower() == "vertex"
+        if gcs_result and use_vertex:
+            gcs_uri, mime_type = gcs_result
             log.debug(
                 "explain_figure",
                 "Using GCS URI directly (no download)",
                 figure_id=figure_id,
                 gcs_uri=gcs_uri,
+                mime_type=mime_type,
             )
             explanation = await figure_service.analyze_figure(
-                image_uri=gcs_uri, caption=caption, target_lang="ja"
+                image_uri=gcs_uri, caption=caption, target_lang="ja", mime_type=mime_type
             )
         else:
             image_bytes = await _fetch_image_bytes(image_url)
@@ -144,7 +149,7 @@ async def explain_figure(
                 )
                 raise HTTPException(status_code=404, detail="Image file not found")
             explanation = await figure_service.analyze_figure(
-                image_bytes=image_bytes, caption=caption, target_lang="ja"
+                image_bytes=image_bytes, caption=caption, target_lang="ja", mime_type="image/jpeg"
             )
 
         # DB登録済みfigureのみ解説をキャッシュする

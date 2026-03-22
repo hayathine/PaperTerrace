@@ -29,10 +29,34 @@ async def register_user(
     """
     storage = get_storage_provider()
 
-    # Check if user already exists
+    # Check if user already exists (by UID or email)
     existing_user = storage.get_user(user.uid)
+    if not existing_user and user.email:
+        existing_user = storage.get_user_by_email(user.email)
+        if existing_user and existing_user.get("id") != user.uid:
+            # 認証プロバイダー移行 (Firebase → Neon Auth) による UID 変更を検出。
+            # DB の id を新しい UID に更新することで以降の処理を正常化する。
+            old_uid = existing_user["id"]
+            try:
+                storage.migrate_user_uid(old_uid, user.uid)
+                existing_user["id"] = user.uid
+                log.warning(
+                    "register",
+                    "UID移行: 旧UIDを新UIDで上書きしました",
+                    old_uid=old_uid,
+                    new_uid=user.uid,
+                    email=user.email,
+                )
+            except Exception as migrate_err:
+                log.error(
+                    "register",
+                    "UID移行に失敗しました",
+                    old_uid=old_uid,
+                    new_uid=user.uid,
+                    error=str(migrate_err),
+                )
     if existing_user:
-        log.info("register", "User already registered", uid=user.uid)
+        log.info("register", "ユーザーは既に登録されています", uid=user.uid)
         return UserInDB(**existing_user)
 
     # Create new user
@@ -54,7 +78,7 @@ async def register_user(
         storage.create_user(user_data)
         log.info(
             "register",
-            "User registered",
+            "ユーザーを登録しました",
             uid=user.uid,
             email=user.email,
             provider=user.provider,
@@ -62,8 +86,23 @@ async def register_user(
         return UserInDB(**user_data)
 
     except Exception as e:
-        log.exception("register", "Failed to register user", uid=user.uid, error=str(e))
+        # レースコンディション（複数インスタンスの同時リクエスト等）による
+        # UniqueViolation の場合は、既存ユーザーを返す
+        error_str = str(e).lower()
+        if "unique" in error_str or "duplicate" in error_str:
+            log.warning(
+                "register",
+                "UniqueViolation: 既存ユーザーとして処理",
+                uid=user.uid,
+                email=user.email,
+            )
+            recovered = storage.get_user(user.uid) or (
+                user.email and storage.get_user_by_email(user.email)
+            )
+            if recovered:
+                return UserInDB(**recovered)
 
+        log.exception("register", "ユーザー登録に失敗しました", uid=user.uid, error=str(e))
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="ユーザー登録に失敗しました",
@@ -107,12 +146,12 @@ async def update_current_user_profile(
     try:
         storage.update_user(user.uid, update_dict)
         updated_user = storage.get_user(user.uid)
-        log.info("update_profile", "User profile updated", uid=user.uid)
+        log.info("update_profile", "ユーザープロファイルを更新しました", uid=user.uid)
         return UserInDB(**updated_user)
 
     except Exception as e:
         log.exception(
-            "update_profile", "Failed to update user", uid=user.uid, error=str(e)
+            "update_profile", "ユーザーの更新に失敗しました", uid=user.uid, error=str(e)
         )
 
         raise HTTPException(
@@ -130,7 +169,7 @@ async def get_current_user_stats(user: CurrentUser):
         stats = storage.get_user_stats(user.uid)
         return UserStats(**stats)
     except Exception as e:
-        log.exception("stats", "Failed to get user stats", uid=user.uid, error=str(e))
+        log.exception("stats", "ユーザー統計の取得に失敗しました", uid=user.uid, error=str(e))
         return UserStats()
 
 
@@ -146,10 +185,10 @@ async def delete_current_user(user: CurrentUser):
 
     try:
         storage.delete_user(user.uid)
-        log.info("delete_account", "User deleted", uid=user.uid)
+        log.info("delete_account", "ユーザーを削除しました", uid=user.uid)
     except Exception as e:
         log.exception(
-            "delete_account", "Failed to delete user", uid=user.uid, error=str(e)
+            "delete_account", "ユーザーの削除に失敗しました", uid=user.uid, error=str(e)
         )
 
         raise HTTPException(

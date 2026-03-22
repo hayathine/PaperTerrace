@@ -2,12 +2,12 @@ import type React from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { buildAuthHeaders } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { useAuth } from "../../contexts/AuthContext";
 import { usePaperCache } from "../../db/hooks";
-// TODO (suspended): db import used by handleAreaSelect - restore when area mode re-enabled.
-// import { db } from "../../db";
 import { isDbAvailable } from "../../db/index";
+import type { Grounding } from "../Chat/types";
 import PDFPage from "./PDFPage";
 import TextModeViewer from "./TextModeViewer";
 import type { PageData, PageWithLines, SelectedFigure } from "./types";
@@ -36,13 +36,19 @@ interface PDFViewerProps {
 	) => void;
 	jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
 	onStatusChange?: (
-		status: "idle" | "uploading" | "processing" | "done" | "error",
+		status:
+			| "idle"
+			| "uploading"
+			| "processing"
+			| "layout_analysis"
+			| "done"
+			| "error",
 	) => void;
 	onPaperLoaded?: (paperId: string | null) => void;
 	onAskAI?: (
 		prompt: string,
 		imageUrl?: string,
-		coords?: any,
+		coords?: { page: number; x: number; y: number },
 		originalText?: string,
 		contextText?: string,
 	) => void;
@@ -54,8 +60,9 @@ interface PDFViewerProps {
 		matches: Array<{ page: number; wordIndex: number }>,
 	) => void;
 	currentSearchMatch?: { page: number; wordIndex: number } | null;
-	evidence?: any;
+	evidence?: Grounding;
 	appEnv?: string;
+	maxPdfSize?: number;
 	mode?: "text" | "stamp" | "area" | "plaintext";
 }
 
@@ -64,8 +71,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	paperId: propPaperId,
 	onWordClick,
 	onTextSelect,
-	// TODO (suspended): onAreaSelect prop kept for interface compatibility, not forwarded.
-	// onAreaSelect,
 	sessionId,
 	jumpTarget,
 	onStatusChange,
@@ -76,12 +81,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	onSearchMatchesUpdate,
 	currentSearchMatch,
 	evidence,
-	appEnv = "production",
+	appEnv = "prod",
+	maxPdfSize = 50,
 	mode: externalMode,
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token, isGuest } = useAuth();
-	const isDev = appEnv === "development";
+	const isLocal = appEnv === "local";
 	const {
 		getCachedPaper,
 		savePaperToCache,
@@ -91,7 +97,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	// syncStatus lifted to App.tsx
 	const [pages, setPages] = useState<PageData[]>([]);
 	const [status, setStatus] = useState<
-		"idle" | "uploading" | "processing" | "done" | "error"
+		"idle" | "uploading" | "processing" | "layout_analysis" | "done" | "error"
 	>("idle");
 	const [errorMsg, setErrorMsg] = useState<string>("");
 	const eventSourceRef = useRef<EventSource | null>(null);
@@ -112,7 +118,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 	const pagesRef = useRef<PageData[]>([]);
 	const [evidenceHighlights, setEvidenceHighlights] = useState<
-		Record<number, any[]>
+		Record<
+			number,
+			Array<{ x: number; y: number; width: number; height: number }>
+		>
 	>({});
 
 	useEffect(() => {
@@ -127,10 +136,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			return;
 		}
 
-		const highlights: Record<number, any[]> = {};
+		const highlights: Record<
+			number,
+			Array<{ x: number; y: number; width: number; height: number }>
+		> = {};
 
 		if (evidence.supports) {
-			evidence.supports.forEach((support: any) => {
+			evidence.supports.forEach((support) => {
 				const text = support.segment_text;
 				if (!text || text.length < 5) return;
 
@@ -311,7 +323,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		paperId: string,
 		fileHash: string | null,
 	) => {
-		if (!figures || figures.length === 0) return;
+		if (!Array.isArray(figures) || figures.length === 0) return;
 
 		setPages((prevPages) => {
 			const nextPages = prevPages.map((page) => {
@@ -379,9 +391,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		jobId: string,
 		paperId: string,
 		fileHash: string | null,
+		streamUrl: string,
 	): Promise<void> => {
 		return new Promise((resolve) => {
-			const es = new EventSource(`${API_URL}/api/layout-jobs/${jobId}/stream`);
+			const fullStreamUrl = streamUrl.startsWith("http")
+				? streamUrl
+				: `${API_URL}${streamUrl}`;
+			const es = new EventSource(fullStreamUrl);
 
 			const timeout = setTimeout(() => {
 				log.error("poll_layout_job", "Job timed out", { job_id: jobId });
@@ -393,7 +409,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				try {
 					const data = JSON.parse(event.data);
 
-					if (data.status === "completed") {
+					if (data.status === "partial") {
+						applyLayoutFigures(data.figures, paperId, fileHash);
+					} else if (data.status === "completed") {
 						log.info("poll_layout_job", "Job completed", {
 							job_id: jobId,
 							figures: data.figures_detected,
@@ -441,7 +459,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		batchPages: number[],
 		fileHash: string | null,
 		headers: HeadersInit,
-	): Promise<string | null> => {
+	): Promise<{ jobId: string; streamUrl: string } | null> => {
 		const formData = new URLSearchParams();
 		formData.append("paper_id", paperId);
 		formData.append("page_numbers", batchPages.join(","));
@@ -470,7 +488,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			return null;
 		}
 
-		return result.job_id ?? null;
+		if (!result.job_id) return null;
+		const streamUrl =
+			result.stream_url ?? `/api/layout-jobs/${result.job_id}/stream`;
+		return { jobId: result.job_id, streamUrl };
 	};
 
 	const triggerLazyLayoutAnalysis = async (
@@ -484,54 +505,31 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			const finalPages = initialPages ?? pagesRef.current;
 			if (!finalPages || finalPages.length === 0) return;
 
-			const BATCH_SIZE = 10;
-
 			// Important for transient sessions: provide file_hash explicitly
 			const firstImgUrl = finalPages[0]?.image_url || "";
 			const hashMatch = firstImgUrl.match(/\/static\/paper_images\/([^/]+)\//);
 			const fileHash = hashMatch ? hashMatch[1] : null;
 
-			const headers: HeadersInit = {
+			const headers = buildAuthHeaders(token, {
 				"Content-Type": "application/x-www-form-urlencoded",
-			};
-			if (token) headers.Authorization = `Bearer ${token}`;
-
-			// バッチに分割
-			const batches: number[][] = [];
-			for (let i = 0; i < finalPages.length; i += BATCH_SIZE) {
-				batches.push(
-					finalPages.slice(i, i + BATCH_SIZE).map((p) => p.page_num),
-				);
-			}
-
-			log.info("trigger_lazy_layout_analysis", "Enqueuing batches", {
-				paper_id: paperId,
-				total_pages: finalPages.length,
-				batches: batches.length,
 			});
 
-			// バッチを順番に（少しディレイをおいて）キューに投入
-			// ゲートウェイへの負荷集中を避けつつ、バックグラウンドの3ワーカーに仕事を渡す
-			const jobIds: (string | null)[] = [];
-			for (const batchPages of batches) {
-				const jobId = await enqueueBatch(
-					paperId,
-					batchPages,
-					fileHash,
-					headers,
-				);
-				jobIds.push(jobId);
-				if (batches.length > 1) {
-					// 3ワーカーが順次取り出せる程度の適度な間隔
-					await new Promise((resolve) => setTimeout(resolve, 500));
-				}
-			}
+			// 1つのジョブで全ページを投げる（バックエンド側の「最初の3枚、その後10枚ずつ」ロジックに任せる）
+			const pageNumbers = finalPages.map((p) => p.page_num);
 
-			// 各ジョブをSSEで並列待機（ポーリング不要・レート制限なし）
+			log.info("trigger_lazy_layout_analysis", "Enqueuing analysis job", {
+				paper_id: paperId,
+				total_pages: finalPages.length,
+			});
+
+			const job = await enqueueBatch(paperId, pageNumbers, fileHash, headers);
+			const jobs = job ? [job] : [];
+
+			// Worker API へ直接 SSE 接続（Cloud Run を経由しない・イベント駆動）
 			await Promise.all(
-				jobIds
-					.filter((id): id is string => id !== null)
-					.map((jobId) => pollLayoutJob(jobId, paperId, fileHash)),
+				jobs.map(({ jobId, streamUrl }) =>
+					pollLayoutJob(jobId, paperId, fileHash, streamUrl),
+				),
 			);
 
 			log.info(
@@ -549,8 +547,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	/* TODO (suspended): fetchStamps removed - stamp mode suspended.
 	const fetchStamps = async (id: string) => {
 		try {
-			const headers: HeadersInit = {};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			const headers = buildAuthHeaders(token);
 
 			const res = await fetch(`${API_URL}/api/stamps/paper/${id}`, { headers });
 			if (res.ok) {
@@ -613,8 +610,19 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		}
 	}, [jumpTarget, mode]);
 
+	const MAX_PDF_SIZE_MB = maxPdfSize;
+
 	const startAnalysis = async (file: File) => {
 		if (processingFileRef.current === file) return;
+
+		if (file.size > MAX_PDF_SIZE_MB * 1024 * 1024) {
+			setStatus("error");
+			setErrorMsg(
+				t("common.errors.file_too_large", { maxMB: MAX_PDF_SIZE_MB }),
+			);
+			return;
+		}
+
 		processingFileRef.current = file;
 
 		setStatus("uploading");
@@ -624,7 +632,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 		const formData = new FormData();
 		formData.append("file", file);
-		formData.append("lang", i18n.language);
+		formData.append("lang", i18n.language.startsWith("ja") ? "ja" : "en");
 
 		formData.append("mode", "json");
 		if (sessionId) {
@@ -632,8 +640,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		}
 
 		try {
-			const headers: HeadersInit = {};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			const headers = buildAuthHeaders(token);
 
 			const response = await fetch(`${API_URL}/api/analyze-pdf-json`, {
 				method: "POST",
@@ -706,7 +713,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						}
 
 						// Also prepend to figures if they exist
-						if (newData.figures && newData.figures.length > 0) {
+						if (Array.isArray(newData.figures) && newData.figures.length > 0) {
 							newData = {
 								...newData,
 								figures: newData.figures.map((f: any) => ({
@@ -734,7 +741,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						return [...prev, newData];
 					});
 				} else if (eventData.type === "done") {
-					setStatus("done");
 					if (eventData.paper_id) {
 						const pId = eventData.paper_id;
 						setLoadedPaperId(pId);
@@ -756,7 +762,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								links: p.links,
 							}));
 
-							// Extract file_hash from image_url (e.g. /static/paper_images/{hash}/page_1.png)
+							// Extract file_hash from image_url (e.g. /static/paper_images/{hash}/page_1.jpg)
 							let fileHash = "";
 							if (imageUrls.length > 0) {
 								const match = imageUrls[0].match(
@@ -781,14 +787,29 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							);
 						})();
 
-						// Trigger lazy layout analysis in background (non-blocking)
+						// レイアウト解析中は "layout_analysis" ステータスを維持し、
+						// 完了後に "done" へ遷移することで GlobalLoading を正しいタイミングで消す
 						// finalPages を明示的に渡す: pagesRef は useEffect 経由で同期されるため、
 						// "done" イベント時点では stale な可能性がある
-						triggerLazyLayoutAnalysis(pId, finalPages).catch((err) =>
-							log.warn("trigger_lazy_layout_analysis", "Lazy analysis failed", {
-								error: err,
-							}),
-						);
+						// 30秒のタイムアウト: Worker API が応答しない場合でも UI がブロックされないよう
+						setStatus("layout_analysis");
+						const layoutTimeout = setTimeout(() => setStatus("done"), 30_000);
+						triggerLazyLayoutAnalysis(pId, finalPages)
+							.catch((err) =>
+								log.warn(
+									"trigger_lazy_layout_analysis",
+									"Lazy analysis failed",
+									{
+										error: err,
+									},
+								),
+							)
+							.finally(() => {
+								clearTimeout(layoutTimeout);
+								setStatus("done");
+							});
+					} else {
+						setStatus("done");
 					}
 					es.close();
 					processingFileRef.current = null;
@@ -837,9 +858,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				}, retryDelay);
 			} else {
 				setStatus("error");
-				setErrorMsg(
-					`ネットワークエラーが発生しました。接続を確認して再度お試しください。(URL: ${stream_url})`,
-				);
+				log.error("stream_retry_exhausted", "Max retries reached", {
+					stream_url,
+				});
+				setErrorMsg(t("common.errors.network"));
 				processingFileRef.current = null;
 				activeTaskIdRef.current = null;
 			}
@@ -925,11 +947,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				canvas.toBlob(async (blob) => {
 					if (!blob) return;
 					const formData = new FormData();
-					formData.append("file", blob, "crop.png");
+					formData.append("file", blob, "crop.jpg");
 
 					// We need token if auth is enabled
-					const headers: HeadersInit = {};
-					if (token) headers.Authorization = `Bearer ${token}`;
+					const headers = buildAuthHeaders(token);
 
 					const res = await fetch(`${API_URL}/api/upload/image`, {
 						method: "POST",
@@ -952,7 +973,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						error: e,
 					});
 				}
-			}, "image/png");
+			}, "image/jpeg");
 		},
 
 		[pages, onAreaSelect, token],
@@ -979,8 +1000,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			setStamps((prev) => [...prev, newStamp]);
 
 			try {
-				const headers: HeadersInit = { "Content-Type": "application/json" };
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token, { "Content-Type": "application/json" });
 
 				const res = await fetch(
 					`${API_URL}/api/stamps/paper/${loadedPaperId}`,
@@ -1027,8 +1047,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			// Optimistic update
 			setStamps((prev) => prev.filter((s) => s.id !== stampId));
 			try {
-				const headers: HeadersInit = {};
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token);
 				await fetch(`${API_URL}/api/stamps/paper/${stampId}`, {
 					method: "DELETE",
 					headers,
@@ -1047,6 +1066,24 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		() => groupWordsIntoLines(pages),
 		[pages],
 	);
+
+	// figure 画像が実際にサーバー上に存在するか確認する（最初の1枚をHEADリクエストで検証）
+	const checkFigureImagesExist = async (
+		pages: PageData[],
+	): Promise<boolean> => {
+		for (const page of pages) {
+			const firstFigure = page.figures?.[0];
+			if (firstFigure?.image_url) {
+				try {
+					const res = await fetch(firstFigure.image_url, { method: "HEAD" });
+					return res.ok;
+				} catch {
+					return false;
+				}
+			}
+		}
+		return true; // 確認対象なし
+	};
 
 	const loadExistingPaper = async (id: string) => {
 		setStatus("processing");
@@ -1076,7 +1113,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						const cachedPages: PageData[] = layoutList.map(
 							(layout: any, i: number) => ({
 								page_num: i + 1,
-								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.png`,
+								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.jpg`,
 								width: layout?.width || 0,
 								height: layout?.height || 0,
 								words: layout?.words || [],
@@ -1096,21 +1133,47 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 						if (cachedPages.length > 0) {
 							setPages(cachedPages);
-							setStatus("done");
 							// Cached papers: preserved current mode
 
 							// Trigger lazy layout analysis to fetch figures if not already present
+							// キャッシュに figures があっても画像が実際に存在しない場合は再解析する
 							const hasFigures = cachedPages.some(
 								(p) => p.figures && p.figures.length > 0,
 							);
-							if (!hasFigures) {
-								triggerLazyLayoutAnalysis(id, cachedPages).catch((err) =>
+							const figuresOk =
+								hasFigures && (await checkFigureImagesExist(cachedPages));
+							if (!hasFigures || !figuresOk) {
+								// 壊れた figure URL が重複排除を妨げないようクリアしてから解析
+								const pagesForAnalysis = hasFigures
+									? cachedPages.map((p) => ({ ...p, figures: [] }))
+									: cachedPages;
+								if (hasFigures) {
 									log.warn(
-										"trigger_lazy_layout_analysis",
-										"Lazy layout analysis failed",
-										{ error: err },
-									),
+										"load_existing_paper",
+										"Figure images missing, clearing and re-running layout analysis",
+										{ paper_id: id },
+									);
+									setPages(pagesForAnalysis);
+								}
+								setStatus("layout_analysis");
+								const layoutTimeoutCached = setTimeout(
+									() => setStatus("done"),
+									30_000,
 								);
+								triggerLazyLayoutAnalysis(id, pagesForAnalysis)
+									.catch((err) =>
+										log.warn(
+											"trigger_lazy_layout_analysis",
+											"Lazy layout analysis failed",
+											{ error: err },
+										),
+									)
+									.finally(() => {
+										clearTimeout(layoutTimeoutCached);
+										setStatus("done");
+									});
+							} else {
+								setStatus("done");
 							}
 
 							// セッション→論文マッピングをバックエンドに通知
@@ -1120,9 +1183,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								fd.append("paper_id", id);
 								fetch(`${API_URL}/api/session-context`, {
 									method: "POST",
-									headers: token
-										? { Authorization: `Bearer ${token}` }
-										: undefined,
+									headers: buildAuthHeaders(token),
 									body: fd,
 								}).catch((err) =>
 									log.warn(
@@ -1147,8 +1208,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				}
 			}
 
-			const headers: HeadersInit = {};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			const headers = buildAuthHeaders(token);
 
 			// 1. Try to fetch full paper data directly first (Fast Load)
 			const paperRes = await fetch(`${API_URL}/api/papers/${id}`, { headers });
@@ -1198,7 +1258,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						const fullPages: PageData[] = layoutList.map(
 							(layout: any, i: number) => ({
 								page_num: i + 1,
-								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.png`,
+								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.jpg`,
 								width: layout?.width || 0,
 								height: layout?.height || 0,
 								words: layout?.words || [],
@@ -1218,7 +1278,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 
 						if (fullPages.length > 0) {
 							setPages(fullPages);
-							setStatus("done");
 							// Full paper data has coordinates ready
 
 							// Cache images in background for all users (CORS avoidance, fast reload)
@@ -1230,17 +1289,43 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							);
 
 							// Trigger lazy layout analysis to fetch figures if not already present
+							// キャッシュに figures があっても画像が実際に存在しない場合は再解析する
 							const hasFigures = fullPages.some(
 								(p) => p.figures && p.figures.length > 0,
 							);
-							if (!hasFigures) {
-								triggerLazyLayoutAnalysis(id, fullPages).catch((err) =>
+							const figuresOk =
+								hasFigures && (await checkFigureImagesExist(fullPages));
+							if (!hasFigures || !figuresOk) {
+								const pagesForAnalysis = hasFigures
+									? fullPages.map((p) => ({ ...p, figures: [] }))
+									: fullPages;
+								if (hasFigures) {
 									log.warn(
-										"trigger_lazy_layout_analysis",
-										"Lazy analysis failed",
-										{ error: err },
-									),
+										"load_existing_paper",
+										"Figure images missing (API path), clearing and re-running layout analysis",
+										{ paper_id: id },
+									);
+									setPages(pagesForAnalysis);
+								}
+								setStatus("layout_analysis");
+								const layoutTimeoutFull = setTimeout(
+									() => setStatus("done"),
+									30_000,
 								);
+								triggerLazyLayoutAnalysis(id, pagesForAnalysis)
+									.catch((err) =>
+										log.warn(
+											"trigger_lazy_layout_analysis",
+											"Lazy analysis failed",
+											{ error: err },
+										),
+									)
+									.finally(() => {
+										clearTimeout(layoutTimeoutFull);
+										setStatus("done");
+									});
+							} else {
+								setStatus("done");
 							}
 
 							// セッション→論文マッピングをバックエンドに通知
@@ -1250,9 +1335,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								fd.append("paper_id", id);
 								fetch(`${API_URL}/api/session-context`, {
 									method: "POST",
-									headers: token
-										? { Authorization: `Bearer ${token}` }
-										: undefined,
+									headers: buildAuthHeaders(token),
 									body: fd,
 								}).catch((err) =>
 									log.warn(
@@ -1404,6 +1487,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							onTextSelect={handleTextSelect}
 							onAskAI={onAskAI}
 							searchTerm={searchTerm}
+							jumpTarget={mode === "plaintext" ? jumpTarget : null}
 						/>
 					</div>
 
@@ -1433,7 +1517,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 										searchTerm={searchTerm}
 										currentSearchMatch={currentSearchMatch}
 										evidenceHighlights={evidenceHighlights[page.page_num]}
-										isDev={isDev}
+										isLocal={isLocal}
 									/>
 								))}
 							</div>

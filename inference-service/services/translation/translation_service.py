@@ -5,12 +5,14 @@
 
 import asyncio
 import logging
-import os
+
 
 from .llamacpp_service import LlamaCppTranslationService
 from .m2m100_service import M2M100TranslationService
 
-QWEN_FALLBACK_TIMEOUT = int(os.getenv("QWEN_FALLBACK_TIMEOUT", "50"))
+from common import settings
+
+QWEN_FALLBACK_TIMEOUT = int(settings.get("QWEN_FALLBACK_TIMEOUT", "50"))
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +30,7 @@ class TranslationService:
         self.llamacpp = llamacpp_service
         self.inference_type = inference_type
         self.fallback_threshold = float(
-            os.getenv("TRANSLATION_FALLBACK_THRESHOLD", "0.5")
+            settings.get("TRANSLATION_FALLBACK_THRESHOLD", "0.5")
         )
 
     async def initialize(self):

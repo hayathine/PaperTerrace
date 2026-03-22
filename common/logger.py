@@ -11,6 +11,8 @@ from datetime import datetime, timedelta, timezone
 import structlog
 from structlog.typing import EventDict, WrappedLogger
 
+from common.config import settings
+
 
 def flatten_extra(
     logger: WrappedLogger, method_name: str, event_dict: EventDict
@@ -91,10 +93,8 @@ shared_processors = [
 
 def configure_logging(log_level: str = "INFO"):
     """ロギングを設定する"""
-    import os
-
     # 環境変数からログレベルを取得（デフォルトはINFO）
-    env_log_level = (os.getenv("LOG_LEVEL") or log_level).upper()
+    env_log_level = (settings.get("LOG_LEVEL") or log_level).upper()
 
     structlog.configure(
         processors=shared_processors
@@ -143,12 +143,12 @@ def configure_logging(log_level: str = "INFO"):
             level = logging.WARNING
             if logger_name == "uvicorn.access":
                 level = getattr(
-                    logging, os.getenv("ACCESS_LOG_LEVEL", "WARNING").upper()
+                    logging, settings.get("ACCESS_LOG_LEVEL", "WARNING").upper()
                 )
             uv_logger.setLevel(level)
 
     # 静的ファイルアクセスログの設定（環境変数で制御）
-    access_log_level = os.getenv("ACCESS_LOG_LEVEL", "WARNING").upper()
+    access_log_level = settings.get("ACCESS_LOG_LEVEL", "WARNING").upper()
 
     # サードパーティライブラリのデバッグログを抑制（アプリのLOG_LEVELに関係なくWARNING以上のみ）
     noisy_loggers = [
@@ -178,6 +178,8 @@ def configure_logging(log_level: str = "INFO"):
         "charset_normalizer",
         "asyncio",
         "multipart",
+        "python_multipart",
+        "python_multipart.multipart",
         "aiohttp",
         "grpc",
     ]

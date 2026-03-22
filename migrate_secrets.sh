@@ -10,7 +10,6 @@ SERVICE_ACCOUNT="602776143589-compute@developer.gserviceaccount.com"
 # Secret Name -> Env Var Value Mapping
 # Note: Using associative arrays (requires bash 4+) or simple multiple arrays
 SECRETS=(
-  "GEMINI_API_KEY=$GEMINI_API_KEY"
   "FIREBASE_API_KEY=$FIREBASE_API_KEY"
   "FIREBASE_AUTH_DOMAIN=$FIREBASE_AUTH_DOMAIN"
   "FIREBASE_PROJECT_ID=$FIREBASE_PROJECT_ID"

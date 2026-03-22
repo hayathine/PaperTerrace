@@ -139,7 +139,7 @@ class PaddleLayoutService:
         Parameters
         ----------
         image_bytes : bytes
-            解析対象の画像データ（PNG/JPEG等）
+            解析対象の画像データ（JPEG/WebP）
 
         Returns
         -------

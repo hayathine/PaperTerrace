@@ -1,20 +1,62 @@
 """
 Papers Router
-Handles paper management (list, get, delete).
+Handles paper management (list, get, delete, claim).
 """
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
+from pydantic import BaseModel
 
-from app.auth import OptionalUser
+from app.auth import CurrentUser, OptionalUser
 from app.providers import get_storage_provider
+from common.logger import ServiceLogger
+
+log = ServiceLogger("Papers")
 
 router = APIRouter(tags=["Papers"])
 
 
+class ClaimPaperRequest(BaseModel):
+    """ゲストとしてアップロードした論文をサインイン後にDBに保存するためのリクエスト。"""
+
+    paper_id: str
+    file_hash: str
+    filename: str
+    ocr_text: str = ""
+    layout_json: str | None = None
+
+
+@router.post("/papers/claim")
+async def claim_paper(body: ClaimPaperRequest, user: CurrentUser):
+    """
+    ゲストとしてアップロードした論文をサインイン後にライブラリに保存する。
+
+    フロントエンドの IndexedDB に保持されているデータを受け取り、
+    認証済みユーザーの owner_id を付けて DB に保存する。
+    """
+    storage = get_storage_provider()
+    storage.save_paper(
+        paper_id=body.paper_id,
+        file_hash=body.file_hash,
+        filename=body.filename,
+        ocr_text=body.ocr_text,
+        html_content="",
+        target_language="ja",
+        layout_json=body.layout_json,
+        owner_id=user.uid,
+    )
+    log.info(
+        "claim_paper",
+        "ゲスト論文をライブラリに保存しました",
+        paper_id=body.paper_id,
+        uid=user.uid,
+    )
+    return JSONResponse({"claimed": True, "paper_id": body.paper_id})
+
+
 @router.get("/papers")
-async def list_papers(user: OptionalUser = None, limit: int = 50):
+async def list_papers(user: OptionalUser = None, limit: int = Query(default=50, ge=1, le=100)):
     """
     List papers for the current user.
 

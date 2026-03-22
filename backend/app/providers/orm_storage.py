@@ -142,6 +142,13 @@ class ORMStorageAdapter(StorageInterface):
             self._replace_session()
             return fn()
 
+    def close(self) -> None:
+        """DBセッションをクローズしてプールに接続を返却する。"""
+        try:
+            self._db.close()
+        except Exception:
+            pass
+
     # ------------------------------------------------------------------
 
     def init_tables(self) -> None:
@@ -386,8 +393,15 @@ class ORMStorageAdapter(StorageInterface):
         user = self._with_recovery(lambda: self.users.get_by_id(user_id))
         return _user_to_dict(user) if user else None
 
+    def get_user_by_email(self, email: str) -> Optional[dict]:
+        user = self._with_recovery(lambda: self.users.get_by_email(email))
+        return _user_to_dict(user) if user else None
+
     def update_user(self, user_id: str, data: dict) -> bool:
         return self._with_recovery(lambda: self.users.update(user_id, data))
+
+    def migrate_user_uid(self, old_uid: str, new_uid: str) -> bool:
+        return self._with_recovery(lambda: self.users.migrate_uid(old_uid, new_uid))
 
     def delete_user(self, user_id: str) -> bool:
         return self._with_recovery(lambda: self.users.delete(user_id))

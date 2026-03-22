@@ -3,12 +3,12 @@ import { useTranslation } from "react-i18next";
 import CopyButton from "../Common/CopyButton";
 import FeedbackSection from "../Common/FeedbackSection";
 import MarkdownContent from "../Common/MarkdownContent";
-import type { Message } from "./types";
+import type { Grounding, Message } from "./types";
 
 interface MessageBubbleProps {
 	message: Message;
 	sessionId: string;
-	onEvidenceClick?: (grounding: any) => void;
+	onEvidenceClick?: (grounding: Grounding) => void;
 }
 
 const MessageBubble: React.FC<MessageBubbleProps> = ({
@@ -20,8 +20,8 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 	const isUser = message.role === "user";
 	const hasGrounding =
 		message.grounding &&
-		(message.grounding.supports?.length > 0 ||
-			message.grounding.chunks?.length > 0);
+		((message.grounding.supports?.length ?? 0) > 0 ||
+			(message.grounding.chunks?.length ?? 0) > 0);
 
 	return (
 		<div
@@ -43,6 +43,7 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 								? "text-orange-50 hover:text-white hover:bg-orange-500"
 								: ""
 						}
+						traceId={isUser ? undefined : message.traceId}
 					/>
 				</div>
 				<MarkdownContent
@@ -72,7 +73,9 @@ const MessageBubble: React.FC<MessageBubbleProps> = ({
 					<div className="mt-3 pt-2 border-t border-slate-100 flex justify-end">
 						<button
 							type="button"
-							onClick={() => onEvidenceClick(message.grounding)}
+							onClick={() =>
+								message.grounding && onEvidenceClick(message.grounding)
+							}
 							className="text-[10px] font-bold uppercase tracking-widest px-2 py-1 bg-orange-50 text-orange-600 rounded hover:bg-orange-100 transition-colors flex items-center gap-1 group/ev"
 						>
 							<svg

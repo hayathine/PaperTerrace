@@ -1,12 +1,13 @@
-import base64
+from __future__ import annotations
+
 import io
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-# pdfplumber related imports for type hinting and functionality
-from pdfplumber.display import PageImage
-from pdfplumber.page import Page
+if TYPE_CHECKING:
+    from pdfplumber.display import PageImage
+    from pdfplumber.page import Page
 
-from app.providers.image_storage import save_page_image
+from app.providers.image_storage import async_save_page_image
 from common.logger import logger
 from common.schemas.layout import BBoxModel
 from common.utils.bbox import get_bbox_from_items, is_contained, scale_bbox
@@ -120,13 +121,11 @@ class FigureService:
                 # Crop from the already rendered PIL image
                 crop_pil = page_img.original.crop(pixel_bbox).convert("RGB")
 
-                # JPEG圧縮で転送サイズを削減（PNG比で90%削減）
                 buffer = io.BytesIO()
                 crop_pil.save(buffer, format="JPEG", quality=85, optimize=True)
-                img_b64 = base64.b64encode(buffer.getvalue()).decode("utf-8")
 
                 img_name = f"p{page_num}_{cand['label']}_{len(final_areas)}"
-                url = save_page_image(file_hash, img_name, img_b64)
+                url = await async_save_page_image(file_hash, img_name, buffer.getvalue(), "jpg")
 
                 final_areas.append(
                     {

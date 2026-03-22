@@ -5,14 +5,17 @@
 		"loading_description": "Please wait a moment...",
 		"error": "Error",
 		"error_boundary": {
-			"title": "Something went wrong",
-			"description": "The issue has been reported. Please reload the page or try again later.",
-			"reload": "Reload Page"
+			"title": "Under Maintenance",
+			"description": "We're adjusting the system. Please try again in a moment.",
+			"reload": "Reload"
 		},
 		"errors": {
 			"unexpected": "An unexpected error occurred. Please try again later.",
 			"load_failed": "Failed to load. Please try again.",
 			"upload_failed": "Upload failed. Please try again.",
+			"file_too_large": "File is too large (max: {{maxMB}}MB). Please try a smaller PDF.",
+			"file_type_invalid": "Only PDF files can be uploaded.",
+			"image_too_large": "Image file is too large. Please select a smaller image.",
 			"processing": "An error occurred during processing. Please try again.",
 			"network": "A network error occurred. Please check your connection."
 		},
@@ -69,7 +72,7 @@
 			"notes": "Dictionary",
 			"analysis": "Analysis",
 			"chat": "Chat",
-			"comments": "Comments",
+			"comments": "Notes",
 			"figures": "Figures",
 			"translation": "Translation",
 			"explanation": "Explanation",
@@ -81,6 +84,7 @@
 		"waiting_pdf": "Waiting for PDF...",
 		"uploading_pdf": "Uploading PDF...",
 		"processing_pdf": "Analyzing PDF...",
+		"analyzing_layout": "Detecting figures and tables...",
 		"select_pdf": "Select a PDF to view",
 		"page": "Page",
 		"toolbar": {
@@ -90,6 +94,8 @@
 			"stamp_mode": "Stamps"
 		},
 		"image_not_available": "Image not available",
+		"figure_analysis_failed": "Failed to analyze the figure.",
+		"figure_analysis_network_error": "Failed to analyze the figure. Please check your connection.",
 		"text_mode_hint": "Use Text Mode to view content",
 		"dictionary": {
 			"ready": "Dictionary Ready!",
@@ -98,11 +104,12 @@
 			"open_link": "Open Link",
 			"ask_ai": "AI Commentary",
 			"ask_in_chat": "Ask in Chat",
-			"save_note": "Save Comment",
+			"save_note": "Save Note",
 			"saved": "Saved",
 			"jump": "Jump to Location",
 			"error_unavailable": "This feature is currently unavailable.",
 			"error_translation_unavailable": "Translation is currently unavailable.",
+			"truncated_notice": "The selected text was too long. Only the first 2000 characters have been translated.",
 			"history_empty": "No saved terms",
 			"history_hint": "Save words to the dictionary to see them here."
 		}
@@ -128,14 +135,14 @@
 		"reproducibility": "Reproducibility Risks"
 	},
 	"notes": {
-		"title": "Comments",
+		"title": "Notes",
 		"placeholder_term": "Term / Keyword",
-		"placeholder_content": "Write your comment here...",
-		"add": "Add Comment",
-		"update": "Update Comment",
+		"placeholder_content": "Write your note here...",
+		"add": "Add Note",
+		"update": "Update Note",
 		"adding": "Adding...",
 		"updating": "Updating...",
-		"no_notes": "No comments yet. Add one above!",
+		"no_notes": "No notes yet. Add one above!",
 		"jump_to_page": "Jump to Page {{page}}"
 	},
 	"stack": {
@@ -159,7 +166,7 @@
 	},
 	"menu": {
 		"translate": "Translate",
-		"note": "Comment",
+		"note": "Note",
 		"ask_ai": "Ask AI",
 		"explain": "Explain",
 		"close": "Close"

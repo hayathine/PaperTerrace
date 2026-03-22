@@ -5,7 +5,7 @@ import StampOverlay from "./StampOverlay";
 describe("StampOverlay Component", () => {
 	const mockStamps = [
 		{ id: "1", x: 20, y: 30, type: "👍" },
-		{ id: "2", x: 50, y: 50, type: "https://example.com/stamp.png" },
+		{ id: "2", x: 50, y: 50, type: "https://example.com/stamp.jpg" },
 	];
 	const onAddStampMock = vi.fn();
 	const onDeleteStampMock = vi.fn();
@@ -31,7 +31,7 @@ describe("StampOverlay Component", () => {
 
 		expect(screen.getByText("👍")).toBeInTheDocument();
 		const imageStamp = screen.getByRole("img");
-		expect(imageStamp).toHaveAttribute("src", "https://example.com/stamp.png");
+		expect(imageStamp).toHaveAttribute("src", "https://example.com/stamp.jpg");
 	});
 
 	it("calls onAddStamp with correct coordinates when clicked in stamp mode", () => {

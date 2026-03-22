@@ -3,6 +3,8 @@ name = "redis-provider"
 version = "0.1.0"
 description = "Shared Redis Provider for PaperTerrace"
 dependencies = [
+    "python-dotenv>=1.0.1",
+    "dynaconf>=3.2.0",
     "redis>=5.0.0",
     "structlog>=24.1.0",
 ]

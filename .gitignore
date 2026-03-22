@@ -10,6 +10,7 @@ infrastructure/k8s/
 .testmondata
 .testmondata*
 *.txt
+optimize_agents/
 prompt_optimization/
 # Byte-compiled / optimized / DLL files
 __pycache__/
@@ -266,3 +267,4 @@ models/
 .kiro
 .agents
 CLAUDE.md
+inference-service/.ov_cache/

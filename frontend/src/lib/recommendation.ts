@@ -45,6 +45,7 @@ export interface RecommendationGenerateResponse {
 	reasoning: string;
 	knowledge_level: string;
 	search_queries: string[];
+	trace_id?: string;
 }
 
 /**

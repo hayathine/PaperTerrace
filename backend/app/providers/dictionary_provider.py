@@ -2,6 +2,13 @@ class DictionaryProvider:
     def __init__(self):
         pass
 
+    def lookup(self, word: str) -> bool:
+        """
+        Check if a word exists in the dictionary.
+        Currently a stub that returns True for any word.
+        """
+        return True
+
 
 # シングルトン化して再利用（高速化の鍵）
 _instance = None

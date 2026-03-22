@@ -6,6 +6,7 @@ import {
 	useEffect,
 	useState,
 } from "react";
+import { API_URL } from "@/config";
 import { authClient, getNeonJWT } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 
@@ -63,8 +64,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 				setIsGuest(false);
 				// session.session.token は opaque token のため、JWT を別途取得する
 				getNeonJWT()
-					.then((jwt) => {
+					.then(async (jwt) => {
 						setToken(jwt);
+						// バックエンド DB にユーザーを登録（未登録の場合は新規作成）
+						// await することで登録完了前に論文アップロードが走るレースコンディションを防ぐ
+						if (jwt) {
+							try {
+								await fetch(`${API_URL}/api/auth/register`, {
+									method: "POST",
+									headers: { Authorization: `Bearer ${jwt}` },
+								});
+							} catch (err) {
+								log.error("register", "Failed to register user in backend", {
+									err,
+								});
+							}
+						}
 					})
 					.catch(() => {
 						setToken(null);

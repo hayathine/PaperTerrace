@@ -1,5 +1,6 @@
 import { lazy, Suspense, useMemo } from "react";
 import { useTranslation } from "react-i18next";
+import type { Grounding } from "../Chat/types";
 import type { SelectedFigure } from "../PDF/types";
 
 const ChatWindow = lazy(() => import("../Chat/ChatWindow"));
@@ -34,7 +35,7 @@ interface SidebarProps {
 	onPendingFigureConsumed?: () => void;
 	pendingChatPrompt?: string | null;
 	onPendingChatConsumed?: () => void;
-	onEvidenceClick?: (grounding: any) => void;
+	onEvidenceClick?: (grounding: Grounding) => void;
 	onClose?: () => void;
 }
 

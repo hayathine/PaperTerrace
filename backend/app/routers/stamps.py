@@ -48,6 +48,8 @@ async def add_paper_stamp(paper_id: str, request: StampRequest, user: OptionalUs
             is_registered = True
 
     if is_registered:
+        if not storage.get_paper(paper_id):
+            raise HTTPException(status_code=404, detail="Paper not found")
         stamp_id = storage.add_paper_stamp(
             paper_id,
             request.stamp_type,
@@ -105,13 +107,17 @@ async def delete_paper_stamp(stamp_id: str):
 @router.post("/stamps/note/{note_id}")
 async def add_note_stamp(note_id: str, request: StampRequest):
     """Add a stamp to a note."""
-    stamp_id = get_storage_provider().add_note_stamp(
-        note_id,
-        request.stamp_type,
-        request.user_id,
-        x=request.x,
-        y=request.y,
-    )
+    from sqlalchemy.exc import IntegrityError
+    try:
+        stamp_id = get_storage_provider().add_note_stamp(
+            note_id,
+            request.stamp_type,
+            request.user_id,
+            x=request.x,
+            y=request.y,
+        )
+    except IntegrityError:
+        raise HTTPException(status_code=404, detail="Note not found")
     return JSONResponse(
         {
             "stamp_id": stamp_id,
@@ -171,12 +177,11 @@ async def upload_custom_stamp(file: UploadFile = File(...)):
         max_size = (256, 256)
         image.thumbnail(max_size, Image.Resampling.LANCZOS)
 
-        # Save as PNG
-        ext = "png"
+        ext = "jpg"
         filename = f"{uuid.uuid4()}_{int(time.time())}.{ext}"
         file_path = STAMPS_UPLOAD_DIR / filename
 
-        image.save(file_path, format="PNG")
+        image.save(file_path, format="JPEG", quality=90)
         file_url = f"/static/user_uploads/stamps/{filename}"
 
         log.info("upload_custom", "Custom stamp uploaded", file_url=file_url)

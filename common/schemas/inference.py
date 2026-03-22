@@ -57,3 +57,17 @@ class TokenizeResponse(BaseModel):
     tokens: List[Any]  # List of dicts with text, lemma, ws
     processing_time: float
     message: Optional[str] = None
+
+
+class LayoutBatchByUrlsRequest(BaseModel):
+    """署名付きURLによる一括レイアウト解析リクエスト"""
+    image_urls: List[str]
+    page_nums: Optional[List[int]] = None
+
+
+class OcrPageResponse(BaseModel):
+    """OCRページ認識レスポンス"""
+    success: bool
+    text: str
+    processing_time: float
+    message: Optional[str] = None

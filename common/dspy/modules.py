@@ -1,3 +1,6 @@
+import random
+from typing import Callable
+
 import dspy
 
 from common.dspy.signatures import (
@@ -11,10 +14,64 @@ from common.dspy.signatures import (
     PaperSummary,
     PaperSummaryContext,
     PaperSummarySections,
+    PersonaAdapterSignature,
     SimpleTranslation,
     SolveTask,
+    SystemContextSignature,
     VisionAnalyzeFigure,
 )
+
+
+class PromptCandidatePool:
+    """GEPA の Pareto フロントから生成された複数の最適化済みプロンプト候補を管理するプール。
+
+    呼び出しのたびにランダムに1つの候補を選択することで、
+    各候補のパフォーマンスをオンラインで比較・評価できる。
+    選択された候補インデックスは TraceContext.candidate_index に記録する。
+
+    使用例::
+
+        pool = PromptCandidatePool.from_bigquery(PaperSummaryModule, "paper_summary")
+        module, idx = pool.select()
+        context.candidate_index = idx
+        result, trace_id = await trace_dspy_call(..., module_callable=module, context=context)
+    """
+
+    def __init__(self, candidates: list[dspy.Module]) -> None:
+        if not candidates:
+            raise ValueError("candidates must not be empty")
+        self.candidates = candidates
+
+    def select(self) -> tuple[dspy.Module, int]:
+        """候補をランダムに1つ選択して返す。
+
+        Returns:
+            (選択されたモジュール, そのインデックス) のタプル。
+        """
+        idx = random.randrange(len(self.candidates))
+        return self.candidates[idx], idx
+
+    def __len__(self) -> int:
+        return len(self.candidates)
+
+    @classmethod
+    def from_bigquery(
+        cls,
+        module_factory: Callable[[], dspy.Module],
+        program_name: str,
+    ) -> "PromptCandidatePool":
+        """BigQuery の prompt_candidates テーブルから最新の Pareto 候補をロードしてプールを生成する。
+
+        候補が存在しない場合は module_factory() による単一モジュールで初期化する。
+
+        Args:
+            module_factory: 新規モジュールインスタンスを生成する callable。
+            program_name: BigQuery 上の識別子（例: 'paper_summary'）。
+        """
+        from common.dspy.prompt_store import load_candidates_from_bigquery
+
+        candidates = load_candidates_from_bigquery(module_factory, program_name)
+        return cls(candidates)
 
 
 class UserPersonaModule(dspy.Module):
@@ -42,37 +99,131 @@ class UserPersonaModule(dspy.Module):
         return result
 
 
+class SystemModule(dspy.Module):
+    """
+    グローバルシステムコンテキストを生成するモジュール。GEPA最適化対象。
+
+    SystemContextSignature の __doc__ が GEPA の最適化対象になる。
+    出力はユーザー非依存の不変制約（役割定義・言語強制・品質基準）のみを含む。
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.generate = dspy.Predict(SystemContextSignature)
+
+    def forward(self, task_type: str, lang_name: str) -> str:
+        result = self.generate(task_type=task_type, lang_name=lang_name)
+        return result.system_context
+
+
+class PersonaAdapter(dspy.Module):
+    """
+    ユーザーペルソナとタスク種別から純粋な行動指示（persona_instruction）を生成するアダプター。
+
+    GEPA 最適化の対象はこのモジュールのみ。system_context の制約に従いつつ、
+    コンテンツ（input_data）には依存せず「どう振る舞うか」という行動ポリシーのみを出力する。
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.adapter = dspy.Predict(PersonaAdapterSignature)
+
+    def forward(
+        self, system_context: str, user_persona: str, task_description: str, lang_name: str
+    ) -> str:
+        result = self.adapter(
+            system_context=system_context,
+            user_persona=user_persona,
+            task_description=task_description,
+            lang_name=lang_name,
+        )
+        return result.persona_instruction
+
+
 class UniversalTaskModule(dspy.Module):
     """
-    SolveTask（パーソナライズ）と任意の下流タスクシグネチャを動的に結合して実行する汎用モジュール。
+    3層パイプラインで任意の下流タスクを実行する汎用モジュール。
 
-    SolveTask が user_persona・lang_name・input_data から task_instruction を生成し、
-    その指示を下流シグネチャに渡すことで、全タスクにパーソナライゼーションを適用する。
+    パイプライン構造:
+        [Layer 1] SystemModule (固定・LLMなし)
+            task_type + lang_name → system_context
+
+        [Layer 2] PersonaAdapter (GEPA最適化対象)
+            system_context + user_persona + task_description + lang_name → persona_instruction
+
+        [Layer 3] downstream Predict (固定)
+            persona_instruction + task_inputs → 出力
+
+    GEPAは PersonaAdapter (PersonaAdapterSignature) のみを最適化する。
+    SystemModule は dspy.Predict を持たないため optimizer から不可視。
+    downstream は __init__ 時に拡張した固定シグネチャで実行する。
     """
+
+    _TASK_DESCRIPTIONS: dict[str, str] = {
+        "PaperSummary": "Summarize an academic paper into structured sections.",
+        "PaperSummarySections": "Summarize an academic paper section by section.",
+        "PaperSummaryContext": "Generate a brief context summary of a paper segment.",
+        "ContextAwareTranslation": "Translate a technical word with academic context awareness.",
+        "SimpleTranslation": "Translate a word or phrase concisely.",
+        "DeepExplanation": "Explain a technical concept in depth using paper context.",
+        "PaperRecommendation": "Recommend related academic papers based on the current paper.",
+        "AdversarialCritique": "Critically review an academic paper for hidden assumptions and risks.",
+        "VisionAnalyzeFigure": "Analyze a figure or chart from an academic paper.",
+        "ChatGeneral": "Answer a user's question about an academic paper.",
+    }
 
     def __init__(self, signature=SolveTask):
         super().__init__()
         self.target_signature = signature
-        self.solve_task = dspy.Predict(SolveTask)
-        # 下流シグネチャに task_instruction InputField を動的追加
-        extended_sig = signature.append(
-            "task_instruction",
-            dspy.InputField(
-                desc="Personalized task instruction generated by SolveTask"
-            ),
-            type_=str,
-        )
+        # Layer 1: 固定システムコンテキスト（LLMなし・最適化対象外）
+        self.system_module = SystemModule()
+        # Layer 2: ペルソナアダプター（GEPA最適化対象）
+        self.persona_adapter = PersonaAdapter()
+        # Layer 3: 下流シグネチャに persona_instruction と lang_name を動的追加（固定・最適化対象外）
+        # 既にフィールドが存在するシグネチャへの重複追加を防止
+        extended_sig = signature
+        if "persona_instruction" not in signature.input_fields:
+            extended_sig = extended_sig.append(
+                "persona_instruction",
+                dspy.InputField(
+                    desc="Behavioral policy from PersonaAdapter: tone, terminology, and explanation depth guidelines"
+                ),
+                type_=str,
+            )
+        if "lang_name" not in extended_sig.input_fields:
+            extended_sig = extended_sig.append(
+                "lang_name",
+                dspy.InputField(
+                    desc="Target language name for the response"
+                ),
+                type_=str,
+            )
         self.solve = dspy.Predict(extended_sig)
 
+    def _get_task_description(self) -> str:
+        sig_name = self.target_signature.__name__
+        return self._TASK_DESCRIPTIONS.get(sig_name, f"Perform the {sig_name} task.")
+
     def forward(self, **kwargs):
-        # Step 1: SolveTask でユーザーペルソナに基づいた task_instruction を生成
-        task_result = self.solve_task(
-            user_persona=kwargs.get("user_persona", ""),
-            lang_name=kwargs.get("lang_name", ""),
-            input_data=kwargs.get("input_data", ""),
+        lang_name = kwargs.get("lang_name", "")
+        sig_name = self.target_signature.__name__
+
+        # Layer 1: 固定システムコンテキストを生成（LLMなし）
+        system_context = self.system_module(
+            task_type=sig_name,
+            lang_name=lang_name,
         )
-        # Step 2: 生成された task_instruction を下流タスクに渡して実行
-        return self.solve(task_instruction=task_result.task_instruction, **kwargs)
+
+        # Layer 2: system_context を受け取りコンテンツ非依存の行動ポリシーを生成（GEPA最適化対象）
+        persona_instruction = self.persona_adapter(
+            system_context=system_context,
+            user_persona=kwargs.get("user_persona", ""),
+            task_description=self._get_task_description(),
+            lang_name=lang_name,
+        )
+
+        # Layer 3: 行動ポリシーとコンテンツを下流タスクに渡して実行（固定）
+        return self.solve(persona_instruction=persona_instruction, **kwargs)
 
 
 # --- 以下、UniversalTaskModule のラッパーとして各モジュールを定義 ---

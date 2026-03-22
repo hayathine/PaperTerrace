@@ -3,7 +3,7 @@ Storage Provider abstraction layer.
 Supports SQLite (current) and Cloud SQL/GCS (future GCP deployment).
 """
 
-import os
+
 import sqlite3
 from abc import ABC, abstractmethod
 from datetime import datetime
@@ -14,7 +14,7 @@ from common.logger import ServiceLogger
 log = ServiceLogger("Storage")
 
 
-DB_PATH = os.getenv("DB_PATH", "ocr_reader.db")
+DB_PATH = settings.get("DB_PATH", "ocr_reader.db")
 
 
 class StorageInterface(ABC):
@@ -237,9 +237,18 @@ class StorageInterface(ABC):
         ...
 
     @abstractmethod
+    def get_user_by_email(self, email: str) -> dict | None:
+        """Get a user by email address."""
+        ...
+
+    @abstractmethod
     def update_user(self, user_id: str, data: dict) -> bool:
         """Update user data."""
         ...
+
+    def migrate_user_uid(self, old_uid: str, new_uid: str) -> bool:
+        """Migrate user primary key from old UID to new UID (auth provider migration)."""
+        return False
 
     @abstractmethod
     def delete_user(self, user_id: str) -> bool:
@@ -317,6 +326,10 @@ class StorageInterface(ABC):
     def clear_all_data(self) -> bool:
         """Clear all data from the database (papers, figures, stamps, notes, etc.)."""
         ...
+
+    def close(self) -> None:
+        """ストレージリソースを解放する（デフォルト: 何もしない）。"""
+        pass
 
 
 class SQLiteStorage(StorageInterface):
@@ -907,6 +920,27 @@ class SQLiteStorage(StorageInterface):
                 return data
             return None
 
+    def get_user_by_email(self, email: str) -> dict | None:
+        """Get a user by email address."""
+        import json
+
+        with self._get_connection() as conn:
+            row = conn.execute(
+                "SELECT * FROM users WHERE email = ?", (email,)
+            ).fetchone()
+            if row:
+                data = dict(row)
+                data["is_public"] = bool(data.get("is_public", 1))
+                if data.get("research_fields"):
+                    try:
+                        data["research_fields"] = json.loads(data["research_fields"])
+                    except json.JSONDecodeError:
+                        data["research_fields"] = []
+                else:
+                    data["research_fields"] = []
+                return data
+            return None
+
     def update_user(self, user_id: str, data: dict) -> bool:
         """Update user data."""
         import json
@@ -1163,9 +1197,9 @@ def get_storage_provider() -> StorageInterface:
     """
     global _sqlite_singleton, _orm_mode
 
-    database_url = os.getenv("DATABASE_URL")
+    database_url = settings.get("DATABASE_URL")
     default_provider = "orm" if database_url else "sqlite"
-    provider_type = os.getenv("STORAGE_PROVIDER", default_provider).lower()
+    provider_type = str(settings.get("STORAGE_PROVIDER", default_provider)).lower()
 
     if provider_type in ["cloudsql", "postgresql", "neon", "orm"]:
         # Always create a fresh session per call so that a failed DB

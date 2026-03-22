@@ -2,6 +2,8 @@ import type React from "react";
 import { useCallback, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { buildAuthHeaders } from "@/lib/auth";
+import { APP_EVENTS } from "@/lib/events";
 import { createLogger } from "@/lib/logger";
 import { useAuth } from "../../contexts/AuthContext";
 import AddNoteForm from "./AddNoteForm";
@@ -49,8 +51,7 @@ const NoteList: React.FC<NoteListProps> = ({
 		setLoading(true);
 		setError(null);
 		try {
-			const headers: HeadersInit = {};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			const headers = buildAuthHeaders(token);
 
 			const baseUrl = API_URL || window.location.origin;
 			const url = new URL(`/api/note/${sessionId}`, baseUrl);
@@ -84,9 +85,9 @@ const NoteList: React.FC<NoteListProps> = ({
 			if (sessionId && paperId) fetchNotes();
 		};
 
-		window.addEventListener("notes-updated", handleNotesUpdated);
+		window.addEventListener(APP_EVENTS.NOTES_UPDATED, handleNotesUpdated);
 		return () => {
-			window.removeEventListener("notes-updated", handleNotesUpdated);
+			window.removeEventListener(APP_EVENTS.NOTES_UPDATED, handleNotesUpdated);
 		};
 	}, [sessionId, paperId, fetchNotes]);
 
@@ -98,8 +99,9 @@ const NoteList: React.FC<NoteListProps> = ({
 			imageUrl?: string,
 		) => {
 			try {
-				const headers: HeadersInit = { "Content-Type": "application/json" };
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token, {
+					"Content-Type": "application/json",
+				});
 
 				const res = await fetch(`${API_URL}/api/note`, {
 					method: "POST",
@@ -117,7 +119,7 @@ const NoteList: React.FC<NoteListProps> = ({
 				});
 				if (res.ok) {
 					fetchNotes();
-					window.dispatchEvent(new Event("notes-updated"));
+					window.dispatchEvent(new Event(APP_EVENTS.NOTES_UPDATED));
 				}
 			} catch (e) {
 				log.error("add_note", "Failed to add note", { error: e });
@@ -135,8 +137,9 @@ const NoteList: React.FC<NoteListProps> = ({
 			imageUrl?: string,
 		) => {
 			try {
-				const headers: HeadersInit = { "Content-Type": "application/json" };
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token, {
+					"Content-Type": "application/json",
+				});
 
 				const res = await fetch(`${API_URL}/api/note/${id}`, {
 					method: "PUT",
@@ -156,7 +159,7 @@ const NoteList: React.FC<NoteListProps> = ({
 				if (res.ok) {
 					fetchNotes();
 					setEditingNote(null);
-					window.dispatchEvent(new Event("notes-updated"));
+					window.dispatchEvent(new Event(APP_EVENTS.NOTES_UPDATED));
 				}
 			} catch (e) {
 				log.error("update_note", "Failed to update note", { error: e });
@@ -168,12 +171,11 @@ const NoteList: React.FC<NoteListProps> = ({
 	const handleDeleteNote = useCallback(
 		async (id: string) => {
 			try {
-				const headers: HeadersInit = {};
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token);
 
 				await fetch(`${API_URL}/api/note/${id}`, { method: "DELETE", headers });
 				setNotes((prev) => prev.filter((n) => n.note_id !== id));
-				window.dispatchEvent(new Event("notes-updated"));
+				window.dispatchEvent(new Event(APP_EVENTS.NOTES_UPDATED));
 			} catch (e) {
 				log.error("delete_note", "Failed to delete note", { error: e });
 			}

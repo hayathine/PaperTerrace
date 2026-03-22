@@ -48,3 +48,4 @@ class RecommendationGenerateResponse(BaseModel):
     reasoning: str
     knowledge_level: str
     search_queries: List[str]
+    trace_id: Optional[str] = None

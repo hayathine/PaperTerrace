@@ -4,23 +4,20 @@ Main application entry point.
 """
 
 import contextlib
-import os
 import time
 import traceback
 from datetime import datetime
 
+import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.middleware.cors import CORSMiddleware
-
-import sentry_sdk
 from sentry_sdk.integrations.fastapi import FastApiIntegration
 from sentry_sdk.integrations.logging import LoggingIntegration
 from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.middleware.cors import CORSMiddleware
 
-from app.core.config import get_neon_auth_url, is_production
-from common.config import settings
+from app.core.config import get_app_env, get_neon_auth_url, get_redis_url, is_production
 from app.routers import (
     analysis_router,
     auth_router,
@@ -39,6 +36,7 @@ from app.routers import (
     upload_router,
     users_router,
 )
+from common.config import settings
 from common.logger import ServiceLogger, configure_logging
 
 log = ServiceLogger("Main")
@@ -59,8 +57,10 @@ if _sentry_enabled and _sentry_dsn:
             LoggingIntegration(),  # ERROR 以上を自動キャプチャ
         ],
         traces_sample_rate=float(getattr(settings, "SENTRY_TRACES_SAMPLE_RATE", 0.1)),
-        profiles_sample_rate=float(getattr(settings, "SENTRY_PROFILES_SAMPLE_RATE", 0.1)),
-        environment=os.getenv("APP_ENV", "production"),
+        profiles_sample_rate=float(
+            getattr(settings, "SENTRY_PROFILES_SAMPLE_RATE", 0.1)
+        ),
+        environment=get_app_env(),
         send_default_pii=False,
     )
     log.info("sentry", "Sentry initialized", dsn=_sentry_dsn[:40] + "...")
@@ -80,33 +80,34 @@ async def lifespan(app: FastAPI):
     Lifespan event handler for FastAPI.
     Handles startup and shutdown events.
     """
-    # Re-configure logging to ensure it survives uvicorn's setup if needed
     configure_logging()
 
+    # DB接続ウォームアップ: コールドスタート後の初回リクエストレイテンシを削減
     try:
-        # Run Alembic migrations
-        from alembic import command
-        from alembic.config import Config
+        import asyncio
 
-        alembic_cfg = Config("alembic.ini")
-        # Ensure alembic uses the correct directory if we're not in root (though usually we are)
-        command.upgrade(alembic_cfg, "head")
+        from app.database import engine
+
+        await asyncio.to_thread(_warmup_db, engine)
+        log.info("lifespan", "DB warmup completed")
     except Exception as e:
-        # If tables already exist, we might get a DuplicateTable error.
-        # We log and continue so the app can still run.
-        if "already exists" in str(e).lower():
-            log.warning(
-                "migration",
-                "Database tables already exist, skipping initial migration",
-                error=str(e),
-            )
-        else:
-            log.error("migration", "Failed to initialize database", error=str(e))
+        log.warning("lifespan", "DB warmup failed (non-fatal)", error=str(e))
 
-            # Re-raise for non-existence errors if necessary, or just continue
-            # For now, let's allow the app to try to run.
+    # ARQ pool 初期化（Redis 未接続環境では None になり、同期フォールバックが使われる）
+    from app.providers import close_arq_pool, get_arq_pool
+    await get_arq_pool()
 
     yield
+
+    await close_arq_pool()
+
+
+def _warmup_db(engine) -> None:
+    """DBへの接続を1本確立してプールをウォームアップする。"""
+    from sqlalchemy import text
+
+    with engine.connect() as conn:
+        conn.execute(text("SELECT 1"))
 
 
 # Create FastAPI app with lifespan
@@ -127,7 +128,7 @@ _default_origins = [
     "https://www.paperterrace.page",
     "https://paperterrace.page",
 ]
-_extra_origins_raw = os.getenv("CORS_EXTRA_ORIGINS", "")
+_extra_origins_raw = settings.get("CORS_EXTRA_ORIGINS", "")
 _extra_origins = [o.strip() for o in _extra_origins_raw.split(",") if o.strip()]
 _allowed_origins = _default_origins + _extra_origins
 
@@ -150,8 +151,8 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
     """
 
     WINDOW_SECONDS = 60
-    REGISTERED_LIMIT = int(os.getenv("RATE_LIMIT_REGISTERED", "120"))
-    GUEST_LIMIT = int(os.getenv("RATE_LIMIT_GUEST", "30"))
+    REGISTERED_LIMIT = int(settings.get("RATE_LIMIT_REGISTERED", "120"))
+    GUEST_LIMIT = int(settings.get("RATE_LIMIT_GUEST", "30"))
     # レートリミット対象外のパス
     _SKIP_PATHS = frozenset(["/api/health", "/health", "/"])
     # レートリミット対象外のプレフィックス（ポーリング系エンドポイント）
@@ -159,14 +160,14 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app):
         super().__init__(app)
-        redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
         try:
             from redis import Redis
 
-            self._redis = Redis.from_url(
-                redis_url, socket_connect_timeout=1, decode_responses=True
+            client = Redis.from_url(
+                get_redis_url(), socket_connect_timeout=1, decode_responses=True
             )
-            self._redis.ping()
+            client.ping()
+            self._redis = client
         except Exception:
             self._redis = None
 
@@ -202,7 +203,9 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
                     headers={"Retry-After": str(max(retry_after, 1))},
                 )
         except Exception as e:
-            mw_log.warning("rate_limit", "Redis error, skipping rate limit", error=str(e))
+            mw_log.warning(
+                "rate_limit", "Redis error, skipping rate limit", error=str(e)
+            )
 
         return await call_next(request)
 
@@ -346,10 +349,8 @@ async def init_db_manual():
             "message": "Storage provider does not support init_tables",
         }
     except Exception as e:
-        app_env = os.getenv("APP_ENV", "production")
-        error_msg = (
-            str(e) if app_env == "development" else "Failed to initialize database"
-        )
+        app_env = settings.get("APP_ENV", "production")
+        error_msg = str(e) if app_env == "local" else "Failed to initialize database"
         return JSONResponse(
             status_code=500, content={"status": "error", "message": error_msg}
         )
@@ -388,7 +389,7 @@ app.include_router(client_errors_router, prefix="/api")
 # Static Files / Image Proxy (GCS-compatible)
 # ============================================================================
 
-_storage_type = os.getenv("STORAGE_TYPE", "local").lower()
+_storage_type = str(settings.get("STORAGE_TYPE", "local")).lower()
 
 if _storage_type == "gcs":
     # GCS mode: proxy image requests through the backend
@@ -415,7 +416,8 @@ if _storage_type == "gcs":
                 return FastAPIResponse(status_code=404, content=b"Not Found")
 
             data = await asyncio.to_thread(blob.download_as_bytes)
-            content_type = "image/png" if filename.endswith(".png") else "image/jpeg"
+            ext = blob.name.rsplit(".", 1)[-1].lower()
+            content_type = "image/webp" if ext == "webp" else "image/jpeg"
             return FastAPIResponse(
                 content=data,
                 media_type=content_type,
@@ -435,7 +437,7 @@ else:
 
     from starlette.staticfiles import StaticFiles
 
-    _images_dir = PathLib(os.getenv("IMAGES_DIR", "src/static/paper_images"))
+    _images_dir = PathLib(settings.get("IMAGES_DIR", "src/static/paper_images"))
     _images_dir.mkdir(parents=True, exist_ok=True)
     app.mount(
         "/static/paper_images",
@@ -482,18 +484,22 @@ async def health_check():
         status = "unhealthy"
         dependencies["database"] = f"error: {str(e)}"
 
-    # Check Redis
+    # Check Redis (ローカル環境または localhost 設定では Redis 未接続でも healthy 扱い)
+    from app.core.config import is_local
     try:
-        # redis_host = os.getenv("REDIS_HOST", "redis")
-        # redis_port = int(os.getenv("REDIS_PORT", "6379"))
-        redis_url = os.getenv("REDIS_URL", "redis://redis:6379")
+        _redis_url = get_redis_url()
         # socket_connect_timeout must be shorter than the liveness probe timeoutSeconds (10s)
-        r = Redis.from_url(redis_url, socket_connect_timeout=1)
+        r = Redis.from_url(_redis_url, socket_connect_timeout=1)
         r.ping()
         dependencies["redis"] = "connected"
     except Exception as e:
-        status = "unhealthy"
-        dependencies["redis"] = f"error: {str(e)}"
+        _redis_url = get_redis_url()
+        is_redis_optional = is_local() or "localhost" in _redis_url
+        if is_redis_optional:
+            dependencies["redis"] = "unavailable (optional in this environment)"
+        else:
+            status = "unhealthy"
+            dependencies["redis"] = f"error: {str(e)}"
 
     health_status = {
         "status": status,
@@ -503,7 +509,7 @@ async def health_check():
     }
 
     # Check Maintenance Mode
-    maintenance_mode = os.getenv("MAINTENANCE_MODE", "false").lower() == "true"
+    maintenance_mode = str(settings.get("MAINTENANCE_MODE", "false")).lower() == "true"
     if maintenance_mode:
         return JSONResponse(
             status_code=503,
@@ -517,7 +523,7 @@ async def health_check():
 
     # Return 503 if unhealthy, unless we are in a testing environment
     is_testing = (
-        os.getenv("ENV") == "testing" or os.getenv("PYTEST_CURRENT_TEST") is not None
+        settings.get("APP_ENV") == "testing" or settings.get("PYTEST_CURRENT_TEST") is not None
     )
     status_code = 200 if (status == "healthy" or is_testing) else 503
 
@@ -530,6 +536,7 @@ async def get_config():
     return JSONResponse(
         content={
             "neon_auth": NEON_AUTH_CONFIG,
-            "app_env": os.getenv("APP_ENV", "production"),
+            "app_env": get_app_env(),
+            "max_pdf_size_mb": int(settings.get("MAX_PDF_SIZE_MB", "50")),
         }
     )

@@ -1,0 +1,57 @@
+# ServiceB（推論サービス：OCR / PaddleOCR + OpenVINO）用Dockerfile
+FROM python:3.12-slim AS runtime-builder
+WORKDIR /app
+
+# uvのインストール
+COPY --from=ghcr.io/astral-sh/uv:0.10.10 /uv /usr/local/bin/uv
+
+# ワークスペース構造をコピー
+COPY inference-service/pyproject.toml inference-service/uv.lock ./
+
+# OCR用の依存関係のみをインストール（openvino + opencv + pillow）
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --frozen --no-dev --group ocr
+
+# --- Production Stage ---
+FROM python:3.12-slim
+
+WORKDIR /app
+
+# システムパッケージのインストール（OpenCV / OpenVINO に必要）
+RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    libstdc++6 \
+    libgcc-s1 \
+    libgomp1 \
+    libgl1 \
+    libglib2.0-0
+
+RUN useradd -m -r appuser && chown -R appuser:appuser /app
+# 仮想環境とアプリケーションコードのコピー
+COPY --chown=appuser:appuser --from=runtime-builder /app/.venv /app/.venv
+COPY --chown=appuser:appuser inference-service/*.py ./
+COPY --chown=appuser:appuser inference-service/services ./services
+COPY --chown=appuser:appuser common ./common
+
+# 環境変数設定
+ENV PATH="/app/.venv/bin:$PATH"
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+ENV INFERENCE_TYPE=ocr
+ENV OCR_DET_MODEL_PATH="/app/models/paddle_detection/det.xml"
+ENV OCR_REC_MODEL_PATH="/app/models/paddle4english/rec.xml"
+ENV OCR_DICT_PATH="/app/models/paddle4english/dict.txt"
+
+# ポート公開
+EXPOSE 8080
+
+USER appuser
+
+HEALTHCHECK --interval=60s --timeout=10s --start-period=30s --retries=3 \
+    CMD curl -f http://localhost:8080/health || exit 1
+
+# アプリケーション起動
+CMD ["/app/.venv/bin/uvicorn", "main:app", "--host=0.0.0.0", "--port=8080"]

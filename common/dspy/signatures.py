@@ -1,75 +1,68 @@
-import re
-
 import dspy
 
-from common.prompts import (
-    AGENT_ADVERSARIAL_CRITIQUE_PROMPT,
-    CHAT_GENERAL_RESPONSE_PROMPT,
-    CORE_SYSTEM_PROMPT,
-    DICT_EXPLAIN_GEMINI_PROMPT,
-    DICT_TRANSLATE_QWEN_PROMPT,
-    DICT_TRANSLATE_WORD_SIMPLE_PROMPT,
-    PAPER_SUMMARY_FULL_PROMPT,
-    PAPER_SUMMARY_SECTIONS_PROMPT,
-    RECOMMENDATION_PAPER_PROMPT,
-    RECOMMENDATION_USER_PROFILE_PROMPT,
-    VISION_ANALYZE_FIGURE_PROMPT,
+from common.dspy_seed_prompt import (
+    ADVERSARIAL_CRITIQUE_SEED,
+    CHAT_GENERAL_SEED,
+    CONTEXT_AWARE_TRANSLATION_SEED,
+    DEEP_EXPLANATION_SEED,
+    PAPER_RECOMMENDATION_SEED,
+    PAPER_SUMMARY_SECTIONS_SEED,
+    PAPER_SUMMARY_SEED,
+    PERSONA_ADAPTER_SEED,
+    SIMPLE_TRANSLATION_SEED,
+    SYSTEM_CONTEXT_SEED,
+    USER_PROFILE_ESTIMATION_SEED,
+    VISION_FIGURE_SEED,
 )
 
+# =============================================================
+# System Layer
+# =============================================================
 
-# -------------------------------------------------------------
-# 1. 既存プロンプトをDSPy向けにクリーンアップするユーティリティ
-# -------------------------------------------------------------
-def clean_prompt_for_dspy(prompt_str: str) -> str:
-    """
-    prompts.py の文字列から DSPy にとってノイズになるプレースホルダー等を除去し、
-    最適化可能性を高めたクリーンな Instruction（__doc__ 用）を生成する。
-    """
-    cleaned = prompt_str
-    # DSPyのInputField名（input_data, lang_name, user_persona）に統一・置換する
-    # これにより、プロンプト内でモデルがどのフィールドを参照すべきか明確になる
-    cleaned = cleaned.replace("PAPER_TEXT: {paper_text}", "")
-    cleaned = cleaned.replace("{paper_text}", "`input_data`")
-    cleaned = cleaned.replace("{text}", "`input_data`")
-    cleaned = cleaned.replace("{input_data}", "`input_data`")
-    cleaned = cleaned.replace("{lang_name}", "`lang_name`")
-    cleaned = cleaned.replace("{user_persona}", "`user_persona`")
 
-    cleaned = cleaned.replace("{document_context}", "the academic paper context")
-    cleaned = cleaned.replace("{history_text}", "the conversation history")
-    cleaned = cleaned.replace("{question}", "the user's question (`input_data`)")
-    cleaned = cleaned.replace("{caption_hint}", "[`input_data`]")
-    cleaned = cleaned.replace("{context_hint}", "the context hint")
-    cleaned = cleaned.replace("{table_text}", "the table text")
-    cleaned = cleaned.replace("{paragraph}", "the paragraph text")
-    cleaned = cleaned.replace("{target_word}", "`input_data`")
-    cleaned = cleaned.replace("{trajectory}", "the user's trajectory")
-    cleaned = cleaned.replace("{paper_analysis}", "`input_data`")
-    cleaned = cleaned.replace("{summary_context}", "the paper summary context")
-    cleaned = cleaned.replace("{context}", "the surrounding context")
+class SystemContextSignature(dspy.Signature):
+    __doc__ = SYSTEM_CONTEXT_SEED
 
-    # paper_context は InputField 名と一致させることでモデルの参照を助ける
-    cleaned = cleaned.replace(
-        "{paper_context}",
-        "the academic paper context provided in the `paper_context` field",
+    task_type: str = dspy.InputField(
+        desc="Type of task being performed (e.g. 'translation', 'summarization', 'critical review')."
+    )
+    lang_name: str = dspy.InputField(desc="Target output language.")
+
+    system_context: str = dspy.OutputField(
+        desc=(
+            "Global role definition and invariant behavioral rules: "
+            "assistant identity, language enforcement, output quality standards. "
+            "Must not contain user-specific or content-specific information."
+        )
     )
 
-    cleaned = cleaned.replace("context above", "provided context")
-    cleaned = cleaned.replace(
-        "Based on the context above", "Based on the provided context"
-    )
 
-    # DSPyは自身の構造化出力フォーマット（フィールドマーカー）を使用するため、
-    # プロンプト内のJSON出力形式の指示を除去する。
-    cleaned = re.sub(
-        r"Please output in the following JSON format.*?Output ONLY valid JSON\.",
-        "Output each field according to the instructions.",
-        cleaned,
-        flags=re.DOTALL,
-    )
+# =============================================================
+# Persona Adapter
+# =============================================================
 
-    # Core Promptを結合して、安定した品質のベースラインとする
-    return f"{CORE_SYSTEM_PROMPT}\n\n[Task Instructions]\n{cleaned}".strip()
+
+class PersonaAdapterSignature(dspy.Signature):
+    __doc__ = PERSONA_ADAPTER_SEED
+
+    system_context: str = dspy.InputField(
+        desc="Global role and invariant rules from the system layer. Persona instructions must not contradict these."
+    )
+    user_persona: str = dspy.InputField(
+        desc="Description of the user's expertise, interests, and preferences."
+    )
+    task_description: str = dspy.InputField(
+        desc="Brief description of the task type (e.g. 'translation', 'paper summary'). Not the content itself."
+    )
+    lang_name: str = dspy.InputField(desc="Target language name for the response.")
+
+    persona_instruction: str = dspy.OutputField(
+        desc=(
+            "Behavioral policy for the assistant: how to adjust tone, "
+            "terminology complexity, explanation depth, and language style. "
+            "Must not contain task-specific content or contradict system_context."
+        )
+    )
 
 
 # =============================================================
@@ -116,7 +109,9 @@ class SolveTask(dspy.Signature):
 
 
 class PaperSummary(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(PAPER_SUMMARY_FULL_PROMPT)
+    __doc__ = PAPER_SUMMARY_SEED
+
+    input_data: str = dspy.InputField(desc="The full paper text or abstract")
     overview: str = dspy.OutputField(
         desc="Overview and high-level summary (1-2 sentences)"
     )
@@ -131,7 +126,9 @@ class PaperSummary(dspy.Signature):
 
 
 class PaperSummarySections(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(PAPER_SUMMARY_SECTIONS_PROMPT)
+    __doc__ = PAPER_SUMMARY_SECTIONS_SEED
+
+    input_data: str = dspy.InputField(desc="The full paper text or section content")
     sections: list[dict] = dspy.OutputField(
         desc="Section-by-section summary list [{'section': '...', 'summary': '...'}]"
     )
@@ -151,7 +148,9 @@ class PaperSummaryContext(dspy.Signature):
 
 
 class ChatGeneral(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(CHAT_GENERAL_RESPONSE_PROMPT)
+    __doc__ = CHAT_GENERAL_SEED
+
+    input_data: str = dspy.InputField(desc="The user's current question or message")
     document_context: str = dspy.InputField(
         desc="Contextual information from the paper"
     )
@@ -165,7 +164,9 @@ class ChatGeneral(dspy.Signature):
 
 
 class AdversarialCritique(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(AGENT_ADVERSARIAL_CRITIQUE_PROMPT)
+    __doc__ = ADVERSARIAL_CRITIQUE_SEED
+
+    input_data: str = dspy.InputField(desc="The paper text to critique")
     hidden_assumptions: list[dict] = dspy.OutputField(
         desc="Hidden assumptions and their risks [{'assumption': '...', 'risk': '...', 'severity': '...'}]"
     )
@@ -184,12 +185,14 @@ class AdversarialCritique(dspy.Signature):
 
 
 # =============================================================
-# Vision (図表分析系) の DSPy Signatures (※画像入力はGeminiマルチモーダル次第)
+# Vision (図表分析系) の DSPy Signatures
 # =============================================================
 
 
 class VisionAnalyzeFigure(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(VISION_ANALYZE_FIGURE_PROMPT)
+    __doc__ = VISION_FIGURE_SEED
+
+    input_data: str = dspy.InputField(desc="Caption or textual hint about the figure")
     type_overview: str = dspy.OutputField(desc="Overview and type of the figure")
     key_findings: list[str] = dspy.OutputField(desc="Main trends or patterns")
     interpretation: str = dspy.OutputField(desc="Interpretation of data or trends")
@@ -203,7 +206,9 @@ class VisionAnalyzeFigure(dspy.Signature):
 
 
 class PaperRecommendation(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(RECOMMENDATION_PAPER_PROMPT)
+    __doc__ = PAPER_RECOMMENDATION_SEED
+
+    input_data: str = dspy.InputField(desc="Analysis of the current paper and user profile")
     recommendations: list[str] = dspy.OutputField(
         desc="List of recommended papers (including titles and reasons)"
     )
@@ -213,11 +218,14 @@ class PaperRecommendation(dspy.Signature):
 
 
 class UserProfileEstimation(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(RECOMMENDATION_USER_PROFILE_PROMPT)
+    __doc__ = USER_PROFILE_ESTIMATION_SEED
 
     paper_summary: str = dspy.InputField(desc="Summary of the paper")
     conversation_history: str = dspy.InputField(desc="Conversation history")
     word_clicks: str = dspy.InputField(desc="List of words clicked by the user")
+    created_at: str = dspy.InputField(
+        desc="Timestamp when the trace was recorded (UTC)"
+    )
     knowledge_level: str = dspy.OutputField(desc="Beginner / Intermediate / Advanced")
     interests: list[str] = dspy.OutputField(desc="Interesting topics")
     unknown_concepts: list[str] = dspy.OutputField(desc="Concepts not yet understood")
@@ -232,8 +240,9 @@ class UserProfileEstimation(dspy.Signature):
 
 
 class ContextAwareTranslation(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(DICT_TRANSLATE_QWEN_PROMPT)
+    __doc__ = CONTEXT_AWARE_TRANSLATION_SEED
 
+    input_data: str = dspy.InputField(desc="The target word or phrase to translate")
     paper_context: str = dspy.InputField(
         desc="Academic paper context including surrounding sentences around the target word (paper summary and/or nearby text excerpt)"
     )
@@ -243,15 +252,17 @@ class ContextAwareTranslation(dspy.Signature):
 
 
 class SimpleTranslation(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(DICT_TRANSLATE_WORD_SIMPLE_PROMPT)
+    __doc__ = SIMPLE_TRANSLATION_SEED
 
+    input_data: str = dspy.InputField(desc="The word or phrase to translate")
     paper_context: str = dspy.InputField(desc="Academic context or summary")
     translation: str = dspy.OutputField(desc="Concise translation")
 
 
 class DeepExplanation(dspy.Signature):
-    __doc__ = clean_prompt_for_dspy(DICT_EXPLAIN_GEMINI_PROMPT)
+    __doc__ = DEEP_EXPLANATION_SEED
 
+    input_data: str = dspy.InputField(desc="The word or concept to explain")
     summary_context: str = dspy.InputField(desc="Abstract or summary of the paper")
     context: str = dspy.InputField(desc="Surrounding text context")
     explanation: str = dspy.OutputField(desc="Concise context-aware explanation")

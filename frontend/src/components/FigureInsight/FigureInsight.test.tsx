@@ -6,7 +6,7 @@ import FigureInsight from "./FigureInsight";
 describe("FigureInsight Component", () => {
 	const mockFigure: SelectedFigure = {
 		id: "fig1",
-		image_url: "http://example.com/fig1.png",
+		image_url: "http://example.com/fig1.jpg",
 		page_number: 1,
 		label: "figure",
 	};
@@ -64,7 +64,7 @@ describe("FigureInsight Component", () => {
 
 		await waitFor(() => {
 			expect(
-				screen.getByText("図の解析に失敗しました (ネットワークエラー)"),
+				screen.getByText("viewer.figure_analysis_network_error"),
 			).toBeDefined();
 		});
 	});

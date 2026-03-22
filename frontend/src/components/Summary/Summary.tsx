@@ -1,6 +1,7 @@
 import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { buildAuthHeaders } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import {
 	generateRecommendations,
@@ -88,12 +89,12 @@ const Summary: React.FC<SummaryProps> = ({
 			try {
 				const formData = new FormData();
 				formData.append("session_id", sessionId);
-				formData.append("lang", i18n.language);
+				const lang = i18n.language.startsWith("ja") ? "ja" : "en";
+				formData.append("lang", lang);
 				if (paperId) formData.append("paper_id", paperId);
 				if (force) formData.append("force", "true");
 
-				const headers: HeadersInit = {};
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token);
 
 				const res = await fetch(`${API_URL}/api/summarize`, {
 					method: "POST",
@@ -160,9 +161,8 @@ const Summary: React.FC<SummaryProps> = ({
 		try {
 			const formData = new FormData();
 			formData.append("session_id", sessionId);
-			formData.append("lang", i18n.language);
-			const headers: HeadersInit = {};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			formData.append("lang", i18n.language.startsWith("ja") ? "ja" : "en");
+			const headers = buildAuthHeaders(token);
 
 			const res = await fetch(`${API_URL}/api/critique`, {
 				method: "POST",
@@ -321,7 +321,7 @@ const Summary: React.FC<SummaryProps> = ({
 						{summaryData && !loading && (
 							<div>
 								<div className="flex justify-end mb-2 gap-1">
-									<CopyButton text={summaryData} />
+									<CopyButton text={summaryData} traceId={summaryTraceId} />
 									<button
 										type="button"
 										onClick={() => handleSummarize(true)}
@@ -496,6 +496,7 @@ const Summary: React.FC<SummaryProps> = ({
 												sessionId={sessionId}
 												targetType="recommendation"
 												targetId={paper.title}
+												traceId={recommendationResponse.trace_id}
 											/>
 										</div>
 									))}
@@ -551,6 +552,7 @@ const Summary: React.FC<SummaryProps> = ({
 													(h) => `${h.risk}: ${h.detail}`,
 												) || []),
 											].join("\n\n")}
+											traceId={critiqueTraceId}
 										/>
 									</div>
 									<MarkdownContent className="prose prose-sm max-w-none text-sm text-slate-700 leading-relaxed font-medium mb-4">

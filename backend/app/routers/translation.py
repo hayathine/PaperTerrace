@@ -4,11 +4,10 @@ Handles word translation, explanation, and language settings.
 """
 
 import asyncio
-import os
 
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse, JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.domain.services.analysis_service import EnglishAnalysisService
@@ -21,6 +20,8 @@ from common.dspy.modules import (
 )
 from common.dspy.trace import TraceContext, trace_dspy_call
 from common.logger import ServiceLogger
+from app.core.config import is_local
+from common import settings
 from common.prompts import (
     CORE_SYSTEM_PROMPT,
 )
@@ -46,12 +47,20 @@ def build_dict_card_html(
     trace_id: str | None = None,
 ) -> str:
     """辞書カードのHTMLレイアウトを構築します"""
+    import html as _html
+
     paper_param = f"&paper_id={paper_id}" if paper_id else ""
     element_param = f"&element_id={element_id}" if element_id else ""
 
-    # JS safety: escape single quotes for word and lemma, backticks for translation
-    js_word = word.replace("'", "\\'").replace('"', '\\"')
-    js_translation = translation.replace("`", "\\`").replace("$", "\\$")
+    # HTML attribute context: HTML-encode to prevent attribute injection
+    # These values appear inside HTML attribute strings (onclick="..."), so
+    # HTML-encoding (& → &amp;, " → &quot;, etc.) is the correct defense.
+    attr_word = _html.escape(word, quote=True)
+    attr_element_id = _html.escape(element_id, quote=True) if element_id else ""
+    attr_paper_id = _html.escape(paper_id, quote=True) if paper_id else ""
+
+    # JS template literal context: escape backtick and ${ for safe interpolation
+    js_translation = translation.replace("`", "\\`").replace("${", "\\${")
 
     # Copy button
     copy_logic = f"navigator.clipboard.writeText(`{js_translation}`)"
@@ -70,7 +79,7 @@ def build_dict_card_html(
     if show_deep_btn:
         deep_btn = f"""
         <button 
-            hx-get="/explain-deep/{lemma}?lang={lang}{paper_param}{element_param}"
+            hx-get="/translate-deep/{lemma}?lang={lang}{paper_param}{element_param}"
             hx-target="closest .dict-card"
             hx-swap="outerHTML"
             hx-indicator="#dict-loading"
@@ -84,12 +93,12 @@ def build_dict_card_html(
         """
 
     # 2. AI Explanation Button (Context Aware)
-    # Note: Use js_word for context explanation to keep original word as title
+    # Note: Use attr_word for context explanation to keep original word as title
     context_btn = ""
     if element_id:
         context_btn = f"""
-        <button 
-            onclick="explainWithContext('{element_id}', '{js_word}', '{lang}', '{paper_id or ""}')"
+        <button
+            onclick="explainWithContext('{attr_element_id}', '{attr_word}', '{lang}', '{attr_paper_id}')"
             class="flex-1 py-1.5 flex items-center justify-center gap-1.5 text-[9px] font-bold text-emerald-600 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-all border border-emerald-100 shadow-sm"
         >
             <svg class="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -101,7 +110,7 @@ def build_dict_card_html(
 
     # Note saving button: User wants original 'word' as Title, 'translation' as Memo
     save_btn = f"""
-    <button onclick="saveWordToNote('{js_word}', `{js_translation}`)" title="Save to Note" 
+    <button onclick="saveWordToNote('{attr_word}', `{js_translation}`)" title="Save to Note"
         class="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all">
         <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" />
@@ -114,7 +123,7 @@ def build_dict_card_html(
     jump_btn = ""
     if element_id:
         jump_btn = f"""
-        <button onclick="jumpToElement('{element_id}')" title="Jump to word" 
+        <button onclick="jumpToElement('{attr_element_id}')" title="Jump to word"
             class="flex-1 py-1.5 flex items-center justify-center gap-1.5 text-[9px] font-bold text-slate-600 bg-slate-50 hover:bg-slate-100 rounded-lg transition-all border border-slate-200 shadow-sm"
         >
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -159,7 +168,40 @@ def build_dict_card_html(
     """
 
 
-@router.get("/explain/{word}")
+class ExplainRequest(BaseModel):
+    word: str = Field(..., min_length=1, max_length=2000)
+    lang: str = Field(default="ja")
+    paper_id: str | None = None
+    session_id: str | None = None
+    element_id: str | None = None
+    conf: str | None = None
+    context: str | None = Field(default=None, max_length=5000)
+
+    @field_validator("lang")
+    @classmethod
+    def validate_lang(cls, v: str) -> str:
+        """サポートされている言語コードのみ許可する。"""
+        if v not in SUPPORTED_LANGUAGES:
+            return "ja"
+        return v
+
+
+@router.post("/translate")
+async def explain_post(payload: ExplainRequest, req: Request):
+    """POST版の解説・翻訳エンドポイント (URI長制限への対応)"""
+    return await explain(
+        req=req,
+        word=payload.word,
+        lang=payload.lang,
+        paper_id=payload.paper_id,
+        session_id=payload.session_id,
+        element_id=payload.element_id,
+        conf=payload.conf,
+        context=payload.context,
+    )
+
+
+@router.get("/translate/{word}")
 async def explain(
     req: Request,
     word: str,
@@ -324,11 +366,10 @@ async def explain(
             "explain", "Gemini fallback translation failed", error=str(e), lemma=lemma
         )
 
-        app_env = os.getenv("APP_ENV", "production")
         # 最終的にエラーの場合
         error_msg = (
             f"Translation failed: {str(e)}"
-            if app_env == "development"
+            if is_local()
             else "Translation failed"
         )
         if not is_htmx:
@@ -355,7 +396,7 @@ async def explain(
         )
 
 
-@router.get("/explain-deep/{word}")
+@router.get("/translate-deep/{word}")
 async def explain_deep(
     req: Request,
     word: str,
@@ -464,10 +505,8 @@ async def explain_deep(
         log.error(
             "explain_deep", "Gemini translation failed", error=str(e), lemma=lemma
         )
-        from app.core.config import is_production
-
         error_msg = (
-            str(e) if not is_production() else "An error occurred during translation."
+            str(e) if is_local() else "An error occurred during translation."
         )
         if not is_htmx:
             return JSONResponse(
@@ -494,10 +533,18 @@ async def explain_deep(
 
 
 class ExplainContextRequest(BaseModel):
-    word: str
-    context: str
+    word: str = Field(..., min_length=1, max_length=2000)
+    context: str = Field(..., min_length=1, max_length=5000)
     session_id: str | None = None
-    lang: str = "ja"
+    lang: str = Field(default="ja")
+
+    @field_validator("lang")
+    @classmethod
+    def validate_lang(cls, v: str) -> str:
+        """サポートされている言語コードのみ許可する。"""
+        if v not in SUPPORTED_LANGUAGES:
+            return "ja"
+        return v
 
 
 @router.post("/explain/context")
@@ -623,13 +670,22 @@ async def explain_image(req: ExplainImageRequest, request: Request):
     # Retrieve Paper Summary Context if paper_id is provided
     # ... Optional but left for future structure
 
-    model = os.getenv("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
+    model = settings.get("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
     prompt = f"[{lang_name}で回答してください]\n{req.prompt}"
+
+    url_lower = req.image_url.lower()
+    if url_lower.endswith(".jpg") or url_lower.endswith(".jpeg"):
+        img_mime_type = "image/jpeg"
+    elif url_lower.endswith(".webp"):
+        img_mime_type = "image/webp"
+    else:
+        img_mime_type = "image/jpeg"
 
     try:
         explanation = await provider.generate_with_image(
             prompt=prompt,
             image_bytes=image_bytes,
+            mime_type=img_mime_type,
             model=model,
             system_instruction=CORE_SYSTEM_PROMPT,
         )

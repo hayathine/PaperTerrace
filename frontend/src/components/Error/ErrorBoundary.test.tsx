@@ -28,7 +28,7 @@ describe("ErrorBoundary", () => {
 			</ErrorBoundary>,
 		);
 		expect(screen.getByTestId("child")).toBeDefined();
-		expect(screen.queryByText("メンテナンス中")).toBeNull();
+		expect(screen.queryByText("common.error_boundary.title")).toBeNull();
 	});
 
 	it("renders fallback UI when an error occurs in children", () => {
@@ -45,7 +45,7 @@ describe("ErrorBoundary", () => {
 			</ErrorBoundary>,
 		);
 
-		expect(screen.getByText("メンテナンス中")).toBeDefined();
+		expect(screen.getByText("common.error_boundary.title")).toBeDefined();
 		expect(screen.queryByTestId("child")).toBeNull();
 
 		consoleSpy.mockRestore();
@@ -63,7 +63,7 @@ describe("ErrorBoundary", () => {
 			</ErrorBoundary>,
 		);
 
-		const reloadButton = screen.getByText("再読み込み");
+		const reloadButton = screen.getByText("common.error_boundary.reload");
 		fireEvent.click(reloadButton);
 
 		expect(window.location.reload).toHaveBeenCalledTimes(1);

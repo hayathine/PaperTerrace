@@ -6,6 +6,17 @@ import { useIntersectionObserver } from "../../hooks/useIntersectionObserver";
 import MarkdownContent from "../Common/MarkdownContent";
 import type { Figure, PageWithLines } from "./types";
 
+/** 一度でも viewport に入ったら true のままにする（スクロール高さ変化によるジャンプ防止） */
+function useVisibleOnce(
+	ref: React.RefObject<Element | null>,
+	options?: IntersectionObserverInit,
+): boolean {
+	const isIntersecting = useIntersectionObserver(ref, options);
+	const hasBeenVisible = useRef(false);
+	if (isIntersecting) hasBeenVisible.current = true;
+	return hasBeenVisible.current;
+}
+
 const KNOWN_SECTIONS = [
 	"abstract",
 	"introduction",
@@ -43,6 +54,7 @@ interface TextModePageProps {
 		contextText?: string,
 	) => void;
 	searchTerm?: string;
+	jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
 }
 
 /**
@@ -156,7 +168,7 @@ function findFigureByBbox(
 	bbox: number[],
 	tolerance = 20,
 ): Figure | undefined {
-	if (!figures || figures.length === 0) return undefined;
+	if (!Array.isArray(figures) || figures.length === 0) return undefined;
 	return figures.find((fig) => {
 		const [fx1, fy1, fx2, fy2] = fig.bbox;
 		return (
@@ -174,12 +186,13 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	onTextSelect,
 	onAskAI,
 	searchTerm,
+	jumpTarget,
 }) => {
 	const { t } = useTranslation();
 
 	// Intersection Observer: delay heavy Markdown rendering until page is near viewport
 	const containerRef = useRef<HTMLDivElement>(null);
-	const isVisible = useIntersectionObserver(containerRef, {
+	const isVisible = useVisibleOnce(containerRef, {
 		rootMargin: "400px",
 	});
 
@@ -295,7 +308,6 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	}, [selectionMenu]);
 
 	// --- コンテンツ: content が空なら lines フォールバック ---
-	// バックエンドが bbox ベースで ![label](bbox) マーカーを生成するため追加処理不要。
 	const processedMarkdown = useMemo(() => {
 		let content = "";
 		if (page.content && page.content.trim().length > 0) {
@@ -314,8 +326,60 @@ const TextModePage: React.FC<TextModePageProps> = ({
 			(_, label, x1, y1, x2, y2) => `![${label}](<${x1},${y1},${x2},${y2}>)`,
 		);
 
+		// フォールバック: content にマーカーがない figure を Y 座標で段落間に挿入する。
+		// 旧キャッシュ論文（マーカー未生成）や遅延レイアウト解析で追加された figure に対応。
+		if (Array.isArray(page.figures) && page.figures.length > 0) {
+			// content 内に既に存在する bbox を収集
+			const existingBboxes: number[][] = [];
+			const markerRe = /!\[[^\]]*\]\(<([\d.]+),([\d.]+),([\d.]+),([\d.]+)>\)/g;
+			let m: RegExpExecArray | null;
+			// biome-ignore lint/suspicious/noAssignInExpressions: iteration idiom
+			while ((m = markerRe.exec(content)) !== null) {
+				existingBboxes.push([
+					Number.parseFloat(m[1]),
+					Number.parseFloat(m[2]),
+					Number.parseFloat(m[3]),
+					Number.parseFloat(m[4]),
+				]);
+			}
+
+			const tol = 20;
+			const unmatched = page.figures.filter(
+				(fig) =>
+					!existingBboxes.some(
+						(eb) =>
+							Math.abs(eb[0] - fig.bbox[0]) < tol &&
+							Math.abs(eb[1] - fig.bbox[1]) < tol &&
+							Math.abs(eb[2] - fig.bbox[2]) < tol &&
+							Math.abs(eb[3] - fig.bbox[3]) < tol,
+					),
+			);
+
+			if (unmatched.length > 0) {
+				const pageHeight = page.height || 1;
+				const paragraphs = content.split("\n\n");
+				const refs = unmatched
+					.map((fig) => ({
+						y: fig.bbox[1],
+						ref: `![${fig.label || "figure"}](<${fig.bbox[0]},${fig.bbox[1]},${fig.bbox[2]},${fig.bbox[3]}>)`,
+					}))
+					.sort((a, b) => a.y - b.y);
+
+				let offset = 0;
+				for (const { y, ref } of refs) {
+					const insertIdx = Math.min(
+						Math.floor((y / pageHeight) * paragraphs.length) + offset,
+						paragraphs.length,
+					);
+					paragraphs.splice(insertIdx, 0, ref);
+					offset += 1;
+				}
+				content = paragraphs.join("\n\n");
+			}
+		}
+
 		return content;
-	}, [page.content, page.lines]);
+	}, [page.content, page.lines, page.figures, page.height]);
 
 	// --- react-markdown の components カスタマイズ ---
 	const mdComponents: Components = useMemo(() => {
@@ -333,20 +397,22 @@ const TextModePage: React.FC<TextModePageProps> = ({
 							? figure.image_url
 							: `${API_URL}${figure.image_url}`;
 
-						const isEquation =
-							figure.label?.toLowerCase() === "equation" ||
-							(typeof alt === "string" &&
-								alt.toLowerCase().includes("equation"));
+						// bbox と page.width から元のサイズ比率を計算
+						const figWidthPercent = page.width
+							? ((figure.bbox[2] - figure.bbox[0]) / page.width) * 100
+							: null;
 
 						return (
 							<img
 								src={imgSrc}
 								alt={alt || figure.label || "Figure"}
 								onClick={() => setZoomedImage(imgSrc)}
-								className={`
-									mx-auto my-4 rounded shadow-sm border border-slate-200 object-contain cursor-zoom-in hover:brightness-[0.98] transition-all
-									${isEquation ? "max-h-24 w-auto max-w-[90%]" : "max-w-full h-auto"}
-								`.trim()}
+								className="mx-auto my-4 rounded shadow-sm border border-slate-200 object-contain cursor-zoom-in hover:brightness-[0.98] transition-all"
+								style={
+									figWidthPercent
+										? { width: `${figWidthPercent}%`, height: "auto" }
+										: { width: "50%", height: "auto" }
+								}
 								loading="lazy"
 								{...rest}
 							/>
@@ -357,18 +423,13 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				}
 			}
 			// 通常の画像
-			const isEquationGeneric =
-				typeof alt === "string" && alt.toLowerCase().includes("equation");
-
 			return (
 				<img
 					src={src}
 					alt={alt}
 					onClick={() => src && setZoomedImage(src)}
-					className={`
-						mx-auto my-4 rounded shadow-sm object-contain cursor-zoom-in hover:brightness-[0.98] transition-all
-						${isEquationGeneric ? "max-h-24 w-auto max-w-[90%]" : "max-w-full h-auto"}
-					`.trim()}
+					className="mx-auto my-4 rounded shadow-sm object-contain cursor-zoom-in hover:brightness-[0.98] transition-all"
+					style={{ width: "50%", height: "auto" }}
 					loading="lazy"
 					{...rest}
 				/>
@@ -526,6 +587,19 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				</span>
 			</div>
 
+			{/* Jump target indicator: Y座標にパルスアニメーションで場所を示す */}
+			{jumpTarget && (
+				<div
+					className="pointer-events-none absolute left-0 right-0 z-20"
+					style={{ top: `${jumpTarget.y * 100}%` }}
+				>
+					<div className="h-0.5 bg-orange-400 animate-pulse opacity-80" />
+					<div className="absolute left-2 -top-3 bg-orange-400 text-white text-[9px] px-1.5 py-0.5 rounded font-bold animate-pulse">
+						↓
+					</div>
+				</div>
+			)}
+
 			{/* Markdown Content - lazy render when off-screen to save React/browser work */}
 			{isVisible ? (
 				<div className="px-3 py-4 sm:px-6 sm:py-5 md:px-10 md:py-8 selection:bg-orange-600/30 overflow-x-hidden">
@@ -608,7 +682,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 						}}
 						className="px-4 py-2.5 sm:py-2 hover:bg-slate-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors rounded-r-lg min-h-[44px] sm:min-h-0"
 					>
-						<span>📝</span> {t("menu.note", "Comment")}
+						<span>📝</span> {t("menu.note", "Note")}
 					</button>
 
 					{/* Triangle arrow */}

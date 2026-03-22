@@ -1,6 +1,6 @@
 # PaperTerrace アプリケーション設定
-# 環境切り替え: APP_ENV=dev (デフォルト) / APP_ENV=prod
-# 優先順位: 実環境変数 > [prod]/[dev] セクション > [default] セクション
+# 環境切り替え: APP_ENV=local (デフォルト) / APP_ENV=staging (開発/staging) / APP_ENV=prod (本番)
+# 優先順位: 実環境変数 > [prod]/[staging]/[local] セクション > [default] セクション
 
 [default]
 LOG_LEVEL = "INFO"
@@ -9,11 +9,12 @@ LOG_LEVEL = "INFO"
 AI_PROVIDER = "vertex"
 AI_TEMPERATURE = 0.1
 AI_MAX_OUTPUT_TOKENS = 2048
-VERTEX_MODEL = "gemini-2.0-flash-lite"
-MODEL_CHAT = "gemini-2.0-flash-lite"
-MODEL_SUMMARY = "gemini-2.0-flash-lite"
-MODEL_TRANSLATE = "gemini-2.0-flash-lite"
-FIGURE_EXPLAIN_MODEL = "gemini-2.0-flash-lite"
+VERTEX_MODEL = "gemini-2.5-flash-lite"
+MODEL_CHAT = "gemini-2.5-flash-lite"
+MODEL_SUMMARY = "gemini-2.5-flash-lite"
+MODEL_TRANSLATE = "gemini-2.5-flash-lite"
+FIGURE_EXPLAIN_MODEL = "gemini-2.5-flash-lite"
+DSPY_MODEL = "vertex_ai/gemini-2.5-flash-lite"
 LAYOUT_PARSER_TYPE = "gemini"
 
 # 翻訳モデル設定（M2M100）
@@ -28,14 +29,18 @@ TRANSLATION_COVERAGE_PENALTY = 0
 CT2_INTER_THREADS = 1
 CT2_INTRA_THREADS = 1
 
-# レイアウト解析
-LAYOUT_THRESHOLD = 0.7
+MAX_PDF_SIZE_MB = 50
 
 # アプリケーション設定
 BATCH_WORDS_LIMIT = 100
 MAX_CONTEXT_LENGTH = 15000
 MAINTENANCE_MODE = false
 OCR_CHUNK_SIZE = 5
+PDF_DPI = 200
+MAX_CHAT_PDF_SIZE_MB = 50
+
+# ストレージ設定
+GCS_BUCKET_NAME = "paperterrace-papers"
 
 # 推論サービス
 INFERENCE_SERVICE_TIMEOUT = 200
@@ -48,8 +53,12 @@ USE_OPENVINO = true
 PRELOAD_MODELS = false
 ENABLE_RATE_LIMIT = false
 
+# OCR 推論サービス（ローカル PaddleOCR / OpenVINO）
+INFERENCE_OCR_TIMEOUT = 30
+INFERENCE_OCR_DISABLED = false
+RATE_LIMIT_OCR = "120/minute"
+
 # Sentry / GlitchTip
-SENTRY_DSN = ""
 SENTRY_ENABLED = false
 SENTRY_TRACES_SAMPLE_RATE = 0.1
 SENTRY_PROFILES_SAMPLE_RATE = 0.1
@@ -60,15 +69,34 @@ RATE_LIMIT_GUEST = 30
 RATE_LIMIT_LAYOUT = "60/minute"
 RATE_LIMIT_TRANSLATE = "300/minute"
 
+# BigQuery
+BQ_LOCATION_LOGS = "asia-northeast1"
+
 # CORS
 CORS_EXTRA_ORIGINS = ""
 
-[dev]
+[local]
 LOG_LEVEL = "DEBUG"
 STORAGE_TYPE = "local"
 STORAGE_PROVIDER = "sqlite"
 IMAGES_DIR = "src/static/paper_images"
-BQ_LOG_DATASET = "paperterrace_logs_dev"
+BQ_LOG_DATASET = "paperterrace_logs_local"
+
+# Local 特定設定
+GCS_BUCKET_NAME_LOCAL = "paperterrace-papers-local"
+INFERENCE_VERIFY_SSL = false
+
+[staging]
+LOG_LEVEL = "DEBUG"
+SENTRY_ENABLED = true
+STORAGE_TYPE = "gcs"
+STORAGE_PROVIDER = "neon"
+IMAGES_DIR = "app/static/paper_images"
+BQ_LOG_DATASET = "paperterrace_logs_staging"
+
+# Staging 特定設定
+GCS_BUCKET_NAME_STAGING = "paperterrace-papers-staging"
+INFERENCE_VERIFY_SSL = false
 
 [prod]
 LOG_LEVEL = "INFO"

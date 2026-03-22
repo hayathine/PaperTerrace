@@ -1,5 +1,8 @@
 import { useEffect, useState } from "react";
+import { createPortal } from "react-dom";
+import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { ERROR_KEYS } from "@/lib/errors";
 import { createLogger } from "@/lib/logger";
 import CopyButton from "../Common/CopyButton";
 import FeedbackSection from "../Common/FeedbackSection";
@@ -40,6 +43,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 	initSessionCache(sessionId);
 
 	// スタックされた解析済み図表の配列（新しいものが先頭）
+	const { t } = useTranslation();
 	const [stackState, setStackState] = useState<FigureResult[]>(
 		globalStackCache[sessionId],
 	);
@@ -123,7 +127,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 							? {
 									...r,
 									isLoading: false,
-									error: `図の解析に失敗しました (${detail})`,
+									error: t(ERROR_KEYS.figure.analysisFailed),
 								}
 							: r,
 					),
@@ -158,7 +162,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 							? {
 									...r,
 									isLoading: false,
-									error: "図の解析に失敗しました (ネットワークエラー)",
+									error: t(ERROR_KEYS.figure.analysisNetworkError),
 								}
 							: r,
 					),
@@ -228,47 +232,49 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 			))}
 
 			{/* Zoom Modal */}
-			{zoomedImage && (
-				<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 overflow-hidden animate-fade-in">
-					<button
-						type="button"
-						className="absolute inset-0 w-full h-full bg-black/80 cursor-pointer border-none"
-						onClick={() => setZoomedImage(null)}
-						aria-label="Close zoom backdrop"
-					/>
-					<button
-						type="button"
-						className="absolute top-6 right-6 text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-all z-[110]"
-						onClick={() => setZoomedImage(null)}
-						aria-label="Close zoom"
-					>
-						<svg
-							className="w-8 h-8"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth="2"
-								d="M6 18L18 6M6 6l12 12"
-							/>
-						</svg>
-					</button>
-					<div
-						role="dialog"
-						aria-modal="true"
-						className="relative max-w-5xl w-full max-h-full flex items-center justify-center pointer-events-none"
-					>
-						<img
-							src={zoomedImage}
-							alt="Zoomed figure"
-							className="max-w-full max-h-[90vh] object-contain shadow-2xl rounded-lg pointer-events-auto cursor-default"
+			{zoomedImage &&
+				createPortal(
+					<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 overflow-hidden animate-fade-in">
+						<button
+							type="button"
+							className="absolute inset-0 w-full h-full bg-black/80 cursor-pointer border-none"
+							onClick={() => setZoomedImage(null)}
+							aria-label="Close zoom backdrop"
 						/>
-					</div>
-				</div>
-			)}
+						<button
+							type="button"
+							className="absolute top-6 right-6 text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-all z-[110]"
+							onClick={() => setZoomedImage(null)}
+							aria-label="Close zoom"
+						>
+							<svg
+								className="w-8 h-8"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth="2"
+									d="M6 18L18 6M6 6l12 12"
+								/>
+							</svg>
+						</button>
+						<div
+							role="dialog"
+							aria-modal="true"
+							className="relative max-w-5xl w-full max-h-full flex items-center justify-center pointer-events-none"
+						>
+							<img
+								src={zoomedImage}
+								alt="Zoomed figure"
+								className="max-w-full max-h-[90vh] object-contain shadow-2xl rounded-lg pointer-events-auto cursor-default"
+							/>
+						</div>
+					</div>,
+					document.body,
+				)}
 		</div>
 	);
 };
@@ -404,7 +410,7 @@ const FigureCard: React.FC<FigureCardProps> = ({
 					) : explanation ? (
 						<>
 							<div className="flex justify-end mb-1">
-								<CopyButton text={explanation} size={12} />
+								<CopyButton text={explanation} size={12} traceId={traceId} />
 							</div>
 							<MarkdownContent className="prose prose-xs max-w-none text-xs text-slate-600 leading-relaxed">
 								{explanation}

@@ -7,11 +7,11 @@
      → API レスポンスはメール送信完了を待たずに即返却
 """
 
-import os
 import smtplib
 import uuid
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
+from common import settings
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -26,7 +26,7 @@ log = ServiceLogger("Contact")
 
 router = APIRouter(prefix="/contact", tags=["Contact"])
 
-DESTINATION_EMAIL = "gwsgsgdas@gmail.com"
+DESTINATION_EMAIL = settings.get("CONTACT_DESTINATION_EMAIL", "gwsgsgdas@gmail.com")
 
 
 def _send_email(record_id: str, req: ContactRequest) -> None:
@@ -36,10 +36,10 @@ def _send_email(record_id: str, req: ContactRequest) -> None:
     環境変数 SMTP_HOST / SMTP_PORT / SMTP_USER / SMTP_PASSWORD が未設定の場合はスキップ。
     """
 
-    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
-    smtp_port = int(os.getenv("SMTP_PORT", "587"))
-    smtp_user = os.getenv("SMTP_USER", "")
-    smtp_password = os.getenv("SMTP_PASSWORD", "")
+    smtp_host = settings.get("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(settings.get("SMTP_PORT", "587"))
+    smtp_user = settings.get("SMTP_USER", "")
+    smtp_password = settings.get("SMTP_PASSWORD", "")
 
     if not smtp_user or not smtp_password:
         log.warning(

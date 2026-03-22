@@ -17,7 +17,7 @@ describe("StampPalette Component", () => {
 			vi.fn(() =>
 				Promise.resolve({
 					ok: true,
-					json: () => Promise.resolve({ url: "/static/custom-stamp.png" }),
+					json: () => Promise.resolve({ url: "/static/custom-stamp.jpg" }),
 				}),
 			),
 		);
@@ -84,7 +84,7 @@ describe("StampPalette Component", () => {
 	it("loads custom stamps from localStorage", () => {
 		localStorage.setItem(
 			"customStamps",
-			JSON.stringify(["/static/old-custom.png"]),
+			JSON.stringify(["/static/old-custom.jpg"]),
 		);
 
 		render(
@@ -98,7 +98,7 @@ describe("StampPalette Component", () => {
 
 		fireEvent.click(screen.getByText("Custom"));
 		const img = screen.getByRole("img");
-		expect(img).toHaveAttribute("src", `${API_URL}/static/old-custom.png`);
+		expect(img).toHaveAttribute("src", `${API_URL}/static/old-custom.jpg`);
 	});
 
 	it("handles custom stamp upload", async () => {
@@ -113,7 +113,7 @@ describe("StampPalette Component", () => {
 
 		fireEvent.click(screen.getByText("Custom"));
 
-		const file = new File(["(⌐□_□)"], "stamp.png", { type: "image/png" });
+		const file = new File(["(⌐□_□)"], "stamp.jpg", { type: "image/jpeg" });
 		const input = container.querySelector(
 			'input[type="file"]',
 		) as HTMLInputElement;
@@ -127,9 +127,9 @@ describe("StampPalette Component", () => {
 			);
 		});
 
-		expect(onSelectStampMock).toHaveBeenCalledWith("/static/custom-stamp.png");
+		expect(onSelectStampMock).toHaveBeenCalledWith("/static/custom-stamp.jpg");
 		expect(localStorage.getItem("customStamps")).toContain(
-			"/static/custom-stamp.png",
+			"/static/custom-stamp.jpg",
 		);
 	});
 });

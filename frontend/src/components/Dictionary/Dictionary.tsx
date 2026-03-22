@@ -9,6 +9,8 @@ export type DictionaryEntryWithCoords = DictionaryEntry & {
 
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { buildAuthHeaders } from "@/lib/auth";
+import { APP_EVENTS } from "@/lib/events";
 import { createLogger } from "@/lib/logger";
 import { useAuth } from "../../contexts/AuthContext";
 import CopyButton from "../Common/CopyButton";
@@ -60,6 +62,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token } = useAuth();
+	const lang = i18n.language.startsWith("ja") ? "ja" : "en";
 
 	// Sub-tab is controlled from parent (App.tsx -> Sidebar.tsx)
 	// No local state needed for activeSubTab to avoid sync issues/double fetches
@@ -86,6 +89,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	>([]);
 	const [loading, setLoading] = useState(false);
 	const [error, setError] = useState<string | null>(null);
+	const [isTruncated, setIsTruncated] = useState(false);
 
 	// Reset when paperId changes (but not when transitioning from null to a real ID)
 	const prevPaperIdRef = React.useRef<string | null | undefined>(paperId);
@@ -128,6 +132,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 		const isLink = (s: string) => {
 			const clean = s.trim();
+			if (clean.includes(" ") || clean.includes("\n")) return false;
 			return (
 				/^(https?:\/\/|\/\/|www\.)/i.test(clean) ||
 				clean.includes("doi.org/") ||
@@ -152,6 +157,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			setLoading(true);
 
 			setError(null);
+			setIsTruncated(false);
 
 			// Add a temporary entry to show analyzing indicator for the new word
 			const tempEntry: DictionaryEntryWithCoords = {
@@ -171,8 +177,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			});
 
 			try {
-				const headers: HeadersInit = {};
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token);
 
 				let res: Response;
 				if (imageUrl) {
@@ -184,7 +189,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 							prompt: term || "この画像を解説してください",
 							session_id: sessionId,
 							paper_id: paperId || "",
-							lang: i18n.language,
+							lang: lang,
 						}),
 					});
 				} else if (currentSubTab === "explanation" && context) {
@@ -196,25 +201,50 @@ const Dictionary: React.FC<DictionaryProps> = ({
 							word: term,
 							context: context,
 							session_id: sessionId,
-							lang: i18n.language,
+							lang: lang,
 						}),
 					});
 				} else if (term.length > 50) {
 					// 長文テキスト（文章・段落）はPOSTエンドポイントで処理
 					// GETパスパラメータに長文を含めると500エラーになるため
-					res = await fetch(`${API_URL}/api/explain/context`, {
-						method: "POST",
-						headers: { ...headers, "Content-Type": "application/json" },
-						body: JSON.stringify({
-							word: term,
-							context: context || term,
-							session_id: sessionId,
-							lang: i18n.language,
-						}),
-					});
+					// バックエンドのバリデーション上限に合わせてトリム（テキストモードの段落選択対応）
+					const truncatedWord =
+						term.length > 2000 ? `${term.slice(0, 2000)}…` : term;
+					const rawContext = context || term;
+					const truncatedContext =
+						rawContext.length > 5000
+							? `${rawContext.slice(0, 5000)}…`
+							: rawContext;
+					if (truncatedWord !== term || truncatedContext !== rawContext) {
+						setIsTruncated(true);
+					}
+					if (currentSubTab === "explanation") {
+						res = await fetch(`${API_URL}/api/explain/context`, {
+							method: "POST",
+							headers: { ...headers, "Content-Type": "application/json" },
+							body: JSON.stringify({
+								word: truncatedWord,
+								context: truncatedContext,
+								session_id: sessionId,
+								lang: lang,
+							}),
+						});
+					} else {
+						res = await fetch(`${API_URL}/api/translate`, {
+							method: "POST",
+							headers: { ...headers, "Content-Type": "application/json" },
+							body: JSON.stringify({
+								word: truncatedWord,
+								context: truncatedContext,
+								session_id: sessionId,
+								paper_id: paperId || "",
+								lang: lang,
+							}),
+						});
+					}
 				} else {
 					const queryParams = new URLSearchParams({
-						lang: i18n.language,
+						lang: lang,
 						paper_id: paperId || "",
 						session_id: sessionId || "",
 					});
@@ -226,7 +256,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					}
 
 					res = await fetch(
-						`${API_URL}/api/explain/${encodeURIComponent(term)}?${queryParams.toString()}`,
+						`${API_URL}/api/translate/${encodeURIComponent(term)}?${queryParams.toString()}`,
 						{ headers },
 					);
 				}
@@ -310,8 +340,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 	const fetchSavedNotes = useCallback(async () => {
 		try {
-			const headers: HeadersInit = {};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			const headers = buildAuthHeaders(token);
 
 			const baseUrl = API_URL || window.location.origin;
 			const url = new URL(`/api/note/${sessionId}`, baseUrl);
@@ -344,29 +373,42 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			if (sessionId && paperId) fetchSavedNotes();
 		};
 
-		window.addEventListener("notes-updated", handleNotesUpdated);
+		window.addEventListener(APP_EVENTS.NOTES_UPDATED, handleNotesUpdated);
 		return () => {
-			window.removeEventListener("notes-updated", handleNotesUpdated);
+			window.removeEventListener(APP_EVENTS.NOTES_UPDATED, handleNotesUpdated);
 		};
 	}, [sessionId, paperId, fetchSavedNotes]);
 
 	const handleDeepTranslate = useCallback(
 		async (entry: DictionaryEntryWithCoords) => {
 			if (!entry) return;
-			const setter =
-				currentSubTab === "explanation" ? setExplanationEntries : setEntries;
+
+			// Switch to explanation tab
+			onSubTabChange?.("explanation");
+
+			// Always use explanationEntries setter for "AI解説" results
+			const setter = setExplanationEntries;
+
 			const updateEntry = (updates: Partial<DictionaryEntryWithCoords>) =>
-				setter((prev) =>
-					prev.map((e) => (e.word === entry.word ? { ...e, ...updates } : e)),
-				);
+				setter((prev) => {
+					const exists = prev.some((e) => e.word === entry.word);
+					if (exists) {
+						return prev.map((e) =>
+							e.word === entry.word ? { ...e, ...updates } : e,
+						);
+					}
+					// If it doesn't exist in explanation tab yet, add it
+					return [{ ...entry, ...updates }, ...prev];
+				});
 
 			updateEntry({ is_analyzing: true });
 			setLoading(true);
 			setError(null);
 
 			try {
-				const headers: HeadersInit = { "Content-Type": "application/json" };
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token, {
+					"Content-Type": "application/json",
+				});
 
 				let res: Response;
 				if (context) {
@@ -377,12 +419,12 @@ const Dictionary: React.FC<DictionaryProps> = ({
 							word: entry.word,
 							context: context,
 							session_id: sessionId,
-							lang: i18n.language,
+							lang: lang,
 						}),
 					});
 				} else {
 					res = await fetch(
-						`${API_URL}/api/explain-deep/${encodeURIComponent(entry.word)}?lang=${i18n.language}&paper_id=${paperId || ""}&session_id=${sessionId || ""}`,
+						`${API_URL}/api/translate-deep/${encodeURIComponent(entry.word)}?lang=${lang}&paper_id=${paperId || ""}&session_id=${sessionId || ""}`,
 						{ headers },
 					);
 				}
@@ -423,8 +465,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 		if (!entry) return;
 		const targetCoords = entry.coords || coordinates;
 		try {
-			const headers: HeadersInit = { "Content-Type": "application/json" };
-			if (token) headers.Authorization = `Bearer ${token}`;
+			const headers = buildAuthHeaders(token, {
+				"Content-Type": "application/json",
+			});
 
 			const res = await fetch(`${API_URL}/api/note`, {
 				method: "POST",
@@ -443,7 +486,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 			if (res.ok) {
 				const key = entry.word;
 				setSavedItems((prev) => new Set(prev).add(key));
-				window.dispatchEvent(new Event("notes-updated"));
+				window.dispatchEvent(new Event(APP_EVENTS.NOTES_UPDATED));
 			}
 		} catch (e) {
 			log.error("save_to_note", "Failed to save note", {
@@ -455,6 +498,8 @@ const Dictionary: React.FC<DictionaryProps> = ({
 
 	const isUrl =
 		term &&
+		!term.trim().includes(" ") &&
+		!term.trim().includes("\n") &&
 		(/^(https?:\/\/|\/\/|www\.)/i.test(term) || term.includes("doi.org/"));
 
 	const activeEntries =
@@ -561,6 +606,18 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					</div>
 				)}
 
+				{isTruncated && !error && (
+					<div className="text-xs text-amber-600 bg-amber-50 p-3 rounded-lg border border-amber-100 mb-4 flex items-start gap-2">
+						<span className="mt-0.5 shrink-0">⚠</span>
+						<span>
+							{t(
+								"viewer.dictionary.truncated_notice",
+								"選択テキストが長すぎるため、先頭部分のみを翻訳しています。",
+							)}
+						</span>
+					</div>
+				)}
+
 				<div className="space-y-4">
 					{activeEntries.map((entry, index) => (
 						<div
@@ -576,9 +633,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 								</div>
 							)}
 							<div className="flex justify-between items-start mb-3">
-								<h2 className="text-lg font-bold text-slate-800">
+								<div className="text-sm font-semibold text-slate-800 leading-relaxed">
 									{entry.word}
-								</h2>
+								</div>
 								<div className="flex items-center gap-2">
 									<CopyButton
 										text={`${entry.word}\n${entry.translation}`}

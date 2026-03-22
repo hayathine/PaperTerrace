@@ -6,11 +6,14 @@ figure/table analysis, layout detection, and adversarial review.
 
 import asyncio
 import json
+from typing import Literal
 
+import httpx
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 
-from app.auth import OptionalUser
+from app.auth import OptionalUser, get_user_identifier
+from app.core.config import get_worker_api_url
 from app.domain.features import (
     AdversarialReviewService,
     FigureInsightService,
@@ -19,11 +22,20 @@ from app.domain.features import (
 from app.domain.services.layout_analysis_service import LayoutAnalysisService
 from app.providers import (
     RedisService,
+    get_arq_pool,
     get_redis_client,
     get_storage_provider,
-)  # RedisService now uses in-memory cache
+)
 from app.workers.layout_job import enqueue_layout_job, get_job_status
 from common.logger import ServiceLogger
+
+
+def _normalize_lang(lang: str) -> Literal["ja", "en"]:
+    """'ja-JP' などのロケール文字列を 'ja'/'en' に正規化する。"""
+    if lang.startswith("ja"):
+        return "ja"
+    return "en"
+
 
 log = ServiceLogger("Analysis")
 
@@ -35,33 +47,33 @@ summary_service = SummaryService()
 figure_insight_service = FigureInsightService()
 adversarial_service = AdversarialReviewService()
 redis_service = RedisService()
-layout_analysis_service = LayoutAnalysisService()
 
 
-def _get_context(session_id: str) -> str | None:
-    """Get paper context from cache or DB fallback."""
-    # 1. Redis キャッシュを優先して確認（DB クエリを省略）
+def _get_context(session_id: str) -> tuple[str | None, str | None]:
+    """(context, paper_id) のタプルを返す。paper_id は取得できた場合のみ。"""
+    # 1. Redis キャッシュを優先
     context = redis_service.get(f"session:{session_id}")
     if context:
         log.debug("get_context", "Cache HIT", session_id=session_id)
         redis_service.expire(f"session:{session_id}", 3600)
-        return context
+        # paper_id も別キーでキャッシュしている場合は返す
+        paper_id = redis_service.get(f"session_pid:{session_id}")
+        return context, paper_id
 
-    # 2. DB から取得（キャッシュミス時のフォールバック）
+    # 2. DB から取得（キャッシュミス時）
     storage = get_storage_provider()
     paper_id = storage.get_session_paper_id(session_id)
     resolved_paper_id = paper_id or session_id
 
     paper = storage.get_paper(resolved_paper_id)
     if paper and paper.get("ocr_text"):
-        log.debug(
-            "get_context",
-            "Fetched FULL context from DB",
-            paper_id=resolved_paper_id,
-        )
-        return paper["ocr_text"]
+        log.debug("get_context", "Fetched FULL context from DB", paper_id=resolved_paper_id)
+        # 次回のために paper_id をキャッシュ
+        if paper_id:
+            redis_service.set(f"session_pid:{session_id}", paper_id, expire=3600)
+        return paper["ocr_text"], resolved_paper_id
 
-    return None
+    return None, None
 
 
 # ============================================================================
@@ -79,7 +91,8 @@ async def summarize(
     force: bool = Form(False),
     user: OptionalUser = None,
 ):
-    context = _get_context(session_id)
+    lang = _normalize_lang(lang)
+    context, resolved_paper_id = _get_context(session_id)
     if not context:
         log.warning("summarize", "Context not found", session_id=session_id)
 
@@ -90,9 +103,9 @@ async def summarize(
 
     try:
         storage = get_storage_provider()
-        # Resolve paper_id if missing
+        # Resolve paper_id if missing（DBアクセスは _get_context で取得済みの場合は不要）
         if not paper_id:
-            paper_id = storage.get_session_paper_id(session_id)
+            paper_id = resolved_paper_id or storage.get_session_paper_id(session_id)
 
         # Clear cached summary if force=True
         if force and paper_id:
@@ -114,7 +127,7 @@ async def summarize(
         force=force,
     )
 
-    current_user_id = user.uid if user else f"guest:{session_id}"
+    current_user_id = get_user_identifier(user, session_id)
 
     summary, trace_id = await summary_service.summarize_full(
         context,
@@ -141,7 +154,7 @@ async def analyze_figure(
     user: OptionalUser = None,
 ):
     content = await file.read()
-    mime_type = file.content_type or "image/png"
+    mime_type = file.content_type or "image/jpeg"
     # Determine current user ID
     current_user_id = (
         user.uid if user else (f"guest:{session_id}" if session_id else None)
@@ -167,11 +180,12 @@ async def analyze_figure(
 async def critique(
     session_id: str = Form(...), lang: str = Form("ja"), user: OptionalUser = None
 ):
-    context = _get_context(session_id)
+    lang = _normalize_lang(lang)
+    context, _ = _get_context(session_id)
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
-    current_user_id = user.uid if user else f"guest:{session_id}"
+    current_user_id = get_user_identifier(user, session_id)
     critique = await adversarial_service.critique(
         context, target_lang=lang, user_id=current_user_id, session_id=session_id
     )
@@ -193,7 +207,9 @@ async def analyze_layout_lazy(
 ):
     """
     レイアウト解析ジョブをキューに投入し、job_id を即時返却する。
-    結果は GET /layout-jobs/{job_id} でポーリングして取得する。
+
+    Worker API が利用可能な場合は HTTP 経由で投入（Redis 直接接続不要）。
+    Worker API が未設定の場合は Redis 直接モード（ローカル開発用）にフォールバック。
     """
     log.info(
         "layout_lazy",
@@ -202,49 +218,72 @@ async def analyze_layout_lazy(
         pages=page_numbers,
     )
 
-    # Parse page numbers
     parsed_pages = None
     if page_numbers:
         try:
             parsed_pages = [int(p.strip()) for p in page_numbers.split(",")]
         except ValueError:
-            raise HTTPException(
-                status_code=400, detail="Invalid page_numbers format"
-            )
+            raise HTTPException(status_code=400, detail="Invalid page_numbers format")
 
     current_user_id = (
         user.uid if user else (f"guest:{session_id}" if session_id else None)
     )
 
-    redis_client = get_redis_client()
-    if redis_client is None:
-        # Redis 未接続時はフォールバックとして同期処理
-        log.warning(
-            "layout_lazy",
-            "Redis unavailable, falling back to synchronous processing",
-        )
+    worker_api_url = get_worker_api_url()
+
+    # --- Worker API モード（staging / prod）---
+    if worker_api_url:
         try:
-            all_figures = await layout_analysis_service.analyze_layout_lazy(
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                resp = await client.post(
+                    f"{worker_api_url}/jobs",
+                    json={
+                        "paper_id": paper_id,
+                        "page_numbers": parsed_pages,
+                        "user_id": current_user_id,
+                        "file_hash": file_hash,
+                        "session_id": session_id,
+                    },
+                )
+                resp.raise_for_status()
+                data = resp.json()
+            job_id = data.get("job_id")
+            log.info("layout_lazy", "Job enqueued via Worker API", job_id=job_id)
+            # フロントエンドが Worker API へ直接 SSE 接続できるよう stream_url を返す
+            stream_url = f"{worker_api_url}/jobs/{job_id}/stream"
+            return JSONResponse({"success": True, **data, "stream_url": stream_url})
+        except Exception as e:
+            log.error("layout_lazy", "Worker API call failed", error=str(e))
+            raise HTTPException(status_code=502, detail="Worker API unavailable.")
+
+    # --- Redis 直接モード（ローカル開発）---
+    arq_pool = await get_arq_pool()
+    redis_client = get_redis_client()
+
+    if arq_pool is None or redis_client is None:
+        log.warning("layout_lazy", "Redis unavailable, falling back to synchronous processing")
+        try:
+            service = LayoutAnalysisService()
+            all_figures = await service.analyze_layout_lazy(
                 paper_id,
                 parsed_pages,
                 user_id=current_user_id,
                 file_hash=file_hash,
                 session_id=session_id,
             )
-            return JSONResponse(
-                {
-                    "success": True,
-                    "paper_id": paper_id,
-                    "figures_detected": len(all_figures),
-                    "figures": all_figures,
-                }
-            )
+            return JSONResponse({
+                "success": True,
+                "paper_id": paper_id,
+                "figures_detected": len(all_figures),
+                "figures": all_figures,
+            })
         except Exception as e:
             log.error("layout_lazy", "Synchronous fallback failed", error=str(e))
             raise HTTPException(status_code=500, detail="Layout analysis failed.")
 
     try:
-        job_id = enqueue_layout_job(
+        job_id = await enqueue_layout_job(
+            arq_pool,
             redis_client,
             paper_id=paper_id,
             page_numbers=parsed_pages,
@@ -252,14 +291,10 @@ async def analyze_layout_lazy(
             file_hash=file_hash,
             session_id=session_id,
         )
-        log.info("layout_lazy", "Job enqueued", job_id=job_id, paper_id=paper_id)
-        return JSONResponse(
-            {
-                "success": True,
-                "job_id": job_id,
-                "status": "queued",
-            }
-        )
+        log.info("layout_lazy", "Job enqueued via Redis", job_id=job_id)
+        # ローカル開発: Cloud Run 経由のSSEエンドポイントを返す
+        stream_url = f"/api/layout-jobs/{job_id}/stream"
+        return JSONResponse({"success": True, "job_id": job_id, "status": "queued", "stream_url": stream_url})
     except Exception as e:
         log.error("layout_lazy", "Failed to enqueue job", error=str(e))
         raise HTTPException(status_code=500, detail="Failed to enqueue layout analysis job.")
@@ -270,8 +305,24 @@ async def get_layout_job_status(job_id: str):
     """
     レイアウト解析ジョブのステータスと結果を返す。
 
-    status: "queued" | "processing" | "completed" | "failed"
+    Worker API 経由または Redis 直接のどちらかで取得する。
     """
+    worker_api_url = get_worker_api_url()
+
+    if worker_api_url:
+        try:
+            async with httpx.AsyncClient(timeout=5.0) as client:
+                resp = await client.get(f"{worker_api_url}/jobs/{job_id}")
+                if resp.status_code == 404:
+                    raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
+                resp.raise_for_status()
+                return JSONResponse(resp.json())
+        except HTTPException:
+            raise
+        except Exception as e:
+            log.error("get_job", "Worker API call failed", error=str(e))
+            raise HTTPException(status_code=502, detail="Worker API unavailable.")
+
     redis_client = get_redis_client()
     if redis_client is None:
         raise HTTPException(status_code=503, detail="Redis unavailable")
@@ -281,81 +332,166 @@ async def get_layout_job_status(job_id: str):
         raise HTTPException(status_code=404, detail=f"Job {job_id} not found")
 
     status = job.get("status")
-
     if status == "completed":
         figures = job.get("result", [])
-        return JSONResponse(
-            {
-                "success": True,
-                "job_id": job_id,
-                "status": "completed",
-                "figures_detected": len(figures),
-                "figures": figures,
-            }
-        )
-
-    return JSONResponse(
-        {
+        return JSONResponse({
             "success": True,
             "job_id": job_id,
-            "status": status,
-            "error": job.get("error"),
-        }
-    )
+            "status": "completed",
+            "figures_detected": len(figures),
+            "figures": figures,
+        })
+
+    return JSONResponse({
+        "success": True,
+        "job_id": job_id,
+        "status": status,
+        "error": job.get("error"),
+    })
 
 
 @router.get("/layout-jobs/{job_id}/stream")
 async def stream_layout_job(job_id: str):
     """
-    レイアウト解析ジョブの完了をSSEでプッシュ通知する。
+    レイアウト解析ジョブの完了を SSE でプッシュ通知する。
 
-    クライアントはポーリングせず、この接続を維持するだけでよい。
-    status: "queued" | "processing" | "completed" | "failed" | "timeout" | "not_found"
+    Worker API 経由の場合は SSE をそのままプロキシする。
     """
+    worker_api_url = get_worker_api_url()
+
+    if worker_api_url:
+        async def proxy_stream():
+            try:
+                async with httpx.AsyncClient(timeout=None) as client:
+                    async with client.stream(
+                        "GET", f"{worker_api_url}/jobs/{job_id}/stream"
+                    ) as resp:
+                        async for chunk in resp.aiter_bytes():
+                            yield chunk
+            except Exception as e:
+                log.error("stream_proxy", "Worker API stream failed", error=str(e))
+                yield f"data: {json.dumps({'status': 'failed', 'error': 'Worker API disconnected'})}\n\n"
+
+        return StreamingResponse(
+            proxy_stream(),
+            media_type="text/event-stream",
+            headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+        )
+
+    # Redis 直接モード（ローカル開発）
     redis_client = get_redis_client()
     if redis_client is None:
         raise HTTPException(status_code=503, detail="Redis unavailable")
 
     async def generate():
-        POLL_INTERVAL = 1.0
         TIMEOUT = 125.0
         HEARTBEAT_INTERVAL = 15.0
         deadline = asyncio.get_event_loop().time() + TIMEOUT
         last_heartbeat = asyncio.get_event_loop().time()
 
-        while asyncio.get_event_loop().time() < deadline:
-            now = asyncio.get_event_loop().time()
+        job = get_job_status(redis_client, job_id)
+        if job is None:
+            yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
+            return
 
-            if now - last_heartbeat >= HEARTBEAT_INTERVAL:
-                yield ": heartbeat\n\n"
-                last_heartbeat = now
+        status = job.get("status")
+        if status == "completed":
+            figures = job.get("result", [])
+            yield f"data: {json.dumps({'status': 'completed', 'figures': figures, 'figures_detected': len(figures)})}\n\n"
+            return
+        if status == "failed":
+            yield f"data: {json.dumps({'status': 'failed', 'error': job.get('error')})}\n\n"
+            return
 
-            job = get_job_status(redis_client, job_id)
-            if job is None:
-                yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
-                return
+        yield f"data: {json.dumps({'status': status})}\n\n"
 
-            status = job.get("status")
+        from app.workers.layout_job import JOB_PUB_PREFIX
+        pubsub = None
+        use_pubsub = False
+        try:
+            pubsub = redis_client.pubsub()
+            await asyncio.to_thread(pubsub.subscribe, f"{JOB_PUB_PREFIX}{job_id}")
+            use_pubsub = True
+        except Exception as e:
+            log.warning("stream_layout", "Pub/Sub unavailable, falling back to polling", error=str(e))
+            if pubsub:
+                try:
+                    await asyncio.to_thread(pubsub.unsubscribe)
+                except Exception:
+                    pass
+                pubsub = None
 
-            if status == "completed":
-                figures = job.get("result", [])
-                yield f"data: {json.dumps({'status': 'completed', 'figures': figures, 'figures_detected': len(figures)})}\n\n"
-                return
+        try:
+            if use_pubsub:
+                while asyncio.get_event_loop().time() < deadline:
+                    now = asyncio.get_event_loop().time()
+                    if now - last_heartbeat >= HEARTBEAT_INTERVAL:
+                        yield ": heartbeat\n\n"
+                        last_heartbeat = now
 
-            if status == "failed":
-                yield f"data: {json.dumps({'status': 'failed', 'error': job.get('error')})}\n\n"
-                return
+                    try:
+                        message = await asyncio.to_thread(
+                            pubsub.get_message, ignore_subscribe_messages=True, timeout=1.0
+                        )
+                    except Exception:
+                        message = None
 
-            yield f"data: {json.dumps({'status': status})}\n\n"
-            await asyncio.sleep(POLL_INTERVAL)
+                    if message and message.get("type") == "message":
+                        try:
+                            data = json.loads(message["data"])
+                            evt_status = data.get("status")
+                            if evt_status == "partial":
+                                figures = data.get("figures", [])
+                                if not isinstance(figures, list):
+                                    figures = []
+                                yield f"data: {json.dumps({'status': 'partial', 'figures': figures})}\n\n"
+                            elif evt_status == "completed":
+                                figures = data.get("result", [])
+                                if not isinstance(figures, list):
+                                    figures = []
+                                yield f"data: {json.dumps({'status': 'completed', 'figures': figures, 'figures_detected': len(figures)})}\n\n"
+                                return
+                            elif evt_status == "failed":
+                                yield f"data: {json.dumps({'status': 'failed', 'error': data.get('error')})}\n\n"
+                                return
+                        except Exception:
+                            pass
+            else:
+                while asyncio.get_event_loop().time() < deadline:
+                    now = asyncio.get_event_loop().time()
+                    if now - last_heartbeat >= HEARTBEAT_INTERVAL:
+                        yield ": heartbeat\n\n"
+                        last_heartbeat = now
+
+                    job = get_job_status(redis_client, job_id)
+                    if job is None:
+                        yield f"data: {json.dumps({'status': 'not_found'})}\n\n"
+                        return
+
+                    status = job.get("status")
+                    if status == "completed":
+                        figures = job.get("result", [])
+                        yield f"data: {json.dumps({'status': 'completed', 'figures': figures, 'figures_detected': len(figures)})}\n\n"
+                        return
+                    if status == "failed":
+                        yield f"data: {json.dumps({'status': 'failed', 'error': job.get('error')})}\n\n"
+                        return
+
+                    yield f"data: {json.dumps({'status': status})}\n\n"
+                    await asyncio.sleep(1.0)
+
+        finally:
+            if pubsub:
+                try:
+                    await asyncio.to_thread(pubsub.unsubscribe)
+                    await asyncio.to_thread(pubsub.close)
+                except Exception:
+                    pass
 
         yield f"data: {json.dumps({'status': 'timeout'})}\n\n"
 
     return StreamingResponse(
         generate(),
         media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",
-        },
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )

@@ -40,7 +40,7 @@ class NeonAuth:
         self.auth_url = get_neon_auth_url()
 
         if not self.jwks_url:
-            log.warning("init", "NEON_AUTH_JWKS_URL (or _DEV) is not set")
+            log.warning("init", "NEON_AUTH_JWKS_URL (or _LOCAL) is not set")
 
     async def _get_jwks(self) -> Dict[str, Any]:
         """Fetch JWKS from Neon Auth or return cached version."""

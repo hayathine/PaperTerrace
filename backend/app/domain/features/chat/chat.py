@@ -3,9 +3,10 @@ AIチャットアシスタント機能を提供するモジュール
 論文の内容に基づいて質問に回答する
 """
 
-import os
+
 
 from app.providers import get_ai_provider
+from common.config import settings
 from common.dspy.config import setup_dspy
 from common.dspy.modules import ChatModule
 from common.dspy.trace import TraceContext, trace_dspy_call
@@ -32,7 +33,7 @@ class ChatService:
     def __init__(self):
         self.ai_provider = get_ai_provider()
         self.redis = RedisService()
-        self.model = os.getenv("MODEL_CHAT", "gemini-2.5-flash")
+        self.model = settings.get("MODEL_CHAT", "gemini-2.5-flash")
         self.cache_ttl_minutes = 60
         setup_dspy()
         self.chat_mod = ChatModule()
@@ -80,27 +81,58 @@ class ChatService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         try:
-            # PDF直接入力方式
-            if pdf_bytes:
+            # PDFキャッシュの確認（pdf_bytes がなくてもキャッシュがあればPDFモードで応答できる）
+            pdf_cache_name = None
+            if paper_id:
+                pdf_cache_key = f"paper_cache_pdf:{paper_id}"
+                pdf_cache_name = self.redis.get(pdf_cache_key)
+
+            # PDF直接入力方式（初回はpdf_bytesあり、2回目以降はキャッシュのみ）
+            if pdf_bytes or pdf_cache_name:
                 logger.debug(
-                    "Processing chat request with PDF",
+                    "PDFを使用したチャットリクエストを処理中",
                     extra={
                         "message_length": len(user_message),
-                        "pdf_size": len(pdf_bytes),
+                        "pdf_size": len(pdf_bytes) if pdf_bytes else 0,
+                        "using_cache": pdf_cache_name is not None,
                     },
                 )
+
+                # 初回: キャッシュを作成してRedisに保存
+                if not pdf_cache_name and pdf_bytes and paper_id:
+                    try:
+                        pdf_cache_name = await self.ai_provider.create_context_cache(
+                            model=self.model,
+                            contents=pdf_bytes,
+                            ttl_minutes=self.cache_ttl_minutes,
+                        )
+                        self.redis.set(
+                            f"paper_cache_pdf:{paper_id}",
+                            pdf_cache_name,
+                            expire=self.cache_ttl_minutes * 60,
+                        )
+                        logger.info(
+                            "PDFコンテキストキャッシュを作成しました",
+                            extra={"paper_id": paper_id, "cache_name": pdf_cache_name},
+                        )
+                    except Exception as e:
+                        logger.warning(f"PDFコンテキストキャッシュの作成に失敗しました ({paper_id}): {e}")
+
                 prompt = CHAT_GENERAL_FROM_PDF_PROMPT.format(
                     lang_name=lang_name,
                     history_text=history_text_for_prompt,
                     user_message=user_message,
                 )
                 response_data = await self.ai_provider.generate_with_pdf(
-                    prompt, pdf_bytes, model=self.model
+                    prompt,
+                    pdf_bytes=pdf_bytes if not pdf_cache_name else None,
+                    cached_content_name=pdf_cache_name,
+                    model=self.model,
                 )
             elif image_bytes:
                 # 画像付きチャット
                 logger.debug(
-                    "Processing chat request with image",
+                    "画像を使用したチャットリクエストを処理中",
                     extra={
                         "message_length": len(user_message),
                         "image_size": len(image_bytes),
@@ -114,12 +146,12 @@ class ChatService:
                     user_message=user_message,
                 )
                 response_data = await self.ai_provider.generate_with_image(
-                    prompt, image_bytes, "image/png", model=self.model
+                    prompt, image_bytes, "image/jpeg", model=self.model
                 )
             else:
                 # 従来のテキストベース方式
                 logger.debug(
-                    "Processing chat request with text",
+                    "テキストベースのチャットリクエストを処理中",
                     extra={
                         "message_length": len(user_message),
                         "history_size": len(history),
@@ -149,7 +181,7 @@ class ChatService:
                             )
                         except Exception as e:
                             logger.warning(
-                                f"Failed to create context cache for {paper_id}: {e}"
+                                f"コンテキストキャッシュの作成に失敗しました ({paper_id}): {e}"
                             )
 
                 # DSPy version
@@ -181,11 +213,11 @@ class ChatService:
                 grounding = None
 
             if not response_text:
-                logger.warning("Empty chat response received")
-                raise ChatError("Empty response from AI")
+                logger.warning("チャットレスポンスが空です")
+                raise ChatError("AIからのレスポンスが空です")
 
             logger.info(
-                "Chat response generated",
+                "チャットレスポンスを生成しました",
                 extra={
                     "response_length": len(response_text),
                     "has_grounding": grounding is not None,
@@ -206,7 +238,7 @@ class ChatService:
             raise
         except Exception as e:
             logger.exception(
-                "Chat request failed",
+                "チャットリクエストに失敗しました",
                 extra={"error": str(e), "message_preview": user_message[:50]},
             )
             return {
@@ -222,6 +254,6 @@ class ChatService:
             try:
                 await self.ai_provider.delete_context_cache(cache_name)
                 self.redis.delete(cache_key)
-                logger.info(f"Deleted context cache for paper {paper_id}")
+                logger.info(f"論文 {paper_id} のコンテキストキャッシュを削除しました")
             except Exception as e:
-                logger.warning(f"Failed to delete context cache for {paper_id}: {e}")
+                logger.warning(f"コンテキストキャッシュの削除に失敗しました ({paper_id}): {e}")

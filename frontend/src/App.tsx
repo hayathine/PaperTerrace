@@ -15,6 +15,7 @@ import ServiceOutage from "./components/UI/ServiceOutage";
 import UploadScreen from "./components/Upload/UploadScreen";
 import { useAuth } from "./contexts/AuthContext";
 import { useLoading } from "./contexts/LoadingContext";
+import { usePaperCache } from "./db/hooks";
 import { useSyncStatus } from "./db/sync";
 import { useLayoutState } from "./hooks/useLayoutState";
 import { usePinchZoom } from "./hooks/usePinchZoom";
@@ -39,15 +40,6 @@ function App() {
 
 	const [currentPaperId, setCurrentPaperId] = useState<string | null>(null);
 	const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-	// Sync isAnalyzing with GlobalLoading
-	useEffect(() => {
-		if (isAnalyzing) {
-			startLoading();
-		} else {
-			stopLoading();
-		}
-	}, [isAnalyzing, startLoading, stopLoading]);
 
 	// Sidebar State
 	const [sessionId] = useState(() => {
@@ -130,6 +122,10 @@ function App() {
 
 	const prevPaperIdRef = useRef<string | null>(null);
 	const paperStartTimeRef = useRef<number | null>(null);
+	// サインイン遷移検知用（null = ゲスト確定、undefined = 初回レンダリング前）
+	const prevUserRef = useRef<typeof user | undefined>(undefined);
+
+	const { getCachedPaper } = usePaperCache();
 
 	const handleScroll = useScrollTracking(currentPaperId || uploadFile?.name);
 	const {
@@ -138,7 +134,8 @@ function App() {
 		containerRef: zoomContainerRef,
 		onWheel: handleZoomWheel,
 	} = usePinchZoom();
-	const [appEnv, setAppEnv] = useState<string>("production");
+	const [appEnv, setAppEnv] = useState<string>("prod");
+	const [maxPdfSize, setMaxPdfSize] = useState<number>(50);
 	const [pdfMode, setPdfMode] = useState<
 		"text" | "stamp" | "area" | "plaintext"
 	>("plaintext");
@@ -153,6 +150,9 @@ function App() {
 				if (data?.app_env) {
 					setAppEnv(data.app_env);
 				}
+				if (data?.max_pdf_size_mb) {
+					setMaxPdfSize(data.max_pdf_size_mb);
+				}
 			} catch (err) {
 				log.error("fetch_config", "Failed to fetch config", { error: err });
 				reportFailure(503);
@@ -162,8 +162,8 @@ function App() {
 	}, []);
 
 	useEffect(() => {
-		if (appEnv === "development") {
-			document.title = `PaperTerrace (Dev) - ${t("tagline", "Read papers casually, like sitting on a terrace")}`;
+		if (appEnv === "local") {
+			document.title = `PaperTerrace (Local) - ${t("tagline", "Read papers casually, like sitting on a terrace")}`;
 		} else {
 			document.title = `PaperTerrace - ${t("tagline", "Read papers casually, like sitting on a terrace")}`;
 		}
@@ -195,6 +195,51 @@ function App() {
 
 		fetchPapers();
 	}, [user, token]);
+
+	// ゲスト → サインイン遷移を検知し、表示中の論文をライブラリに保存する
+	useEffect(() => {
+		const prevUser = prevUserRef.current;
+		prevUserRef.current = user;
+
+		// prevUser === null: ゲスト確定状態からサインインした場合のみ実行
+		if (prevUser === null && user && token && currentPaperId) {
+			const claimGuestPaper = async () => {
+				const cached = await getCachedPaper(currentPaperId);
+				if (!cached) return;
+
+				try {
+					const res = await fetch(`${API_URL}/api/papers/claim`, {
+						method: "POST",
+						headers: {
+							"Content-Type": "application/json",
+							Authorization: `Bearer ${token}`,
+						},
+						body: JSON.stringify({
+							paper_id: cached.id,
+							file_hash: cached.file_hash,
+							filename: cached.title,
+							ocr_text: cached.ocr_text ?? "",
+							layout_json: cached.layout_json ?? null,
+						}),
+					});
+
+					if (res.ok) {
+						// ライブラリ一覧を再取得
+						const papersRes = await fetch(`${API_URL}/api/papers`, {
+							headers: { Authorization: `Bearer ${token}` },
+						});
+						const data = await papersRes.json();
+						if (data?.papers) setUploadedPapers(data.papers);
+					}
+				} catch (err) {
+					log.error("claim_paper", "ゲスト論文のクレームに失敗しました", {
+						error: err,
+					});
+				}
+			};
+			claimGuestPaper();
+		}
+	}, [user, token, currentPaperId]);
 
 	// Context Cache Lifecycle Management & Session Duration Tracking
 	useEffect(() => {
@@ -409,10 +454,24 @@ function App() {
 		// but for now let's keep it until next jump.
 	};
 
-	const handleAnalysisStatusChange = useCallback((status: string) => {
-		// Show analyzing state during upload and processing
-		setIsAnalyzing(status === "uploading" || status === "processing");
-	}, []);
+	const handleAnalysisStatusChange = useCallback(
+		(status: string) => {
+			if (status === "uploading") {
+				setIsAnalyzing(true);
+				startLoading(t("viewer.uploading_pdf"));
+			} else if (status === "processing") {
+				setIsAnalyzing(true);
+				startLoading(t("viewer.processing_pdf"));
+			} else if (status === "layout_analysis") {
+				setIsAnalyzing(true);
+				startLoading(t("viewer.analyzing_layout"));
+			} else {
+				setIsAnalyzing(false);
+				stopLoading();
+			}
+		},
+		[startLoading, stopLoading, t],
+	);
 
 	const handleAskAI = (
 		prompt: string,
@@ -912,6 +971,7 @@ function App() {
 												currentSearchMatch={currentSearchMatch}
 												evidence={activeEvidence}
 												appEnv={appEnv}
+												maxPdfSize={maxPdfSize}
 												mode={pdfMode}
 											/>
 										</div>

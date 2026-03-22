@@ -1,13 +1,13 @@
 import type React from "react";
 import { useEffect, useRef } from "react";
 import MessageBubble from "./MessageBubble";
-import type { Message } from "./types";
+import type { Grounding, Message } from "./types";
 
 interface MessageListProps {
 	messages: Message[];
 	isLoading: boolean;
 	sessionId: string;
-	onEvidenceClick?: (grounding: any) => void;
+	onEvidenceClick?: (grounding: Grounding) => void;
 }
 
 const MessageList: React.FC<MessageListProps> = ({

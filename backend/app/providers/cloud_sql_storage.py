@@ -3,7 +3,7 @@ Cloud SQL Storage Provider
 """
 
 import json
-import os
+
 from contextlib import contextmanager
 from datetime import datetime
 
@@ -26,13 +26,13 @@ class CloudSQLStorage(StorageInterface):
 
     def __init__(self):
         self.db_url = get_database_url()
-        self.db_user = os.getenv("DB_USER")
-        self.db_password = os.getenv("DB_PASSWORD")
-        self.db_name = os.getenv("DB_NAME")
+        self.db_user = settings.get("DB_USER")
+        self.db_password = settings.get("DB_PASSWORD")
+        self.db_name = settings.get("DB_NAME")
         # Connect via Unix socket (e.g. for Google Cloud SQL) or TCP for local
-        self.host = os.getenv("DB_HOST", "127.0.0.1")
-        self.port = os.getenv("DB_PORT", "5432")
-        self.instance_connection_name = os.getenv("CLOUDSQL_CONNECTION_NAME")
+        self.host = settings.get("DB_HOST", "127.0.0.1")
+        self.port = settings.get("DB_PORT", "5432")
+        self.instance_connection_name = settings.get("CLOUDSQL_CONNECTION_NAME")
 
         log.info(
             "init",
@@ -638,6 +638,29 @@ class CloudSQLStorage(StorageInterface):
                     if data.get("research_fields"):
                         try:
                             # Postgres TEXT might come as string
+                            if isinstance(data["research_fields"], str):
+                                data["research_fields"] = json.loads(
+                                    data["research_fields"]
+                                )
+                        except json.JSONDecodeError:
+                            data["research_fields"] = []
+                    else:
+                        data["research_fields"] = []
+                    return data
+                return None
+
+    def get_user_by_email(self, email: str) -> dict | None:
+        """メールアドレスでユーザーを取得する。"""
+        with self._get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT * FROM users WHERE email = %s", (email,))
+                row = cur.fetchone()
+                if row:
+                    data = dict(row)
+                    data["is_public"] = bool(data.get("is_public", 1))
+                    data["plan"] = data.get("plan", "free")
+                    if data.get("research_fields"):
+                        try:
                             if isinstance(data["research_fields"], str):
                                 data["research_fields"] = json.loads(
                                     data["research_fields"]

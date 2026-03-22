@@ -6,7 +6,7 @@ describe("groupWordsIntoLines", () => {
 	it("should group words into lines for a single page", () => {
 		const mockPage: PageData = {
 			page_num: 1,
-			image_url: "test.png",
+			image_url: "test.jpg",
 			width: 1000,
 			height: 1000,
 			words: [
@@ -37,7 +37,7 @@ describe("groupWordsIntoLines", () => {
 	it("should return empty lines if no words are provided", () => {
 		const mockPage: PageData = {
 			page_num: 1,
-			image_url: "test.png",
+			image_url: "test.jpg",
 			width: 1000,
 			height: 1000,
 			words: [],

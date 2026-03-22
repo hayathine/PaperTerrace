@@ -13,7 +13,12 @@ def sort_blocks(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     if not blocks:
         return []
 
-    max_x = max(b["bbox"][2] for b in blocks)
+    def get_x2(bbox):
+        if isinstance(bbox, dict):
+            return bbox.get("x_max") or bbox.get("x1") or bbox.get("right") or 0
+        return bbox[2]
+
+    max_x = max(get_x2(b["bbox"]) for b in blocks)
     mid_x = max_x / 2.0
 
     left_col = []
@@ -24,9 +29,33 @@ def sort_blocks(blocks: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
         bbox = b["bbox"]
         # Handle both list [x1, y1, x2, y2] and dict {"x_min": x1, ...} formats
         if isinstance(bbox, dict):
-            bx1 = bbox.get("x_min") or bbox.get("x0") or bbox.get("left")
-            bx2 = bbox.get("x_max") or bbox.get("x1") or bbox.get("right")
-            by1 = bbox.get("y_min") or bbox.get("top") or bbox.get("y0")
+            bx1 = (
+                bbox.get("x_min")
+                if bbox.get("x_min") is not None
+                else bbox.get("x0")
+                if bbox.get("x0") is not None
+                else bbox.get("left")
+                if bbox.get("left") is not None
+                else 0
+            )
+            bx2 = (
+                bbox.get("x_max")
+                if bbox.get("x_max") is not None
+                else bbox.get("x1")
+                if bbox.get("x1") is not None
+                else bbox.get("right")
+                if bbox.get("right") is not None
+                else 0
+            )
+            by1 = (
+                bbox.get("y_min")
+                if bbox.get("y_min") is not None
+                else bbox.get("top")
+                if bbox.get("top") is not None
+                else bbox.get("y0")
+                if bbox.get("y0") is not None
+                else 0
+            )
         else:
             bx1, by1, bx2, _ = bbox
 

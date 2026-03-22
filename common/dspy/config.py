@@ -2,27 +2,37 @@ import os
 
 import dspy
 
+from common.config import settings
+from common.logger import get_logger
+
+log = get_logger(__name__)
+
 
 def setup_dspy():
-    """Configure DSPy with Gemini."""
-    # Use gemini/ prefix for litellm
-    model_name = os.environ.get("DSPY_GEMINI_MODEL", "gemini/gemini-2.5-flash-lite")
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if api_key:
-        lm = dspy.LM(model_name, api_key=api_key)
-        dspy.configure(lm=lm)
-        return lm
-    else:
-        print("GEMINI_API_KEY is not set. DSPy not fully configured.")
-        lm = dspy.LM(model_name)
-        dspy.configure(lm=lm)
-        return lm
+    """Configure DSPy with Vertex AI."""
+    # Use vertex_ai/ prefix for litellm
+    model_name = settings.get("DSPY_MODEL", "vertex_ai/gemini-2.5-flash-lite")
+    project = settings.get("GCP_PROJECT_ID")
+    location = settings.get("GCP_LOCATION", "us-central1")
+    credentials = settings.get("GOOGLE_APPLICATION_CREDENTIALS")
+
+    kwargs: dict = {}
+    if project:
+        kwargs["vertex_project"] = project
+    if location:
+        kwargs["vertex_location"] = location
+    if credentials:
+        kwargs["vertex_credentials"] = credentials
+
+    lm = dspy.LM(model_name, **kwargs)
+    dspy.configure(lm=lm)
+    return lm
 
 
 def get_dspy_gcs_bucket():
     from google.cloud import storage
 
-    bucket_name = os.getenv("GCS_BUCKET_NAME") or os.getenv("STORAGE_BUCKET")
+    bucket_name = settings.get("GCS_BUCKET_NAME") or settings.get("STORAGE_BUCKET")
     if not bucket_name:
         return None
     client = storage.Client()
@@ -34,7 +44,7 @@ def save_dspy_module_to_gcs(module: dspy.Module, filename: str):
     # Always save locally first
     local_path = os.path.join(os.getcwd(), filename)
     module.save(local_path)
-    print(f"✅ Saved optimized module locally to {local_path}")
+    log.info("save_dspy_module_to_gcs", "Saved optimized module locally", path=local_path)
 
     # Try to upload to GCS
     bucket = get_dspy_gcs_bucket()
@@ -42,11 +52,14 @@ def save_dspy_module_to_gcs(module: dspy.Module, filename: str):
         try:
             blob = bucket.blob(f"dspy_models/{filename}")
             blob.upload_from_filename(local_path)
-            print(
-                f"✅ Uploaded {filename} to GCS (gs://{bucket.name}/dspy_models/{filename})"
+            log.info(
+                "save_dspy_module_to_gcs",
+                "Uploaded to GCS",
+                filename=filename,
+                bucket=bucket.name,
             )
         except Exception as e:
-            print(f"⚠️ Failed to upload {filename} to GCS: {e}")
+            log.warning("save_dspy_module_to_gcs", "Failed to upload to GCS", filename=filename, error=str(e))
 
 
 def load_dspy_module_from_gcs(module: dspy.Module, filename: str) -> bool:
@@ -59,16 +72,16 @@ def load_dspy_module_from_gcs(module: dspy.Module, filename: str) -> bool:
             blob = bucket.blob(f"dspy_models/{filename}")
             if blob.exists():
                 blob.download_to_filename(local_path)
-                print(f"✅ Downloaded {filename} from GCS")
+                log.info("load_dspy_module_from_gcs", "Downloaded from GCS", filename=filename)
                 module.load(local_path)
                 return True
         except Exception as e:
-            print(f"⚠️ Failed to download {filename} from GCS: {e}")
+            log.warning("load_dspy_module_from_gcs", "Failed to download from GCS", filename=filename, error=str(e))
 
     # Fallback to local file if exists
     if os.path.exists(local_path):
         module.load(local_path)
-        print(f"✅ Loaded optimized module from local fallback '{local_path}'")
+        log.info("load_dspy_module_from_gcs", "Loaded from local fallback", path=local_path)
         return True
 
     return False

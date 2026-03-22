@@ -29,7 +29,7 @@ describe("TextModePage Component", () => {
 		figures: [
 			{
 				bbox: [10, 10, 50, 50] as [number, number, number, number],
-				image_url: "/static/fig1.png",
+				image_url: "/static/fig1.jpg",
 				label: "figure",
 				page_num: 1,
 			},

@@ -4,12 +4,14 @@
 """
 
 import asyncio
+import json
 import os
 import time
 from typing import Any
 
 import httpx
 
+from common.config import settings
 from common.logger import ServiceLogger
 from common.schemas.inference import LayoutAnalysisRequest
 
@@ -45,26 +47,39 @@ class InferenceServiceClient:
     """推論サービスクライアント（レイアウト解析専用）"""
 
     def __init__(self):
-        default_url = os.getenv("INFERENCE_SERVICE_URL", "http://localhost:8080")
-        self.layout_base_url = os.getenv("INFERENCE_LAYOUT_URL", default_url)
+        default_url = settings.get("INFERENCE_SERVICE_URL", "http://localhost:8080")
+        primary_url = settings.get("INFERENCE_LAYOUT_URL", default_url)
 
-        self.timeout = int(os.getenv("INFERENCE_SERVICE_TIMEOUT", "60"))
-        self.max_retries = int(os.getenv("INFERENCE_SERVICE_RETRIES", "2"))
+        # 追加エンドポイント（カンマ区切り）でラウンドロビン対応
+        extra_urls = [
+            u.strip()
+            for u in settings.get("INFERENCE_LAYOUT_EXTRA_URLS", "").split(",")
+            if u.strip()
+        ]
+        self.layout_urls: list[str] = [primary_url] + extra_urls
+        self._rr_index: int = 0
+
+        # 後方互換
+        self.layout_base_url = primary_url
+
+        self.timeout = int(settings.get("INFERENCE_SERVICE_TIMEOUT", "60"))
+        self.max_retries = int(settings.get("INFERENCE_SERVICE_RETRIES", "2"))
 
         # 無効化フラグ
         self.is_disabled = (
-            os.getenv("INFERENCE_SERVICE_DISABLED", "false").lower() == "true"
+            str(settings.get("INFERENCE_SERVICE_DISABLED", "false")).lower() == "true"
         )
 
         # 回路ブレーカー設定
         self.failure_threshold = 5
         self.recovery_timeout = 60  # 1分
         self._circuit_state: dict[str, dict] = {
-            "layout": {"failure_count": 0, "last_failure_time": None, "circuit_open": False},
+            url: {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
+            for url in self.layout_urls
         }
 
         # SSL検証設定
-        verify_env = os.getenv("INFERENCE_VERIFY_SSL", "true").lower()
+        verify_env = str(settings.get("INFERENCE_VERIFY_SSL", "true")).lower()
         if verify_env == "false":
             self.verify_ssl = False
         elif os.path.isfile(verify_env):
@@ -89,6 +104,22 @@ class InferenceServiceClient:
 
     async def __aexit__(self, exc_type, exc_val, exc_tb):
         await self.client.aclose()
+
+    def _next_layout_url(self) -> str:
+        """ラウンドロビンで次の利用可能なURLを返す。全URL遮断中は先頭を返す。"""
+        for _ in range(len(self.layout_urls)):
+            url = self.layout_urls[self._rr_index % len(self.layout_urls)]
+            self._rr_index += 1
+            state = self._circuit_state[url]
+            if not state["circuit_open"]:
+                return url
+            # 回復タイムアウト経過済みなら復旧して返す
+            if state["last_failure_time"] and time.time() - state["last_failure_time"] > self.recovery_timeout:
+                state["circuit_open"] = False
+                state["failure_count"] = 0
+                return url
+        # 全URL遮断中はとりあえず先頭を返す
+        return self.layout_urls[0]
 
     def _check_circuit_breaker(self, service: str):
         """回路ブレーカーの状態チェック"""
@@ -128,7 +159,7 @@ class InferenceServiceClient:
             )
 
     async def _make_request_with_retry(
-        self, base_url: str, method: str, endpoint: str, service: str, timeout: int | None = None, **kwargs
+        self, base_url: str, method: str, endpoint: str, service: str | None = None, timeout: int | None = None, **kwargs
     ) -> dict[str, Any]:
         """リトライ機能付きリクエスト"""
         if self.is_disabled:
@@ -139,7 +170,12 @@ class InferenceServiceClient:
                 "Inference service is disabled by configuration"
             )
 
-        self._check_circuit_breaker(service)
+        # circuit breaker キーは base_url を使用（後方互換で service も受け付ける）
+        cb_key = base_url if base_url in self._circuit_state else (service or base_url)
+        if cb_key not in self._circuit_state:
+            self._circuit_state[cb_key] = {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
+
+        self._check_circuit_breaker(cb_key)
 
         last_exception = None
 
@@ -150,7 +186,7 @@ class InferenceServiceClient:
                 response = await self.client.request(method, url, timeout=request_timeout, **kwargs)
                 response.raise_for_status()
 
-                self._record_success(service)
+                self._record_success(cb_key)
                 return response.json()
 
             except httpx.HTTPError as e:
@@ -186,7 +222,7 @@ class InferenceServiceClient:
                     wait_time = 2**attempt
                     await asyncio.sleep(wait_time)
                 else:
-                    self._record_failure(service)
+                    self._record_failure(cb_key)
 
         # 全ての試行が失敗
         if isinstance(last_exception, httpx.TimeoutException):
@@ -244,7 +280,7 @@ class InferenceServiceClient:
             log.debug("analyze_image", "画像データによるレイアウト解析リクエスト")
 
             # multipart/form-dataで画像を送信
-            files = {"file": ("image.png", image_bytes, "image/png")}
+            files = {"file": ("image.jpg", image_bytes, "image/jpeg")}
 
             response = await self._make_request_with_retry(
                 self.layout_base_url, "POST", "/api/v1/analyze-image", service="layout", files=files
@@ -297,6 +333,7 @@ class InferenceServiceClient:
 
             # バッチサイズで分割
             all_results = []
+            all_crops: list[list[dict]] = []
             for i in range(0, len(images), max_batch_size):
                 batch = images[i : i + max_batch_size]
 
@@ -306,17 +343,19 @@ class InferenceServiceClient:
                     page_num = page_nums[i + j] if page_nums else j
                     files.append(("files", (f"page_{page_num}.jpg", img, "image/jpeg")))
 
+                target_url = self._next_layout_url()
                 response = await self._make_request_with_retry(
-                    self.layout_base_url,
+                    target_url,
                     "POST",
                     "/api/v1/analyze-images-batch",
-                    service="layout",
                     files=files,
                 )
 
                 if response.get("success"):
                     batch_results = response.get("results", [])
+                    batch_crops = response.get("crops", [[] for _ in batch])
                     all_results.extend(batch_results)
+                    all_crops.extend(batch_crops)
                     log.debug(
                         "analyze_batch",
                         "サブバッチの送信・解析が完了",
@@ -334,11 +373,75 @@ class InferenceServiceClient:
                 result_count=len(all_results),
             )
 
-            return all_results
+            return all_results, all_crops
 
         except Exception as e:
             log.error("analyze_batch", "バッチレイアウト解析エラー", error=str(e))
 
+            raise
+
+    async def analyze_images_batch_by_urls(
+        self,
+        image_urls: list[str],
+        page_nums: list[int] | None = None,
+        max_batch_size: int = 10,
+    ) -> list[list[dict[str, Any]]]:
+        """
+        署名付きURL経由で複数画像を一括解析。
+        推論サービスが直接GCSからダウンロードするためバックエンドのメモリ転送が不要。
+        """
+        from common.schemas.inference import LayoutBatchByUrlsRequest
+
+        try:
+            log.debug(
+                "analyze_batch_by_urls",
+                "URL経由バッチレイアウト解析リクエスト",
+                image_count=len(image_urls),
+            )
+
+            all_results = []
+            all_crops: list[list[dict]] = []
+            for i in range(0, len(image_urls), max_batch_size):
+                batch_urls = image_urls[i : i + max_batch_size]
+                batch_page_nums = page_nums[i : i + max_batch_size] if page_nums else None
+
+                req = LayoutBatchByUrlsRequest(
+                    image_urls=batch_urls,
+                    page_nums=batch_page_nums,
+                )
+
+                target_url = self._next_layout_url()
+                response = await self._make_request_with_retry(
+                    target_url,
+                    "POST",
+                    "/api/v1/analyze-images-batch-by-urls",
+                    json=req.model_dump(),
+                )
+
+                if response.get("success"):
+                    batch_results = response.get("results", [])
+                    batch_crops = response.get("crops", [[] for _ in batch_urls])
+                    all_results.extend(batch_results)
+                    all_crops.extend(batch_crops)
+                    log.debug(
+                        "analyze_batch_by_urls",
+                        "サブバッチ完了",
+                        batch_size=len(batch_urls),
+                        processing_time=response.get("processing_time", 0),
+                    )
+                else:
+                    error_msg = response.get("message", "不明なエラー")
+                    raise InferenceServiceError(f"URL経由バッチ解析失敗: {error_msg}")
+
+            log.debug(
+                "analyze_batch_by_urls",
+                "全URL経由解析完了",
+                result_count=len(all_results),
+            )
+            return all_results, all_crops
+
+        except Exception as e:
+            log.error("analyze_batch_by_urls", "URL経由バッチ解析エラー", error=str(e))
             raise
 
     async def analyze_images_batch_streaming(
@@ -370,16 +473,17 @@ class InferenceServiceClient:
                 files.append(("files", (f"page_{page_num}.jpg", img, "image/jpeg")))
 
             try:
+                target_url = self._next_layout_url()
                 response = await self._make_request_with_retry(
-                    self.layout_base_url,
+                    target_url,
                     "POST",
                     "/api/v1/analyze-images-batch",
-                    service="layout",
                     files=files,
                 )
 
                 if response.get("success"):
                     batch_results = response.get("results", [])
+                    batch_crops = response.get("crops", [[] for _ in batch])
                     log.debug(
                         "analyze_batch_streaming",
                         "サブバッチ完了 → yield",
@@ -388,7 +492,7 @@ class InferenceServiceClient:
                         processing_time=response.get("processing_time", 0),
                     )
                     # バッチが返ってきた時点で即座に yield
-                    yield i, batch_results
+                    yield i, batch_results, batch_crops
                 else:
                     error_msg = response.get("message", "不明なエラー")
                     raise InferenceServiceError(f"バッチ解析失敗: {error_msg}")
@@ -401,7 +505,7 @@ class InferenceServiceClient:
                     error=str(e),
                 )
                 # 1バッチに失敗しても他のバッチは続ける
-                yield i, [[] for _ in batch]
+                yield i, [[] for _ in batch], [[] for _ in batch]
 
     async def health_check(self) -> dict[str, Any]:
         """推論サービスのヘルスチェック"""
@@ -418,6 +522,83 @@ class InferenceServiceClient:
             log.error("health_check", "ヘルスチェックエラー", error=str(e))
 
             raise
+
+
+class OcrInferenceClient:
+    """ローカル OCR 推論サービスクライアント（PaddleOCR / OpenVINO）。"""
+
+    def __init__(self) -> None:
+        self.ocr_url: str = settings.get("INFERENCE_OCR_URL", "")
+        self.timeout: int = int(settings.get("INFERENCE_OCR_TIMEOUT", "30"))
+        self.is_disabled: bool = not self.ocr_url or str(
+            settings.get("INFERENCE_OCR_DISABLED", "false")
+        ).lower() == "true"
+
+        # 回路ブレーカー（InferenceServiceClient と同構造）
+        self._cb: dict = {
+            "failure_count": 0,
+            "last_failure_time": None,
+            "circuit_open": False,
+        }
+        self.failure_threshold: int = 5
+        self.recovery_timeout: int = 60
+
+        self.client = httpx.AsyncClient(
+            timeout=httpx.Timeout(self.timeout, connect=10.0),
+            limits=httpx.Limits(max_connections=5, max_keepalive_connections=3),
+        )
+
+    def is_available(self) -> bool:
+        """OCR サービスが利用可能かを確認する。"""
+        if self.is_disabled:
+            return False
+        if self._cb["circuit_open"]:
+            last_fail = self._cb["last_failure_time"]
+            if last_fail and time.time() - last_fail > self.recovery_timeout:
+                self._cb.update({"circuit_open": False, "failure_count": 0})
+                return True
+            return False
+        return True
+
+    async def ocr_page(
+        self, img_bytes: bytes, bboxes: list[dict] | None = None
+    ) -> str:
+        """画像バイトを OCR サービスに送り、認識テキストを返す。
+
+        Args:
+            img_bytes: ページ画像バイト（JPEG/PNG 等）
+            bboxes: テキスト領域 bbox のリスト（省略時は自動検出）
+        Returns:
+            認識テキスト文字列
+        """
+        if not self.is_available():
+            raise InferenceServiceDownError("OCR service circuit open or disabled")
+
+        try:
+            files = {"file": ("page.jpg", img_bytes, "image/jpeg")}
+            data = {"bboxes_json": json.dumps(bboxes)} if bboxes else {}
+
+            resp = await self.client.post(
+                f"{self.ocr_url}/api/v1/ocr-page",
+                files=files,
+                data=data,
+            )
+            resp.raise_for_status()
+            result = resp.json()
+
+            if result.get("success"):
+                self._cb["failure_count"] = 0
+                return result.get("text", "")
+
+            raise InferenceServiceError(result.get("message", "OCR failed"))
+
+        except httpx.HTTPError as e:
+            self._cb["failure_count"] += 1
+            self._cb["last_failure_time"] = time.time()
+            if self._cb["failure_count"] >= self.failure_threshold:
+                self._cb["circuit_open"] = True
+                log.error("ocr_page", "OCR サービスの回路ブレーカーを開きました")
+            raise InferenceServiceDownError(f"OCR request failed: {e}") from e
 
 
 # シングルトンインスタンス
@@ -441,3 +622,15 @@ async def cleanup_inference_client():
     if _inference_client:
         await _inference_client.client.aclose()
         _inference_client = None
+
+
+# OCR クライアントのシングルトン
+_ocr_client: OcrInferenceClient | None = None
+
+
+async def get_ocr_client() -> OcrInferenceClient:
+    """OCR 推論サービスクライアントの取得"""
+    global _ocr_client
+    if _ocr_client is None:
+        _ocr_client = OcrInferenceClient()
+    return _ocr_client

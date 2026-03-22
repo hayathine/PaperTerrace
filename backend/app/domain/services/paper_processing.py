@@ -1,16 +1,13 @@
-import os
-
-import httpx
-
 from app.domain.features.figure_insight import FigureInsightService
 from app.domain.features.summary import SummaryService
 from app.providers import get_storage_provider
 from common.logger import ServiceLogger
 
 log = ServiceLogger("Processing")
-storage = get_storage_provider()
+# FigureInsightService は DB セッションを持たないためシングルトンで問題なし。
+# storage はモジュールレベルで生成すると SessionLocal() がプロセス終了まで
+# コネクションを占有し続けるため、各タスク内で都度生成・クローズする。
 figure_insight = FigureInsightService()
-summary_service = SummaryService(storage=storage)
 
 
 async def process_figure_analysis_task(
@@ -28,6 +25,7 @@ async def process_figure_analysis_task(
 
     log.info("figure_task", "Analysis task started", figure_id=figure_id)
 
+    storage = get_storage_provider()
     try:
         figure = storage.get_figure(figure_id)
         if not figure:
@@ -43,34 +41,41 @@ async def process_figure_analysis_task(
             )
             return
 
-        # Retrieve image bytes
-        image_bytes = None
-        if image_url.startswith("/static/"):
-            file_path = f"src/{image_url.lstrip('/')}"
-            if os.path.exists(file_path):
-                with open(file_path, "rb") as f:
-                    image_bytes = f.read()
-        elif image_url.startswith("http"):
-            async with httpx.AsyncClient() as client:
-                resp = await client.get(image_url, timeout=30.0)
-                if resp.status_code == 200:
-                    image_bytes = resp.content
+        import anyio
+        from app.providers.image_storage import get_image_bytes, resolve_gcs_uri
 
-        if not image_bytes:
-            log.warning(
-                "figure_task", "Could not retrieve image bytes", image_url=image_url
+        # GCS URI が取得できる場合はバイトダウンロードを省略
+        gcs_result = await anyio.to_thread.run_sync(resolve_gcs_uri, image_url)
+        if gcs_result:
+            gcs_uri, mime_type = gcs_result
+            explanation = await figure_insight.analyze_figure(
+                image_uri=gcs_uri,
+                caption=figure.get("caption", ""),
+                mime_type=mime_type,
+                target_lang=lang,
+                user_id=user_id,
+                session_id=session_id,
+                paper_id=figure.get("paper_id"),
             )
-            return
+        else:
+            # ローカル環境: ストレージ層から直接取得（HTTP経由ではなく）
+            try:
+                image_bytes = await anyio.to_thread.run_sync(get_image_bytes, image_url)
+            except Exception:
+                log.warning(
+                    "figure_task", "Could not retrieve image bytes", image_url=image_url
+                )
+                return
 
-        # All visual elements (figures, tables, equations) are handled via general AI analysis
-        explanation = await figure_insight.analyze_figure(
-            image_bytes,
-            caption=figure.get("caption", ""),
-            target_lang=lang,
-            user_id=user_id,
-            session_id=session_id,
-            paper_id=figure.get("paper_id"),
-        )
+            explanation = await figure_insight.analyze_figure(
+                image_bytes,
+                caption=figure.get("caption", ""),
+                mime_type="image/jpeg",
+                target_lang=lang,
+                user_id=user_id,
+                session_id=session_id,
+                paper_id=figure.get("paper_id"),
+            )
         storage.update_figure_explanation(figure_id, explanation)
 
         label = figure.get("label", "figure")
@@ -86,6 +91,8 @@ async def process_figure_analysis_task(
             error=str(e),
             exc_info=True,
         )
+    finally:
+        storage.close()
 
 
 async def process_paper_summary_task(
@@ -102,6 +109,7 @@ async def process_paper_summary_task(
 
     log.info("summary_task", "Summary task started", paper_id=paper_id)
 
+    storage = get_storage_provider()
     try:
         paper = storage.get_paper(paper_id)
         if not paper or not paper.get("ocr_text"):
@@ -120,6 +128,7 @@ async def process_paper_summary_task(
             return
 
         # Execute summary
+        summary_service = SummaryService(storage=storage)
         await summary_service.summarize_full(
             text=paper["ocr_text"],
             target_lang=lang,
@@ -139,3 +148,5 @@ async def process_paper_summary_task(
             error=str(e),
             exc_info=True,
         )
+    finally:
+        storage.close()

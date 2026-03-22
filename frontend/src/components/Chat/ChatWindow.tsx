@@ -2,12 +2,13 @@ import React, { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { v4 as uuidv4 } from "uuid";
 import { API_URL } from "@/config";
+import { buildAuthHeaders } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { useAuth } from "../../contexts/AuthContext";
 import { useLoading } from "../../contexts/LoadingContext";
 import InputArea from "./InputArea";
 import MessageList from "./MessageList";
-import type { Message } from "./types";
+import type { Grounding, Message } from "./types";
 
 const log = createLogger("Chat");
 
@@ -19,7 +20,7 @@ interface ChatWindowProps {
 	onInitialChatSent?: () => void;
 	initialPrompt?: string | null;
 	onInitialPromptSent?: () => void;
-	onEvidenceClick?: (grounding: any) => void;
+	onEvidenceClick?: (grounding: Grounding) => void;
 }
 
 const ChatWindow: React.FC<ChatWindowProps> = ({
@@ -53,8 +54,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 				url.searchParams.append("session_id", sessionId);
 				url.searchParams.append("paper_id", paperId);
 
-				const headers: HeadersInit = {};
-				if (token) headers.Authorization = `Bearer ${token}`;
+				const headers = buildAuthHeaders(token);
 
 				const res = await fetch(url.toString(), { headers });
 				if (res.ok) {
@@ -128,7 +128,7 @@ const ChatWindow: React.FC<ChatWindowProps> = ({
 						session_id: sessionId,
 						paper_id: paperId,
 						figure_id: figureId,
-						lang: i18n.language,
+						lang: i18n.language.startsWith("ja") ? "ja" : "en",
 					}),
 				});
 
