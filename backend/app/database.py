@@ -10,16 +10,26 @@ from sqlalchemy.pool import NullPool
 
 
 def get_url():
-    url = settings.get("DATABASE_URL")
+    # 環境に応じた DB URL を取得（staging: DATABASE_URL_STAGING, local: DATABASE_URL_LOCAL）
+    try:
+        from app.core.config import get_database_url
+        url = get_database_url()
+    except Exception:
+        # get_database_url が失敗した場合（ローカル開発でDBが未設定など）は個別変数にフォールバック
+        url = settings.get("DATABASE_URL")
+        if not url:
+            user = settings.get("DB_USER")
+            password = settings.get("DB_PASSWORD")
+            host = settings.get("DB_HOST")
+            dbname = settings.get("DB_NAME")
+
+            if all([user, password, host, dbname]):
+                url = f"postgresql://{user}:{password}@{host}/{dbname}"
+            else:
+                db_path = settings.get("DB_PATH", "ocr_reader.db")
+                url = f"sqlite:///{db_path}"
+
     if not url:
-        user = settings.get("DB_USER")
-        password = settings.get("DB_PASSWORD")
-        host = settings.get("DB_HOST")
-        dbname = settings.get("DB_NAME")
-
-        if all([user, password, host, dbname]):
-            return f"postgresql://{user}:{password}@{host}/{dbname}"
-
         db_path = settings.get("DB_PATH", "ocr_reader.db")
         url = f"sqlite:///{db_path}"
 

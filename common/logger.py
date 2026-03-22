@@ -178,6 +178,8 @@ def configure_logging(log_level: str = "INFO"):
         "charset_normalizer",
         "asyncio",
         "multipart",
+        "python_multipart",
+        "python_multipart.multipart",
         "aiohttp",
         "grpc",
     ]

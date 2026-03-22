@@ -34,7 +34,9 @@ describe("Config Resolution", () => {
 		vi.stubGlobal("location", { hostname: "my-feature-branch.pages.dev" });
 
 		const { API_URL } = await import("./config");
-		expect(API_URL).toBe("https://paperterracedevworker.gwsgsgdas.workers.dev");
+		expect(API_URL).toBe(
+			"https://paperterracestagingworker.gwsgsgdas.workers.dev",
+		);
 	});
 
 	it("returns dev worker URL for dev prefix", async () => {
@@ -42,7 +44,9 @@ describe("Config Resolution", () => {
 		vi.stubGlobal("location", { hostname: "dev.paperterrace.page" });
 
 		const { API_URL } = await import("./config");
-		expect(API_URL).toBe("https://paperterracedevworker.gwsgsgdas.workers.dev");
+		expect(API_URL).toBe(
+			"https://paperterracestagingworker.gwsgsgdas.workers.dev",
+		);
 	});
 
 	it("respects VITE_API_URL if provided in PROD", async () => {

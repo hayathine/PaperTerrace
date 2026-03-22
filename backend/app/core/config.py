@@ -46,21 +46,29 @@ def is_local() -> bool:
 
 
 def get_database_url() -> str:
-    """環境に応じた Neon PostgreSQL 接続 URL を返す。"""
-    if is_production():
+    """環境に応じた Neon PostgreSQL 接続 URL を返す。
+
+    優先順位:
+      prod    : DATABASE_URL
+      staging : DATABASE_URL_STAGING → DATABASE_URL
+      local   : DATABASE_URL_LOCAL   → DATABASE_URL
+    """
+    env = get_app_env()
+    if env == "prod":
         url = settings.get("DATABASE_URL")
+        suffix = ""
+    elif env == "staging":
+        url = settings.get("DATABASE_URL_STAGING") or settings.get("DATABASE_URL")
+        suffix = "_STAGING"
     else:
-        url = (
-            settings.get("DATABASE_URL_LOCAL")
-            or settings.get("DATABASE_URL")
-        )
+        url = settings.get("DATABASE_URL_LOCAL") or settings.get("DATABASE_URL")
+        suffix = "_LOCAL"
 
     if not url:
         raise RuntimeError(
-            f"DATABASE_URL{'_LOCAL' if not is_production() else ''} が設定されていません"
+            f"DATABASE_URL{suffix} が設定されていません"
         )
 
-    env = get_app_env()
     log.info("config", f"Database URL resolved (env={env})")
     return url
 

@@ -367,8 +367,8 @@ if INFERENCE_TYPE in ["all", "layout"]:
         )
 
         try:
-            # 各画像をbytesとして読み込む（一時ファイル不要）
-            images_bytes = [await file.read() for file in files]
+            # 各画像をbytesとして並列読み込み
+            images_bytes = list(await asyncio.gather(*[file.read() for file in files]))
 
             # 一括解析を実行
             if hasattr(layout_service, "analyze_images_batch_from_bytes"):
@@ -384,11 +384,9 @@ if INFERENCE_TYPE in ["all", "layout"]:
                     res = await run_in_threadpool(layout_service.analyze_image, img_bytes)
                     batch_results.append(res)
 
-            # シリアライズ + クロップ
-            results = []
-            all_crops = []
-            for img_bytes, page_results in zip(images_bytes, batch_results):
-                serializable = [
+            # シリアライズ
+            results = [
+                [
                     {
                         "bbox": {
                             "x_min": r.bbox.x_min,
@@ -401,9 +399,15 @@ if INFERENCE_TYPE in ["all", "layout"]:
                     }
                     for r in page_results
                 ]
-                results.append(serializable)
-                page_crops = await run_in_threadpool(_crop_page_figures, img_bytes, serializable)
-                all_crops.append(page_crops)
+                for page_results in batch_results
+            ]
+            # クロップを並列実行
+            all_crops = list(
+                await asyncio.gather(*[
+                    run_in_threadpool(_crop_page_figures, img_bytes, serializable)
+                    for img_bytes, serializable in zip(images_bytes, results)
+                ])
+            )
 
             processing_time = time.time() - start_time
             return {
@@ -470,10 +474,8 @@ if INFERENCE_TYPE in ["all", "layout"]:
                     res = await run_in_threadpool(layout_service.analyze_image, img_bytes)
                     batch_results.append(res)
 
-            results = []
-            all_crops = []
-            for img_bytes, page_results in zip(images_bytes, batch_results):
-                serializable = [
+            results = [
+                [
                     {
                         "bbox": {
                             "x_min": r.bbox.x_min,
@@ -486,9 +488,14 @@ if INFERENCE_TYPE in ["all", "layout"]:
                     }
                     for r in page_results
                 ]
-                results.append(serializable)
-                page_crops = await run_in_threadpool(_crop_page_figures, img_bytes, serializable)
-                all_crops.append(page_crops)
+                for page_results in batch_results
+            ]
+            all_crops = list(
+                await asyncio.gather(*[
+                    run_in_threadpool(_crop_page_figures, img_bytes, serializable)
+                    for img_bytes, serializable in zip(images_bytes, results)
+                ])
+            )
 
             return {
                 "success": True,

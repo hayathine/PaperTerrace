@@ -490,11 +490,15 @@ class PDFOCRService:
                 # 2段組みレイアウトによるインデントアーティファクトを修正
                 page_text = _fix_indentation_artifacts(page_text)
 
-                # (cid:N) 等の文字化けを検出したら OCR フォールバックへ
-                if _is_garbled_text(page_text):
+                # テキストが空（スキャン PDF）または (cid:N) 文字化けを検出したら OCR フォールバックへ
+                is_empty = not page_text.strip()
+                is_garbled = _is_garbled_text(page_text)
+                if is_empty or is_garbled:
+                    reason = "empty_text" if is_empty else "garbled_text"
                     log.warning(
                         "_finalize_page_phase_3",
-                        "Garbled text detected (cid: pattern), attempting OCR fallback",
+                        "OCR fallback triggered",
+                        reason=reason,
                         page_num=page_num,
                         cid_count=page_text.count("(cid:"),
                     )

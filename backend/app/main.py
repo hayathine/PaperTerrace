@@ -537,5 +537,6 @@ async def get_config():
         content={
             "neon_auth": NEON_AUTH_CONFIG,
             "app_env": get_app_env(),
+            "max_pdf_size_mb": int(settings.get("MAX_PDF_SIZE_MB", "50")),
         }
     )

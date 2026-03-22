@@ -135,6 +135,7 @@ function App() {
 		onWheel: handleZoomWheel,
 	} = usePinchZoom();
 	const [appEnv, setAppEnv] = useState<string>("prod");
+	const [maxPdfSize, setMaxPdfSize] = useState<number>(50);
 	const [pdfMode, setPdfMode] = useState<
 		"text" | "stamp" | "area" | "plaintext"
 	>("plaintext");
@@ -148,6 +149,9 @@ function App() {
 				const data = await res.json();
 				if (data?.app_env) {
 					setAppEnv(data.app_env);
+				}
+				if (data?.max_pdf_size_mb) {
+					setMaxPdfSize(data.max_pdf_size_mb);
 				}
 			} catch (err) {
 				log.error("fetch_config", "Failed to fetch config", { error: err });
@@ -967,6 +971,7 @@ function App() {
 												currentSearchMatch={currentSearchMatch}
 												evidence={activeEvidence}
 												appEnv={appEnv}
+												maxPdfSize={maxPdfSize}
 												mode={pdfMode}
 											/>
 										</div>

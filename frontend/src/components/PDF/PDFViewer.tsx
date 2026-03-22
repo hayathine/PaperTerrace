@@ -62,6 +62,7 @@ interface PDFViewerProps {
 	currentSearchMatch?: { page: number; wordIndex: number } | null;
 	evidence?: Grounding;
 	appEnv?: string;
+	maxPdfSize?: number;
 	mode?: "text" | "stamp" | "area" | "plaintext";
 }
 
@@ -81,6 +82,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	currentSearchMatch,
 	evidence,
 	appEnv = "prod",
+	maxPdfSize = 50,
 	mode: externalMode,
 }) => {
 	const { t, i18n } = useTranslation();
@@ -608,15 +610,15 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		}
 	}, [jumpTarget, mode]);
 
-	const MAX_FILE_SIZE_MB = 30;
+	const MAX_PDF_SIZE_MB = maxPdfSize;
 
 	const startAnalysis = async (file: File) => {
 		if (processingFileRef.current === file) return;
 
-		if (file.size > MAX_FILE_SIZE_MB * 1024 * 1024) {
+		if (file.size > MAX_PDF_SIZE_MB * 1024 * 1024) {
 			setStatus("error");
 			setErrorMsg(
-				t("common.errors.file_too_large", { maxMB: MAX_FILE_SIZE_MB }),
+				t("common.errors.file_too_large", { maxMB: MAX_PDF_SIZE_MB }),
 			);
 			return;
 		}
