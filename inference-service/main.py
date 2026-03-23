@@ -109,6 +109,7 @@ def _crop_page_figures(img_bytes: bytes, serialized_results: list) -> list[dict]
 				"class_name": class_name,
 				"bbox": {"x_min": x_min, "y_min": y_min, "x_max": x_max, "y_max": y_max},
 				"image_b64": base64.b64encode(buf.getvalue()).decode(),
+				"score": res.get("score"),
 			})
 		except Exception:
 			pass

@@ -57,6 +57,7 @@ class LayoutAnalysisService:
                     ],
                     "label": class_name,
                     "image_url": figure_image_url,
+                    "conf": crop.get("score"),
                 }
             except Exception as e:
                 log.warning(
@@ -161,6 +162,7 @@ class LayoutAnalysisService:
                         "explanation": "",
                         "label": fig.get("label", "figure"),
                         "latex": "",
+                        "conf": fig.get("conf"),
                     }
                     for fig in batch_figures
                 ]

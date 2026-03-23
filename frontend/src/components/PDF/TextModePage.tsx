@@ -1,4 +1,5 @@
 import React, { useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { Components } from "react-markdown";
 import { API_URL } from "../../config";
@@ -690,48 +691,50 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				</div>
 			)}
 
-			{/* Zoom Modal */}
-			{zoomedImage && (
-				<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 overflow-hidden animate-fade-in">
-					<button
-						type="button"
-						className="absolute inset-0 w-full h-full bg-black/80 cursor-pointer border-none"
-						onClick={() => setZoomedImage(null)}
-						aria-label="Close zoom backdrop"
-					/>
-					<button
-						type="button"
-						className="absolute top-6 right-6 text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-all z-[110]"
-						onClick={() => setZoomedImage(null)}
-						aria-label="Close zoom"
-					>
-						<svg
-							className="w-8 h-8"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth="2"
-								d="M6 18L18 6M6 6l12 12"
-							/>
-						</svg>
-					</button>
-					<div
-						role="dialog"
-						aria-modal="true"
-						className="relative max-w-5xl w-full max-h-full flex items-center justify-center pointer-events-none"
-					>
-						<img
-							src={zoomedImage}
-							alt="Zoomed figure"
-							className="max-w-full max-h-[90vh] object-contain shadow-2xl rounded-lg pointer-events-auto cursor-default"
+			{/* Zoom Modal — body にポータル描画して viewport 基準で表示 */}
+			{zoomedImage &&
+				createPortal(
+					<div className="fixed inset-0 z-[100] flex items-center justify-center p-4 md:p-8 overflow-hidden animate-fade-in">
+						<button
+							type="button"
+							className="absolute inset-0 w-full h-full bg-black/80 cursor-pointer border-none"
+							onClick={() => setZoomedImage(null)}
+							aria-label="Close zoom backdrop"
 						/>
-					</div>
-				</div>
-			)}
+						<button
+							type="button"
+							className="absolute top-6 right-6 text-white/70 hover:text-white p-2 hover:bg-white/10 rounded-full transition-all z-[110]"
+							onClick={() => setZoomedImage(null)}
+							aria-label="Close zoom"
+						>
+							<svg
+								className="w-8 h-8"
+								fill="none"
+								stroke="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth="2"
+									d="M6 18L18 6M6 6l12 12"
+								/>
+							</svg>
+						</button>
+						<div
+							role="dialog"
+							aria-modal="true"
+							className="relative max-w-5xl w-full flex items-center justify-center pointer-events-none"
+						>
+							<img
+								src={zoomedImage}
+								alt="Zoomed figure"
+								className="max-w-full max-h-[90vh] object-contain shadow-2xl rounded-lg pointer-events-auto cursor-default"
+							/>
+						</div>
+					</div>,
+					document.body,
+				)}
 		</div>
 	);
 };

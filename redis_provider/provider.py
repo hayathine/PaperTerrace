@@ -252,19 +252,31 @@ def get_is_registered(user_id: str | None) -> bool:
     """
     if not user_id:
         return False
+    if user_id.startswith("guest"):
+        log.debug("get_is_registered", f"Guest user, skipping DB check: {user_id}")
+        return False
     redis = RedisService()
     cache_key = f"user_registered:{user_id}"
     cached = redis.get(cache_key)
     if cached is not None:
         return bool(cached)
     # DB fallback
+    storage = None
     try:
         from app.providers import get_storage_provider
         storage = get_storage_provider()
         is_reg = bool(storage.get_user(user_id))
         if is_reg:
             redis.set(cache_key, is_reg, expire=300)  # 5分キャッシュ（登録済みのみ）
+        else:
+            log.warning("get_is_registered", f"User not found in DB (unregistered?): {user_id}")
         return is_reg
     except Exception as e:
-        log.warning("get_is_registered", f"Failed to check registration for {user_id}: {e}")
+        log.warning("get_is_registered", f"DB check failed for {user_id}: {e}", exc_info=True)
         return False
+    finally:
+        if storage is not None:
+            try:
+                storage.close()
+            except Exception:
+                pass

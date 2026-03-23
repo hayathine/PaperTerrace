@@ -20,6 +20,7 @@ vi.mock("react-i18next", () => ({
 vi.mock("../../contexts/AuthContext", () => ({
 	useAuth: () => ({
 		token: "test-token",
+		getToken: () => Promise.resolve("test-token"),
 		isGuest: false,
 	}),
 }));

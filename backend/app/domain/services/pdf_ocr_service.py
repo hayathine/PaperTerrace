@@ -176,50 +176,54 @@ class PDFOCRService:
                         total=total_pages,
                     )
 
-                    # Step A: Phase 1 & 2 を chunk 内全ページ並列実行
-                    # 各ページが独立した fitz doc でレンダリングするため真の並列動作する
-                    prefetched_pages = list(
-                        await asyncio.gather(
-                            *[
-                                self._prepare_page_phases_1_2(
-                                    pdf.pages[page_idx],
-                                    page_idx,
-                                    total_pages,
-                                    file_hash,
-                                    file_bytes,
-                                )
-                                for page_idx in range(chunk_start, chunk_end)
-                            ]
-                        )
-                    )
-
-                    # Step B: Phase 1 を全ページ先行 yield → Phase 3 を chunk 内並列実行
-                    # Phase 3 も独立 fitz doc を使うため並列化可能
-                    for page_data in prefetched_pages:
-                        yield page_data["phase1_result"]
-
-                    finalize_tasks = [
+                    # Phase 1+2 タスクをチャンク内全ページ分作成（並列実行）
+                    phase12_tasks = [
                         asyncio.create_task(
-                            self._finalize_page_phase_3(
-                                prefetched_pages[i],
-                                [],
-                                None,
-                                chunk_start + i,
+                            self._prepare_page_phases_1_2(
+                                pdf.pages[page_idx],
+                                page_idx,
                                 total_pages,
                                 file_hash,
-                                pdf_path=tmp_path,
-                                file_bytes=file_bytes,
+                                file_bytes,
                             )
                         )
-                        for i in range(len(prefetched_pages))
+                        for page_idx in range(chunk_start, chunk_end)
                     ]
 
-                    for final_result in await asyncio.gather(*finalize_tasks):
-                        page_text = final_result[2]
-                        layout_data = final_result[6]
-                        all_text_parts.append(page_text)
-                        all_layout_parts.append(layout_data)
+                    # Phase 1+2 タスクは並列実行しつつ、yield は page_num 順を維持する
+                    # 修正1: image_url を実際の値（phase1_result の None ではなく page_data から取得）で埋める
+                    # 修正2: チャンク全体の完了を待たず、各タスク完了次第 yield する（ただし順序保証）
+                    phase3_tasks = []
+                    for task in phase12_tasks:
+                        page_data = await task  # 並列実行済みのタスクをページ順に受け取る
+                        p = page_data["phase1_result"]
+                        yield (p[0], p[1], p[2], p[3], p[4], page_data["image_url"], p[6])
+                        phase3_tasks.append(
+                            asyncio.create_task(
+                                self._finalize_page_phase_3(
+                                    page_data,
+                                    [],
+                                    None,
+                                    page_data["page_num"] - 1,
+                                    total_pages,
+                                    file_hash,
+                                    pdf_path=tmp_path,
+                                    file_bytes=file_bytes,
+                                )
+                            )
+                        )
+
+                    # Phase 3 結果も完了次第 yield し、DB 保存用に page_num 順で収集
+                    chunk_finals = []
+                    for future in asyncio.as_completed(phase3_tasks):
+                        final_result = await future
                         yield final_result
+                        chunk_finals.append(final_result)
+
+                    chunk_finals.sort(key=lambda r: r[0])
+                    for final_result in chunk_finals:
+                        all_text_parts.append(final_result[2])
+                        all_layout_parts.append(final_result[6])
 
             # 2. Finalize and save to DB
             log.info(
@@ -490,16 +494,29 @@ class PDFOCRService:
                 # 2段組みレイアウトによるインデントアーティファクトを修正
                 page_text = _fix_indentation_artifacts(page_text)
 
-                # テキストが空（スキャン PDF）または (cid:N) 文字化けを検出したら OCR フォールバックへ
+                # テキストが空（スキャン PDF）、(cid:N) 文字化け、または極端に短い場合は OCR フォールバックへ
                 is_empty = not page_text.strip()
                 is_garbled = _is_garbled_text(page_text)
-                if is_empty or is_garbled:
-                    reason = "empty_text" if is_empty else "garbled_text"
+                _min_page_text_len = int(
+                    settings.get("INFERENCE_OCR_MIN_PAGE_TEXT_LEN", 100)
+                )
+                is_too_short = (
+                    not is_empty and len(page_text.strip()) < _min_page_text_len
+                )
+                if is_empty or is_garbled or is_too_short:
+                    reason = (
+                        "empty_text"
+                        if is_empty
+                        else "garbled_text"
+                        if is_garbled
+                        else "too_short_text"
+                    )
                     log.warning(
                         "_finalize_page_phase_3",
                         "OCR fallback triggered",
                         reason=reason,
                         page_num=page_num,
+                        text_len=len(page_text.strip()),
                         cid_count=page_text.count("(cid:"),
                     )
                     fallback = await self._ocr_fallback(

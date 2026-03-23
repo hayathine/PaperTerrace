@@ -834,10 +834,12 @@ async def stream(task_id: str):
                         )
 
                 else:
-                    log.info(
+                    log.warning(
                         "stream",
-                        "ゲスト/一時セッションのためDBへの保存をスキップします",
+                        "DBへの保存をスキップ: is_registered=False (ゲストまたは未登録ユーザー)",
                         task_id=task_id,
+                        user_id=user_id,
+                        is_guest=str(user_id).startswith("guest") if user_id else True,
                     )
 
                 # Redis session context (1-hour sliding limit, TRUNCATED to 20k chars to prevent OOM)
@@ -1241,10 +1243,12 @@ async def stream(task_id: str):
                         paper_id=paper_id,
                     )
             else:
-                log.info(
+                log.warning(
                     "ocr_generate",
-                    "Skipping DB save for guest session",
+                    "DBへの保存をスキップ: is_registered=False (ゲストまたは未登録ユーザー)",
                     paper_id=paper_id,
+                    user_id=user_id,
+                    is_guest=str(user_id).startswith("guest") if user_id else True,
                 )
 
             # Redisセッションコンテキストを1時間保持 (sliding)

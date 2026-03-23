@@ -113,8 +113,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	mode: externalMode,
 }) => {
 	const { t, i18n } = useTranslation();
-	const { token, isGuest } = useAuth();
-	const isLocal = appEnv === "local";
+	const { token, getToken, isGuest } = useAuth();
+	const isLocal = appEnv === "local" || appEnv === "staging";
 	const {
 		getCachedPaper,
 		savePaperToCache,
@@ -702,7 +702,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		setLoadedPaperId(null);
 
 		try {
-			const headers = buildAuthHeaders(token);
+			// 最新の JWT を取得（token stateは初期ロード時の値で古い可能性があるため）
+			const freshToken = await getToken().catch(() => null);
+			const headers = buildAuthHeaders(freshToken ?? token);
 			const lang = i18n.language.startsWith("ja") ? "ja" : "en";
 
 			// Phase A: ハッシュ計算 + 署名付き URL 取得
