@@ -37,7 +37,7 @@ from app.routers import (
     users_router,
 )
 from common.config import settings
-from common.logger import ServiceLogger, configure_logging
+from common.logger import ServiceLogger
 
 log = ServiceLogger("Main")
 mw_log = ServiceLogger("Middleware")
@@ -80,7 +80,6 @@ async def lifespan(app: FastAPI):
     Lifespan event handler for FastAPI.
     Handles startup and shutdown events.
     """
-    configure_logging()
 
     # DB接続ウォームアップ: コールドスタート後の初回リクエストレイテンシを削減
     try:
@@ -94,8 +93,13 @@ async def lifespan(app: FastAPI):
         log.warning("lifespan", "DB warmup failed (non-fatal)", error=str(e))
 
     # ARQ pool 初期化（Redis 未接続環境では None になり、同期フォールバックが使われる）
+    # タイムアウトを設定してコールドスタート遅延を防ぐ
+    import asyncio as _asyncio
     from app.providers import close_arq_pool, get_arq_pool
-    await get_arq_pool()
+    try:
+        await _asyncio.wait_for(get_arq_pool(), timeout=5.0)
+    except _asyncio.TimeoutError:
+        log.warning("lifespan", "ARQ pool initialization timed out (Redis may be unavailable)")
 
     yield
 

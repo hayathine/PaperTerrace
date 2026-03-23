@@ -91,8 +91,15 @@ shared_processors = [
 ]
 
 
-def configure_logging(log_level: str = "INFO"):
+_is_logging_configured = False
+
+
+def configure_logging(log_level: str = "INFO", force: bool = False):
     """ロギングを設定する"""
+    global _is_logging_configured
+    if _is_logging_configured and not force:
+        return
+
     # 環境変数からログレベルを取得（デフォルトはINFO）
     env_log_level = (settings.get("LOG_LEVEL") or log_level).upper()
 
@@ -118,13 +125,20 @@ def configure_logging(log_level: str = "INFO"):
     for h in root_logger.handlers[:]:
         root_logger.removeHandler(h)
 
-    handler = logging.StreamHandler(sys.stdout)  # stderrからstdoutに変更
-    handler.setFormatter(formatter)
+    # テスト環境では sys.stdout が差し替えられる可能性があるため、安全策をとる
+    try:
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(formatter)
+        root_logger.addHandler(handler)
+    except (ValueError, AttributeError):
+        # I/O error on closed file or similar
+        pass
 
-    root_logger.addHandler(handler)
     root_logger.setLevel(getattr(logging, env_log_level))
 
     logging.getLogger("app_logger").setLevel(getattr(logging, env_log_level))
+
+    _is_logging_configured = True
 
     # uvicornのログ設定
     for logger_name in [
