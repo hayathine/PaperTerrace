@@ -431,14 +431,26 @@ class GCSImageStorage(ImageStorageStrategy):
             blob_name = self._to_blob_name(image_url)
             if not blob_name:
                 return None
+            import google.auth
+            import google.auth.transport.requests
             from datetime import timedelta
 
             blob = self.bucket.blob(blob_name)
-            url = blob.generate_signed_url(
-                expiration=timedelta(seconds=expiration_seconds),
-                method="GET",
-                version="v4",
-            )
+
+            sign_kwargs: dict = {
+                "expiration": timedelta(seconds=expiration_seconds),
+                "method": "GET",
+                "version": "v4",
+            }
+
+            credentials, _ = google.auth.default()
+            if not hasattr(credentials, "signer"):
+                auth_request = google.auth.transport.requests.Request()
+                credentials.refresh(auth_request)
+                sign_kwargs["service_account_email"] = credentials.service_account_email
+                sign_kwargs["access_token"] = credentials.token
+
+            url = blob.generate_signed_url(**sign_kwargs)
             return url
         except Exception as e:
             log.warning(
@@ -452,17 +464,35 @@ class GCSImageStorage(ImageStorageStrategy):
     def generate_upload_signed_url(
         self, file_hash: str, expiration_seconds: int = 900
     ) -> str | None:
-        """pdfs/{file_hash}.pdf への PUT 用署名付き URL を生成する（v4署名）。"""
+        """pdfs/{file_hash}.pdf への PUT 用署名付き URL を生成する（v4署名）。
+
+        Cloud Run / GCE などの ADC 環境では service_account_email と access_token を
+        明示的に渡すことで IAM 経由の署名に対応する。
+        """
         try:
+            import google.auth
+            import google.auth.transport.requests
             from datetime import timedelta
 
             blob = self.bucket.blob(f"pdfs/{file_hash}.pdf")
-            url = blob.generate_signed_url(
-                expiration=timedelta(seconds=expiration_seconds),
-                method="PUT",
-                content_type="application/pdf",
-                version="v4",
-            )
+
+            sign_kwargs: dict = {
+                "expiration": timedelta(seconds=expiration_seconds),
+                "method": "PUT",
+                "content_type": "application/pdf",
+                "version": "v4",
+            }
+
+            # ADC 環境（Cloud Run 等）ではキーファイルがないため、
+            # アクセストークンとサービスアカウントメールを使って署名する
+            credentials, _ = google.auth.default()
+            if not hasattr(credentials, "signer"):
+                auth_request = google.auth.transport.requests.Request()
+                credentials.refresh(auth_request)
+                sign_kwargs["service_account_email"] = credentials.service_account_email
+                sign_kwargs["access_token"] = credentials.token
+
+            url = blob.generate_signed_url(**sign_kwargs)
             log.debug(
                 "generate_upload_signed_url",
                 "PUT 用署名付き URL を生成しました",

@@ -113,6 +113,7 @@ class WorkerSettings:
     job_timeout = JOB_TIMEOUT
     max_tries = MAX_RETRIES
     retry_delay = 30      # リトライ間隔（秒）
+    poll_delay = 0.3      # キュー確認間隔（デフォルト0.5秒）
 
     # 完了ジョブ結果の保持時間（layout_job TTL と合わせる）
     keep_result_s = 3600

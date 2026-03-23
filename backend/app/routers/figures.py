@@ -94,6 +94,7 @@ async def explain_figure(
                 return {"explanation": figure["explanation"]}
             image_url = figure.get("image_url")
             caption = figure.get("caption", "")
+            paper_id = figure.get("paper_id")
         elif body.image_url:
             # トランジェントfigure: DBにないがimage_urlで直接解析する
             log.info(
@@ -103,6 +104,7 @@ async def explain_figure(
             )
             image_url = body.image_url
             caption = ""
+            paper_id = None
         else:
             log.warning(
                 "explain_figure",
@@ -136,7 +138,8 @@ async def explain_figure(
                 mime_type=mime_type,
             )
             explanation = await figure_service.analyze_figure(
-                image_uri=gcs_uri, caption=caption, target_lang="ja", mime_type=mime_type
+                image_uri=gcs_uri, caption=caption, target_lang="ja", mime_type=mime_type,
+                paper_id=paper_id,
             )
         else:
             image_bytes = await _fetch_image_bytes(image_url)
@@ -149,7 +152,8 @@ async def explain_figure(
                 )
                 raise HTTPException(status_code=404, detail="Image file not found")
             explanation = await figure_service.analyze_figure(
-                image_bytes=image_bytes, caption=caption, target_lang="ja", mime_type="image/jpeg"
+                image_bytes=image_bytes, caption=caption, target_lang="ja", mime_type="image/jpeg",
+                paper_id=paper_id,
             )
 
         # DB登録済みfigureのみ解説をキャッシュする

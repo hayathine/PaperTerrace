@@ -715,7 +715,14 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			);
 
 			if (!urlRes.ok) {
-				if (urlRes.status === 413) throw new Error("__file_too_large__");
+				if (urlRes.status === 413) {
+					const errData = await urlRes.json().catch(() => ({}));
+					const err = new Error("__file_too_large__") as Error & {
+						maxMB?: number;
+					};
+					err.maxMB = errData.max_mb ?? MAX_PDF_SIZE_MB;
+					throw err;
+				}
 				const errData = await urlRes.json().catch(() => ({}));
 				throw new Error(errData.error || "Upload request failed");
 			}
@@ -764,7 +771,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			setStatus("error");
 			if (err?.message === "__file_too_large__") {
 				setErrorMsg(
-					t("common.errors.file_too_large", { maxMB: MAX_PDF_SIZE_MB }),
+					t("common.errors.file_too_large", {
+						maxMB: err.maxMB ?? MAX_PDF_SIZE_MB,
+					}),
 				);
 			} else {
 				setErrorMsg(t("common.errors.upload_failed"));
@@ -895,9 +904,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						// 完了後に "done" へ遷移することで GlobalLoading を正しいタイミングで消す
 						// finalPages を明示的に渡す: pagesRef は useEffect 経由で同期されるため、
 						// "done" イベント時点では stale な可能性がある
-						// 30秒のタイムアウト: Worker API が応答しない場合でも UI がブロックされないよう
+						// フォールバックタイムアウト: SSE の内部タイムアウト(130s)より長く設定し、
+						// promise が settle しない極端なケースのみ UI ブロックを解除する
 						setStatus("layout_analysis");
-						const layoutTimeout = setTimeout(() => setStatus("done"), 30_000);
+						const layoutTimeout = setTimeout(() => setStatus("done"), 135_000);
 						triggerLazyLayoutAnalysis(pId, finalPages)
 							.catch((err) =>
 								log.warn(
@@ -1262,7 +1272,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								setStatus("layout_analysis");
 								const layoutTimeoutCached = setTimeout(
 									() => setStatus("done"),
-									30_000,
+									135_000,
 								);
 								triggerLazyLayoutAnalysis(id, pagesForAnalysis)
 									.catch((err) =>
@@ -1414,7 +1424,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								setStatus("layout_analysis");
 								const layoutTimeoutFull = setTimeout(
 									() => setStatus("done"),
-									30_000,
+									135_000,
 								);
 								triggerLazyLayoutAnalysis(id, pagesForAnalysis)
 									.catch((err) =>

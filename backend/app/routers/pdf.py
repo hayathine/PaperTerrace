@@ -387,10 +387,12 @@ async def request_upload_url(
 
     # ファイルサイズ検証
     max_pdf_bytes = int(settings.get("MAX_PDF_SIZE_MB", "50")) * 1024 * 1024
+    max_pdf_mb = max_pdf_bytes // (1024 * 1024)
     if file_size_bytes > max_pdf_bytes:
         return JSONResponse(
             {
-                "error": f"File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB."
+                "error": f"File too large. Maximum size is {max_pdf_mb}MB.",
+                "max_mb": max_pdf_mb,
             },
             status_code=413,
         )

@@ -62,6 +62,8 @@ class LayoutAnalysisService:
             )
             self.threshold = 0.5
 
+        self.input_h = 640
+        self.input_w = 640
         self._initialize_model()
 
     def _initialize_model(self):
@@ -126,6 +128,13 @@ class LayoutAnalysisService:
             for input_info in inputs:
                 if input_info.name == "image":
                     self.image_input_name = input_info.name
+                    try:
+                        shape = input_info.shape
+                        if len(shape) == 4 and isinstance(shape[2], int) and isinstance(shape[3], int):
+                            self.input_h = shape[2]
+                            self.input_w = shape[3]
+                    except Exception:
+                        pass
                 elif input_info.name == "scale_factor":
                     self.scale_input_name = input_info.name
                 elif input_info.name == "im_shape":
@@ -190,18 +199,18 @@ class LayoutAnalysisService:
 
         try:
             # 1. Preprocess all images
-            preprocessed_data = [self._preprocess(path) for path in image_paths]
+            preprocessed_data = [self._preprocess(path, target_size=(self.input_w, self.input_h)) for path in image_paths]
 
             # 2. Batch inference
-            # We assume all images are of the same target size (640, 640)
+            # We assume all images are of the same target size
             batch_img = np.concatenate([d[0] for d in preprocessed_data], axis=0)
 
-            # scale_factor and im_shape are (1.0, 1.0) and (640, 640) for each image
+            # scale_factor and im_shape are (1.0, 1.0) and (input_h, input_w) for each image
             batch_scale_factor = np.tile(
                 np.array([[1.0, 1.0]], dtype=np.float32), (len(image_paths), 1)
             )
             batch_im_shape = np.tile(
-                np.array([[640.0, 640.0]], dtype=np.float32), (len(image_paths), 1)
+                np.array([[float(self.input_h), float(self.input_w)]], dtype=np.float32), (len(image_paths), 1)
             )
 
             outputs = self._inference(batch_img, batch_scale_factor, batch_im_shape)

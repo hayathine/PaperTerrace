@@ -9,6 +9,7 @@ from common.dspy.modules import VisionFigureModule
 from common.dspy.trace import TraceContext, save_trace
 from common import settings
 from common.logger import ServiceLogger
+from redis_provider.provider import RedisService
 
 log = ServiceLogger("FigureInsight")
 
@@ -19,6 +20,7 @@ class FigureInsightService:
     def __init__(self):
         self.ai_provider = get_ai_provider()
         self.model = settings.get("FIGURE_EXPLAIN_MODEL", "gemini-2.5-flash")
+        self.redis = RedisService()
         setup_dspy()
         self.figure_mod = VisionFigureModule()
 
@@ -56,6 +58,11 @@ class FigureInsightService:
             lang_name=lang_name, caption_hint=caption_hint
         )
 
+        # paper_id に紐づく PDF コンテキストキャッシュを Redis から取得
+        pdf_cache_name: str | None = None
+        if paper_id:
+            pdf_cache_name = self.redis.get(f"paper_cache_pdf:{paper_id}")
+
         import time
 
         start = time.perf_counter()
@@ -66,6 +73,7 @@ class FigureInsightService:
                 image_size=len(image_bytes) if image_bytes else 0,
                 image_uri=image_uri,
                 mime_type=mime_type,
+                using_pdf_cache=pdf_cache_name is not None,
             )
             analysis: FigureAnalysisResponse = (
                 await self.ai_provider.generate_with_image(
@@ -76,6 +84,7 @@ class FigureInsightService:
                     response_model=FigureAnalysisResponse,
                     image_uri=image_uri,
                     max_tokens=4096,
+                    cached_content_name=pdf_cache_name,
                 )
             )
 

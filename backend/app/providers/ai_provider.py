@@ -394,18 +394,18 @@ class GeminiProvider(AIProviderInterface):
 
             config = self._types.GenerateContentConfig(**config_params)
 
-            if cached_content_name:
-                image_part = None
-            elif image_uri:
+            if image_uri:
                 image_part = self._types.Part.from_uri(
                     file_uri=image_uri, mime_type=mime_type
                 )
-            else:
+            elif image_bytes:
                 image_part = self._types.Part.from_bytes(
                     data=image_bytes, mime_type=mime_type
                 )
+            else:
+                image_part = None
 
-            contents = [prompt] if cached_content_name else [image_part, prompt]
+            contents = [image_part, prompt] if image_part else [prompt]
 
             response = await self.client.aio.models.generate_content(
                 model=target_model,
@@ -885,18 +885,18 @@ class VertexAIProvider(AIProviderInterface):
 
         target_model = model or self.model
         try:
-            if cached_content_name:
-                image_part = None
-            elif image_uri:
+            if image_uri:
                 image_part = self._types.Part.from_uri(
                     file_uri=image_uri, mime_type=mime_type
                 )
-            else:
+            elif image_bytes:
                 image_part = self._types.Part.from_bytes(
                     data=image_bytes, mime_type=mime_type
                 )
+            else:
+                image_part = None
 
-            contents = [prompt] if cached_content_name else [image_part, prompt]
+            contents = [image_part, prompt] if image_part else [prompt]
 
             config_params: GenConfig = {
                 "temperature": self.temperature,

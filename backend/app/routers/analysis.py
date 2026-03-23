@@ -431,7 +431,7 @@ async def stream_layout_job(job_id: str):
 
                     try:
                         message = await asyncio.to_thread(
-                            pubsub.get_message, ignore_subscribe_messages=True, timeout=1.0
+                            pubsub.get_message, ignore_subscribe_messages=True, timeout=0.2
                         )
                     except Exception:
                         message = None
@@ -478,7 +478,8 @@ async def stream_layout_job(job_id: str):
                         return
 
                     yield f"data: {json.dumps({'status': status})}\n\n"
-                    await asyncio.sleep(1.0)
+                    # processing 中は短いインターバル、queued 等の待機中は長め
+                    await asyncio.sleep(0.3 if status == "processing" else 1.0)
 
         finally:
             if pubsub:
