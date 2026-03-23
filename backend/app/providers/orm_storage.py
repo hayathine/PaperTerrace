@@ -21,7 +21,6 @@ from app.models.repositories.figure_repository import FigureRepository
 from app.models.repositories.note_repository import NoteRepository
 from app.models.repositories.ocr_repository import OCRRepository
 from app.models.repositories.paper_repository import PaperRepository
-from app.models.repositories.session_repository import SessionRepository
 from app.models.repositories.stamp_repository import StampRepository
 from app.models.repositories.user_repository import UserRepository
 from app.providers.storage_provider import StorageInterface
@@ -111,7 +110,6 @@ class ORMStorageAdapter(StorageInterface):
         self.stamps = StampRepository(db)
         self.users = UserRepository(db)
         self.ocr = OCRRepository(db)
-        self.sessions = SessionRepository(db)
         self.chat = ChatHistoryRepository(db)
 
     def _replace_session(self) -> None:
@@ -229,6 +227,12 @@ class ORMStorageAdapter(StorageInterface):
         return self._with_recovery(
             lambda: self.papers.update_visibility(paper_id, visibility)
         )
+
+    def increment_like_count(self, paper_id: str) -> bool:
+        return self._with_recovery(lambda: self.papers.increment_like_count(paper_id))
+
+    def decrement_like_count(self, paper_id: str) -> bool:
+        return self._with_recovery(lambda: self.papers.decrement_like_count(paper_id))
 
     # ===== Note methods =====
 
@@ -465,13 +469,20 @@ class ORMStorageAdapter(StorageInterface):
             )
         )
 
-    # ===== Session methods =====
+    # ===== Session methods (Redis) =====
+
+    _SESSION_PAPER_TTL = 86400  # 24時間
 
     def save_session_context(self, session_id: str, paper_id: str) -> None:
-        self._with_recovery(lambda: self.sessions.save(session_id, paper_id))
+        """セッション→論文マッピングをRedisに保存する。"""
+        from redis_provider.provider import RedisService
+        RedisService().set(f"session_paper:{session_id}", paper_id, expire=self._SESSION_PAPER_TTL)
 
     def get_session_paper_id(self, session_id: str) -> Optional[str]:
-        return self._with_recovery(lambda: self.sessions.get_paper_id(session_id))
+        """RedisからセッションIDに対応する論文IDを取得する。"""
+        from redis_provider.provider import RedisService
+        val = RedisService().get(f"session_paper:{session_id}")
+        return str(val) if val is not None else None
 
     # ===== Chat history methods =====
 
@@ -490,17 +501,14 @@ class ORMStorageAdapter(StorageInterface):
         from app.models.orm.figure import PaperFigure
         from app.models.orm.note import Note
         from app.models.orm.ocr import OCRCache
-        from app.models.orm.paper import Paper, PaperLike
-        from app.models.orm.session import AppSession
+        from app.models.orm.paper import Paper
 
         def _do_clear():
             for model in [
                 NoteStamp,
                 PaperStamp,
                 PaperFigure,
-                PaperLike,
                 Note,
-                AppSession,
                 OCRCache,
                 Paper,
             ]:

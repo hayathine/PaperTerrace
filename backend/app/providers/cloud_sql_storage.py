@@ -237,6 +237,29 @@ class CloudSQLStorage(StorageInterface):
                 )
             conn.commit()
             return cur.rowcount > 0
+    def increment_like_count(self, paper_id: str) -> bool:
+        """Increment like_count for a paper (floor 0)."""
+        now = datetime.now()
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE papers SET like_count = GREATEST(COALESCE(like_count, 0) + 1, 0), updated_at = %s WHERE paper_id = %s",
+                    (now, paper_id),
+                )
+            conn.commit()
+            return cur.rowcount > 0
+
+    def decrement_like_count(self, paper_id: str) -> bool:
+        """Decrement like_count for a paper (floor 0)."""
+        now = datetime.now()
+        with self._get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE papers SET like_count = GREATEST(COALESCE(like_count, 0) - 1, 0), updated_at = %s WHERE paper_id = %s",
+                    (now, paper_id),
+                )
+            conn.commit()
+            return cur.rowcount > 0
 
     # ===== Note methods =====
 

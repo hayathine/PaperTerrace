@@ -42,6 +42,13 @@ dev = [
     "ruff>=0.15.0",
     "ty>=0.0.15",
 ]
+quantize = [
+    "openvino>=2024.0.0",
+    "nncf>=2.13.0",
+    "opencv-python-headless>=4.13.0.92",
+    "numpy>=1.26.4",
+    "pdf2image>=1.17.0",
+]
 
 [tool.pytest.ini_options]
 addopts = "--testmon"

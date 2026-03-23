@@ -363,6 +363,7 @@ class LayoutAnalysisService:
                                 "image_url": fig["image_url"],
                                 "label": fig.get("label", "figure"),
                                 "page_num": fig["page_num"],
+                                "conf": fig.get("conf"),
                             }
                         )
                     for i, layout in enumerate(layout_list):

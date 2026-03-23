@@ -362,11 +362,6 @@ const PDFPage: React.FC<PDFPageProps> = ({
 										}`}
 										style={style}
 									>
-										<img
-											src={fig.image_url}
-											className="hidden group-data-[click-mode]/viewer:block w-full h-full object-fill"
-											alt={fig.label}
-										/>
 										{/* クリックモード時のみ表示するインタラクティブ要素。
 									    子要素はすべて absolute なのでラッパー div はレイアウトに影響しない。 */}
 										<div className="hidden group-data-[click-mode]/viewer:block">
@@ -404,12 +399,24 @@ const PDFPage: React.FC<PDFPageProps> = ({
 														</button>
 													</div>
 
-													{/* Transparent overlay to prevent text selection underneath */}
+													{/* Transparent overlay: bbox全体をクリック可能にする */}
 													<button
 														type="button"
 														aria-label="Selection overlay"
-														className="absolute inset-0 w-full h-full z-40 bg-transparent"
-														onClick={(e) => e.stopPropagation()}
+														className="absolute inset-0 w-full h-full z-40 bg-transparent cursor-pointer"
+														onClick={(e) => {
+															e.stopPropagation();
+															if (onFigureSelect) {
+																onFigureSelect({
+																	id: fig.id,
+																	image_url: fig.image_url,
+																	label: fig.label,
+																	caption: fig.caption,
+																	page_number: page_num,
+																	conf: fig.conf,
+																});
+															}
+														}}
 													/>
 												</>
 											)}

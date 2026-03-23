@@ -1,15 +1,17 @@
 """
 Papers Router
-Handles paper management (list, get, delete, claim).
+Handles paper management (list, get, delete, claim, like).
 """
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.auth import CurrentUser, OptionalUser
+from app.models.bigquery.schemas import PaperLikeData
 from app.providers import get_storage_provider
+from app.providers.bigquery_log import BigQueryLogClient
 from common.logger import ServiceLogger
 
 log = ServiceLogger("Papers")
@@ -118,3 +120,47 @@ async def delete_paper(paper_id: str, user: OptionalUser = None):
 
     deleted = storage.delete_paper(paper_id)
     return JSONResponse({"deleted": deleted})
+
+
+@router.post("/papers/{paper_id}/like")
+async def like_paper(paper_id: str, user: CurrentUser):
+    """
+    論文にいいねを付ける。
+    BigQuery にイベントログを記録し、Neon の like_count をインクリメントする。
+    """
+    storage = get_storage_provider()
+    paper = storage.get_paper(paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    try:
+        bq = BigQueryLogClient.get_instance()
+        bq.streaming_insert("paper_likes", [PaperLikeData(user_id=user.uid, paper_id=paper_id, action="like").to_bq_row()])
+    except Exception as e:
+        log.warning("like_paper", "BQ insert failed", error=str(e), paper_id=paper_id)
+
+    storage.increment_like_count(paper_id)
+    log.info("like_paper", "いいね完了", paper_id=paper_id, uid=user.uid)
+    return JSONResponse({"ok": True})
+
+
+@router.delete("/papers/{paper_id}/like")
+async def unlike_paper(paper_id: str, user: CurrentUser):
+    """
+    論文のいいねを取り消す。
+    BigQuery にイベントログを記録し、Neon の like_count をデクリメントする。
+    """
+    storage = get_storage_provider()
+    paper = storage.get_paper(paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    try:
+        bq = BigQueryLogClient.get_instance()
+        bq.streaming_insert("paper_likes", [PaperLikeData(user_id=user.uid, paper_id=paper_id, action="unlike").to_bq_row()])
+    except Exception as e:
+        log.warning("unlike_paper", "BQ insert failed", error=str(e), paper_id=paper_id)
+
+    storage.decrement_like_count(paper_id)
+    log.info("unlike_paper", "いいね取り消し完了", paper_id=paper_id, uid=user.uid)
+    return JSONResponse({"ok": True})

@@ -93,6 +93,16 @@ class StorageInterface(ABC):
         """Update paper visibility."""
         ...
 
+    @abstractmethod
+    def increment_like_count(self, paper_id: str) -> bool:
+        """Increment like_count for a paper (floor 0)."""
+        ...
+
+    @abstractmethod
+    def decrement_like_count(self, paper_id: str) -> bool:
+        """Decrement like_count for a paper (floor 0)."""
+        ...
+
     # ===== Note methods =====
 
     @abstractmethod
@@ -514,6 +524,26 @@ class SQLiteStorage(StorageInterface):
             cursor = conn.execute(
                 "UPDATE papers SET layout_json = ?, updated_at = ? WHERE paper_id = ?",
                 (layout_json, now, paper_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def increment_like_count(self, paper_id: str) -> bool:
+        """Increment like_count (floor 0)."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE papers SET like_count = MAX(0, COALESCE(like_count, 0) + 1) WHERE paper_id = ?",
+                (paper_id,),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+
+    def decrement_like_count(self, paper_id: str) -> bool:
+        """Decrement like_count (floor 0)."""
+        with self._get_connection() as conn:
+            cursor = conn.execute(
+                "UPDATE papers SET like_count = MAX(0, COALESCE(like_count, 0) - 1) WHERE paper_id = ?",
+                (paper_id,),
             )
             conn.commit()
             return cursor.rowcount > 0
