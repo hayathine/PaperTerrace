@@ -16,6 +16,9 @@ MODEL_TRANSLATE = "gemini-2.5-flash-lite"
 FIGURE_EXPLAIN_MODEL = "gemini-2.5-flash-lite"
 DSPY_MODEL = "vertex_ai/gemini-2.5-flash-lite"
 LAYOUT_PARSER_TYPE = "gemini"
+LAYOUT_EDGE_FILTER_MARGIN_X = 0.03   # 左右端マージン（ページ幅の3%）
+LAYOUT_EDGE_FILTER_MARGIN_Y = 0.01   # 上下端マージン（ページ高さの1%）
+LAYOUT_MIN_WIDTH_RATIO = 0.10        # 幅がページ幅の10%以下のボックスを除外
 
 # 翻訳モデル設定（M2M100）
 TRANSLATION_BEAM_SIZE = 10

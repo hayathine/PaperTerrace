@@ -52,6 +52,7 @@ const Summary: React.FC<SummaryProps> = ({
 	);
 
 	// Recommendation state
+	const [userQuery, setUserQuery] = useState("");
 	const [recommendationOpen, setRecommendationOpen] = useState(false);
 	const [recommendationLoading, setRecommendationLoading] = useState(false);
 	const [recommendationError, setRecommendationError] = useState<string | null>(
@@ -213,7 +214,7 @@ const Summary: React.FC<SummaryProps> = ({
 		setRecommendationError(null);
 		setClickedPapers(new Set());
 		try {
-			const res = await generateRecommendations(sessionId, token);
+			const res = await generateRecommendations(sessionId, token, userQuery);
 			setRecommendationResponse(res);
 			setRecommendationOpen(true);
 		} catch (err) {
@@ -361,7 +362,7 @@ const Summary: React.FC<SummaryProps> = ({
 				{mode === "discover" && (
 					<div className="space-y-4">
 						{!recommendationOpen && !recommendationLoading ? (
-							<div className="flex flex-col items-center justify-center py-12 text-center">
+							<div className="flex flex-col items-center justify-center py-8 text-center">
 								<div className="w-16 h-16 bg-orange-100 text-orange-500 rounded-full flex items-center justify-center mb-4">
 									<svg
 										className="w-8 h-8"
@@ -380,12 +381,24 @@ const Summary: React.FC<SummaryProps> = ({
 								<h3 className="text-lg font-bold text-slate-800 mb-2">
 									{t("recommendation.explore_title", "Explore Next Papers")}
 								</h3>
-								<p className="text-sm text-slate-500 mb-6">
+								<p className="text-sm text-slate-500 mb-5">
 									{t(
 										"recommendation.explore_description",
 										"Based on your reading history and behavior, we'll generate personalized recommendations.",
 									)}
 								</p>
+								<div className="w-full mb-5">
+									<textarea
+										value={userQuery}
+										onChange={(e) => setUserQuery(e.target.value)}
+										placeholder={t(
+											"recommendation.user_query_placeholder",
+											"どのような論文が読みたいですか？（例: 強化学習の最新動向、医療画像認識）",
+										)}
+										rows={3}
+										className="w-full px-3 py-2 text-sm text-slate-700 bg-white border border-slate-200 rounded-xl resize-none focus:outline-none focus:ring-2 focus:ring-orange-300 focus:border-transparent placeholder:text-slate-400 transition-shadow"
+									/>
+								</div>
 								<button
 									type="button"
 									onClick={handleGenerateRecommendations}

@@ -108,11 +108,15 @@ export async function submitRecommendationRollout(
 export async function generateRecommendations(
 	sessionId: string,
 	token: string | null,
+	userQuery?: string,
 ): Promise<RecommendationGenerateResponse> {
+	const body: Record<string, string> = { session_id: sessionId };
+	if (userQuery?.trim()) body.user_query = userQuery.trim();
+
 	const res = await fetch(`${API_URL}/api/recommendation/generate`, {
 		method: "POST",
 		headers: buildHeaders(token),
-		body: JSON.stringify({ session_id: sessionId }),
+		body: JSON.stringify(body),
 	});
 	if (!res.ok) {
 		const detail = await res.text().catch(() => "");

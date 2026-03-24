@@ -116,7 +116,7 @@ def _log_overrides():
         pass
 
 
-_log_overrides()
+# _log_overrides()
 
 
 def _get_app_env() -> str:

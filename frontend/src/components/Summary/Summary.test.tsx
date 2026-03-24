@@ -207,7 +207,7 @@ describe("Summary Component", () => {
 		fireEvent.click(generateBtn);
 
 		await waitFor(() => {
-			expect(generateRecommendations).toHaveBeenCalledWith("s1", mockToken);
+			expect(generateRecommendations).toHaveBeenCalledWith("s1", mockToken, "");
 		});
 
 		expect(await screen.findByText("Rec Paper 1")).toBeDefined();

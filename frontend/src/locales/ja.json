@@ -198,6 +198,7 @@
 		"top_recommendations": "おすすめの論文",
 		"status_clicked": "チェック済み",
 		"action_explore": "内容を見る",
+		"user_query_placeholder": "どのような論文が読みたいですか？（例: 強化学習の最新動向、医療画像認識）",
 		"feedback": {
 			"title": "改善にご協力ください",
 			"description": "これらの推薦を評価して、今後の提案の質を向上させましょう。",

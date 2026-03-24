@@ -239,6 +239,10 @@ class RecommendationService:
             trajectory.knowledge_level = "Extracted"  # 以前の構造化フィールドは固定値へ
             repo.upsert(trajectory)
 
+        # ユーザーの具体的なリクエストがあれば persona に追記
+        if req.user_query:
+            user_persona = f"{user_persona}\n\nUser's specific request: {req.user_query}"
+
         # 論文推薦クエリ生成
         rec_mod = RecommendationService._get_recommendation_module()
 

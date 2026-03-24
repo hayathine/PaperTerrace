@@ -1,0 +1,18 @@
+.git/
+.gitignore
+.gcloudignore
+node_modules/
+*.db
+*.sqlite3
+**/*.log
+local-files/
+models/
+infrastructure/
+.venv/
+venv/
+env/
+# These are needed for build
+!backend/scripts/
+!frontend/dist/
+!common/
+!redis_provider/

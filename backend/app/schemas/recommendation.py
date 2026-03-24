@@ -41,6 +41,7 @@ class RecommendationRolloutRequest(BaseModel):
 
 class RecommendationGenerateRequest(BaseModel):
     session_id: str
+    user_query: Optional[str] = None  # ユーザーが希望する論文の種類（任意）
 
 
 class RecommendationGenerateResponse(BaseModel):

@@ -188,17 +188,18 @@ class OpenVINOLayoutAnalysisService:
 
             tasks = [
                 asyncio.to_thread(self._inference, img, scale_factor, im_shape)
-                for img, im_shape, scale_factor, _, _ in preprocessed_list
+                for img, im_shape, scale_factor, _, _, _ in preprocessed_list
             ]
             all_outputs = await asyncio.gather(*tasks)
 
             batch_results = []
             for i, outputs in enumerate(all_outputs):
-                _, _, _, real_pad_info, real_scale = preprocessed_list[i]
+                _, _, _, real_pad_info, real_scale, orig_size = preprocessed_list[i]
                 results = self._postprocess(
                     outputs,
                     real_scale=real_scale,
                     pad_info=real_pad_info,
+                    orig_size=orig_size,
                     threshold=self.threshold,
                     target_class_ids=target_class_ids,
                 )
@@ -255,18 +256,19 @@ class OpenVINOLayoutAnalysisService:
             # OPTIMAL_NUMBER_OF_INFER_REQUESTS 分のリクエストプールを活用して並列推論
             tasks = [
                 asyncio.to_thread(self._inference, img, scale_factor, im_shape)
-                for img, im_shape, scale_factor, _, _ in preprocessed_list
+                for img, im_shape, scale_factor, _, _, _ in preprocessed_list
             ]
             all_outputs = await asyncio.gather(*tasks)
 
             # 3. Postprocess
             batch_results = []
             for i, outputs in enumerate(all_outputs):
-                _, _, _, real_pad_info, real_scale = preprocessed_list[i]
+                _, _, _, real_pad_info, real_scale, orig_size = preprocessed_list[i]
                 results = self._postprocess(
                     outputs,
                     real_scale=real_scale,
                     pad_info=real_pad_info,
+                    orig_size=orig_size,
                     threshold=self.threshold,
                     target_class_ids=target_class_ids,
                 )
@@ -295,7 +297,7 @@ class OpenVINOLayoutAnalysisService:
 
     def _preprocess_from_bytes(
         self, img_bytes: bytes, target_size: tuple[int, int] = (640, 640)
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, tuple[int, int]]:
         try:
             from PIL import Image
 
@@ -303,6 +305,7 @@ class OpenVINOLayoutAnalysisService:
             if img_pil.mode != "RGB":
                 img_pil = img_pil.convert("RGB")
             img = np.array(img_pil)
+            orig_h, orig_w = img.shape[:2]
         except Exception as e:
             raise ValueError(f"Could not decode image bytes: {e}") from e
 
@@ -327,11 +330,11 @@ class OpenVINOLayoutAnalysisService:
         ).astype(np.float32)
         real_scale = np.expand_dims(im_info["scale_factor"], axis=0).astype(np.float32)
 
-        return img, im_shape, scale_factor, real_pad_info, real_scale
+        return img, im_shape, scale_factor, real_pad_info, real_scale, (orig_h, orig_w)
 
     def _preprocess(
         self, img_path: str | Path, target_size: tuple[int, int] = (640, 640)
-    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray, tuple[int, int]]:
         try:
             from PIL import Image
 
@@ -339,6 +342,7 @@ class OpenVINOLayoutAnalysisService:
             if img_pil.mode != "RGB":
                 img_pil = img_pil.convert("RGB")
             img = np.array(img_pil)
+            orig_h, orig_w = img.shape[:2]
         except Exception as e:
             raise FileNotFoundError(f"Could not load image: {img_path}") from e
 
@@ -364,7 +368,7 @@ class OpenVINOLayoutAnalysisService:
         ).astype(np.float32)
         real_scale = np.expand_dims(im_info["scale_factor"], axis=0).astype(np.float32)
 
-        return img, im_shape, scale_factor, real_pad_info, real_scale
+        return img, im_shape, scale_factor, real_pad_info, real_scale, (orig_h, orig_w)
 
     def _inference(
         self,
@@ -402,6 +406,7 @@ class OpenVINOLayoutAnalysisService:
         outputs: list,
         real_scale: np.ndarray,
         pad_info: np.ndarray,
+        orig_size: tuple[int, int] | None = None,
         threshold: float = 0.5,
         target_class_ids: list[int] | None = None,
     ) -> list[dict[str, Any]]:
@@ -428,20 +433,44 @@ class OpenVINOLayoutAnalysisService:
             boxes = np.round(boxes).astype(int)
             boxes = np.maximum(boxes, 0)
 
-            valid_box_mask = (boxes[:, 2] > boxes[:, 0]) & (boxes[:, 3] > boxes[:, 1])
+            # --- Edge filtering + ノイズフィルタ ---
+            if orig_size:
+                orig_h, orig_w = orig_size
+                margin_x = max(2, int(orig_w * float(settings.get("LAYOUT_EDGE_FILTER_MARGIN_X", "0.03"))))
+                margin_y = max(2, int(orig_h * float(settings.get("LAYOUT_EDGE_FILTER_MARGIN_Y", "0.01"))))
+                min_width_ratio = float(settings.get("LAYOUT_MIN_WIDTH_RATIO", "0.10"))
 
-            f_class_ids = class_ids[valid_box_mask]
-            f_scores = scores[valid_box_mask]
-            f_boxes = boxes[valid_box_mask]
-
-            for cid, score, box in zip(f_class_ids, f_scores, f_boxes):
-                results.append(
-                    {
-                        "class_id": int(cid),
-                        "score": float(score),
-                        "bbox": box.tolist(),
-                    }
+                # 左右端・上下端マージン判定
+                is_at_edge = (
+                    (boxes[:, 0] < margin_x) |
+                    (boxes[:, 2] > orig_w - margin_x) |
+                    (boxes[:, 1] < margin_y) |
+                    (boxes[:, 3] > orig_h - margin_y)
                 )
+
+                # 幅が小さすぎるノイズ判定（ページ幅の10%以下）
+                is_too_narrow = (boxes[:, 2] - boxes[:, 0]) < orig_w * min_width_ratio
+
+                valid_box_mask = ~(is_at_edge | is_too_narrow)
+                boxes = boxes[valid_box_mask]
+                class_ids = class_ids[valid_box_mask]
+                scores = scores[valid_box_mask]
+
+            if len(boxes) > 0:
+                valid_box_mask = (boxes[:, 2] > boxes[:, 0]) & (boxes[:, 3] > boxes[:, 1])
+
+                f_class_ids = class_ids[valid_box_mask]
+                f_scores = scores[valid_box_mask]
+                f_boxes = boxes[valid_box_mask]
+
+                for cid, score, box in zip(f_class_ids, f_scores, f_boxes):
+                    results.append(
+                        {
+                            "class_id": int(cid),
+                            "score": float(score),
+                            "bbox": box.tolist(),
+                        }
+                    )
 
         # クラス別検出数をログに出力（閾値を超えた内訳確認用）
         if results:

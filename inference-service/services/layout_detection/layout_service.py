@@ -420,13 +420,33 @@ class LayoutAnalysisService:
             for res in valid_predictions:
                 class_id, score, xxmin, yymin, xxmax, yymax = res
 
-                # モデル出力は 640x640 等のキャンバス座標系
                 # 1. パディングを除去
                 # 2. スケールを元に戻す
-                x1 = max(0, min(ori_w, int(round((xxmin - pad_w) / scale_w))))
-                y1 = max(0, min(ori_h, int(round((yymin - pad_h) / scale_h))))
-                x2 = max(0, min(ori_w, int(round((xxmax - pad_w) / scale_w))))
-                y2 = max(0, min(ori_h, int(round((yymax - pad_h) / scale_h))))
+                x1 = int(round((xxmin - pad_w) / scale_w))
+                y1 = int(round((yymin - pad_h) / scale_h))
+                x2 = int(round((xxmax - pad_w) / scale_w))
+                y2 = int(round((yymax - pad_h) / scale_h))
+
+                # --- ページの端っこを弾くロジック ---
+                margin_x = max(2, int(ori_w * float(settings.get("LAYOUT_EDGE_FILTER_MARGIN_X", "0.03"))))
+                margin_y = max(2, int(ori_h * float(settings.get("LAYOUT_EDGE_FILTER_MARGIN_Y", "0.01"))))
+
+                if (x1 < margin_x or x2 > ori_w - margin_x or
+                        y1 < margin_y or y2 > ori_h - margin_y):
+                    logger.debug(f"Postprocess - Rejecting edge box: ({x1}, {y1}, {x2}, {y2})")
+                    continue
+
+                # --- 幅が小さすぎるノイズを弾くロジック ---
+                min_width_ratio = float(settings.get("LAYOUT_MIN_WIDTH_RATIO", "0.10"))
+                if (x2 - x1) < ori_w * min_width_ratio:
+                    logger.debug(f"Postprocess - Rejecting narrow box (width={(x2 - x1)}, threshold={ori_w * min_width_ratio:.1f}): ({x1}, {y1}, {x2}, {y2})")
+                    continue
+
+                # 最終的なクリッピング
+                x1 = max(0, min(ori_w, x1))
+                y1 = max(0, min(ori_h, y1))
+                x2 = max(0, min(ori_w, x2))
+                y2 = max(0, min(ori_h, y2))
 
                 logger.debug(
                     f"Postprocess - Coordinates: ({xxmin:.1f}, {yymin:.1f}, {xxmax:.1f}, {yymax:.1f}) -> Final: ({x1}, {y1}, {x2}, {y2})"

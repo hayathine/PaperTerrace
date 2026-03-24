@@ -365,10 +365,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
 										{/* クリックモード時のみ表示するインタラクティブ要素。
 									    子要素はすべて absolute なのでラッパー div はレイアウトに影響しない。 */}
 										<div className="hidden group-data-[click-mode]/viewer:block">
-											{/* 確信度バッジ (isLocal=true のみ) */}
-											{isLocal && fig.conf !== undefined && (
+											{/* ラベルバッジ (isLocal=true のみ) */}
+											{isLocal && fig.label && (
 												<div className="absolute top-0 left-0 bg-black/70 text-white text-[10px] px-1 py-0.5 rounded-br z-[9999] pointer-events-none">
-													Score: {(fig.conf * 100).toFixed(1)}%
+													{fig.label}
 												</div>
 											)}
 
