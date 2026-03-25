@@ -55,9 +55,9 @@ class WordAnalysisService:
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
         try:
-            from common.dspy.config import setup_dspy
-            from common.dspy.modules import SimpleTranslationModule
-            from common.dspy.trace import TraceContext, trace_dspy_call
+            from common.dspy_utils.config import setup_dspy
+            from common.dspy_utils.modules import SimpleTranslationModule
+            from common.dspy_utils.trace import TraceContext, trace_dspy_call
 
             setup_dspy()
             trans_mod = SimpleTranslationModule()

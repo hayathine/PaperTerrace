@@ -261,3 +261,30 @@ Rules:
 - Do NOT add any commentary or explanation — output transcribed text only.
 - If a line is clearly a continuation of the previous paragraph (e.g., hyphenated word at line break), join them.
 """
+
+PDF_EXTRACT_TEXT_OCR_BATCH_PROMPT = """\
+You will receive multiple page images from an academic paper.
+Extract all body text from each page image and format it as Markdown.
+
+Rules:
+- Use `#` / `##` / `###` for section headings and subheadings based on font size and position.
+- Preserve paragraph breaks with a blank line between paragraphs.
+- Preserve inline formatting: bold, italic, equations as-is.
+- **Omit** figure captions, table captions, and footnotes entirely.
+- **Omit** page numbers, headers, and footers.
+- Do NOT add any commentary or explanation — output transcribed text only.
+- If a line is clearly a continuation of the previous paragraph (e.g., hyphenated word at line break), join them.
+
+IMPORTANT: Separate each page's output with the exact delimiter line: ===PAGE_N===
+where N is the page number shown in the request (e.g., ===PAGE_3===).
+Output ONLY the delimiters and extracted text — no other commentary.
+
+Example output format:
+===PAGE_1===
+# Introduction
+This paper presents...
+
+===PAGE_2===
+## Related Work
+Prior work on...
+"""

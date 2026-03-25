@@ -7,9 +7,9 @@ AIチャットアシスタント機能を提供するモジュール
 
 from app.providers import get_ai_provider
 from common.config import settings
-from common.dspy.config import setup_dspy
-from common.dspy.modules import ChatModule
-from common.dspy.trace import TraceContext, trace_dspy_call
+from common.dspy_utils.config import setup_dspy
+from common.dspy_utils.modules import ChatModule
+from common.dspy_utils.trace import TraceContext, trace_dspy_call
 from common.logger import logger
 from common.dspy_seed_prompt import (
     CHAT_GENERAL_FROM_PDF_PROMPT,

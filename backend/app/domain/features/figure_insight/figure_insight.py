@@ -4,9 +4,9 @@ from app.providers import get_ai_provider
 from app.schemas.gemini_schema import (
     FigureAnalysisResponse,
 )
-from common.dspy.config import setup_dspy
-from common.dspy.modules import VisionFigureModule
-from common.dspy.trace import TraceContext, save_trace
+from common.dspy_utils.config import setup_dspy
+from common.dspy_utils.modules import VisionFigureModule
+from common.dspy_utils.trace import TraceContext, save_trace
 from common import settings
 from common.logger import ServiceLogger
 from redis_provider.provider import RedisService

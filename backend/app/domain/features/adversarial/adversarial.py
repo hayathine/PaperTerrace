@@ -7,9 +7,9 @@
 """
 
 from app.providers import get_ai_provider
-from common.dspy.config import setup_dspy
-from common.dspy.modules import AdversarialModule
-from common.dspy.trace import trace_dspy_call
+from common.dspy_utils.config import setup_dspy
+from common.dspy_utils.modules import AdversarialModule
+from common.dspy_utils.trace import trace_dspy_call
 from common.logger import logger
 from common.dspy_seed_prompt import ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT
 
@@ -102,7 +102,7 @@ class AdversarialReviewService:
                     extra={"text_length": len(text)},
                 )
                 # DSPy version
-                from common.dspy.trace import TraceContext
+                from common.dspy_utils.trace import TraceContext
 
                 res, trace_id = await trace_dspy_call(
                     "AdversarialModule",

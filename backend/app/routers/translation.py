@@ -12,13 +12,13 @@ from pydantic import BaseModel, Field, field_validator
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.domain.services.analysis_service import EnglishAnalysisService
 from app.providers import get_ai_provider, get_storage_provider
-from common.dspy.config import setup_dspy
-from common.dspy.modules import (
+from common.dspy_utils.config import setup_dspy
+from common.dspy_utils.modules import (
     DeepExplanationModule,
     SimpleTranslationModule,
     TranslationModule,
 )
-from common.dspy.trace import TraceContext, trace_dspy_call
+from common.dspy_utils.trace import TraceContext, trace_dspy_call
 from common.logger import ServiceLogger
 from app.core.config import is_local
 from common import settings

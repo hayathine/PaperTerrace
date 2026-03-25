@@ -216,28 +216,52 @@ class PDFOCRService:
                         for page_idx in range(chunk_start, chunk_end)
                     ]
 
-                    # Phase 1+2 タスクは並列実行しつつ、yield は page_num 順を維持する
-                    # 修正1: image_url を実際の値（phase1_result の None ではなく page_data から取得）で埋める
-                    # 修正2: チャンク全体の完了を待たず、各タスク完了次第 yield する（ただし順序保証）
-                    phase3_tasks = []
+                    # Phase 1+2: 並列実行済みタスクをページ順に収集しつつ即時 yield
+                    chunk_page_data = []
                     for task in phase12_tasks:
                         page_data = await task  # 並列実行済みのタスクをページ順に受け取る
                         p = page_data["phase1_result"]
                         yield (p[0], p[1], p[2], p[3], p[4], page_data["image_url"], p[6])
-                        phase3_tasks.append(
-                            asyncio.create_task(
-                                self._finalize_page_phase_3(
-                                    page_data,
-                                    [],
-                                    None,
-                                    page_data["page_num"] - 1,
-                                    total_pages,
-                                    file_hash,
-                                    pdf_path=tmp_path,
-                                    file_bytes=file_bytes,
-                                )
+                        chunk_page_data.append(page_data)
+
+                    # バッチOCR: phase1 テキストが空または文字化けのページを事前検出して一括送信
+                    _min_len = int(settings.get("INFERENCE_OCR_MIN_PAGE_TEXT_LEN", 100))
+                    ocr_candidate_pages = [
+                        (pd["page_num"], pd["img_bytes"])
+                        for pd in chunk_page_data
+                        if not (pd.get("phase1_result") or ("",) * 7)[2].strip()
+                        or _is_garbled_text((pd.get("phase1_result") or ("",) * 7)[2] or "")
+                        or len(((pd.get("phase1_result") or ("",) * 7)[2] or "").strip()) < _min_len
+                    ]
+                    batch_ocr_results: dict[int, str] = {}
+                    if ocr_candidate_pages:
+                        batch_ocr_results = await self._ocr_fallback_batch(ocr_candidate_pages)
+                        log.info(
+                            "batch_ocr",
+                            "Batch OCR completed",
+                            candidate_count=len(ocr_candidate_pages),
+                            result_count=len(batch_ocr_results),
+                        )
+                        for pd in chunk_page_data:
+                            if pd["page_num"] in batch_ocr_results:
+                                pd["ocr_text_override"] = batch_ocr_results[pd["page_num"]]
+
+                    phase3_tasks = [
+                        asyncio.create_task(
+                            self._finalize_page_phase_3(
+                                page_data,
+                                [],
+                                None,
+                                page_data["page_num"] - 1,
+                                total_pages,
+                                file_hash,
+                                pdf_path=tmp_path,
+                                file_bytes=file_bytes,
+                                ocr_text_override=page_data.get("ocr_text_override"),
                             )
                         )
+                        for page_data in chunk_page_data
+                    ]
 
                     # Phase 3 結果も完了次第 yield し、DB 保存用に page_num 順で収集
                     chunk_finals = []
@@ -466,6 +490,7 @@ class PDFOCRService:
         file_hash: str,
         pdf_path: str | None = None,
         file_bytes: bytes = b"",
+        ocr_text_override: str | None = None,
     ) -> tuple:
         """Execute Phase 3: Layout refinement, Markdown generation, and Figure cropping."""
         page_num = page_data["page_num"]
@@ -541,23 +566,34 @@ class PDFOCRService:
                         if is_garbled
                         else "too_short_text"
                     )
-                    log.warning(
-                        "_finalize_page_phase_3",
-                        "OCR fallback triggered",
-                        reason=reason,
-                        page_num=page_num,
-                        text_len=len(page_text.strip()),
-                        cid_count=page_text.count("(cid:"),
-                    )
-                    fallback = await self._ocr_fallback(
-                        page_data["img_bytes"],
-                        page_num,
-                        layout_blocks=layout_blocks,
-                        img_width=int(layout_data.get("width", 0)),
-                        img_height=int(layout_data.get("height", 0)),
-                    )
-                    if fallback:
-                        page_text = fallback
+                    if ocr_text_override is not None:
+                        # バッチOCRで事前取得済みのテキストを使用
+                        log.info(
+                            "_finalize_page_phase_3",
+                            "Using pre-fetched batch OCR result",
+                            reason=reason,
+                            page_num=page_num,
+                        )
+                        if ocr_text_override:
+                            page_text = ocr_text_override
+                    else:
+                        log.warning(
+                            "_finalize_page_phase_3",
+                            "OCR fallback triggered",
+                            reason=reason,
+                            page_num=page_num,
+                            text_len=len(page_text.strip()),
+                            cid_count=page_text.count("(cid:"),
+                        )
+                        fallback = await self._ocr_fallback(
+                            page_data["img_bytes"],
+                            page_num,
+                            layout_blocks=layout_blocks,
+                            img_width=int(layout_data.get("width", 0)),
+                            img_height=int(layout_data.get("height", 0)),
+                        )
+                        if fallback:
+                            page_text = fallback
 
                 # 3. Post-process layout blocks (equations, figures)
                 # y座標を保持して後で本文中の適切な位置に挿入するため、リストで管理する
@@ -801,6 +837,88 @@ class PDFOCRService:
             )
 
         return ""
+
+    async def _ocr_fallback_batch(
+        self,
+        pages: list[tuple[int, bytes]],
+    ) -> dict[int, str]:
+        """
+        複数ページ画像を一括で Gemini Vision に送り OCR 結果を返す。
+
+        Args:
+            pages: [(page_num, img_bytes), ...] のリスト
+
+        Returns:
+            {page_num: ocr_text} の辞書。失敗ページは含まない。
+        """
+        from common.dspy_seed_prompt import PDF_EXTRACT_TEXT_OCR_BATCH_PROMPT
+
+        if not pages:
+            return {}
+
+        try:
+            ai = await get_ai_provider()
+            ocr_model = settings.get("MODEL_OCR", settings.get("MODEL_SUMMARY", "gemini-2.5-flash-lite"))
+            ocr_max_tokens = int(settings.get("OCR_MAX_OUTPUT_TOKENS", 8192))
+
+            page_nums = [p[0] for p in pages]
+            images_list = [p[1] for p in pages]
+
+            # ページ番号を明示したプロンプトを生成
+            page_labels = ", ".join(f"PAGE_{n}" for n in page_nums)
+            prompt = (
+                f"Process the following {len(pages)} page image(s) in order: {page_labels}.\n\n"
+                + PDF_EXTRACT_TEXT_OCR_BATCH_PROMPT
+            )
+
+            log.info(
+                "_ocr_fallback_batch",
+                "Gemini batch OCR",
+                page_nums=page_nums,
+                image_count=len(images_list),
+            )
+
+            raw = await ai.generate_with_images(
+                prompt=prompt,
+                images_list=images_list,
+                mime_type="image/jpeg",
+                model=ocr_model,
+                max_tokens=ocr_max_tokens,
+            )
+
+            if not raw:
+                return {}
+
+            # ===PAGE_N=== デリミタでパース
+            results: dict[int, str] = {}
+            parts = re.split(r"={3}PAGE_(\d+)={3}", raw)
+            # parts = ["前文", "1", "ページ1テキスト", "2", "ページ2テキスト", ...]
+            i = 1
+            while i + 1 < len(parts):
+                try:
+                    pn = int(parts[i])
+                    text = parts[i + 1].strip()
+                    if text:
+                        results[pn] = text
+                except ValueError:
+                    pass
+                i += 2
+
+            log.info(
+                "_ocr_fallback_batch",
+                "Batch OCR parsed",
+                requested=page_nums,
+                parsed=list(results.keys()),
+            )
+            return results
+
+        except Exception as e:
+            log.warning(
+                "_ocr_fallback_batch",
+                "Batch OCR failed, will fall back to per-page OCR",
+                error=str(e),
+            )
+            return {}
 
     def _extract_markdown_sequential(
         self, file_bytes: bytes, idx: int, exclude_bboxes_pt: list

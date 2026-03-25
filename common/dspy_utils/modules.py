@@ -3,7 +3,7 @@ from typing import Callable
 
 import dspy
 
-from common.dspy.signatures import (
+from common.dspy_utils.signatures import (
     AdversarialCritique,
     BuildDecisionProfile,
     ChatGeneral,
@@ -68,7 +68,7 @@ class PromptCandidatePool:
             module_factory: 新規モジュールインスタンスを生成する callable。
             program_name: BigQuery 上の識別子（例: 'paper_summary'）。
         """
-        from common.dspy.prompt_store import load_candidates_from_bigquery
+        from common.dspy_utils.prompt_store import load_candidates_from_bigquery
 
         candidates = load_candidates_from_bigquery(module_factory, program_name)
         return cls(candidates)

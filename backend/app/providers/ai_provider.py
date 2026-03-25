@@ -95,6 +95,7 @@ class AIProviderInterface(ABC):
         response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
+        max_tokens: int | None = None,
     ) -> Any:
         """Generate text response from prompt with multiple images."""
         pass
@@ -467,9 +468,11 @@ class GeminiProvider(AIProviderInterface):
         response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
+        max_tokens: int | None = None,
     ) -> Any:
         """Generate text response from prompt with multiple images."""
         target_model = model or self.model
+        effective_max_tokens = max_tokens or self.max_tokens
         try:
             log.debug(
                 "gemini_multi_image",
@@ -482,7 +485,7 @@ class GeminiProvider(AIProviderInterface):
             # Configure generation config
             config_params: GenConfig = {
                 "temperature": self.temperature,
-                "max_output_tokens": self.max_tokens,
+                "max_output_tokens": effective_max_tokens,
             }
             if response_model:
                 config_params["response_mime_type"] = "application/json"
@@ -513,7 +516,7 @@ class GeminiProvider(AIProviderInterface):
                 config=config,
             )
             self._check_truncation(
-                response, target_model, "gemini_multi_image", self.max_tokens
+                response, target_model, "gemini_multi_image", effective_max_tokens
             )
 
             if response_model:
@@ -970,9 +973,11 @@ class VertexAIProvider(AIProviderInterface):
         response_model: type[BaseModel] | None = None,
         system_instruction: str | None = None,
         cached_content_name: str | None = None,
+        max_tokens: int | None = None,
     ) -> Any:
         """Generate text response from prompt with multiple images."""
         target_model = model or self.model
+        effective_max_tokens = max_tokens or self.max_tokens
         try:
             if cached_content_name:
                 contents = [prompt]
@@ -986,7 +991,7 @@ class VertexAIProvider(AIProviderInterface):
 
             config_params: GenConfig = {
                 "temperature": self.temperature,
-                "max_output_tokens": self.max_tokens,
+                "max_output_tokens": effective_max_tokens,
             }
             if response_model:
                 config_params["response_mime_type"] = "application/json"
@@ -1007,7 +1012,7 @@ class VertexAIProvider(AIProviderInterface):
                 config=config,
             )
             self._check_truncation(
-                response, target_model, "vertex_multi_image", self.max_tokens
+                response, target_model, "vertex_multi_image", effective_max_tokens
             )
 
             if response_model:

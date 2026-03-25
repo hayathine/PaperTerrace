@@ -13,9 +13,9 @@ from app.schemas.recommendation import (
     RecommendationRolloutRequest,
     RecommendationSyncRequest,
 )
-from common.dspy.config import load_dspy_module_from_gcs, setup_dspy
-from common.dspy.modules import RecommendationModule, UserPersonaModule
-from common.dspy.trace import TraceContext, trace_dspy_call
+from common.dspy_utils.config import load_dspy_module_from_gcs, setup_dspy
+from common.dspy_utils.modules import RecommendationModule, UserPersonaModule
+from common.dspy_utils.trace import TraceContext, trace_dspy_call
 from common.logger import logger
 from redis_provider.provider import RedisService
 
