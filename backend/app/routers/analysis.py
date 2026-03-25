@@ -19,13 +19,13 @@ from app.domain.features import (
     FigureInsightService,
     SummaryService,
 )
-from app.domain.services.layout_analysis_service import LayoutAnalysisService
 from app.providers import (
     RedisService,
     get_arq_pool,
     get_redis_client,
     get_storage_provider,
 )
+from app.domain.services.layout_analysis_service import LayoutAnalysisService
 from app.workers.layout_job import enqueue_layout_job, get_job_status
 from common.logger import ServiceLogger
 

@@ -23,18 +23,17 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 FROM python:3.12-slim AS production
 WORKDIR /app
 
-# Install runtime dependencies and gcsfuse
+# Install runtime dependencies
+# libpq5: PostgreSQL client (psycopg2 依存)
+# curl: ヘルスチェック用
+# ca-certificates: HTTPS通信 (GCS, Gemini API 等)
+# libgl1, libglib2.0-0: PyMuPDF wheel に同梱済みのため不要
+# gcsfuse: GCS は Python SDK 経由のため不要
 RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 curl libgl1 libglib2.0-0 \
-    gnupg lsb-release ca-certificates \
-    && curl -fsSL https://packages.cloud.google.com/apt/doc/apt-key.gpg \
-       | gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg \
-    && echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] http://packages.cloud.google.com/apt gcsfuse-$(lsb_release -c -s) main" \
-       | tee /etc/apt/sources.list.d/gcsfuse.list \
-    && apt-get update && apt-get install -y --no-install-recommends gcsfuse
+    libpq5 curl ca-certificates
 
 RUN useradd -m -r appuser && chown -R appuser:appuser /app
 COPY --chown=appuser:appuser --from=runtime-builder /app/.venv /app/.venv
@@ -47,6 +46,9 @@ COPY --chown=appuser:appuser backend/app/ ./app/
 COPY --chown=appuser:appuser common/ ./common/
 COPY --chown=appuser:appuser redis_provider/ ./redis_provider/
 COPY --chown=appuser:appuser backend/scripts/ ./scripts/
+
+# .pyc をビルド時に生成してコールドスタート時の import コストを削減
+RUN python -m compileall -q app/ common/ redis_provider/
 
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONPATH="/app" \

@@ -69,12 +69,12 @@ MATH_UNICODE_LATEX: dict[str, str] = {
     "‡": r"\ddagger ",
     "√": r"\sqrt ",
     # Blackboard bold
-    "ℝ": r"\mathbb{R}",
-    "ℤ": r"\mathbb{Z}",
-    "ℚ": r"\mathbb{Q}",
-    "ℕ": r"\mathbb{N}",
-    "ℂ": r"\mathbb{C}",
-    "𝔼": r"\mathbb{E}",
+    "ℝ": r"\mathbb{R} ",
+    "ℤ": r"\mathbb{Z} ",
+    "ℚ": r"\mathbb{Q} ",
+    "ℕ": r"\mathbb{N} ",
+    "ℂ": r"\mathbb{C} ",
+    "𝔼": r"\mathbb{E} ",
     # Greek lowercase
     "α": r"\alpha ",
     "β": r"\beta ",

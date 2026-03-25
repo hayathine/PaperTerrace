@@ -11,6 +11,7 @@ import io
 import json
 import httpx
 import time
+import traceback
 from typing import Optional
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
@@ -42,6 +43,7 @@ from common.schemas.inference import (
 configure_logging()
 
 INFERENCE_TYPE = str(settings.get("INFERENCE_TYPE", "all")).lower()
+ENABLE_OCR_CROPS = str(settings.get("ENABLE_OCR_CROPS", "false")).lower() == "true"
 
 # サービスインスタンス
 layout_service = None
@@ -69,7 +71,7 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
     except ImportError:
         logger.warning("Translation dependencies not found, skipping import")
 
-if INFERENCE_TYPE in ["all", "ocr"]:
+if INFERENCE_TYPE in ["all", "ocr"] or (INFERENCE_TYPE == "layout" and ENABLE_OCR_CROPS):
     try:
         from services.ocr.ocr_service import PaddleOpenVinoOcrService
     except ImportError:
@@ -140,6 +142,25 @@ app.add_middleware(GZipMiddleware, minimum_size=1000)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """グローバル例外ハンドラー。未キャプチャの例外をログに記録し、500エラーを返す。"""
+    logger.error(
+        f"Global Exception in inference-service: method={request.method} path={request.url.path}"
+    )
+    logger.error(traceback.format_exc())
+
+    return JSONResponse(
+        status_code=500,
+        content={
+            "success": False,
+            "error": "Internal Server Error",
+            "message": str(exc),
+            "traceback": None if str(settings.get("APP_ENV")).lower() == "prod" else traceback.format_exc(),
+        },
+    )
+
 # --------------------------------------------------
 # グローバル状態
 # --------------------------------------------------
@@ -199,7 +220,7 @@ async def ensure_initialized():
             )
             logger.info("TranslationService orchestrator initialized")
 
-        if INFERENCE_TYPE in ["all", "ocr"]:
+        if INFERENCE_TYPE in ["all", "ocr"] or (INFERENCE_TYPE == "layout" and ENABLE_OCR_CROPS):
             ocr_service = PaddleOpenVinoOcrService()
             logger.info("PaddleOpenVinoOcrService initialized")
 
@@ -520,6 +541,93 @@ if INFERENCE_TYPE in ["all", "layout"]:
                 "processing_time": time.time() - start_time,
                 "message": error_msg,
             }
+
+    # --------------------------------------------------
+    # レイアウトクロップ OCR
+    # --------------------------------------------------
+
+    # OCR 対象外クラス（非テキスト要素）
+    _OCR_SKIP_CLASSES = {"table", "figure", "picture", "formula", "chart", "algorithm", "equation"}
+
+    @app.post("/api/v1/ocr-crops")
+    @limiter.limit(settings.get("RATE_LIMIT_OCR", "120/minute"))
+    async def ocr_crops(
+        request: Request,
+        file: UploadFile = File(...),
+        layout_blocks_json: str = Form(...),
+    ):
+        """レイアウトブロック単位でクロップして OCR テキストを抽出する。
+
+        Args:
+            file: ページ画像（JPEG/PNG 等）
+            layout_blocks_json: レイアウト解析結果の JSON（list of blocks）
+                各ブロック: {"bbox": {"x_min":..,"y_min":..,"x_max":..,"y_max":..}, "class_name":..}
+
+        Returns:
+            {"text": "...", "processing_time": ...}
+        """
+        await ensure_initialized()
+
+        if not ocr_service:
+            raise HTTPException(status_code=503, detail="OCR service unavailable (layout pod)")
+
+        start_time = time.time()
+
+        try:
+            image_bytes = await file.read()
+            blocks: list[dict] = json.loads(layout_blocks_json)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid request: {e}")
+
+        def _run_ocr_crops(img_bytes: bytes, blks: list[dict]) -> str:
+            from PIL import Image
+            img = Image.open(io.BytesIO(img_bytes)).convert("RGB")
+            img_w, img_h = img.size
+
+            # y_min 昇順（読み取り順）でソート
+            text_blocks = [
+                b for b in blks
+                if b.get("class_name", "").lower() not in _OCR_SKIP_CLASSES
+            ]
+            text_blocks.sort(key=lambda b: b.get("bbox", {}).get("y_min", 0))
+
+            lines: list[str] = []
+            for block in text_blocks:
+                bbox = block.get("bbox", {})
+                x_min = max(0, int(bbox.get("x_min", 0)))
+                y_min = max(0, int(bbox.get("y_min", 0)))
+                x_max = min(img_w, int(bbox.get("x_max", img_w)))
+                y_max = min(img_h, int(bbox.get("y_max", img_h)))
+
+                if x_max <= x_min or y_max <= y_min:
+                    continue
+
+                crop = img.crop((x_min, y_min, x_max, y_max))
+                buf = io.BytesIO()
+                crop.save(buf, format="JPEG", quality=90)
+                crop_bytes = buf.getvalue()
+
+                text = ocr_service.ocr_page(crop_bytes)
+                if text.strip():
+                    lines.append(text.strip())
+
+            return "\n".join(lines)
+
+        try:
+            text = await run_in_threadpool(_run_ocr_crops, image_bytes, blocks)
+            return OcrPageResponse(
+                success=True,
+                text=text,
+                processing_time=time.time() - start_time,
+            )
+        except Exception as e:
+            logger.exception("OCR crops failed")
+            return OcrPageResponse(
+                success=False,
+                text="",
+                processing_time=time.time() - start_time,
+                message=str(e),
+            )
 
     # --------------------------------------------------
     # レイアウト解析（PDF）

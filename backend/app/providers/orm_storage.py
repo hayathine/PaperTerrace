@@ -476,12 +476,12 @@ class ORMStorageAdapter(StorageInterface):
     def save_session_context(self, session_id: str, paper_id: str) -> None:
         """セッション→論文マッピングをRedisに保存する。"""
         from redis_provider.provider import RedisService
-        RedisService().set(f"session_paper:{session_id}", paper_id, expire=self._SESSION_PAPER_TTL)
+        RedisService().set(f"session_pid:{session_id}", paper_id, expire=self._SESSION_PAPER_TTL)
 
     def get_session_paper_id(self, session_id: str) -> Optional[str]:
         """RedisからセッションIDに対応する論文IDを取得する。"""
         from redis_provider.provider import RedisService
-        val = RedisService().get(f"session_paper:{session_id}")
+        val = RedisService().get(f"session_pid:{session_id}")
         return str(val) if val is not None else None
 
     # ===== Chat history methods =====

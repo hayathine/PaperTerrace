@@ -62,6 +62,11 @@ class InferenceServiceClient:
         # 後方互換
         self.layout_base_url = primary_url
 
+        # OCR crops 専用 URL（OCR 対応 Pod のみ指定 = G3）
+        ocr_crops_url = settings.get("INFERENCE_OCR_CROPS_URL", "")
+        self.ocr_crops_url: str = ocr_crops_url.strip()
+        self.ocr_crops_disabled: bool = not bool(self.ocr_crops_url)
+
         self.timeout = int(settings.get("INFERENCE_SERVICE_TIMEOUT", "60"))
         self.max_retries = int(settings.get("INFERENCE_SERVICE_RETRIES", "2"))
 
@@ -73,9 +78,10 @@ class InferenceServiceClient:
         # 回路ブレーカー設定
         self.failure_threshold = 5
         self.recovery_timeout = 60  # 1分
+        all_urls = self.layout_urls + ([self.ocr_crops_url] if self.ocr_crops_url else [])
         self._circuit_state: dict[str, dict] = {
             url: {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
-            for url in self.layout_urls
+            for url in all_urls
         }
 
         # SSL検証設定
@@ -506,6 +512,53 @@ class InferenceServiceClient:
                 )
                 # 1バッチに失敗しても他のバッチは続ける
                 yield i, [[] for _ in batch], [[] for _ in batch]
+
+    async def ocr_crops(
+        self, img_bytes: bytes, layout_blocks: list[dict]
+    ) -> str:
+        """OCR 対応 Pod（G3）の /api/v1/ocr-crops を呼び出してテキストを取得する。
+
+        INFERENCE_OCR_CROPS_URL に OCR 対応 Pod の URL を設定する必要がある。
+
+        Args:
+            img_bytes: ページ画像バイト（JPEG/PNG 等）
+            layout_blocks: レイアウト解析結果のブロックリスト
+                各ブロック: {"bbox": {"x_min":..,"y_min":..,"x_max":..,"y_max":..}, "class_name":..}
+        Returns:
+            認識テキスト文字列
+        """
+        if self.ocr_crops_disabled:
+            raise InferenceServiceDownError("OCR crops service not configured (INFERENCE_OCR_CROPS_URL not set)")
+
+        cb_key = self.ocr_crops_url
+        if cb_key not in self._circuit_state:
+            self._circuit_state[cb_key] = {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
+        self._check_circuit_breaker(cb_key)
+
+        timeout = int(settings.get("INFERENCE_OCR_TIMEOUT", "120"))
+
+        try:
+            files = {"file": ("page.jpg", img_bytes, "image/jpeg")}
+            data = {"layout_blocks_json": json.dumps(layout_blocks)}
+
+            resp = await self.client.post(
+                f"{self.ocr_crops_url}/api/v1/ocr-crops",
+                files=files,
+                data=data,
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            result = resp.json()
+
+            self._record_success(cb_key)
+            if result.get("success"):
+                return result.get("text", "")
+
+            raise InferenceServiceError(result.get("message", "OCR crops failed"))
+
+        except httpx.HTTPError as e:
+            self._record_failure(cb_key)
+            raise InferenceServiceDownError(f"OCR crops request failed: {e}") from e
 
     async def health_check(self) -> dict[str, Any]:
         """推論サービスのヘルスチェック"""

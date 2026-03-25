@@ -35,6 +35,21 @@ class PaddleOpenVinoOcrService:
             "/app/models/paddle4english/dict.txt",
         )
 
+        # 検出モデルのハイパーパラメータ
+        # 入力解像度: 大きいほど細かい文字を検出できるが推論時間が増加する
+        # 学術論文(150dpi, ~1241x1630px)では1280が最適バランス
+        self.det_input_size: int = int(settings.get("OCR_DET_INPUT_SIZE", "1280"))
+        # DB二値化閾値: 低いほど薄い文字を拾うが誤検出も増える (0.15〜0.35)
+        self.det_thresh: float = float(settings.get("OCR_DET_THRESH", "0.2"))
+        # 膨張カーネルサイズ (W, H): 大きいほど単語を行単位にまとめる
+        # 行全体をまとめると認識モデルのmax_wで圧縮され精度低下するため小さく設定
+        self.det_dilate_ksize_w: int = int(settings.get("OCR_DET_DILATE_KSIZE_W", "20"))
+        self.det_dilate_ksize_h: int = int(settings.get("OCR_DET_DILATE_KSIZE_H", "3"))
+        # 膨張繰り返し回数
+        self.det_dilate_iter: int = int(settings.get("OCR_DET_DILATE_ITER", "2"))
+        # 最小 bbox 幅: 単一文字レベルの細切れ検出を排除する閾値（px, 1280px 入力換算）
+        self.det_min_bbox_width: int = int(settings.get("OCR_DET_MIN_BBOX_WIDTH", "25"))
+
         self.compiled_det = None
         self.compiled_rec = None
         self.det_request_pool: queue.Queue = queue.Queue()
@@ -70,20 +85,23 @@ class PaddleOpenVinoOcrService:
         os.makedirs(cache_dir, exist_ok=True)
         core.set_property({"CACHE_DIR": cache_dir})
 
-        # 検出モデル: 逐次処理が主なため LATENCY 優先
+        det_pool_size: int = int(settings.get("OCR_DET_POOL_SIZE", "2"))
+        rec_pool_size: int = int(settings.get("OCR_REC_POOL_SIZE", "4"))
+
+        # 検出モデル: THROUGHPUT 優先、プールサイズは OCR_DET_POOL_SIZE で制御
         det_model = core.read_model(self.det_model_path)
         self.compiled_det = core.compile_model(
-            det_model, "CPU", {"PERFORMANCE_HINT": "LATENCY"}
+            det_model, "CPU", {"PERFORMANCE_HINT": "THROUGHPUT"}
         )
-        for _ in range(2):
+        for _ in range(det_pool_size):
             self.det_request_pool.put(self.compiled_det.create_infer_request())
 
-        # 認識モデル: 複数クロップを並列認識するため複数リクエストを用意
+        # 認識モデル: プールサイズは OCR_REC_POOL_SIZE で制御
         rec_model = core.read_model(self.rec_model_path)
         self.compiled_rec = core.compile_model(
-            rec_model, "CPU", {"PERFORMANCE_HINT": "LATENCY"}
+            rec_model, "CPU", {"PERFORMANCE_HINT": "THROUGHPUT"}
         )
-        for _ in range(4):
+        for _ in range(rec_pool_size):
             self.rec_request_pool.put(self.compiled_rec.create_infer_request())
 
         logger.info("PaddleOpenVinoOcrService initialized successfully")
@@ -95,13 +113,16 @@ class PaddleOpenVinoOcrService:
     def _preprocess_det(
         self, img_bgr: np.ndarray
     ) -> tuple[np.ndarray, float, float, int, int]:
-        """検出モデル用の前処理。640x640 にリサイズして正規化する。
+        """検出モデル用の前処理。OCR_DET_INPUT_SIZE にリサイズして正規化する。
+
+        モデルは動的入力サイズ対応のため、OCR_DET_INPUT_SIZE で解像度を制御できる。
+        学術論文など高密度テキストでは 1280 が 640 より大幅に精度向上する。
 
         Returns:
             (tensor, scale_x, scale_y, pad_x, pad_y)
         """
         orig_h, orig_w = img_bgr.shape[:2]
-        target = 640
+        target = self.det_input_size
 
         scale = min(target / orig_w, target / orig_h)
         new_w = int(orig_w * scale)
@@ -139,24 +160,29 @@ class PaddleOpenVinoOcrService:
         scale_y: float,
         pad_x: int,
         pad_y: int,
-        thresh: float = 0.3,
     ) -> list[tuple[int, int, int, int]]:
         """DB モデルの確率マップをテキスト領域の bbox リストに変換する。
 
-        Args:
-            prob_map: shape (1, 1, H, W) の確率マップ
+        ハイパーパラメータは設定ファイルで制御:
+          OCR_DET_THRESH         二値化閾値 (default: 0.2)
+          OCR_DET_DILATE_KSIZE_W 膨張カーネル幅 (default: 3)
+          OCR_DET_DILATE_KSIZE_H 膨張カーネル高さ (default: 2)
+          OCR_DET_DILATE_ITER    膨張繰り返し回数 (default: 1)
+
         Returns:
             [(x_min, y_min, x_max, y_max), ...] のリスト（Y 座標昇順）
         """
-        # (1,1,640,640) → (640,640)
         score_map = prob_map[0, 0]
 
         # 二値化
-        binary = (score_map > thresh).astype(np.uint8) * 255
+        binary = (score_map > self.det_thresh).astype(np.uint8) * 255
 
-        # 膨張してテキスト行をつなげる
-        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (9, 3))
-        dilated = cv2.dilate(binary, kernel, iterations=1)
+        # 膨張してテキスト領域をつなげる
+        kernel = cv2.getStructuringElement(
+            cv2.MORPH_RECT,
+            (self.det_dilate_ksize_w, self.det_dilate_ksize_h),
+        )
+        dilated = cv2.dilate(binary, kernel, iterations=self.det_dilate_iter)
 
         contours, _ = cv2.findContours(
             dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
@@ -177,8 +203,8 @@ class PaddleOpenVinoOcrService:
             x_max = min(orig_w, x_orig + w_orig)
             y_max = min(orig_h, y_orig + h_orig)
 
-            # 小さすぎる領域を除外
-            if (x_max - x_min) < 10 or (y_max - y_min) < 5:
+            # 小さすぎる領域を除外（単一文字レベルの細切れ検出を排除）
+            if (x_max - x_min) < self.det_min_bbox_width or (y_max - y_min) < 5:
                 continue
 
             bboxes.append((x_min, y_min, x_max, y_max))

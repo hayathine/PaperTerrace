@@ -28,19 +28,45 @@ log = ServiceLogger("OCR")
 
 def _is_garbled_text(text: str) -> bool:
     """
-    (cid:N) やフォントエンコーディング由来の文字化けが含まれるか判定する。
+    フォントエンコーディング由来の文字化けが含まれるか判定する。
 
-    PDFのToUnicode CMAPが欠損・破損している場合、pdfplumberやPyMuPDFは
-    グリフをUnicodeにマッピングできず (cid:N) をそのまま出力する。
-    5個以上、またはテキスト全体の0.5%以上を占める場合に化けと判定する。
+    以下の4パターンをカバーする:
+
+    1. (cid:N) ― pdfplumber が ToUnicode CMap 欠損時に出力するリテラル文字列。
+    2. Unicode 置換文字 U+FFFD ― デコード失敗を示す明示的マーカー。
+    3. Unicode Private Use Area U+E000〜U+F8FF ― PDFカスタムフォントが
+       グリフをPUA領域にマッピングする場合に発生（本PDFの主因）。
+    4. Unicode Supplementary PUA U+F0000〜U+FFFFF ― 同上、補助面版。
+
+    各パターンについて「5文字以上」または「テキスト全体の0.5%以上」で
+    文字化けと判定する。
     """
     if not text:
         return False
+
+    text_len = max(len(text), 1)
+    threshold_ratio = 0.005
+
+    # 1. (cid:N) パターン
     cid_count = text.count("(cid:")
-    if cid_count >= 5:
+    if cid_count >= 5 or (cid_count > 0 and cid_count / text_len > threshold_ratio):
         return True
-    if cid_count > 0 and cid_count / max(len(text), 1) > 0.005:
+
+    # 2. Unicode 置換文字 U+FFFD
+    repl_count = text.count("\uFFFD")
+    if repl_count >= 5 or (repl_count > 0 and repl_count / text_len > threshold_ratio):
         return True
+
+    # 3. Unicode Private Use Area (BMP): U+E000〜U+F8FF
+    pua_count = sum(1 for c in text if "\uE000" <= c <= "\uF8FF")
+    if pua_count >= 5 or (pua_count > 0 and pua_count / text_len > threshold_ratio):
+        return True
+
+    # 4. Unicode Supplementary PUA: U+F0000〜U+FFFFF
+    sup_pua_count = sum(1 for c in text if "\U000F0000" <= c <= "\U000FFFFF")
+    if sup_pua_count >= 5 or (sup_pua_count > 0 and sup_pua_count / text_len > threshold_ratio):
+        return True
+
     return False
 
 
@@ -496,7 +522,11 @@ class PDFOCRService:
 
                 # テキストが空（スキャン PDF）、(cid:N) 文字化け、または極端に短い場合は OCR フォールバックへ
                 is_empty = not page_text.strip()
-                is_garbled = _is_garbled_text(page_text)
+                # pymupdf4llm はフォントエンコーディングエラーを ASCII シフト文字として出力するため
+                # そのパターンを検出できない場合がある。pdfplumber (Phase 1) は \uFFFD を出力するため
+                # 両方をチェックして文字化けを正確に判定する。
+                phase1_text = (page_data.get("phase1_result") or ("", "", "", "", "", "", ""))[2] or ""
+                is_garbled = _is_garbled_text(page_text) or _is_garbled_text(phase1_text)
                 _min_page_text_len = int(
                     settings.get("INFERENCE_OCR_MIN_PAGE_TEXT_LEN", 100)
                 )
@@ -520,7 +550,11 @@ class PDFOCRService:
                         cid_count=page_text.count("(cid:"),
                     )
                     fallback = await self._ocr_fallback(
-                        page_data["img_bytes"], page_num
+                        page_data["img_bytes"],
+                        page_num,
+                        layout_blocks=layout_blocks,
+                        img_width=int(layout_data.get("width", 0)),
+                        img_height=int(layout_data.get("height", 0)),
                     )
                     if fallback:
                         page_text = fallback
@@ -676,28 +710,98 @@ class PDFOCRService:
             layout_data,
         )
 
-    async def _ocr_fallback(self, img_bytes: bytes, page_num: int) -> str:
+    @staticmethod
+    def _make_line_bboxes_from_layout(
+        layout_blocks: list,
+        img_width: int,
+        img_height: int,
+        line_height: int,
+    ) -> list[dict]:
+        """レイアウトブロックを水平ラインストリップに分割して OCR 用 bbox リストを生成する。
+
+        各テキスト系ブロックを line_height px のストリップに縦分割する。
+        図・グラフ等の非テキストブロックは除外する。
         """
-        フォントエンコーディング問題でテキスト抽出が失敗した場合に
-        ローカル OCR サービス（PaddleOCR / OpenVINO）にフォールバックしてプレーンテキストを返す。
+        NON_TEXT_CLASSES = {"figure", "picture", "chart", "image", "seal"}
+        bboxes: list[dict] = []
+
+        for block in layout_blocks:
+            class_name = block.get("class_name", "").lower()
+            if any(cls in class_name for cls in NON_TEXT_CLASSES):
+                continue
+
+            raw_bbox = block.get("bbox", {})
+            if not isinstance(raw_bbox, dict):
+                continue
+
+            x_min = max(0, int(raw_bbox.get("x_min", 0)))
+            y_min = max(0, int(raw_bbox.get("y_min", 0)))
+            x_max = min(img_width, int(raw_bbox.get("x_max", img_width)))
+            y_max = min(img_height, int(raw_bbox.get("y_max", img_height)))
+
+            if x_max <= x_min or y_max <= y_min:
+                continue
+
+            # ブロックを line_height px のストリップに縦分割
+            y = y_min
+            while y < y_max:
+                strip_y_max = min(y + line_height, y_max)
+                # 高さが line_height の半分未満のストリップは認識精度が低いため除外
+                if (strip_y_max - y) >= line_height // 2:
+                    bboxes.append(
+                        {
+                            "x_min": x_min,
+                            "y_min": y,
+                            "x_max": x_max,
+                            "y_max": strip_y_max,
+                        }
+                    )
+                y += line_height
+
+        return bboxes
+
+    async def _ocr_fallback(
+        self,
+        img_bytes: bytes,
+        page_num: int,
+        layout_blocks: list | None = None,
+        img_width: int = 0,
+        img_height: int = 0,
+    ) -> str:
+        """
+        テキスト抽出が失敗した場合にレイアウトサービスの ocr-crops エンドポイントで
+        フォールバック OCR を実行してプレーンテキストを返す。
+
+        layout_blocks が提供された場合、レイアウトクロップ単位で OCR を実行する（高精度）。
+        layout_blocks が空の場合は検出モデルによる自動検出にフォールバックする。
         """
         try:
-            from app.providers.inference_client import get_ocr_client
+            from app.providers.inference_client import get_inference_client
 
-            ocr_client = await get_ocr_client()
-            if ocr_client.is_available():
+            inference_client = await get_inference_client()
+
+            if layout_blocks:
                 log.info(
                     "_ocr_fallback",
-                    "Falling back to local OCR service",
+                    "Layout-crop OCR fallback via layout service",
+                    page_num=page_num,
+                    block_count=len(layout_blocks),
+                )
+                text = await inference_client.ocr_crops(img_bytes, layout_blocks)
+            else:
+                log.info(
+                    "_ocr_fallback",
+                    "Detection-based OCR fallback (no layout blocks)",
                     page_num=page_num,
                 )
-                text = await ocr_client.ocr_page(img_bytes)
-                if text and text.strip():
-                    return text
+                text = await inference_client.ocr_crops(img_bytes, [])
+
+            if text and text.strip():
+                return text
         except Exception as e:
             log.warning(
                 "_ocr_fallback",
-                "Local OCR fallback failed",
+                "OCR crops fallback failed",
                 page_num=page_num,
                 error=str(e),
             )
@@ -730,6 +834,9 @@ class PDFOCRService:
             rect = drawing["rect"]
             area = rect.width * rect.height
             aspect = rect.width / rect.height if rect.height > 0 else 999
+            # ページ全体を覆う背景矩形（>80%）はredact対象外にする
+            if area > page_area * 0.80:
+                continue
             if area > page_area * 0.01 and aspect < 20:
                 all_exclude.append([rect.x0, rect.y0, rect.x1, rect.y1])
 
