@@ -5,9 +5,79 @@ from fastapi import Request
 from fastapi.responses import JSONResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from app.core.config import get_redis_url, is_production
+from common.config import settings
 from common.logger import ServiceLogger
 
-log = ServiceLogger("Middleware")
+mw_log = ServiceLogger("Middleware")
+
+
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    """
+    IPアドレス / ユーザーIDベースの固定ウィンドウレートリミット。
+    Redis が利用不可の場合は制限をスキップし、可用性を優先する。
+    - 登録ユーザー: RATE_LIMIT_REGISTERED req/分 (デフォルト 120)
+    - ゲスト:       RATE_LIMIT_GUEST req/分 (デフォルト 30)
+    """
+
+    WINDOW_SECONDS = 60
+    REGISTERED_LIMIT = int(settings.get("RATE_LIMIT_REGISTERED", "120"))
+    GUEST_LIMIT = int(settings.get("RATE_LIMIT_GUEST", "30"))
+    # レートリミット対象外のパス
+    _SKIP_PATHS = frozenset(["/api/health", "/health", "/"])
+    # レートリミット対象外のプレフィックス（ポーリング系エンドポイント）
+    _SKIP_PREFIXES = ("/api/layout-jobs/",)
+
+    def __init__(self, app):
+        super().__init__(app)
+        try:
+            from redis import Redis
+
+            client = Redis.from_url(
+                get_redis_url(), socket_connect_timeout=1, decode_responses=True
+            )
+            client.ping()
+            self._redis = client
+        except Exception:
+            self._redis = None
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path in self._SKIP_PATHS:
+            return await call_next(request)
+
+        if any(request.url.path.startswith(p) for p in self._SKIP_PREFIXES):
+            return await call_next(request)
+
+        if not self._redis:
+            return await call_next(request)
+
+        # TrustedProxyMiddleware が先に設定した user_id を使用
+        user_id = getattr(request.state, "user_id", None)
+        identifier = user_id or (request.client.host if request.client else "unknown")
+        limit = self.REGISTERED_LIMIT if user_id else self.GUEST_LIMIT
+        key = f"rate:{identifier}"
+
+        try:
+            count = self._redis.incr(key)
+            if count == 1:
+                self._redis.expire(key, self.WINDOW_SECONDS)
+
+            if count > limit:
+                retry_after = self._redis.ttl(key)
+                return JSONResponse(
+                    status_code=429,
+                    content={
+                        "error": "Too Many Requests",
+                        "message": "リクエスト制限に達しました。しばらく待ってから再試行してください。",
+                    },
+                    headers={"Retry-After": str(max(retry_after, 1))},
+                )
+        except Exception as e:
+            mw_log.warning(
+                "rate_limit", "Redis error, skipping rate limit", error=str(e)
+            )
+
+        return await call_next(request)
 
 
 class TrustedProxyMiddleware(BaseHTTPMiddleware):
@@ -21,7 +91,7 @@ class TrustedProxyMiddleware(BaseHTTPMiddleware):
         user_id = request.headers.get("x-user-id")
         if user_id:
             request.state.user_id = user_id
-            log.debug("trusted_proxy", "Request authenticated", user_id=user_id)
+            mw_log.debug("auth", "Request authenticated", user_id=user_id)
 
         return await call_next(request)
 
@@ -34,20 +104,15 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next):
         start_time = time.time()
-        path = request.url.path
-        is_noisy_path = (
-            path == "/api/health"
-            or path.startswith("/static/")
-            or path == "/api/analyze-layout-lazy"
-        )
-        log_func = log.debug if is_noisy_path else log.info
+        if request.url.path in ["/api/health", "/health"]:
+            return await call_next(request)
 
         # Log request start
-        log_func(
-            "dispatch",
-            "Request started",
+        mw_log.info(
+            "request",
+            "started",
             method=request.method,
-            path=path,
+            path=request.url.path,
             query_params=str(request.query_params),
             client_host=request.client.host if request.client else "unknown",
         )
@@ -57,30 +122,46 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             duration = time.time() - start_time
 
             # Log request completion
-            log_func(
-                "dispatch",
-                "Request completed",
+            mw_log.info(
+                "request",
+                "completed",
                 method=request.method,
                 path=request.url.path,
                 status_code=response.status_code,
                 duration_ms=round(duration * 1000, 2),
             )
-
             return response
-        except Exception as e:
+        except BaseException as e:
+            if isinstance(e, (KeyboardInterrupt, SystemExit, GeneratorExit)):
+                raise
+
             duration = time.time() - start_time
-            log.error(
-                "dispatch",
-                "Request failed",
+
+            # Handle ExceptionGroup/BaseExceptionGroup specifically for better logging
+            error_msg_detail = str(e)
+            if hasattr(e, "exceptions"):
+                sub_errors = [str(se) for se in getattr(e, "exceptions")]
+                error_msg_detail = f"{type(e).__name__}: {'; '.join(sub_errors)}"
+
+            mw_log.error(
+                "request",
+                "failed",
                 method=request.method,
                 path=request.url.path,
-                error=str(e),
+                error=error_msg_detail,
                 error_type=type(e).__name__,
                 duration_ms=round(duration * 1000, 2),
             )
+            mw_log.error("request", traceback.format_exc())
 
-            log.error("dispatch", traceback.format_exc())
+            # Hide detailed error message from end users in production
+            error_msg = (
+                error_msg_detail
+                if not is_production()
+                else "An unexpected error occurred. Please try again later."
+            )
+
             return JSONResponse(
                 status_code=500,
-                content={"error": "Internal Server Error", "message": str(e)},
+                content={"error": "Internal Server Error", "message": error_msg},
             )

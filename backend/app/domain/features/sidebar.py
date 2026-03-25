@@ -2,7 +2,7 @@
 sidebarに用語やノートを表示・保存する機能を提供するモジュール
 
 ノートの保存先・キャッシュ戦略:
-- 登録ユーザー: Cloud SQL に永続保存 + Redis に読み取りキャッシュ (write-invalidate)
+- 登録ユーザー: DB に永続保存 + Redis に読み取りキャッシュ (write-invalidate)
 - ゲスト:       Redis にセッション限定で一時保存 (TTL: 1時間)
 
 キャッシュキー設計:
@@ -180,7 +180,7 @@ class SidebarNoteService:
             }
 
             if self._is_registered(user_id):
-                # 登録ユーザー: Cloud SQL に永続保存し、読み取りキャッシュを invalidate
+                # 登録ユーザー: DB に永続保存し、読み取りキャッシュを invalidate
                 self.storage.save_note(
                     note_id,
                     session_id,
@@ -232,7 +232,7 @@ class SidebarNoteService:
         """
         Get all notes for a session or user.
 
-        登録ユーザーはRedisキャッシュを優先し、ミス時のみCloud SQLに問い合わせる。
+        登録ユーザーはRedisキャッシュを優先し、ミス時のみDBに問い合わせる。
 
         Args:
             session_id: The session identifier
@@ -244,7 +244,7 @@ class SidebarNoteService:
         """
         try:
             if self._is_registered(user_id):
-                # キャッシュヒット: Cloud SQL へのアクセスを省略
+                # キャッシュヒット: DB へのアクセスを省略
                 cached = self._get_cached_user_notes(user_id, paper_id)
                 if cached is not None:
                     logger.info(
@@ -257,7 +257,7 @@ class SidebarNoteService:
                     )
                     return cached
 
-                # キャッシュミス: Cloud SQL から取得してキャッシュに書き込む
+                # キャッシュミス: DB から取得してキャッシュに書き込む
                 notes = self.storage.get_notes(
                     session_id, paper_id=paper_id, user_id=user_id
                 )

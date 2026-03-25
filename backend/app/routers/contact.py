@@ -2,7 +2,7 @@
 お問い合わせ・要望受付ルーター。
 
 フロー:
-  1. Cloud SQL (PostgreSQL) の contact_requests テーブルへ永続化
+  1. DB (PostgreSQL) の contact_requests テーブルへ永続化
   2. DB 保存成功をトリガーに BackgroundTasks で Gmail 送信
      → API レスポンスはメール送信完了を待たずに即返却
 """
@@ -11,7 +11,6 @@ import smtplib
 import uuid
 from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
-from common import settings
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from sqlalchemy.orm import Session
@@ -19,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.models.orm.contact import ContactRequest as ContactRequestORM
 from app.schemas.contact import ContactRequest
+from common import settings
 from common.logger import ServiceLogger
 
 log = ServiceLogger("Contact")
@@ -114,7 +114,7 @@ async def submit_contact(
     db: Session = Depends(get_db),
 ):
     """
-    1. Cloud SQL (contact_requests テーブル) へ保存
+    1. DB (contact_requests テーブル) へ保存
     2. DB 保存成功をトリガーに BackgroundTasks でメール送信
     クライアントにはメール完了を待たず即座にレスポンスを返す。
     """

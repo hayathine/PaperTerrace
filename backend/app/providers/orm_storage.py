@@ -1,8 +1,8 @@
 """
 ORMStorageAdapter: StorageInterface を SQLAlchemy ORM リポジトリで実装するアダプター。
 
-生 SQL を使った PostgreSQLStorage / CloudSQLStorage の代替として、
-ORM モデルを単一の変更箇所として扱えるようにする。
+ORM モデルを単一の変更箇所として、
+全ての DB アクセスをリポジトリ経由に統一する。
 """
 
 import json

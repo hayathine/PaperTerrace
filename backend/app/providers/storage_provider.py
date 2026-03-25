@@ -1,8 +1,6 @@
 """
 Storage Provider abstraction layer.
-Supports SQLite (current) and Cloud SQL/GCS (future GCP deployment).
 """
-
 
 import sqlite3
 from abc import ABC, abstractmethod
@@ -1212,6 +1210,7 @@ class SQLiteStorage(StorageInterface):
 #   We therefore cache only the SQLiteStorage singleton; for ORM mode we
 #   create a fresh Session (and adapter) per call.
 _sqlite_singleton: SQLiteStorage | None = None
+_postgresql_singleton = None
 _orm_mode: bool = False
 
 
@@ -1225,13 +1224,19 @@ def get_storage_provider() -> StorageInterface:
     DATABASE_URL または DB_USER/DB_HOST 等の環境変数が設定されている場合は
     PostgreSQL モードになる。
     """
-    global _sqlite_singleton, _orm_mode
+    global _sqlite_singleton, _postgresql_singleton, _orm_mode
 
     database_url = settings.get("DATABASE_URL")
-    default_provider = "orm" if database_url else "sqlite"
+    default_provider = "postgresql" if database_url else "sqlite"
     provider_type = str(settings.get("STORAGE_PROVIDER", default_provider)).lower()
 
-    if provider_type in ["cloudsql", "postgresql", "neon", "orm"]:
+    if provider_type in ["postgresql", "neon"]:
+        from app.providers.postgresql_storage import PostgreSQLStorage
+
+        if _postgresql_singleton is None:
+            _postgresql_singleton = PostgreSQLStorage()
+        return _postgresql_singleton
+    elif provider_type in ["cloudsql", "orm"]:
         # Always create a fresh session per call so that a failed DB
         # operation in one request cannot poison subsequent requests.
         from app.database import SessionLocal

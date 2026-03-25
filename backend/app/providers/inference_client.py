@@ -62,6 +62,11 @@ class InferenceServiceClient:
         # 後方互換
         self.layout_base_url = primary_url
 
+        # Qwen 翻訳用 URL
+        qwen_url = settings.get("INFERENCE_QWEN_URL", "")
+        self.qwen_url: str = qwen_url.strip()
+        self.qwen_disabled: bool = not bool(self.qwen_url)
+
         # OCR crops 専用 URL（OCR 対応 Pod のみ指定 = G3）
         ocr_crops_url = settings.get("INFERENCE_OCR_CROPS_URL", "")
         self.ocr_crops_url: str = ocr_crops_url.strip()
@@ -78,7 +83,7 @@ class InferenceServiceClient:
         # 回路ブレーカー設定
         self.failure_threshold = 5
         self.recovery_timeout = 60  # 1分
-        all_urls = self.layout_urls + ([self.ocr_crops_url] if self.ocr_crops_url else [])
+        all_urls = self.layout_urls + ([self.ocr_crops_url] if self.ocr_crops_url else []) + ([self.qwen_url] if self.qwen_url else [])
         self._circuit_state: dict[str, dict] = {
             url: {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
             for url in all_urls
@@ -516,17 +521,7 @@ class InferenceServiceClient:
     async def ocr_crops(
         self, img_bytes: bytes, layout_blocks: list[dict]
     ) -> str:
-        """OCR 対応 Pod（G3）の /api/v1/ocr-crops を呼び出してテキストを取得する。
-
-        INFERENCE_OCR_CROPS_URL に OCR 対応 Pod の URL を設定する必要がある。
-
-        Args:
-            img_bytes: ページ画像バイト（JPEG/PNG 等）
-            layout_blocks: レイアウト解析結果のブロックリスト
-                各ブロック: {"bbox": {"x_min":..,"y_min":..,"x_max":..,"y_max":..}, "class_name":..}
-        Returns:
-            認識テキスト文字列
-        """
+        """OCR 対応 Pod（G3）の /api/v1/ocr-crops を呼び出してテキストを取得する。"""
         if self.ocr_crops_disabled:
             raise InferenceServiceDownError("OCR crops service not configured (INFERENCE_OCR_CROPS_URL not set)")
 
@@ -559,6 +554,48 @@ class InferenceServiceClient:
         except httpx.HTTPError as e:
             self._record_failure(cb_key)
             raise InferenceServiceDownError(f"OCR crops request failed: {e}") from e
+
+    async def translate_text(
+        self, text: str, tgt_lang: str = "ja", paper_context: str | None = None
+    ) -> str:
+        """Qwen 翻訳 Pod を呼び出して翻訳を実行する。"""
+        if self.qwen_disabled:
+            raise InferenceServiceDownError("Qwen translation service not configured (INFERENCE_QWEN_URL not set)")
+
+        cb_key = self.qwen_url
+        if cb_key not in self._circuit_state:
+            self._circuit_state[cb_key] = {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
+        self._check_circuit_breaker(cb_key)
+
+        timeout = int(settings.get("INFERENCE_TRANSLATE_TIMEOUT", "120"))
+
+        try:
+            payload = {
+                "text": text,
+                "tgt_lang": tgt_lang,
+                "paper_context": paper_context,
+            }
+            log.debug("translate_text", "Qwen翻訳リクエスト", text_len=len(text))
+
+            resp = await self.client.post(
+                f"{self.qwen_url}/api/v1/translate",
+                json=payload,
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            result = resp.json()
+
+            self._record_success(cb_key)
+            if result.get("success"):
+                log.info("translate_text", "Qwen翻訳成功", word=text[:20])
+                return result.get("translation", "")
+
+            raise InferenceServiceError(result.get("message", "Qwen translation failed"))
+
+        except httpx.HTTPError as e:
+            self._record_failure(cb_key)
+            log.error("translate_text", "Qwen翻訳リクエスト失敗", error=str(e))
+            raise InferenceServiceDownError(f"Qwen translation request failed: {e}") from e
 
     async def health_check(self) -> dict[str, Any]:
         """推論サービスのヘルスチェック"""
