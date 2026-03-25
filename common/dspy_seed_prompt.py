@@ -249,4 +249,15 @@ Based on the provided image and paper context, answer the user's question in {la
 Please provide a clear and easy-to-understand explanation in {lang_name}.
 """
 
-PDF_EXTRACT_TEXT_OCR_PROMPT = "Transcribe the text from this PDF page preserving the structure as much as possible."
+PDF_EXTRACT_TEXT_OCR_PROMPT = """\
+Extract all body text from this academic paper page image and format it as Markdown.
+
+Rules:
+- Use `#` / `##` / `###` for section headings and subheadings based on font size and position.
+- Preserve paragraph breaks with a blank line between paragraphs.
+- Preserve inline formatting: bold, italic, equations as-is.
+- **Omit** figure captions, table captions, and footnotes entirely.
+- **Omit** page numbers, headers, and footers.
+- Do NOT add any commentary or explanation — output transcribed text only.
+- If a line is clearly a continuation of the previous paragraph (e.g., hyphenated word at line break), join them.
+"""

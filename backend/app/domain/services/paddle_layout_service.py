@@ -54,9 +54,7 @@ class PaddleLayoutService:
             if target_pages is None:
                 try:
                     with pdfplumber.open(pdf_path) as pdf:
-                        total_pages = len(pdf.pages)
-                        target_pages = list(range(total_pages))
-                        target_pages = list(range(total_pages))
+                        target_pages = list(range(len(pdf.pages)))
 
                 except Exception as e:
                     log.error(

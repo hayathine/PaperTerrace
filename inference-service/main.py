@@ -605,9 +605,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
                 crop = img.crop((x_min, y_min, x_max, y_max))
                 buf = io.BytesIO()
                 crop.save(buf, format="JPEG", quality=90)
-                crop_bytes = buf.getvalue()
-
-                text = ocr_service.ocr_page(crop_bytes)
+                text = ocr_service.ocr_page(buf.getvalue())
                 if text.strip():
                     lines.append(text.strip())
 

@@ -769,39 +769,33 @@ class PDFOCRService:
         img_height: int = 0,
     ) -> str:
         """
-        テキスト抽出が失敗した場合にレイアウトサービスの ocr-crops エンドポイントで
-        フォールバック OCR を実行してプレーンテキストを返す。
+        テキスト抽出が失敗した場合に Gemini Vision でフォールバック OCR を実行する。
 
-        layout_blocks が提供された場合、レイアウトクロップ単位で OCR を実行する（高精度）。
-        layout_blocks が空の場合は検出モデルによる自動検出にフォールバックする。
+        ページ画像を Gemini に渡し、タイトル・見出しを考慮した Markdown 形式で
+        本文テキストを抽出する。図表キャプションは除去される。
         """
+        from common.dspy_seed_prompt import PDF_EXTRACT_TEXT_OCR_PROMPT
+
         try:
-            from app.providers.inference_client import get_inference_client
-
-            inference_client = await get_inference_client()
-
-            if layout_blocks:
-                log.info(
-                    "_ocr_fallback",
-                    "Layout-crop OCR fallback via layout service",
-                    page_num=page_num,
-                    block_count=len(layout_blocks),
-                )
-                text = await inference_client.ocr_crops(img_bytes, layout_blocks)
-            else:
-                log.info(
-                    "_ocr_fallback",
-                    "Detection-based OCR fallback (no layout blocks)",
-                    page_num=page_num,
-                )
-                text = await inference_client.ocr_crops(img_bytes, [])
-
+            ai = await get_ai_provider()
+            log.info(
+                "_ocr_fallback",
+                "Gemini Vision OCR fallback",
+                page_num=page_num,
+            )
+            ocr_model = settings.get("MODEL_OCR", settings.get("MODEL_SUMMARY", "gemini-2.5-flash-lite"))
+            text = await ai.generate_with_image(
+                prompt=PDF_EXTRACT_TEXT_OCR_PROMPT,
+                image_bytes=img_bytes,
+                mime_type="image/jpeg",
+                model=ocr_model,
+            )
             if text and text.strip():
-                return text
+                return text.strip()
         except Exception as e:
             log.warning(
                 "_ocr_fallback",
-                "OCR crops fallback failed",
+                "Gemini Vision OCR fallback failed",
                 page_num=page_num,
                 error=str(e),
             )

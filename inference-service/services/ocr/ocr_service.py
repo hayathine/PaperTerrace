@@ -85,21 +85,21 @@ class PaddleOpenVinoOcrService:
         os.makedirs(cache_dir, exist_ok=True)
         core.set_property({"CACHE_DIR": cache_dir})
 
-        det_pool_size: int = int(settings.get("OCR_DET_POOL_SIZE", "2"))
-        rec_pool_size: int = int(settings.get("OCR_REC_POOL_SIZE", "4"))
+        det_pool_size: int = int(settings.get("OCR_DET_POOL_SIZE", "1"))
+        rec_pool_size: int = int(settings.get("OCR_REC_POOL_SIZE", "1"))
 
-        # 検出モデル: THROUGHPUT 優先、プールサイズは OCR_DET_POOL_SIZE で制御
+        # 検出モデル: LATENCY モード（クロップ逐次処理のため並列不要、メモリ節約）
         det_model = core.read_model(self.det_model_path)
         self.compiled_det = core.compile_model(
-            det_model, "CPU", {"PERFORMANCE_HINT": "THROUGHPUT"}
+            det_model, "CPU", {"PERFORMANCE_HINT": "LATENCY"}
         )
         for _ in range(det_pool_size):
             self.det_request_pool.put(self.compiled_det.create_infer_request())
 
-        # 認識モデル: プールサイズは OCR_REC_POOL_SIZE で制御
+        # 認識モデル: LATENCY モード（同上）
         rec_model = core.read_model(self.rec_model_path)
         self.compiled_rec = core.compile_model(
-            rec_model, "CPU", {"PERFORMANCE_HINT": "THROUGHPUT"}
+            rec_model, "CPU", {"PERFORMANCE_HINT": "LATENCY"}
         )
         for _ in range(rec_pool_size):
             self.rec_request_pool.put(self.compiled_rec.create_infer_request())
@@ -243,19 +243,18 @@ class PaddleOpenVinoOcrService:
     def _preprocess_rec(self, crop_bgr: np.ndarray) -> np.ndarray:
         """認識モデル用の前処理。高さ 48px に正規化する（PP-OCRv5 実モデル仕様）。
 
-        PP-OCRv5 (SVTRv2) は内部で複数回 stride 2 の Pooling を行うため、
-        幅は最低 32px 必要。不足時はゼロパディングして保証する。
+        PP-OCRv5 (SVTRv2) は動的幅対応のため max_w 制限は設けない。
+        幅は最低 32px 必要（AveragePool の kernel 幅が縮小後に 1 以下になるのを防ぐ）。
         """
         target_h = 48
         min_w = 32   # AveragePool の kernel 幅が縮小後に 1 以下になるのを防ぐ
-        max_w = 320
 
         h, w = crop_bgr.shape[:2]
         if h == 0 or w == 0:
             return np.zeros((1, 3, target_h, min_w), dtype=np.float32)
 
         scale = target_h / h
-        new_w = max(min_w, min(int(w * scale), max_w))
+        new_w = max(min_w, int(w * scale))
 
         resized = cv2.resize(crop_bgr, (new_w, target_h), interpolation=cv2.INTER_LINEAR)
 

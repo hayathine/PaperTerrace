@@ -14,6 +14,7 @@ VERTEX_MODEL = "gemini-2.5-flash-lite"
 MODEL_CHAT = "gemini-2.5-flash-lite"
 MODEL_SUMMARY = "gemini-2.5-flash-lite"
 MODEL_TRANSLATE = "gemini-2.5-flash-lite"
+MODEL_OCR = "gemini-2.5-flash-lite"
 FIGURE_EXPLAIN_MODEL = "gemini-2.5-flash-lite"
 DSPY_MODEL = "vertex_ai/gemini-2.5-flash-lite"
 LAYOUT_PARSER_TYPE = "gemini"
@@ -69,24 +70,21 @@ OCR_LINE_HEIGHT_PX = 35
 RATE_LIMIT_OCR = "120/minute"
 
 # OCR 検出モデルのハイパーパラメータ
-# 入力解像度: モデルは動的サイズ対応。学術論文では 1280 が 640 より大幅に精度向上
-# メモリ要件: 1280px + 並列4リクエストで ~3.5GB → pod limit 4Gi が必要
-OCR_DET_INPUT_SIZE = 1280
+# 入力解像度: 640 が 1280 より高速かつ同等以上の精度（適度なスムージングでノイズ除去）
+# 認識モデルは動的幅対応のため max_w 制約なし → 640 でも行全体を正確に認識可能
+OCR_DET_INPUT_SIZE = 640
 # DB 二値化閾値: 低いほど薄い文字を拾う (0.15〜0.35)
 OCR_DET_THRESH = 0.2
-# 膨張カーネル (W, H): 文字を単語レベルにまとめるため W=20 以上を推奨
-# W=3 だと個別文字レベルの bbox になり認識精度が大幅低下する
-# W=20, ITER=2 で約 40px 水平方向に膨張 → 英単語レベルでのマージが可能
-# 行全体をまとめると認識モデルの max_w=320px 制約で圧縮されるため W は中程度に設定
-OCR_DET_DILATE_KSIZE_W = 20
+# 膨張カーネル (W, H): 認識モデルが動的幅対応になったため行レベル bbox でも問題なし
+OCR_DET_DILATE_KSIZE_W = 5
 OCR_DET_DILATE_KSIZE_H = 3
-OCR_DET_DILATE_ITER = 2
-# 最小 bbox 幅: 単一文字レベルの細切れ検出を排除（px, 1280px 入力換算）
+OCR_DET_DILATE_ITER = 1
+# 最小 bbox 幅: 単一文字レベルの細切れ検出を排除（px）
 OCR_DET_MIN_BBOX_WIDTH = 25
 # OpenVINO リクエストプールサイズ（メモリと並列性のトレードオフ）
 # thinkpad (4GB RAM) では小さく設定すること
-OCR_DET_POOL_SIZE = 2
-OCR_REC_POOL_SIZE = 4
+OCR_DET_POOL_SIZE = 1
+OCR_REC_POOL_SIZE = 1
 
 # Sentry / GlitchTip
 SENTRY_ENABLED = false
