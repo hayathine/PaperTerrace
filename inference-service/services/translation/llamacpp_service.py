@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import re
+import time
 from typing import Optional
 
 from llama_cpp import Llama
@@ -82,18 +83,34 @@ class LlamaCppTranslationService:
             logger.info("Llama-cpp モデルの読み込みが完了しました。")
 
             # ウォームアップ推論: mmap ページキャッシュを温める
-            logger.info("ウォームアップ推論を実行中...")
-            llm_ref = self.llm
-            await loop.run_in_executor(
-                None,
-                lambda: llm_ref.create_chat_completion(
-                    messages=[{"role": "user", "content": "hi"}],
-                    max_tokens=1,
-                ),
-            )
-            logger.info("ウォームアップ完了")
+            await loop.run_in_executor(None, self._warmup)
+
         except Exception as e:
             logger.error(f"Llama-cpp モデルの初期化中にエラーが発生しました: {e}")
+            if str(settings.get("DEV_MODE", "false")).lower() == "true":
+                logger.warning("開発モードのため継続します（推論時にエラーになります）")
+                return
+            raise RuntimeError(f"Failed to load LLM: {e}")
+
+    def _warmup(self):
+        """Perform a small inference to warm up the model."""
+        logger.info("ウォームアップ推論を実行中...")
+        from common.dspy_seed_prompt import DICT_TRANSLATE_SYSTEM_PROMPT
+
+        start_time = time.time()
+        try:
+            # Include system prompt in warmup to pre-cache the instructions
+            self.llm.create_chat_completion(
+                messages=[
+                    {"role": "system", "content": DICT_TRANSLATE_SYSTEM_PROMPT},
+                    {"role": "user", "content": "Warmup"},
+                ],
+                max_tokens=1,
+            )
+            elapsed = time.time() - start_time
+            logger.info(f"ウォームアップ完了: {elapsed:.2f}s")
+        except Exception as e:
+            logger.error(f"ウォームアップ失敗: {e}")
             if str(settings.get("DEV_MODE", "false")).lower() == "true":
                 logger.warning("開発モードのため継続します（推論時にエラーになります）")
                 return
@@ -119,14 +136,20 @@ class LlamaCppTranslationService:
             )
         self._is_busy = True
 
-        from common.dspy_seed_prompt import DICT_TRANSLATE_LLM_PROMPT
+        from common.dspy_seed_prompt import (
+            DICT_TRANSLATE_LLM_PROMPT,
+            DICT_TRANSLATE_SYSTEM_PROMPT,
+        )
 
         user_content = DICT_TRANSLATE_LLM_PROMPT.format(
             paper_context=paper_context,
             target_word=original_word,
             lang_name=lang_name,
         )
-        messages = [{"role": "user", "content": user_content}]
+        messages = [
+            {"role": "system", "content": DICT_TRANSLATE_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ]
 
         try:
             import time

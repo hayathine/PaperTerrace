@@ -1199,6 +1199,36 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		return true; // 確認対象なし
 	};
 
+	/**
+	 * DB (paper_figures テーブル) から figure データを取得して pages に適用する。
+	 * figures が存在すれば true を返す。レイアウト解析の前段フォールバックとして使用。
+	 */
+	const fetchAndApplyDbFigures = async (
+		paperId: string,
+		fileHash: string | null,
+	): Promise<boolean> => {
+		try {
+			const headers = buildAuthHeaders(token);
+			const res = await fetch(`${API_URL}/api/papers/${paperId}/figures`, {
+				headers,
+			});
+			if (!res.ok) return false;
+			const data = await res.json();
+			if (Array.isArray(data.figures) && data.figures.length > 0) {
+				applyLayoutFigures(data.figures, paperId, fileHash);
+				log.info(
+					"load_existing_paper",
+					"Loaded figures from DB, skipping layout analysis",
+					{ paper_id: paperId, count: data.figures.length },
+				);
+				return true;
+			}
+			return false;
+		} catch {
+			return false;
+		}
+	};
+
 	const loadExistingPaper = async (id: string) => {
 		setStatus("processing");
 		setLoadedPaperId(id);
@@ -1269,23 +1299,32 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 									);
 									setPages(pagesForAnalysis);
 								}
-								setStatus("layout_analysis");
-								const layoutTimeoutCached = setTimeout(
-									() => setStatus("done"),
-									135_000,
+								// まず DB (paper_figures) から取得を試みる
+								const dbHasFigures = await fetchAndApplyDbFigures(
+									id,
+									cached.file_hash,
 								);
-								triggerLazyLayoutAnalysis(id, pagesForAnalysis)
-									.catch((err) =>
-										log.warn(
-											"trigger_lazy_layout_analysis",
-											"Lazy layout analysis failed",
-											{ error: err },
-										),
-									)
-									.finally(() => {
-										clearTimeout(layoutTimeoutCached);
-										setStatus("done");
-									});
+								if (!dbHasFigures) {
+									setStatus("layout_analysis");
+									const layoutTimeoutCached = setTimeout(
+										() => setStatus("done"),
+										135_000,
+									);
+									triggerLazyLayoutAnalysis(id, pagesForAnalysis)
+										.catch((err) =>
+											log.warn(
+												"trigger_lazy_layout_analysis",
+												"Lazy layout analysis failed",
+												{ error: err },
+											),
+										)
+										.finally(() => {
+											clearTimeout(layoutTimeoutCached);
+											setStatus("done");
+										});
+								} else {
+									setStatus("done");
+								}
 							} else {
 								setStatus("done");
 							}
@@ -1421,23 +1460,32 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 									);
 									setPages(pagesForAnalysis);
 								}
-								setStatus("layout_analysis");
-								const layoutTimeoutFull = setTimeout(
-									() => setStatus("done"),
-									135_000,
+								// まず DB (paper_figures) から取得を試みる
+								const dbHasFigures = await fetchAndApplyDbFigures(
+									id,
+									paperData.file_hash,
 								);
-								triggerLazyLayoutAnalysis(id, pagesForAnalysis)
-									.catch((err) =>
-										log.warn(
-											"trigger_lazy_layout_analysis",
-											"Lazy analysis failed",
-											{ error: err },
-										),
-									)
-									.finally(() => {
-										clearTimeout(layoutTimeoutFull);
-										setStatus("done");
-									});
+								if (!dbHasFigures) {
+									setStatus("layout_analysis");
+									const layoutTimeoutFull = setTimeout(
+										() => setStatus("done"),
+										135_000,
+									);
+									triggerLazyLayoutAnalysis(id, pagesForAnalysis)
+										.catch((err) =>
+											log.warn(
+												"trigger_lazy_layout_analysis",
+												"Lazy analysis failed",
+												{ error: err },
+											),
+										)
+										.finally(() => {
+											clearTimeout(layoutTimeoutFull);
+											setStatus("done");
+										});
+								} else {
+									setStatus("done");
+								}
 							} else {
 								setStatus("done");
 							}

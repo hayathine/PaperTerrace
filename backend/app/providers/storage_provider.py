@@ -1029,31 +1029,16 @@ class SQLiteStorage(StorageInterface):
             }
 
     def save_session_context(self, session_id: str, paper_id: str) -> None:
-        """Save session to paper mapping."""
-        try:
-            with self._get_connection() as conn:
-                conn.execute(
-                    "INSERT OR REPLACE INTO app_sessions (session_id, paper_id, created_at) VALUES (?, ?, ?)",
-                    (session_id, paper_id, datetime.now().isoformat()),
-                )
-                conn.commit()
-            log.info(
-                "save_session",
-                "Session context saved",
-                session_id=session_id,
-                paper_id=paper_id,
-            )
-
-        except Exception as e:
-            log.error("save_session", "Failed to save session context", error=str(e))
+        """Save session to paper mapping using Redis."""
+        from redis_provider.provider import RedisService
+        RedisService().set(f"session_pid:{session_id}", paper_id, expire=86400)
+        log.info("save_session", "Session context saved to Redis", session_id=session_id)
 
     def get_session_paper_id(self, session_id: str) -> str | None:
-        """Get paper ID for a session."""
-        with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT paper_id FROM app_sessions WHERE session_id = ?", (session_id,)
-            ).fetchone()
-            return row[0] if row else None
+        """Get paper ID for a session from Redis."""
+        from redis_provider.provider import RedisService
+        val = RedisService().get(f"session_pid:{session_id}")
+        return str(val) if val is not None else None
 
     # ===== Social paper methods =====
 
@@ -1180,13 +1165,14 @@ class SQLiteStorage(StorageInterface):
         tables = [
             "papers",
             "paper_figures",
-            "paper_likes",
             "paper_stamps",
             "trajectories",
-            "app_sessions",
             "notes",
             "note_stamps",
             "ocr_reader",
+            "app_sessions",
+            "chat_histories",
+            "users",
         ]
         with self._get_connection() as conn:
             for table in tables:

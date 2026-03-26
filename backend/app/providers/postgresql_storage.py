@@ -8,7 +8,7 @@ from datetime import datetime
 
 import psycopg2
 import psycopg2.pool
-from psycopg2.extras import RealDictCursor
+from psycopg2.extras import RealDictCursor, execute_values
 
 from app.core.config import get_database_url
 from common.config import settings  # noqa: F401  secrets/.env の一括ロードを保証
@@ -584,8 +584,6 @@ class PostgreSQLStorage(StorageInterface):
 
         with self._get_connection() as conn:
             with conn.cursor() as cur:
-                from psycopg2.extras import execute_values
-
                 query = """
                     INSERT INTO paper_figures (id, paper_id, page_number, bbox_json, image_url, caption, explanation, label, latex, created_at)
                     VALUES %s
@@ -803,31 +801,16 @@ class PostgreSQLStorage(StorageInterface):
                 }
 
     def save_session_context(self, session_id: str, paper_id: str) -> None:
-        """Save session to paper mapping."""
-        with self._get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    """
-                    INSERT INTO app_sessions (session_id, paper_id, created_at) 
-                    VALUES (%s, %s, %s)
-                    ON CONFLICT (session_id) DO UPDATE SET
-                    paper_id = EXCLUDED.paper_id,
-                    created_at = EXCLUDED.created_at
-                    """,
-                    (session_id, paper_id, datetime.now()),
-                )
-            conn.commit()
+        """Save session to paper mapping using Redis."""
+        from redis_provider.provider import RedisService
+        RedisService().set(f"session_pid:{session_id}", paper_id, expire=86400)
+        log.info("save_session", "Session context saved to Redis", session_id=session_id)
 
     def get_session_paper_id(self, session_id: str) -> str | None:
-        """Get paper ID for a session."""
-        with self._get_connection() as conn:
-            with conn.cursor() as cur:
-                cur.execute(
-                    "SELECT paper_id FROM app_sessions WHERE session_id = %s",
-                    (session_id,),
-                )
-                row = cur.fetchone()
-                return row[0] if row else None
+        """Get paper ID for a session from Redis."""
+        from redis_provider.provider import RedisService
+        val = RedisService().get(f"session_pid:{session_id}")
+        return str(val) if val is not None else None
 
     def get_user_papers(
         self, user_id: str, page: int = 1, per_page: int = 20
@@ -975,10 +958,8 @@ class PostgreSQLStorage(StorageInterface):
         tables = [
             "papers",
             "paper_figures",
-            "paper_likes",
             "paper_stamps",
             "trajectories",
-            "app_sessions",
             "notes",
             "note_stamps",
             "ocr_reader",
