@@ -62,10 +62,10 @@ class InferenceServiceClient:
         # 後方互換
         self.layout_base_url = primary_url
 
-        # Qwen 翻訳用 URL
-        qwen_url = settings.get("INFERENCE_QWEN_URL", "")
-        self.qwen_url: str = qwen_url.strip()
-        self.qwen_disabled: bool = not bool(self.qwen_url)
+        # Translation 翻訳用 URL
+        translate_url = settings.get("INFERENCE_TRANSLATE_URL", "")
+        self.translate_url: str = translate_url.strip()
+        self.translate_disabled: bool = not bool(self.translate_url)
 
         # OCR crops 専用 URL（OCR 対応 Pod のみ指定 = G3）
         ocr_crops_url = settings.get("INFERENCE_OCR_CROPS_URL", "")
@@ -83,7 +83,7 @@ class InferenceServiceClient:
         # 回路ブレーカー設定
         self.failure_threshold = 5
         self.recovery_timeout = 60  # 1分
-        all_urls = self.layout_urls + ([self.ocr_crops_url] if self.ocr_crops_url else []) + ([self.qwen_url] if self.qwen_url else [])
+        all_urls = self.layout_urls + ([self.ocr_crops_url] if self.ocr_crops_url else []) + ([self.translate_url] if self.translate_url else [])
         self._circuit_state: dict[str, dict] = {
             url: {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
             for url in all_urls
@@ -558,11 +558,11 @@ class InferenceServiceClient:
     async def translate_text(
         self, text: str, tgt_lang: str = "ja", paper_context: str | None = None
     ) -> str:
-        """Qwen 翻訳 Pod を呼び出して翻訳を実行する。"""
-        if self.qwen_disabled:
-            raise InferenceServiceDownError("Qwen translation service not configured (INFERENCE_QWEN_URL not set)")
+        """Llama 翻訳 Pod を呼び出して翻訳を実行する。"""
+        if self.translate_disabled:
+            raise InferenceServiceDownError("Translation service not configured (INFERENCE_TRANSLATE_URL not set)")
 
-        cb_key = self.qwen_url
+        cb_key = self.translate_url
         if cb_key not in self._circuit_state:
             self._circuit_state[cb_key] = {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
         self._check_circuit_breaker(cb_key)
@@ -575,10 +575,10 @@ class InferenceServiceClient:
                 "tgt_lang": tgt_lang,
                 "paper_context": paper_context,
             }
-            log.debug("translate_text", "Qwen翻訳リクエスト", text_len=len(text))
+            log.debug("translate_text", "翻訳リクエスト", text_len=len(text))
 
             resp = await self.client.post(
-                f"{self.qwen_url}/api/v1/translate",
+                f"{self.translate_url}/api/v1/translate",
                 json=payload,
                 timeout=timeout,
             )
@@ -587,15 +587,15 @@ class InferenceServiceClient:
 
             self._record_success(cb_key)
             if result.get("success"):
-                log.info("translate_text", "Qwen翻訳成功", word=text[:20])
+                log.info("translate_text", "翻訳成功", word=text[:20])
                 return result.get("translation", "")
 
-            raise InferenceServiceError(result.get("message", "Qwen translation failed"))
+            raise InferenceServiceError(result.get("message", "Translation failed"))
 
         except httpx.HTTPError as e:
             self._record_failure(cb_key)
-            log.error("translate_text", "Qwen翻訳リクエスト失敗", error=str(e))
-            raise InferenceServiceDownError(f"Qwen translation request failed: {e}") from e
+            log.error("translate_text", "翻訳リクエスト失敗", error=str(e))
+            raise InferenceServiceDownError(f"Translation request failed: {e}") from e
 
     async def health_check(self) -> dict[str, Any]:
         """推論サービスのヘルスチェック"""

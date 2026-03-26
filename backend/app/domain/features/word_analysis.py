@@ -32,13 +32,13 @@ class WordAnalysisService:
     ) -> dict | None:
         # 1. 辞書チェック（省略）
         
-        # 2. Qwen 翻訳の試行（環境変数 INFERENCE_QWEN_URL がある場合）
+        # 2. Translation Pod 翻訳の試行（環境変数 INFERENCE_TRANSLATE_URL がある場合）
         from app.providers.inference_client import get_inference_client
         inf_client = await get_inference_client()
         
-        if not inf_client.qwen_disabled:
+        if not inf_client.translate_disabled:
             try:
-                log.info("translate", "Qwenによる翻訳を開始します", word=lemma)
+                log.info("translate", "Translation Podによる翻訳を開始します", word=lemma)
                 translation = await inf_client.translate_text(
                     text=lemma,
                     tgt_lang=lang,
@@ -49,10 +49,10 @@ class WordAnalysisService:
                     return {
                         "word": lemma,
                         "translation": translation,
-                        "source": "Qwen AI", # Qwen からの回答であることを明示
+                        "source": "Translation AI", # Llama 等からの回答であることを明示
                     }
             except Exception as e:
-                log.warning("translate", "Qwen翻訳に失敗しました。Geminiにフォールバックします。", error=str(e))
+                log.warning("translate", "Translation Pod翻訳に失敗しました。Geminiにフォールバックします。", error=str(e))
                 # 失敗した場合は Gemini にフォールバック
 
         # 3. Gemini Translation (Context-aware if context provided)
