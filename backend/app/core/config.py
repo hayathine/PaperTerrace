@@ -93,13 +93,29 @@ def get_neon_auth_url() -> str | None:
     )
 
 
-def get_bq_log_dataset() -> str:
-    """環境に応じた BigQuery ログデータセット名を返す。"""
-    if is_production():
-        return settings.get("BQ_LOG_DATASET", "paperterrace_logs")
-    if is_staging():
-        return settings.get("BQ_LOG_DATASET_STAGING", "paperterrace_logs_staging")
-    return settings.get("BQ_LOG_DATASET_LOCAL", "paperterrace_logs_local")
+def get_log_database_url() -> str:
+    """環境に応じたログ用 PostgreSQL 接続 URL を返す（vostro ポッド）。
+
+    優先順位:
+      prod    : LOG_DATABASE_URL
+      staging : LOG_DATABASE_URL_STAGING → LOG_DATABASE_URL
+      local   : LOG_DATABASE_URL_LOCAL   → LOG_DATABASE_URL
+    """
+    env = get_app_env()
+    if env == "prod":
+        url = settings.get("LOG_DATABASE_URL")
+        suffix = ""
+    elif env == "staging":
+        url = settings.get("LOG_DATABASE_URL_STAGING") or settings.get("LOG_DATABASE_URL")
+        suffix = "_STAGING"
+    else:
+        url = settings.get("LOG_DATABASE_URL_LOCAL") or settings.get("LOG_DATABASE_URL")
+        suffix = "_LOCAL"
+
+    if not url:
+        raise RuntimeError(f"LOG_DATABASE_URL{suffix} が設定されていません")
+
+    return url
 
 
 def get_gcs_bucket_name() -> str | None:

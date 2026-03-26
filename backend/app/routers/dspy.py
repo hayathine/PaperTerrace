@@ -1,7 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from google.cloud import bigquery as bq
 
-from app.providers.bigquery_log import BigQueryLogClient
+from app.providers.pg_log import PgLogClient
 from app.schemas.dspy import TraceCommentUpdate
 from common.logger import ServiceLogger
 
@@ -13,21 +12,14 @@ router = APIRouter(prefix="/dspy", tags=["DSPy"])
 @router.post("/trace/{trace_id}/copy")
 async def mark_trace_copied(trace_id: str):
     """
-    Mark a DSPy trace as copied by the user.
-    This serves as a strong positive signal for optimization.
+    DSPy トレースをユーザーがコピーしたとしてマークする。
+    最適化の強い正シグナルとなる。
     """
-    client = BigQueryLogClient.get_instance()
-    table = client.table_ref("dspy_traces")
-
-    sql = f"""
-        UPDATE `{table}`
-        SET is_copied = TRUE
-        WHERE trace_id = @trace_id
-    """
-    params = [bq.ScalarQueryParameter("trace_id", "STRING", trace_id)]
+    client = PgLogClient.get_instance()
+    sql = "UPDATE logs.dspy_traces SET is_copied = TRUE WHERE trace_id = :trace_id"
 
     try:
-        affected = client.execute_dml(sql, params)
+        affected = client.execute_dml(sql, {"trace_id": trace_id})
         if affected == 0:
             log.warning("mark_copied", "Trace not found", trace_id=trace_id)
             raise HTTPException(status_code=404, detail="Trace not found")
@@ -46,23 +38,15 @@ async def mark_trace_copied(trace_id: str):
 @router.post("/trace/{trace_id}/comment")
 async def update_trace_comment(trace_id: str, body: TraceCommentUpdate):
     """
-    Add or update a comment for a DSPy trace.
+    DSPy トレースにコメントを追加・更新する。
     """
-    client = BigQueryLogClient.get_instance()
-    table = client.table_ref("dspy_traces")
-
-    sql = f"""
-        UPDATE `{table}`
-        SET comment = @comment
-        WHERE trace_id = @trace_id
-    """
-    params = [
-        bq.ScalarQueryParameter("trace_id", "STRING", trace_id),
-        bq.ScalarQueryParameter("comment", "STRING", body.comment),
-    ]
+    client = PgLogClient.get_instance()
+    sql = (
+        "UPDATE logs.dspy_traces SET comment = :comment WHERE trace_id = :trace_id"
+    )
 
     try:
-        affected = client.execute_dml(sql, params)
+        affected = client.execute_dml(sql, {"trace_id": trace_id, "comment": body.comment})
         if affected == 0:
             log.warning("update_comment", "Trace not found", trace_id=trace_id)
             raise HTTPException(status_code=404, detail="Trace not found")

@@ -1,8 +1,8 @@
 """
-GA4 BigQuery → BigQuery Sync Job
+GA4 BigQuery → PostgreSQL Sync Job
 
 GA4 のエクスポートデータから日次エンゲージメント・ページビューを集計し、
-paperterrace_logs データセット（asia-northeast1）に書き込む。
+logs PostgreSQL（vostro ポッド）に書き込む。
 Kubernetes CronJob として実行されることを想定。
 
 Usage:
@@ -18,7 +18,7 @@ import structlog
 from google.cloud import bigquery
 
 from app.models.bigquery.schemas import PageViewLogData, UserEngagementData
-from app.providers.bigquery_log import BigQueryLogClient
+from app.providers.pg_log import PgLogClient
 from common.config import settings
 
 log = structlog.get_logger("GA4Sync")
@@ -138,15 +138,15 @@ def build_page_views_query(dataset: str, target_date: str) -> str:
 
 def sync_engagement(
     ga4_client: bigquery.Client,
-    bq_log: BigQueryLogClient,
+    pg_log: PgLogClient,
     dataset: str,
     target_date: str,
 ) -> int:
-    """GA4 から日次エンゲージメントを集計して BigQuery に書き込む。
+    """GA4 から日次エンゲージメントを集計して PostgreSQL に書き込む。
 
     Args:
         ga4_client: GA4 データセット用 BigQuery クライアント（asia-northeast2）。
-        bq_log: ログ用 BigQueryLogClient（asia-northeast1）。
+        pg_log: ログ用 PgLogClient（vostro）。
         dataset: GA4 データセットパス（project.dataset）。
         target_date: YYYYMMDD 形式の日付文字列。
 
@@ -167,27 +167,29 @@ def sync_engagement(
         log.info("engagement_empty", msg="No engagement data", date=target_date)
         return 0
 
+    iso_date = f"{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}"
+
     # 既存データを削除してから再挿入（冪等性確保）
-    table_ref = bq_log.table_ref("user_engagements")
-    bq_log.execute_dml(
-        f"DELETE FROM `{table_ref}` WHERE event_date = '{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}'"
+    pg_log.execute_dml(
+        "DELETE FROM logs.user_engagements WHERE event_date = :event_date",
+        {"event_date": iso_date},
     )
 
     records = [
         UserEngagementData(
             user_pseudo_id=row.user_pseudo_id,
             firebase_uid=row.firebase_uid,
-            event_date=f"{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}",
+            event_date=iso_date,
             total_engagement_seconds=float(row.total_engagement_seconds or 0),
             page_views=int(row.page_views or 0),
             session_count=int(row.session_count or 0),
             max_scroll_depth=int(row.max_scroll_depth) if row.max_scroll_depth is not None else None,
-        ).to_bq_row()
+        ).to_pg_row()
         for row in rows
     ]
 
     try:
-        bq_log.streaming_insert("user_engagements", records)
+        pg_log.insert("user_engagements", records)
     except Exception as e:
         log.error("engagement_insert_failed", msg=str(e), date=target_date)
         return 0
@@ -198,15 +200,15 @@ def sync_engagement(
 
 def sync_page_views(
     ga4_client: bigquery.Client,
-    bq_log: BigQueryLogClient,
+    pg_log: PgLogClient,
     dataset: str,
     target_date: str,
 ) -> int:
-    """GA4 からページビューイベントを取得して BigQuery に書き込む。
+    """GA4 からページビューイベントを取得して PostgreSQL に書き込む。
 
     Args:
         ga4_client: GA4 データセット用 BigQuery クライアント（asia-northeast2）。
-        bq_log: ログ用 BigQueryLogClient（asia-northeast1）。
+        pg_log: ログ用 PgLogClient（vostro）。
         dataset: GA4 データセットパス（project.dataset）。
         target_date: YYYYMMDD 形式の日付文字列。
 
@@ -227,10 +229,12 @@ def sync_page_views(
         log.info("page_views_empty", msg="No page view data", date=target_date)
         return 0
 
+    iso_date = f"{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}"
+
     # 既存データを削除してから再挿入（冪等性確保）
-    table_ref = bq_log.table_ref("page_view_logs")
-    bq_log.execute_dml(
-        f"DELETE FROM `{table_ref}` WHERE event_date = '{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}'"
+    pg_log.execute_dml(
+        "DELETE FROM logs.page_view_logs WHERE event_date = :event_date",
+        {"event_date": iso_date},
     )
 
     records = [
@@ -244,13 +248,13 @@ def sync_page_views(
             page_referrer=row.page_referrer,
             engagement_time_seconds=float(row.engagement_time_seconds or 0),
             is_entrance=row.is_entrance,
-            event_date=f"{target_date[:4]}-{target_date[4:6]}-{target_date[6:]}",
-        ).to_bq_row()
+            event_date=iso_date,
+        ).to_pg_row()
         for row in rows
     ]
 
     try:
-        bq_log.streaming_insert("page_view_logs", records)
+        pg_log.insert("page_view_logs", records)
     except Exception as e:
         log.error("page_views_insert_failed", msg=str(e), date=target_date)
         return 0
@@ -266,7 +270,7 @@ def sync_page_views(
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Sync GA4 data from BigQuery (analytics) to BigQuery (logs)"
+        description="Sync GA4 data from BigQuery (analytics) to PostgreSQL (logs)"
     )
     parser.add_argument(
         "--date",
@@ -301,15 +305,15 @@ def main():
 
     log.info(
         "start",
-        msg="Starting GA4 → BigQuery sync",
+        msg="Starting GA4 → PostgreSQL sync",
         dataset=dataset,
         dates=dates,
     )
 
-    # GA4 読み取り用クライアント（asia-northeast2）
+    # GA4 読み取り用クライアント（BigQuery, asia-northeast2）
     ga4_client = bigquery.Client(project=GCP_PROJECT_ID, location=BQ_LOCATION_ANALYTICS)
-    # ログ書き込み用クライアント（asia-northeast1）
-    bq_log = BigQueryLogClient.get_instance()
+    # ログ書き込み用クライアント（PostgreSQL, vostro）
+    pg_log = PgLogClient.get_instance()
 
     total_engagements = 0
     total_page_views = 0
@@ -317,8 +321,8 @@ def main():
     for target_date in dates:
         log.info("sync_date", msg=f"Processing date: {target_date}")
         try:
-            eng_count = sync_engagement(ga4_client, bq_log, dataset, target_date)
-            pv_count = sync_page_views(ga4_client, bq_log, dataset, target_date)
+            eng_count = sync_engagement(ga4_client, pg_log, dataset, target_date)
+            pv_count = sync_page_views(ga4_client, pg_log, dataset, target_date)
             total_engagements += eng_count
             total_page_views += pv_count
         except Exception as e:

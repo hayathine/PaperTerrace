@@ -114,16 +114,16 @@ def _save_trace_sync(
     answer: str | None = None,
     candidate_index: int | None = None,
 ):
-    """Synchronously write a trace record to BigQuery. Runs in background thread."""
+    """Synchronously write a trace record to PostgreSQL. Runs in background thread."""
     try:
         env = settings.get("APP_ENV", "local")
         if env in ("local", "testing"):
             logger.debug("Skipping DSPy trace recording in %s environment.", env)
             return
 
-        from app.providers.bigquery_log import BigQueryLogClient
+        from app.providers.pg_log import PgLogClient
 
-        bq = BigQueryLogClient.get_instance()
+        pg = PgLogClient.get_instance()
         row = {
             "trace_id": trace_id,
             "module_name": module_name,
@@ -146,7 +146,7 @@ def _save_trace_sync(
             "candidate_index": candidate_index if candidate_index is not None else (context.candidate_index if context else None),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
-        bq.streaming_insert("dspy_traces", [row])
+        pg.insert("dspy_traces", [row])
     except Exception:
         logger.exception("Failed to save DSPy trace %s", trace_id)
 

@@ -11,7 +11,7 @@ from pydantic import BaseModel
 from app.auth import CurrentUser, OptionalUser
 from app.models.bigquery.schemas import PaperLikeData
 from app.providers import get_storage_provider
-from app.providers.bigquery_log import BigQueryLogClient
+from app.providers.pg_log import PgLogClient
 from common.logger import ServiceLogger
 
 log = ServiceLogger("Papers")
@@ -134,10 +134,10 @@ async def like_paper(paper_id: str, user: CurrentUser):
         raise HTTPException(status_code=404, detail="Paper not found")
 
     try:
-        bq = BigQueryLogClient.get_instance()
-        bq.streaming_insert("paper_likes", [PaperLikeData(user_id=user.uid, paper_id=paper_id, action="like").to_bq_row()])
+        pg = PgLogClient.get_instance()
+        pg.insert("paper_likes", [PaperLikeData(user_id=user.uid, paper_id=paper_id, action="like").to_pg_row()])
     except Exception as e:
-        log.warning("like_paper", "BQ insert failed", error=str(e), paper_id=paper_id)
+        log.warning("like_paper", "PG insert failed", error=str(e), paper_id=paper_id)
 
     storage.increment_like_count(paper_id)
     log.info("like_paper", "いいね完了", paper_id=paper_id, uid=user.uid)
@@ -156,10 +156,10 @@ async def unlike_paper(paper_id: str, user: CurrentUser):
         raise HTTPException(status_code=404, detail="Paper not found")
 
     try:
-        bq = BigQueryLogClient.get_instance()
-        bq.streaming_insert("paper_likes", [PaperLikeData(user_id=user.uid, paper_id=paper_id, action="unlike").to_bq_row()])
+        pg = PgLogClient.get_instance()
+        pg.insert("paper_likes", [PaperLikeData(user_id=user.uid, paper_id=paper_id, action="unlike").to_pg_row()])
     except Exception as e:
-        log.warning("unlike_paper", "BQ insert failed", error=str(e), paper_id=paper_id)
+        log.warning("unlike_paper", "PG insert failed", error=str(e), paper_id=paper_id)
 
     storage.decrement_like_count(paper_id)
     log.info("unlike_paper", "いいね取り消し完了", paper_id=paper_id, uid=user.uid)

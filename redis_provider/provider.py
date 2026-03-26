@@ -15,42 +15,64 @@ REDIS_URL = get_redis_url()
 REDIS_DB = int(settings.get("REDIS_DB", 0))
 REDIS_PASSWORD = settings.get("REDIS_PASSWORD", None)
 
-_RETRY_INTERVAL = 5.0  # 接続失敗後のリトライ間隔（秒）
+_RETRY_INTERVAL = 30.0  # 接続失敗後のリトライ間隔（秒）を延長してイベントループの負荷を軽減
 
 _redis_client = None
 _redis_enabled = True
 _last_attempt_time: float = 0.0  # 0 = 未試行
+_is_connecting = False  # 現在接続試行中かどうかのフラグ
 
 _arq_pool = None
 
 
 def get_redis_client():
-    global _redis_client, _last_attempt_time
+    global _redis_client, _last_attempt_time, _is_connecting
     if not _redis_enabled:
         return None
 
+    if _redis_client:
+        return _redis_client
+
     now = time.monotonic()
-    should_attempt = _redis_client is None and (now - _last_attempt_time) >= _RETRY_INTERVAL
+    should_attempt = not _is_connecting and (now - _last_attempt_time) >= _RETRY_INTERVAL
 
     if should_attempt:
         _last_attempt_time = now
-        try:
-            client = redis.Redis.from_url(
-                REDIS_URL,
-                decode_responses=True,
-                socket_timeout=5.0,
-                socket_connect_timeout=5.0,
-            )
-            # test connection
-            client.ping()
-            _redis_client = client
-            log.info("init", f"Connected to Redis at {REDIS_URL}")
-        except Exception as e:
-            log.warning(
-                "init",
-                f"Failed to connect to Redis ({REDIS_URL}): {e}. Will retry in {_RETRY_INTERVAL:.0f}s.",
-            )
-            _redis_client = None
+        _is_connecting = True
+
+        def connect_and_ping():
+            global _redis_client, _is_connecting
+            try:
+                start_time = time.monotonic()
+                # タイムアウト設定を厳しめにする
+                client = redis.Redis.from_url(
+                    REDIS_URL,
+                    decode_responses=True,
+                    socket_timeout=1.0,
+                    socket_connect_timeout=1.0,
+                )
+                # test connection (DNS解決やネットワークが原因でここでブロックする可能性がある)
+                client.ping()
+                elapsed = time.monotonic() - start_time
+                _redis_client = client
+                log.info("init", f"Connected to Redis at {REDIS_URL} (took {elapsed:.3f}s)")
+            except Exception as e:
+                elapsed = time.monotonic() - start_time
+                log.warning(
+                    "init",
+                    f"Failed to connect to Redis ({REDIS_URL}) after {elapsed:.3f}s: {e}. Will retry in {_RETRY_INTERVAL:.0f}s.",
+                )
+                _redis_client = None
+            finally:
+                _is_connecting = False
+
+        # バックグラウンドスレッドで実行してメインイベントループ（FastAPI）をブロックしないようにする
+        import threading
+
+        thread = threading.Thread(target=connect_and_ping, daemon=True)
+        thread.start()
+        log.debug("init", "Started background Redis connection attempt")
+
     return _redis_client
 
 
