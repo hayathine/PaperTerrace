@@ -8,7 +8,7 @@ class NLPService:
     @staticmethod
     @lru_cache(maxsize=5000)
     def lemmatize(text: str) -> str:
-        """テキストの正規化（小文字化のみ）。Qwen が原形処理を担うため十分。"""
+        """テキストの正規化（小文字化のみ）。LLM が原形処理を担うため十分。"""
         return text.strip().lower()
 
     @staticmethod

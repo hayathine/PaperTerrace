@@ -137,7 +137,7 @@ Your goal is to help users understand complex academic papers, translate technic
 5. Do NOT add meta-comments like "(そのまま)" or "(Translation: ...)" to the output.
 """
 
-DICT_TRANSLATE_QWEN_PROMPT = """[Academic Context]
+DICT_TRANSLATE_LLM_PROMPT = """[Academic Context]
 {paper_context}
 
 [Target Text]

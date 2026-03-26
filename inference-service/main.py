@@ -63,7 +63,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
     except ImportError:
         logger.warning("Layout detection dependencies not found, skipping import")
 
-if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
+if INFERENCE_TYPE in ["all", "translation", "m2m100", "translate"]:
     try:
         from services.translation.llamacpp_service import LlamaCppTranslationService
         from services.translation.m2m100_service import M2M100TranslationService
@@ -199,14 +199,14 @@ async def ensure_initialized():
             layout_service = LayoutAnalysisService(lang="en")
             logger.info("LayoutAnalysisService initialized")
 
-        if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
+        if INFERENCE_TYPE in ["all", "translation", "m2m100", "translate"]:
             if INFERENCE_TYPE in ["all", "translation", "m2m100"]:
                 # M2M100
                 m2m100_service = M2M100TranslationService()
                 await m2m100_service.initialize()
                 logger.info("M2M100TranslationService initialized")
 
-            if INFERENCE_TYPE in ["all", "translation", "qwen"]:
+            if INFERENCE_TYPE in ["all", "translation", "translate"]:
                 # LlamaCpp
                 llamacpp_service = LlamaCppTranslationService()
                 await llamacpp_service.initialize()
@@ -668,7 +668,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
 # --------------------------------------------------
 
 
-if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
+if INFERENCE_TYPE in ["all", "translation", "m2m100", "translate"]:
 
     @app.post("/api/v1/translate", response_model=TranslationResponse)
     @limiter.limit(settings.get("RATE_LIMIT_TRANSLATE", "300/minute"))
@@ -698,8 +698,8 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "qwen"]:
             from services.translation.llamacpp_service import LlamaBusyError
 
             if isinstance(e, LlamaBusyError):
-                logger.warning(f"Qwen busy, rejecting request: {e}")
-                raise HTTPException(status_code=503, detail="Qwen is busy")
+                logger.warning(f"LlamaCpp busy, rejecting request: {e}")
+                raise HTTPException(status_code=503, detail="LlamaCpp is busy")
 
             logger.exception("Translation failed")
             app_env = settings.get("APP_ENV", "production")

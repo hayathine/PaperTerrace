@@ -18,7 +18,7 @@ class LlamaBusyError(RuntimeError):
 class LlamaCppTranslationService:
     """
     llama-cpp-python を利用した高度な翻訳サービス
-    Qwen3 30B などの GGUF モデルを使用して、文脈に応じた翻訳と解説を提供します。
+    GGUF モデルを使用して、文脈に応じた翻訳と解説を提供します。
     """
 
     def __init__(self):
@@ -30,7 +30,6 @@ class LlamaCppTranslationService:
         # 安全性のため、物理コア数(6)より少ないスレッド数(4)をデフォルトに設定します。
         self.n_threads = int(settings.get("LLAMACPP_THREADS", "4"))
         # Batch size controls peak memory during prompt evaluation.
-        # Default reduced from 512 to 64 to prevent OOM on ~10GB Qwen3-30B model.
         self.n_batch = int(settings.get("LLAMACPP_BATCH_SIZE", "512"))
         self.n_gpu_layers = int(
             settings.get("LLAMACPP_GPU_LAYERS", "0")
@@ -105,7 +104,7 @@ class LlamaCppTranslationService:
     ) -> str:
         """
         論文の文脈を考慮した翻訳を実行します。
-        DICT_TRANSLATE_QWEN_PROMPT を直接使用し、DSPy を経由しません。
+        DICT_TRANSLATE_LLM_PROMPT を直接使用し、DSPy を経由しません。
         """
         if self.llm is None:
             logger.error(
@@ -116,13 +115,13 @@ class LlamaCppTranslationService:
         # await のない箇所でフラグ確認・設定するため asyncio の協調スケジューリング上安全
         if self._is_busy:
             raise LlamaBusyError(
-                f"Qwen is currently processing another request. word='{original_word[:30]}'"
+                f"LlamaCpp is currently processing another request. word='{original_word[:30]}'"
             )
         self._is_busy = True
 
-        from common.dspy_seed_prompt import DICT_TRANSLATE_QWEN_PROMPT
+        from common.dspy_seed_prompt import DICT_TRANSLATE_LLM_PROMPT
 
-        user_content = DICT_TRANSLATE_QWEN_PROMPT.format(
+        user_content = DICT_TRANSLATE_LLM_PROMPT.format(
             paper_context=paper_context,
             target_word=original_word,
             lang_name=lang_name,
@@ -148,7 +147,7 @@ class LlamaCppTranslationService:
                     max_tokens=max_tokens,
                 )
                 text = raw["choices"][0]["message"]["content"]
-                # Qwen3 thinking ブロックを除去
+                # thinking ブロックを除去（一部モデルが出力する場合に対応）
                 return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
 
             result = await loop.run_in_executor(None, _run)

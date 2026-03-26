@@ -1,6 +1,6 @@
 """
 翻訳オーケストレーションサービス
-確信度に基づく M2M100 と LlamaCpp (Qwen3) の切り替えを管理
+確信度に基づく M2M100 と LlamaCpp の切り替えを管理
 """
 
 import asyncio
@@ -12,7 +12,7 @@ from .m2m100_service import M2M100TranslationService
 
 from common import settings
 
-QWEN_FALLBACK_TIMEOUT = int(settings.get("QWEN_FALLBACK_TIMEOUT", "50"))
+LLAMACPP_FALLBACK_TIMEOUT = int(settings.get("LLAMACPP_FALLBACK_TIMEOUT", "50"))
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +65,11 @@ class TranslationService:
 
         input_text = lemma
 
-        # Qwen 単独モードの場合
-        if self.inference_type == "qwen":
+        # LlamaCpp 単独モードの場合
+        if self.inference_type == "translate":
             if not self.llamacpp:
                 raise ValueError(
-                    "LlamaCpp service is not initialized but inference_type is qwen"
+                    "LlamaCpp service is not initialized"
                 )
             try:
                 llm_result = await self.llamacpp.translate_with_llamacpp(
@@ -77,9 +77,9 @@ class TranslationService:
                     paper_context=paper_context or "No specific context available.",
                     lang_name=lang_full_name,
                 )
-                return llm_result, "Qwen", 1.0, lemma
+                return llm_result, "LlamaCpp", 1.0, lemma
             except Exception as e:
-                logger.error(f"Qwen3 translation failed: {e}")
+                logger.error(f"LlamaCpp translation failed: {e}")
                 raise
 
         # M2M100 または translation (両方) モードの場合
@@ -102,7 +102,7 @@ class TranslationService:
             and self.inference_type in ["translation", "all"]
         ):
             logger.info(
-                f"確信度が低いため LlamaCpp (Qwen3) に切り替えます (conf={conf:.3f}, target_lang={target_lang} -> {lang_full_name})"
+                f"確信度が低いため LlamaCpp に切り替えます (conf={conf:.3f}, target_lang={target_lang} -> {lang_full_name})"
             )
             try:
                 llm_result = await asyncio.wait_for(
@@ -111,19 +111,19 @@ class TranslationService:
                         paper_context=paper_context or "No specific context available.",
                         lang_name=lang_full_name,
                     ),
-                    timeout=QWEN_FALLBACK_TIMEOUT,
+                    timeout=LLAMACPP_FALLBACK_TIMEOUT,
                 )
-                return llm_result, "Qwen", 1.0, lemma
+                return llm_result, "LlamaCpp", 1.0, lemma
             except asyncio.TimeoutError:
-                # Qwen3 がタイムアウト → 上位でGeminiフォールバックを引き起こす
+                # LlamaCpp がタイムアウト → 上位でGeminiフォールバックを引き起こす
                 logger.warning(
-                    f"Qwen3タイムアウト ({QWEN_FALLBACK_TIMEOUT}s, conf={conf:.3f})、Geminiへフォールバック"
+                    f"LlamaCppタイムアウト ({LLAMACPP_FALLBACK_TIMEOUT}s, conf={conf:.3f})、Geminiへフォールバック"
                 )
                 raise
             except Exception as e:
                 # その他のエラー: m2m100の結果をそのまま返す
                 logger.warning(
-                    f"Qwen3翻訳失敗 (conf={conf:.3f})、m2m100の結果を使用します: {e}"
+                    f"LlamaCpp翻訳失敗 (conf={conf:.3f})、m2m100の結果を使用します: {e}"
                 )
 
         return translation, model, conf, lemma
@@ -145,8 +145,8 @@ class TranslationService:
             else:
                 input_texts.append(t)
 
-        # Qwen 単独モードの場合
-        if self.inference_type == "qwen":
+        # LlamaCpp 単独モードの場合
+        if self.inference_type == "translate":
             final_translations = []
             final_models = []
             final_confidences = []
@@ -158,10 +158,10 @@ class TranslationService:
                         lang_name=lang_full_name,
                     )
                     final_translations.append(translation)
-                    final_models.append("Qwen")
+                    final_models.append("LlamaCpp")
                     final_confidences.append(1.0)
                 except Exception as e:
-                    logger.warning(f"Qwen3 batch translation failed: {e}")
+                    logger.warning(f"LlamaCpp batch translation failed: {e}")
                     final_translations.append("")
                     final_models.append("failed")
                     final_confidences.append(0.0)
@@ -196,11 +196,11 @@ class TranslationService:
                         paper_context=paper_context or "No specific context available.",
                         lang_name=lang_full_name,
                     )
-                    model = "Qwen"
+                    model = "LlamaCpp"
                 except Exception as e:
-                    # Qwen3 が失敗した場合、m2m100の結果をそのまま使用
+                    # LlamaCpp が失敗した場合、m2m100の結果をそのまま使用
                     logger.warning(
-                        f"バッチ翻訳[{i}] Qwen3失敗、m2m100の結果を使用します: {e}"
+                        f"バッチ翻訳[{i}] LlamaCpp失敗、m2m100の結果を使用します: {e}"
                     )
 
             final_translations.append(translation)
