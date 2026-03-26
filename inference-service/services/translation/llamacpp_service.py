@@ -30,6 +30,7 @@ class LlamaCppTranslationService:
         self.n_ctx = int(settings.get("LLAMACPP_CTX_SIZE", "1024"))
         # 安全性のため、物理コア数(6)より少ないスレッド数(4)をデフォルトに設定します。
         self.n_threads = int(settings.get("LLAMACPP_THREADS", "4"))
+        self.n_threads_batch = int(settings.get("LLAMACPP_THREADS_BATCH", str(self.n_threads)))
         # Batch size controls peak memory during prompt evaluation.
         self.n_batch = int(settings.get("LLAMACPP_BATCH_SIZE", "512"))
         self.n_gpu_layers = int(
@@ -66,6 +67,7 @@ class LlamaCppTranslationService:
                         model_path=self.model_path,
                         n_ctx=self.n_ctx,
                         n_threads=self.n_threads,
+                        n_threads_batch=self.n_threads_batch,
                         n_batch=self.n_batch,
                         n_gpu_layers=self.n_gpu_layers,
                         use_mlock=self.use_mlock,

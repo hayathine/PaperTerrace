@@ -128,6 +128,7 @@ BQ_LOG_DATASET = "paperterrace_logs_staging"
 # Staging 特定設定
 GCS_BUCKET_NAME_STAGING = "paperterrace-papers-staging"
 INFERENCE_VERIFY_SSL = false
+# LOG_DATABASE_URL_STAGING = "" (環境変数から取得)
 
 [prod]
 LOG_LEVEL = "INFO"
@@ -137,3 +138,4 @@ STORAGE_PROVIDER = "neon"
 IMAGES_DIR = "app/static/paper_images"
 BQ_LOG_DATASET = "paperterrace_logs"
 INFERENCE_VERIFY_SSL = false
+# LOG_DATABASE_URL = "" (環境変数から取得)
