@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import re
+import threading
 import time
 from typing import Optional
 
@@ -42,7 +43,9 @@ class LlamaCppTranslationService:
         self.flash_attn = str(settings.get("LLAMACPP_FLASH_ATTN", "true")).lower() == "true"
         self.max_tokens = int(settings.get("LLAMACPP_MAX_TOKENS", "2048"))
         self.verbose = str(settings.get("LLAMACPP_VERBOSE", "false")).lower() == "true"
-        self._is_busy = False
+        self._lock = asyncio.Lock()
+        self.fallback_timeout = int(settings.get("LLAMACPP_FALLBACK_TIMEOUT", "30"))
+        self._abort_event = threading.Event()
         logger.info(f"Llama-cpp モデルの初期化設定: {self.__dict__}")
 
     async def initialize(self):
@@ -135,64 +138,86 @@ class LlamaCppTranslationService:
             )
             return "Error: LLM service is not initialized."
 
-        # await のない箇所でフラグ確認・設定するため asyncio の協調スケジューリング上安全
-        if self._is_busy:
-            raise LlamaBusyError(
-                f"LlamaCpp is currently processing another request. word='{original_word[:30]}'"
+        # ロックを使用して同時実行を制限し、キューイングします
+        async with self._lock:
+            self._abort_event.clear()
+
+            from common.dspy_seed_prompt import (
+                DICT_TRANSLATE_LLM_PROMPT,
+                DICT_TRANSLATE_SYSTEM_PROMPT,
             )
-        self._is_busy = True
 
-        from common.dspy_seed_prompt import (
-            DICT_TRANSLATE_LLM_PROMPT,
-            DICT_TRANSLATE_SYSTEM_PROMPT,
-        )
-
-        user_content = DICT_TRANSLATE_LLM_PROMPT.format(
-            paper_title=paper_context, # The argument name is still paper_context for now to avoid breaking the client immediately
-            target_word=original_word,
-            lang_name=lang_name,
-        )
-        messages = [
-            {"role": "system", "content": DICT_TRANSLATE_SYSTEM_PROMPT},
-            {"role": "user", "content": user_content},
-        ]
-
-        try:
-            import time
-
-            logger.info(
-                f"LLM 翻訳実行開始: word='{original_word[:50]}', lang='{lang_name}', context_len={len(paper_context)}"
+            user_content = DICT_TRANSLATE_LLM_PROMPT.format(
+                paper_title=paper_context, # The argument name is still paper_context for now to avoid breaking the client immediately
+                target_word=original_word,
+                lang_name=lang_name,
             )
-            start_time = time.time()
-            loop = asyncio.get_running_loop()
+            messages = [
+                {"role": "system", "content": DICT_TRANSLATE_SYSTEM_PROMPT},
+                {"role": "user", "content": user_content},
+            ]
 
-            llm_ref = self.llm
-            max_tokens = self.max_tokens
+            try:
+                import time
 
-            def _run():
-                raw = llm_ref.create_chat_completion(
-                    messages=messages,
-                    temperature=0.3,
-                    max_tokens=max_tokens,
+                logger.info(
+                    f"LLM 翻訳実行開始: word='{original_word[:50]}', lang='{lang_name}', context_len={len(paper_context)}"
                 )
-                text = raw["choices"][0]["message"]["content"]
-                # thinking ブロックを除去（一部モデルが出力する場合に対応）
-                return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+                start_time = time.time()
+                loop = asyncio.get_running_loop()
 
-            result = await loop.run_in_executor(None, _run)
-            elapsed = time.time() - start_time
-            logger.info(
-                f"LLM 翻訳が正常に完了しました。経過時間: {elapsed:.2f}s, 結果文字数: {len(result)}"
-            )
-            return result
+                llm_ref = self.llm
+                max_tokens = self.max_tokens
+                abort_event = self._abort_event
 
-        except LlamaBusyError:
-            raise
-        except Exception as e:
-            logger.error(f"LLM 推論エラー: {e}")
-            return f"Translation error occurred: {str(e)}"
-        finally:
-            self._is_busy = False
+                def _run():
+                    def should_abort(tokens, logits):
+                        """トークン生成ごとに中断フラグを確認する stopping_criteria コールバック。"""
+                        return abort_event.is_set()
+
+                    raw = llm_ref.create_chat_completion(
+                        messages=messages,
+                        temperature=0.3,
+                        max_tokens=max_tokens,
+                        stopping_criteria=should_abort,
+                    )
+                    text = raw["choices"][0]["message"]["content"]
+                    # thinking ブロックを除去（一部モデルが出力する場合に対応）
+                    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+
+                executor_future = loop.run_in_executor(None, _run)
+                try:
+                    result = await asyncio.wait_for(
+                        asyncio.shield(executor_future), timeout=self.fallback_timeout
+                    )
+                except asyncio.TimeoutError:
+                    self._abort_event.set()
+                    elapsed = time.time() - start_time
+                    logger.warning(
+                        f"LLM 推論タイムアウト ({self.fallback_timeout}s): word='{original_word[:30]}', elapsed={elapsed:.2f}s"
+                    )
+                    raise LlamaBusyError(
+                        f"LlamaCpp timed out after {self.fallback_timeout}s. word='{original_word[:30]}'"
+                    )
+                except asyncio.CancelledError:
+                    # HTTP リクエストがキャンセル/切断された場合、スレッドに中断を通知
+                    self._abort_event.set()
+                    logger.info(f"LLM 推論がキャンセルされました: word='{original_word[:30]}'")
+                    raise
+
+                elapsed = time.time() - start_time
+                logger.info(
+                    f"LLM 翻訳が正常に完了しました。経過時間: {elapsed:.2f}s, 結果文字数: {len(result)}"
+                )
+                return result
+
+            except LlamaBusyError:
+                raise
+            except asyncio.CancelledError:
+                raise
+            except Exception as e:
+                logger.error(f"LLM 推論エラー: {e}")
+                return f"Translation error occurred: {str(e)}"
 
     async def cleanup(self):
         """リソースを解放します。"""

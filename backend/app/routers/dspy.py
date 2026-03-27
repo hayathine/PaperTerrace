@@ -16,7 +16,7 @@ async def mark_trace_copied(trace_id: str):
     最適化の強い正シグナルとなる。
     """
     client = PgLogClient.get_instance()
-    sql = "UPDATE logs.dspy_traces SET is_copied = TRUE WHERE trace_id = :trace_id"
+    sql = f"UPDATE {client.table_ref('dspy_traces')} SET is_copied = TRUE WHERE trace_id = :trace_id"
 
     try:
         affected = client.execute_dml(sql, {"trace_id": trace_id})
@@ -41,9 +41,7 @@ async def update_trace_comment(trace_id: str, body: TraceCommentUpdate):
     DSPy トレースにコメントを追加・更新する。
     """
     client = PgLogClient.get_instance()
-    sql = (
-        "UPDATE logs.dspy_traces SET comment = :comment WHERE trace_id = :trace_id"
-    )
+    sql = f"UPDATE {client.table_ref('dspy_traces')} SET comment = :comment WHERE trace_id = :trace_id"
 
     try:
         affected = client.execute_dml(sql, {"trace_id": trace_id, "comment": body.comment})

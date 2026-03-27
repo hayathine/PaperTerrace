@@ -89,12 +89,12 @@ class RecommendationService:
         if req.conversation_history is not None:
             cached_data["conversation_history"] = req.conversation_history
         if req.word_clicks is not None:
-            clicks_data = [w.dict() for w in req.word_clicks]
+            clicks_data = [w.model_dump() for w in req.word_clicks]
             existing_clicks = cached_data.get("word_clicks") or []
             existing_clicks.extend(clicks_data)
             cached_data["word_clicks"] = existing_clicks
         if req.copy_events is not None:
-            copy_data = [c.dict() for c in req.copy_events]
+            copy_data = [c.model_dump() for c in req.copy_events]
             existing_copies = cached_data.get("copy_events") or []
             existing_copies.extend(copy_data)
             cached_data["copy_events"] = existing_copies
