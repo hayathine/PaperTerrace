@@ -7,7 +7,6 @@ AIチャットアシスタント機能を提供するモジュール
 
 from app.providers import get_ai_provider
 from common.config import settings
-from common.dspy_utils.config import setup_dspy
 from common.dspy_utils.modules import ChatModule
 from common.dspy_utils.trace import TraceContext, trace_dspy_call
 from common.logger import logger
@@ -35,7 +34,6 @@ class ChatService:
         self.redis = RedisService()
         self.model = settings.get("MODEL_CHAT", "gemini-2.5-flash")
         self.cache_ttl_minutes = 60
-        setup_dspy()
         self.chat_mod = ChatModule()
 
     async def chat(
@@ -47,7 +45,7 @@ class ChatService:
         paper_id: str | None = None,
         user_id: str | None = None,
         session_id: str | None = None,
-        pdf_bytes: bytes | None = None,
+        pdf_input: bytes | str | None = None,
         image_bytes: bytes | None = None,
     ) -> dict | str:
         """
@@ -55,13 +53,13 @@ class ChatService:
 
         Args:
             user_message: The user's question or message
-            history: Conversation history (list of role/content dicts)
+            history: Conversation history
             document_context: The paper text for context
             target_lang: Output language
-            paper_id: 論文ID (キャッシュ管理用)
-            user_id: ユーザーID (トレース用)
-            session_id: セッションID (トレース用)
-            pdf_bytes: PDFバイナリデータ (PDF直接入力方式)
+            paper_id: 論文ID
+            user_id: ユーザーID
+            session_id: セッションID
+            pdf_input: PDFバイナリデータ または GCS URI (gs://...)
             image_bytes: 図表等の画像データ
 
         Returns:
@@ -77,33 +75,21 @@ class ChatService:
         )
 
         from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
-
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         try:
-            # PDFキャッシュの確認（pdf_bytes がなくてもキャッシュがあればPDFモードで応答できる）
+            # PDFキャッシュの確認
             pdf_cache_name = None
             if paper_id:
-                pdf_cache_key = f"paper_cache_pdf:{paper_id}"
-                pdf_cache_name = self.redis.get(pdf_cache_key)
+                pdf_cache_name = self.redis.get(f"paper_cache_pdf:{paper_id}")
 
-            # PDF直接入力方式（初回はpdf_bytesあり、2回目以降はキャッシュのみ）
-            if pdf_bytes or pdf_cache_name:
-                logger.debug(
-                    "PDFを使用したチャットリクエストを処理中",
-                    extra={
-                        "message_length": len(user_message),
-                        "pdf_size": len(pdf_bytes) if pdf_bytes else 0,
-                        "using_cache": pdf_cache_name is not None,
-                    },
-                )
-
-                # 初回: キャッシュを作成してRedisに保存
-                if not pdf_cache_name and pdf_bytes and paper_id:
+            if pdf_input or pdf_cache_name:
+                # 初回: キャッシュを作成
+                if not pdf_cache_name and pdf_input and paper_id:
                     try:
                         pdf_cache_name = await self.ai_provider.create_context_cache(
                             model=self.model,
-                            contents=pdf_bytes,
+                            contents=pdf_input,
                             ttl_minutes=self.cache_ttl_minutes,
                         )
                         self.redis.set(
@@ -111,12 +97,8 @@ class ChatService:
                             pdf_cache_name,
                             expire=self.cache_ttl_minutes * 60,
                         )
-                        logger.info(
-                            "PDFコンテキストキャッシュを作成しました",
-                            extra={"paper_id": paper_id, "cache_name": pdf_cache_name},
-                        )
                     except Exception as e:
-                        logger.warning(f"PDFコンテキストキャッシュの作成に失敗しました ({paper_id}): {e}")
+                        logger.warning(f"PDFキャッシュ作成失敗 ({paper_id}): {e}")
 
                 prompt = CHAT_GENERAL_FROM_PDF_PROMPT.format(
                     lang_name=lang_name,
@@ -125,7 +107,7 @@ class ChatService:
                 )
                 response_data = await self.ai_provider.generate_with_pdf(
                     prompt,
-                    pdf_bytes=pdf_bytes if not pdf_cache_name else None,
+                    pdf_bytes=pdf_input if (not pdf_cache_name and isinstance(pdf_input, bytes)) else None,
                     cached_content_name=pdf_cache_name,
                     model=self.model,
                 )
@@ -245,6 +227,112 @@ class ChatService:
                 "text": f"エラーが発生しました: {str(e)}",
                 "trace_id": "error",
             }
+
+    async def chat_stream(
+        self,
+        user_message: str,
+        history: list[dict],
+        document_context: str = "",
+        target_lang: str = "ja",
+        paper_id: str | None = None,
+        user_id: str | None = None,
+        session_id: str | None = None,
+        pdf_bytes: bytes | None = None,
+        image_bytes: bytes | None = None,
+    ):
+        """
+        Stream a chat response based on user message and document context.
+        Yields tokens as they are generated.
+        """
+        recent_history = history[-10:] if len(history) > 10 else history
+        current_conversation = recent_history + [
+            {"role": "user", "content": user_message}
+        ]
+        history_text_for_prompt = "\n".join(
+            [f"{msg['role']}: {msg['content']}" for msg in current_conversation]
+        )
+
+        from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
+        lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
+
+        try:
+            # Handle PDF Cache
+            pdf_cache_name = None
+            if paper_id:
+                pdf_cache_name = self.redis.get(f"paper_cache_pdf:{paper_id}")
+
+            if pdf_bytes or pdf_cache_name:
+                # Cache creation logic (same as in chat method)
+                if not pdf_cache_name and pdf_bytes and paper_id:
+                    try:
+                        pdf_cache_name = await self.ai_provider.create_context_cache(
+                            model=self.model,
+                            contents=pdf_bytes,
+                            ttl_minutes=self.cache_ttl_minutes,
+                        )
+                        self.redis.set(
+                            f"paper_cache_pdf:{paper_id}",
+                            pdf_cache_name,
+                            expire=self.cache_ttl_minutes * 60,
+                        )
+                    except Exception:
+                        pass
+
+                prompt = CHAT_GENERAL_FROM_PDF_PROMPT.format(
+                    lang_name=lang_name,
+                    history_text=history_text_for_prompt,
+                    user_message=user_message,
+                )
+                async for token in self.ai_provider.generate_with_pdf_stream(
+                    prompt,
+                    pdf_bytes=pdf_bytes if not pdf_cache_name else None,
+                    cached_content_name=pdf_cache_name,
+                    model=self.model,
+                ):
+                    yield token
+
+            elif image_bytes:
+                context = document_context if document_context else "No paper context."
+                prompt = CHAT_WITH_FIGURE_PROMPT.format(
+                    lang_name=lang_name,
+                    document_context=context[:10000],
+                    history_text=history_text_for_prompt,
+                    user_message=user_message,
+                )
+                async for token in self.ai_provider.generate_with_image_stream(
+                    prompt, image_bytes, "image/jpeg", model=self.model
+                ):
+                    yield token
+            else:
+                # Text-based stream (bypass DSPy for now for raw streaming)
+                context = document_context if document_context else "No paper loaded."
+                cache_name = None
+                if paper_id:
+                    cache_name = self.redis.get(f"paper_cache:{paper_id}")
+                    if not cache_name and len(context) > 2000:
+                        try:
+                            cache_name = await self.ai_provider.create_context_cache(
+                                model=self.model,
+                                contents=context,
+                                system_instruction=CORE_SYSTEM_PROMPT,
+                                ttl_minutes=self.cache_ttl_minutes,
+                            )
+                            self.redis.set(f"paper_cache:{paper_id}", cache_name, expire=self.cache_ttl_minutes * 60)
+                        except Exception:
+                            pass
+
+                prompt = f"Context: {context[:20000]}\n\nHistory: {history_text_for_prompt}\n\nUser: {user_message}\n\nAssistant (Output in {lang_name}):"
+                async for token in self.ai_provider.generate_stream(
+                    prompt,
+                    system_instruction=CORE_SYSTEM_PROMPT,
+                    cached_content_name=cache_name,
+                    model=self.model,
+                ):
+                    yield token
+
+        except Exception as e:
+            logger.exception("chat_stream_failed")
+            yield f"Error: {str(e)}"
 
     async def delete_paper_cache(self, paper_id: str):
         """Delete the context cache for a specific paper."""

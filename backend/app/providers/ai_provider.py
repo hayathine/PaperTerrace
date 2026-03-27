@@ -101,6 +101,43 @@ class AIProviderInterface(ABC):
         pass
 
     @abstractmethod
+    async def generate_stream(
+        self,
+        prompt: str,
+        context: str = "",
+        model: str | None = None,
+        system_instruction: str | None = None,
+        cached_content_name: str | None = None,
+    ):
+        """Yield text chunks from prompt."""
+        ...
+
+    @abstractmethod
+    async def generate_with_image_stream(
+        self,
+        prompt: str,
+        image_bytes: bytes | None = None,
+        mime_type: str = "image/jpeg",
+        model: str | None = None,
+        system_instruction: str | None = None,
+        cached_content_name: str | None = None,
+        image_uri: str | None = None,
+    ):
+        """Yield text chunks from prompt with image."""
+        ...
+
+    @abstractmethod
+    async def generate_with_pdf_stream(
+        self,
+        prompt: str,
+        pdf_bytes: bytes | None = None,
+        model: str | None = None,
+        cached_content_name: str | None = None,
+    ):
+        """Yield text chunks from prompt with PDF."""
+        ...
+
+    @abstractmethod
     async def count_tokens(self, contents: Any, model: str | None = None) -> int:
         """Count tokens for the given contents."""
         ...
@@ -574,16 +611,15 @@ class GeminiProvider(AIProviderInterface):
                 config_params["cached_content"] = cached_content_name
             config = self._types.GenerateContentConfig(**config_params)
 
-            contents = (
-                [prompt]
-                if cached_content_name
-                else [
-                    self._types.Part.from_bytes(
-                        data=pdf_bytes, mime_type="application/pdf"
-                    ),
-                    prompt,
-                ]
-            )
+            if not cached_content_name and pdf_bytes:
+                if isinstance(pdf_bytes, str) and pdf_bytes.startswith("gs://"):
+                    pdf_part = self._types.Part.from_uri(file_uri=pdf_bytes, mime_type="application/pdf")
+                else:
+                    # Bytes case
+                    pdf_part = self._types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
+                contents = [pdf_part, prompt]
+            else:
+                contents = [prompt]
 
             response = await self.client.aio.models.generate_content(
                 model=target_model,
@@ -608,6 +644,132 @@ class GeminiProvider(AIProviderInterface):
                 pdf_size=len(pdf_bytes) if pdf_bytes else 0,
             )
             raise AIGenerationError(f"PDF analysis failed: {e}") from e
+
+    async def generate_stream(
+        self,
+        prompt: str,
+        context: str = "",
+        model: str | None = None,
+        system_instruction: str | None = None,
+        cached_content_name: str | None = None,
+    ):
+        """Generate streaming response from Gemini."""
+        target_model = model or self.model
+        try:
+            full_prompt = f"{context}\n\n{prompt}" if context else prompt
+            config_params: dict = {
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
+            }
+            if system_instruction and not cached_content_name:
+                config_params["system_instruction"] = system_instruction
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
+
+            config = self._types.GenerateContentConfig(**config_params)
+            contents = prompt if cached_content_name else full_prompt
+
+            response_stream = await self.client.aio.models.generate_content_stream(
+                model=target_model,
+                contents=contents,
+                config=config,
+            )
+            async for chunk in response_stream:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            log.exception("gemini_stream", "Gemini ストリーミング生成に失敗しました")
+            raise AIGenerationError(f"Streaming failed: {e}")
+
+    async def generate_with_image_stream(
+        self,
+        prompt: str,
+        image_bytes: bytes | None = None,
+        mime_type: str = "image/jpeg",
+        model: str | None = None,
+        system_instruction: str | None = None,
+        cached_content_name: str | None = None,
+        image_uri: str | None = None,
+    ):
+        """Generate streaming response from Gemini with image."""
+        target_model = model or self.model
+        try:
+            config_params: dict = {
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
+            }
+            if system_instruction:
+                config_params["system_instruction"] = system_instruction
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
+
+            config = self._types.GenerateContentConfig(**config_params)
+
+            if image_uri:
+                image_part = self._types.Part.from_uri(
+                    file_uri=image_uri, mime_type=mime_type
+                )
+            elif image_bytes:
+                image_part = self._types.Part.from_bytes(
+                    data=image_bytes, mime_type=mime_type
+                )
+            else:
+                image_part = None
+
+            contents = [image_part, prompt] if image_part else [prompt]
+
+            response_stream = await self.client.aio.models.generate_content_stream(
+                model=target_model,
+                contents=contents,
+                config=config,
+            )
+            async for chunk in response_stream:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            log.exception("gemini_image_stream", "Gemini 画像ストリーミングに失敗しました")
+            raise AIGenerationError(f"Image streaming failed: {e}")
+
+    async def generate_with_pdf_stream(
+        self,
+        prompt: str,
+        pdf_bytes: bytes | None = None,
+        model: str | None = None,
+        cached_content_name: str | None = None,
+    ):
+        """Generate streaming response from Gemini with PDF."""
+        target_model = model or self.model
+        try:
+            config_params: dict = {
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
+            }
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
+            config = self._types.GenerateContentConfig(**config_params)
+
+            contents = (
+                [prompt]
+                if cached_content_name
+                else [
+                    self._types.Part.from_bytes(
+                        data=pdf_bytes, mime_type="application/pdf"
+                    ),
+                    prompt,
+                ]
+            )
+
+            response_stream = await self.client.aio.models.generate_content_stream(
+                model=target_model,
+                contents=contents,
+                config=config,
+            )
+            async for chunk in response_stream:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            log.exception("gemini_pdf_stream", "Gemini PDF ストリーミングに失敗しました")
+            raise AIGenerationError(f"PDF streaming failed: {e}")
 
     async def count_tokens(self, contents: Any, model: str | None = None) -> int:
         """Count tokens using Gemini API."""
@@ -639,7 +801,12 @@ class GeminiProvider(AIProviderInterface):
 
             # contents can be a list of parts or a single string
             if isinstance(contents, str):
-                parts = [self._types.Part.from_text(text=contents)]
+                if contents.startswith("gs://"):
+                    parts = [
+                        self._types.Part.from_uri(file_uri=contents, mime_type="application/pdf")
+                    ]
+                else:
+                    parts = [self._types.Part.from_text(text=contents)]
             elif isinstance(contents, bytes):
                 # Assume PDF if bytes
                 parts = [
@@ -1046,23 +1213,21 @@ class VertexAIProvider(AIProviderInterface):
     async def generate_with_pdf(
         self,
         prompt: str,
-        pdf_bytes: bytes | None = None,
+        pdf_bytes: bytes | str | None = None,
         model: str | None = None,
         cached_content_name: str | None = None,
     ) -> str:
         """Generate text response from prompt with PDF input."""
         target_model = model or self.model
         try:
-            contents = (
-                [prompt]
-                if cached_content_name
-                else [
-                    self._types.Part.from_bytes(
-                        data=pdf_bytes, mime_type="application/pdf"
-                    ),
-                    prompt,
-                ]
-            )
+            if not cached_content_name and pdf_bytes:
+                if isinstance(pdf_bytes, str) and pdf_bytes.startswith("gs://"):
+                    pdf_part = self._types.Part.from_uri(file_uri=pdf_bytes, mime_type="application/pdf")
+                else:
+                    pdf_part = self._types.Part.from_bytes(data=pdf_bytes, mime_type="application/pdf")
+                contents = [pdf_part, prompt]
+            else:
+                contents = [prompt]
 
             config_params: GenConfig = {
                 "temperature": self.temperature,
@@ -1086,6 +1251,132 @@ class VertexAIProvider(AIProviderInterface):
         except Exception as e:
             log.exception("vertex_pdf", "Vertex AI PDF 生成に失敗しました")
             raise AIGenerationError(f"Vertex PDF analysis failed: {e}") from e
+
+    async def generate_stream(
+        self,
+        prompt: str,
+        context: str = "",
+        model: str | None = None,
+        system_instruction: str | None = None,
+        cached_content_name: str | None = None,
+    ):
+        """Generate streaming response from Vertex AI."""
+        target_model = model or self.model
+        try:
+            full_prompt = f"{context}\n\n{prompt}" if context else prompt
+            config_params: dict = {
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
+            }
+            if system_instruction and not cached_content_name:
+                config_params["system_instruction"] = system_instruction
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
+
+            config = self._types.GenerateContentConfig(**config_params)
+            contents = prompt if cached_content_name else full_prompt
+
+            response_stream = await self.client.aio.models.generate_content_stream(
+                model=target_model,
+                contents=contents,
+                config=config,
+            )
+            async for chunk in response_stream:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            log.exception("vertex_stream", "Vertex AI ストリーミング生成に失敗しました")
+            raise AIGenerationError(f"Vertex streaming failed: {e}")
+
+    async def generate_with_image_stream(
+        self,
+        prompt: str,
+        image_bytes: bytes | None = None,
+        mime_type: str = "image/jpeg",
+        model: str | None = None,
+        system_instruction: str | None = None,
+        cached_content_name: str | None = None,
+        image_uri: str | None = None,
+    ):
+        """Generate streaming response from Vertex AI with image."""
+        target_model = model or self.model
+        try:
+            config_params: dict = {
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
+            }
+            if system_instruction:
+                config_params["system_instruction"] = system_instruction
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
+
+            config = self._types.GenerateContentConfig(**config_params)
+
+            if image_uri:
+                image_part = self._types.Part.from_uri(
+                    file_uri=image_uri, mime_type=mime_type
+                )
+            elif image_bytes:
+                image_part = self._types.Part.from_bytes(
+                    data=image_bytes, mime_type=mime_type
+                )
+            else:
+                image_part = None
+
+            contents = [image_part, prompt] if image_part else [prompt]
+
+            response_stream = await self.client.aio.models.generate_content_stream(
+                model=target_model,
+                contents=contents,
+                config=config,
+            )
+            async for chunk in response_stream:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            log.exception("vertex_image_stream", "Vertex AI 画像ストリーミングに失敗しました")
+            raise AIGenerationError(f"Vertex image streaming failed: {e}")
+
+    async def generate_with_pdf_stream(
+        self,
+        prompt: str,
+        pdf_bytes: bytes | None = None,
+        model: str | None = None,
+        cached_content_name: str | None = None,
+    ):
+        """Generate streaming response from Vertex AI with PDF."""
+        target_model = model or self.model
+        try:
+            config_params: dict = {
+                "temperature": self.temperature,
+                "max_output_tokens": self.max_tokens,
+            }
+            if cached_content_name:
+                config_params["cached_content"] = cached_content_name
+            config = self._types.GenerateContentConfig(**config_params)
+
+            contents = (
+                [prompt]
+                if cached_content_name
+                else [
+                    self._types.Part.from_bytes(
+                        data=pdf_bytes, mime_type="application/pdf"
+                    ),
+                    prompt,
+                ]
+            )
+
+            response_stream = await self.client.aio.models.generate_content_stream(
+                model=target_model,
+                contents=contents,
+                config=config,
+            )
+            async for chunk in response_stream:
+                if chunk.text:
+                    yield chunk.text
+        except Exception as e:
+            log.exception("vertex_pdf_stream", "Vertex AI PDF ストリーミングに失敗しました")
+            raise AIGenerationError(f"Vertex PDF streaming failed: {e}")
 
     async def count_tokens(self, contents: Any, model: str | None = None) -> int:
         """Count tokens using Vertex AI API."""
@@ -1119,7 +1410,10 @@ class VertexAIProvider(AIProviderInterface):
             )
 
             if isinstance(contents, str):
-                parts = [self._types.Part.from_text(text=contents)]
+                if contents.startswith("gs://"):
+                    parts = [self._types.Part.from_uri(file_uri=contents, mime_type="application/pdf")]
+                else:
+                    parts = [self._types.Part.from_text(text=contents)]
             elif isinstance(contents, bytes):
                 parts = [
                     self._types.Part.from_bytes(

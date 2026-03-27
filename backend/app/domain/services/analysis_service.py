@@ -42,10 +42,11 @@ class EnglishAnalysisService:
         context: str | None = None,
         lang: str = "ja",
         session_id: str | None = None,
+        paper_title: str | None = None,
     ):
-        """Get translation for a lemma, optionally using context."""
+        """Get translation for a lemma, optionally using context or paper title."""
         return await self.word_analysis.translate(
-            lemma, lang=lang, context=context, session_id=session_id
+            lemma, lang=lang, context=context, session_id=session_id, paper_title=paper_title
         )
 
     # Legacy accessors

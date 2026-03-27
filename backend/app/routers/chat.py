@@ -69,37 +69,46 @@ class ChatRequest(BaseModel):
 
 @router.post("/chat")
 async def chat(request: ChatRequest, user: OptionalUser = None):
+    import time
+
+    t_start = time.perf_counter()
     storage = get_storage_provider()
-    # Check registration status (Redis キャッシュ付き、DB フォールバック)
+
+    # 1. Auth & Redis cache check
     user_id = user.uid if user else None
     is_registered = get_is_registered(user_id)
+    t_auth = time.perf_counter()
 
-    sanitized_message = request.message  # @field_validator でサニタイズ済み
+    sanitized_message = request.message
 
-    # Resolve paper_id
+    # 2. Resolve paper_id
     paper_id = request.paper_id
     if not paper_id:
         paper_id = storage.get_session_paper_id(request.session_id)
+    t_paper_resolve = time.perf_counter()
 
-    # Get history key
+    # 3. History key
     if is_registered:
         history_key = (
             f"chat:{user_id}:{request.paper_id if request.paper_id else 'global'}"
         )
-        expire = 7 * 24 * 3600  # 7 days for registered users
+        expire = 7 * 24 * 3600
     else:
         history_key = f"chat:{request.session_id}:{request.paper_id if request.paper_id else 'global'}"
-        expire = 3600  # 1 hour for guests (sliding window)
+        expire = 3600
 
-    # セッションコンテキストと履歴を1往復で取得（Redis MGET）
+    # 4. Context & History from Redis
     session_key = f"session:{request.session_id}"
     context_raw, history_raw = redis_service.mget(session_key, history_key)
     context = context_raw or ""
     history = history_raw or []
+    t_redis_load = time.perf_counter()
+
+    # Sliding window/Context refresh
     if context:
         redis_service.expire(session_key, 3600)
 
-    # Check chat limit (max 10 turns)
+    # 5. Chat turn limit
     user_msg_count = sum(1 for m in history if m.get("role") == "user")
     if user_msg_count >= 10:
         return JSONResponse(
@@ -108,7 +117,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
             }
         )
 
-    # Fetch image if figure_id provided
+    # 6. Image Load (if figure_id)
     image_bytes = None
     if request.figure_id:
         figure = storage.get_figure(request.figure_id)
@@ -117,57 +126,43 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
                 image_bytes = get_image_bytes(figure["image_url"])
                 log.debug("chat", "画像を読み込みました", figure_id=request.figure_id)
             except Exception as e:
-                log.error(
-                    "chat",
-                    "画像の読み込みに失敗しました",
-                    figure_id=request.figure_id,
-                    error=str(e),
-                )
+                log.warning("chat", "画像の読み込みに失敗しました", figure_id=request.figure_id, error=str(e))
+    t_image_load = time.perf_counter()
 
-    # Fetch PDF bytes for grounding if paper_id exists
-    # キャッシュが既にある場合はGCSダウンロードをスキップ
+    # 7. PDF Grounding Download (THE BIG POTENTIAL NECK)
     MAX_CHAT_PDF_BYTES = int(settings.get("MAX_CHAT_PDF_SIZE_MB", "30")) * 1024 * 1024
-    pdf_bytes = None
+    pdf_input: bytes | str | None = None
+    t_pdf_download_start = time.perf_counter()
     if paper_id:
         pdf_cache_key = f"paper_cache_pdf:{paper_id}"
+        # If cache exists in Redis, we skip download as ChatService will use the cache
         if redis_service.get(pdf_cache_key):
-            log.debug(
-                "chat", "PDFキャッシュが存在するため、GCSからのダウンロードをスキップします", paper_id=paper_id
-            )
+            log.debug("chat", "PDFキャッシュ存在のためダウンロードスキップ", paper_id=paper_id)
         else:
             try:
                 paper_info = storage.get_paper(paper_id)
                 if paper_info and paper_info.get("file_hash"):
-                    from app.providers import get_image_storage
-
+                    from app.providers.image_storage import get_image_storage, GCSImageStorage
                     img_storage = get_image_storage()
-                    pdf_bytes = img_storage.get_doc_bytes(
-                        img_storage.get_doc_path(paper_info["file_hash"])
-                    )
-                    if len(pdf_bytes) > MAX_CHAT_PDF_BYTES:
-                        log.warning(
-                            "chat",
-                            "PDFサイズが上限を超えたため、テキストコンテキストのみで処理します",
-                            paper_id=paper_id,
-                            pdf_size_mb=f"{len(pdf_bytes) / 1024 / 1024:.1f}",
-                            limit_mb=settings.get("MAX_CHAT_PDF_SIZE_MB", "30"),
-                        )
-                        pdf_bytes = None
+                    
+                    if isinstance(img_storage, GCSImageStorage):
+                        doc_path = img_storage.get_doc_path(paper_info["file_hash"])
+                        pdf_input = f"gs://{img_storage.bucket_name}/{doc_path}"
+                        log.debug("chat", "GCS URIをチャット用に解決", uri=pdf_input)
                     else:
-                        log.debug(
-                            "chat", "GroundingのためにPDFバイナリを読み込みました", paper_id=paper_id
+                        pdf_input = img_storage.get_doc_bytes(
+                            img_storage.get_doc_path(paper_info["file_hash"])
                         )
+                        if pdf_input and len(pdf_input) > MAX_CHAT_PDF_BYTES:
+                            log.warning("chat", "PDFサイズ超過のためGroundingスキップ")
+                            pdf_input = None
             except Exception as e:
-                log.warning(
-                    "chat",
-                    "Grounding用のPDFバイナリの読み込みに失敗しました",
-                    error=str(e),
-                    paper_id=paper_id,
-                )
+                log.warning("chat", "Grounding用PDFの取得に失敗(non-fatal)", error=str(e))
+    t_pdf_download_end = time.perf_counter()
 
-    # Calculate user_id (handling guest case)
+    # 8. AI Generation (The core processing)
     current_user_id = user_id if is_registered else f"guest:{request.session_id}"
-
+    ai_start = time.perf_counter()
     response_data = await chat_service.chat(
         sanitized_message,
         history=history,
@@ -177,15 +172,36 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         user_id=current_user_id,
         session_id=request.session_id,
         image_bytes=image_bytes,
-        pdf_bytes=pdf_bytes,
+        pdf_input=pdf_input,
+    )
+    ai_end = time.perf_counter()
+
+    # Unpack response
+    # response_data is expected to be a dict {"text": ..., "trace_id": ..., "grounding": ...}
+    if isinstance(response_data, str):
+        response_text = response_data
+        grounding = None
+        trace_id = None
+    else:
+        response_text = response_data["text"]
+        grounding = response_data.get("grounding")
+        trace_id = response_data.get("trace_id")
+
+    # Final Timings Log
+    total_s = ai_end - t_start
+    log.info(
+        "chat_timing",
+        "Chat request processed",
+        total_s=round(total_s, 3),
+        auth_s=round(t_auth - t_start, 3),
+        redis_s=round(t_redis_load - t_paper_resolve, 3),
+        image_s=round(t_image_load - t_redis_load, 3),
+        pdf_download_s=round(t_pdf_download_end - t_pdf_download_start, 3),
+        ai_call_s=round(ai_end - ai_start, 3),
+        paper_id=paper_id,
     )
 
-    # response_data is now ALWAYS a dict (containing 'text', 'trace_id', and optionally 'grounding')
-    response_text = response_data["text"]
-    grounding = response_data.get("grounding")
-    trace_id = response_data.get("trace_id")
-
-    # Update history
+    # 9. Update History
     history.append({"role": "user", "content": sanitized_message})
     history.append(
         {
@@ -196,21 +212,21 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         }
     )
 
-    # Trim history (keep last 40)
+    # Trim history
     if len(history) > 40:
         history = history[-40:]
 
-    # Save to cache & Refresh context TTL
+    # Save update
     redis_service.set(history_key, json.dumps(history), expire=expire)
     if context:
         redis_service.expire(f"session:{request.session_id}", 3600)
 
-    # PostgreSQL に永続保存（登録ユーザー + paper_id がある場合のみ）
+    # Permament storage
     if is_registered and paper_id:
         try:
             storage.save_chat_history(user_id, paper_id, history)
         except Exception as e:
-            log.warning("chat", "DBへのチャット履歴の永続化に失敗しました", error=str(e))
+            log.warning("chat", "History persistence failed", error=str(e))
 
     return JSONResponse(
         {
@@ -219,6 +235,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
             "trace_id": trace_id,
         }
     )
+
 
 
 @router.get("/chat/history")

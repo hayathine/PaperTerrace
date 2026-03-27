@@ -106,8 +106,17 @@ async def lifespan(app: FastAPI):
         except Exception as e:
             log.warning("lifespan", "ARQ pool initialization failed (non-fatal)", error=str(e))
 
-    # DB warmup と ARQ pool 初期化を並列実行してコールドスタートを短縮
-    await asyncio.gather(_warmup_db_async(), _warmup_arq_async())
+    async def _warmup_dspy_async() -> None:
+        """DSPy 初期化: リクエストごとのオーバーヘッドを削減。"""
+        try:
+            from common.dspy_utils.config import setup_dspy
+            await asyncio.to_thread(setup_dspy)
+            log.info("lifespan", "DSPy initialized")
+        except Exception as e:
+            log.warning("lifespan", "DSPy initialization failed (non-fatal)", error=str(e))
+
+    # DB warmup, ARQ pool 初期化, DSPy 初期化を並列実行してコールドスタートを短縮
+    await asyncio.gather(_warmup_db_async(), _warmup_arq_async(), _warmup_dspy_async())
 
     yield
 

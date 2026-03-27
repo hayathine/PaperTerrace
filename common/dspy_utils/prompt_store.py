@@ -27,6 +27,7 @@ from typing import TYPE_CHECKING, Callable
 
 import dspy
 from common.logger import get_logger
+from backend.app.core.config import get_log_database_url, get_log_schema
 
 log = get_logger(__name__)
 
@@ -51,7 +52,11 @@ class _StandalonePgClient:
     def __init__(self) -> None:
         import psycopg2  # type: ignore[import]
 
-        self._url = os.getenv("LOG_DATABASE_URL")
+        try:
+            self._url = get_log_database_url()
+        except Exception:
+            self._url = os.getenv("LOG_DATABASE_URL")
+
         if not self._url:
             raise RuntimeError("LOG_DATABASE_URL が設定されていません")
         # 接続確認
@@ -78,7 +83,8 @@ class _StandalonePgClient:
         cols = list(rows[0].keys())
         col_str = ", ".join(cols)
         placeholders = ", ".join(f"%({c})s" for c in cols)
-        sql = f"INSERT INTO logs.{table} ({col_str}) VALUES ({placeholders})"
+        schema = get_log_schema()
+        sql = f"INSERT INTO {schema}.{table} ({col_str}) VALUES ({placeholders})"
         with self._connect() as conn:
             with conn.cursor() as cur:
                 cur.executemany(sql, rows)
@@ -202,8 +208,9 @@ def load_candidates_from_bigquery(
     pg = _get_pg_client()
 
     # 最新の optimization_id を取得
+    schema = get_log_schema()
     row = pg.query_one(
-        "SELECT optimization_id FROM logs.prompt_candidates "
+        f"SELECT optimization_id FROM {schema}.prompt_candidates "
         "WHERE program_name = :program_name "
         "ORDER BY created_at DESC LIMIT 1",
         {"program_name": program_name},
@@ -220,7 +227,7 @@ def load_candidates_from_bigquery(
     optimization_id: str = row["optimization_id"]
 
     rows = pg.query(
-        "SELECT candidate_index, module_state FROM logs.prompt_candidates "
+        f"SELECT candidate_index, module_state FROM {schema}.prompt_candidates "
         "WHERE program_name = :program_name AND optimization_id = :optimization_id "
         "ORDER BY candidate_index ASC",
         {"program_name": program_name, "optimization_id": optimization_id},

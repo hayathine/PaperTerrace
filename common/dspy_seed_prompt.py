@@ -141,20 +141,11 @@ Your goal is to help users understand complex academic papers, translate technic
 # Fixed System Prompt for Translation (Prefix Caching optimized)
 # ------------------------------------------
 
-DICT_TRANSLATE_SYSTEM_PROMPT = """You are an expert academic research assistant.
-Translate the target English text into the requested language using the provided academic paper context.
-Prioritize domain-specific accuracy.
-Output ONLY the translated word or phrase. Do NOT include any explanations or meta-comments.
-Example: "Context: outperforms SOTA models. Target: SOTA" -> "最先端の" """
+DICT_TRANSLATE_SYSTEM_PROMPT = (
+    """Translate with domain-accurate terminology. Output only the translation."""
+)
 
-DICT_TRANSLATE_LLM_PROMPT = """[Academic Context]
-{paper_context}
-
-[Target Text]
-{target_word}
-[Target Language]: {lang_name}
-
-Translation:"""
+DICT_TRANSLATE_LLM_PROMPT = """{paper_title}|{lang_name}|{target_word}"""
 
 VISION_ANALYZE_FIGURE_PROMPT = """Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.
 {caption_hint}

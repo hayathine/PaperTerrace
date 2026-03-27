@@ -14,7 +14,6 @@ from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.domain.services.analysis_service import EnglishAnalysisService
 from app.providers import get_ai_provider
 from app.providers.orm_storage import ORMStorageAdapter
-from common.dspy_utils.config import setup_dspy
 from common.dspy_utils.modules import (
     DeepExplanationModule,
     SimpleTranslationModule,
@@ -243,8 +242,15 @@ async def explain(
         f"guest:{session_id}" if session_id else None
     )
 
+    # Fetch paper title for local LLM optimization
+    paper_title = None
+    if paper_id:
+        paper_obj = storage.get_paper(paper_id)
+        if paper_obj:
+            paper_title = paper_obj.get("title")
+
     # 1. Cache Check / Translation Pod
-    cached = await service.get_translation(lemma, lang=lang, context=context)
+    cached = await service.get_translation(lemma, lang=lang, context=context, paper_title=paper_title)
     if cached:
         source = cached.get("source", "Cache")
         if not is_htmx:
@@ -296,7 +302,6 @@ async def explain(
             paper_context += f"\n[Surrounding Context]\n...{context}...\n"
 
         is_phrase = " " in lemma.strip()
-        setup_dspy()
         if is_phrase:
             trans_mod = TranslationModule()
             res, trace_id = await trace_dspy_call(
@@ -452,7 +457,6 @@ async def explain_deep(
         log.info("explain_deep", "Gemini call", lemma=lemma)
 
         # DSPy version
-        setup_dspy()
         trans_mod = TranslationModule()
         # Single words might need different prompt, but for now use context aware phrase translation
         res, trace_id = await trace_dspy_call(
@@ -576,7 +580,6 @@ async def explain_with_context(
 
     try:
         # DSPy version
-        setup_dspy()
         # DeepExplanation uses summary_context, context, word, lang_name
         deep_mod = DeepExplanationModule()
         res, trace_id = await trace_dspy_call(

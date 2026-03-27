@@ -148,7 +148,7 @@ class LlamaCppTranslationService:
         )
 
         user_content = DICT_TRANSLATE_LLM_PROMPT.format(
-            paper_context=paper_context,
+            paper_title=paper_context, # The argument name is still paper_context for now to avoid breaking the client immediately
             target_word=original_word,
             lang_name=lang_name,
         )

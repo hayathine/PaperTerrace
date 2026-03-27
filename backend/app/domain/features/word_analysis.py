@@ -29,31 +29,43 @@ class WordAnalysisService:
         lang: str = "ja",
         context: str | None = None,
         session_id: str | None = None,
+        paper_title: str | None = None,
     ) -> dict | None:
-        # 1. 辞書チェック（省略）
+        # ... logic
         
-        # 2. Translation Pod 翻訳の試行（環境変数 INFERENCE_TRANSLATE_URL がある場合）
+        # 2. Translation Pod 翻訳
         from app.providers.inference_client import get_inference_client
         inf_client = await get_inference_client()
         
         if not inf_client.translate_disabled:
-            try:
-                log.info("translate", "Translation Podによる翻訳を開始します", word=lemma)
-                translation = await inf_client.translate_text(
-                    text=lemma,
-                    tgt_lang=lang,
-                    paper_context=context
-                )
-                if translation:
-                    self.translation_cache[lemma] = translation
-                    return {
-                        "word": lemma,
-                        "translation": translation,
-                        "source": "Translation AI", # Llama 等からの回答であることを明示
-                    }
-            except Exception as e:
-                log.warning("translate", "Translation Pod翻訳に失敗しました。Geminiにフォールバックします。", error=str(e))
-                # 失敗した場合は Gemini にフォールバック
+            # 長文やフレーズ(スペースあり)は Gemini に任せ、単語のみ Translation Pod を使用する
+            is_phrase = " " in lemma.strip()
+            is_too_long = len(lemma) > 25
+
+            if is_phrase or is_too_long:
+                log.debug("translate", "長文またはフレーズのため Translation Pod をスキップします", word=lemma)
+            else:
+                try:
+                    # 80 トークン制限に合わせ、タイトル・文脈を極限まで切り詰める
+                    # lemma > 10 char の場合は、LLMのリソース節約のためコンテキストをスキップする
+                    safe_title = (paper_title[:60] + "...") if paper_title and len(paper_title) > 65 else paper_title
+                    input_context = (safe_title if safe_title else (context[:30] if context else None)) if len(lemma) <= 10 else None
+                    
+                    log.info("translate", "Translation AI 開始(64-token mode)", word=lemma, ctx=input_context)
+                    translation = await inf_client.translate_text(
+                        text=lemma,
+                        tgt_lang=lang,
+                        paper_context=input_context
+                    )
+                    if translation:
+                        self.translation_cache[lemma] = translation
+                        return {
+                            "word": lemma,
+                            "translation": translation,
+                            "source": "Translation AI",
+                        }
+                except Exception as e:
+                    log.warning("translate", "Translation Pod翻訳に失敗しました", error=str(e))
 
         # 3. Gemini Translation (Context-aware if context provided)
         if context:
