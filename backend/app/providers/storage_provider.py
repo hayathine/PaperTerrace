@@ -3,7 +3,8 @@ Storage Provider abstraction layer.
 """
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from contextvars import ContextVar
+from typing import Any, Optional
 
 from common.config import settings  # noqa: F401
 from common.logger import ServiceLogger
@@ -346,17 +347,23 @@ class StorageInterface(ABC):
         ...
 
 
+# Request-scoped storage context
+storage_context: ContextVar[Optional[Any]] = ContextVar("storage_context", default=None)
+
+
 def get_storage_provider() -> StorageInterface:
     """
     Returns the storage provider (ORMStorageAdapter).
-    
-    All environments (local, staging, prod) now use ORM-based storage
-    to ensure consistency and avoid direct SQL dependency.
+    Uses request-scoped context if available to prevent session leaks.
     """
+    # Try to get existing request-scoped storage
+    storage = storage_context.get()
+    if storage is not None:
+        return storage
+
+    # Fallback for background tasks or non-request contexts
     from app.database import SessionLocal
     from app.providers.orm_storage import ORMStorageAdapter
 
-    # ORMStorageAdapter creates its own internal repositories using the session.
-    # It handles session recovery and management.
     db = SessionLocal()
     return ORMStorageAdapter(db)

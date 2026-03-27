@@ -5,13 +5,15 @@ Handles word translation, explanation, and language settings.
 
 import asyncio
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
+from app.database import get_orm_storage
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.domain.services.analysis_service import EnglishAnalysisService
-from app.providers import get_ai_provider, get_storage_provider
+from app.providers import get_ai_provider
+from app.providers.orm_storage import ORMStorageAdapter
 from common.dspy_utils.config import setup_dspy
 from common.dspy_utils.modules import (
     DeepExplanationModule,
@@ -187,7 +189,11 @@ class ExplainRequest(BaseModel):
 
 
 @router.post("/translate")
-async def explain_post(payload: ExplainRequest, req: Request):
+async def explain_post(
+    payload: ExplainRequest,
+    req: Request,
+    storage: ORMStorageAdapter = Depends(get_orm_storage),
+):
     """POST版の解説・翻訳エンドポイント (URI長制限への対応)"""
     return await explain(
         req=req,
@@ -198,6 +204,7 @@ async def explain_post(payload: ExplainRequest, req: Request):
         element_id=payload.element_id,
         conf=payload.conf,
         context=payload.context,
+        storage=storage,
     )
 
 
@@ -211,9 +218,9 @@ async def explain(
     element_id: str | None = None,
     conf: str | None = None,
     context: str | None = None,
+    storage: ORMStorageAdapter = Depends(get_orm_storage),
 ):
     """単語の解説 (Cache -> Gemini)"""
-    storage = get_storage_provider()
     start_time = asyncio.get_event_loop().time()
     element_id = element_id or req.headers.get("HX-Trigger")
 
@@ -236,8 +243,8 @@ async def explain(
         f"guest:{session_id}" if session_id else None
     )
 
-    # 1. Cache Check
-    cached = await service.get_translation(lemma, lang=lang)
+    # 1. Cache Check / Translation Pod
+    cached = await service.get_translation(lemma, lang=lang, context=context)
     if cached:
         source = cached.get("source", "Cache")
         if not is_htmx:
@@ -405,9 +412,9 @@ async def explain_deep(
     session_id: str | None = None,
     element_id: str | None = None,
     context: str | None = None,
+    storage: ORMStorageAdapter = Depends(get_orm_storage),
 ):
     """Geminiによる詳細翻訳（ユーザー押下により発動）"""
-    storage = get_storage_provider()
     # Robust element_id detection
     element_id = element_id or req.headers.get("HX-Trigger")
 
@@ -548,9 +555,12 @@ class ExplainContextRequest(BaseModel):
 
 
 @router.post("/explain/context")
-async def explain_with_context(req: ExplainContextRequest, request: Request):
+async def explain_with_context(
+    req: ExplainContextRequest,
+    request: Request,
+    storage: ORMStorageAdapter = Depends(get_orm_storage),
+):
     """Explain word with context using Gemini"""
-    storage = get_storage_provider()
     start_time = asyncio.get_event_loop().time()
     lang_name = SUPPORTED_LANGUAGES.get(req.lang, req.lang)
 

@@ -1,7 +1,20 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { useAuth } from "../../contexts/AuthContext";
 import type { SelectedFigure } from "../PDF/types";
 import FigureInsight from "./FigureInsight";
+
+// Mock dependencies
+vi.mock("react-i18next", () => ({
+	useTranslation: () => ({
+		t: (key: string) => key,
+		i18n: { language: "ja" },
+	}),
+}));
+
+vi.mock("../../contexts/AuthContext", () => ({
+	useAuth: vi.fn(),
+}));
 
 describe("FigureInsight Component", () => {
 	const mockFigure: SelectedFigure = {
@@ -14,6 +27,9 @@ describe("FigureInsight Component", () => {
 	beforeEach(() => {
 		vi.resetAllMocks();
 		global.fetch = vi.fn();
+		(useAuth as any).mockReturnValue({
+			token: "test-token",
+		});
 	});
 
 	it("renders empty state when no figure is selected and stack is empty", () => {

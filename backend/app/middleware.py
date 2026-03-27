@@ -165,3 +165,31 @@ class LoggingMiddleware(BaseHTTPMiddleware):
                 status_code=500,
                 content={"error": "Internal Server Error", "message": error_msg},
             )
+
+
+class StorageMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to provide a request-scoped database storage session.
+    Prevents connection leaks by ensuring each request gets a fresh session,
+    which is closed automatically after the response is sent.
+    """
+
+    async def dispatch(self, request: Request, call_next):
+        from app.database import SessionLocal
+        from app.providers.orm_storage import ORMStorageAdapter
+        from app.providers.storage_provider import storage_context
+
+        # Skip storage for health checks to minimize DB load
+        if request.url.path in ["/api/health", "/health", "/"]:
+            return await call_next(request)
+
+        db = SessionLocal()
+        storage = ORMStorageAdapter(db)
+        token = storage_context.set(storage)
+
+        try:
+            response = await call_next(request)
+            return response
+        finally:
+            storage.close()  # Also closes the underlying session
+            storage_context.reset(token)

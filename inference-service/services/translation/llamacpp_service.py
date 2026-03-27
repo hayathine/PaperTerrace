@@ -27,7 +27,7 @@ class LlamaCppTranslationService:
         # ローカルパスが優先される設定
         self.model_path = settings.get("LLAMACPP_MODEL_PATH")
 
-        self.n_ctx = int(settings.get("LLAMACPP_CTX_SIZE", "1024"))
+        self.n_ctx = int(settings.get("LLAMACPP_CTX_SIZE", "512"))
         # 安全性のため、物理コア数(6)より少ないスレッド数(4)をデフォルトに設定します。
         self.n_threads = int(settings.get("LLAMACPP_THREADS", "4"))
         self.n_threads_batch = int(settings.get("LLAMACPP_THREADS_BATCH", str(self.n_threads)))
@@ -36,10 +36,12 @@ class LlamaCppTranslationService:
         self.n_gpu_layers = int(
             settings.get("LLAMACPP_GPU_LAYERS", "0")
         )  # CPU実行をデフォルトに
-        self.use_mlock = str(settings.get("LLAMACPP_USE_MLOCK", "false")).lower() == "true"
+        self.use_mlock = str(settings.get("LLAMACPP_USE_MLOCK", "true")).lower() == "true"
         # mmap allows the model to be loaded from disk on demand, reducing initial RAM usage.
         self.use_mmap = str(settings.get("LLAMACPP_USE_MMAP", "true")).lower() == "true"
+        self.flash_attn = str(settings.get("LLAMACPP_FLASH_ATTN", "true")).lower() == "true"
         self.max_tokens = int(settings.get("LLAMACPP_MAX_TOKENS", "2048"))
+        self.verbose = str(settings.get("LLAMACPP_VERBOSE", "false")).lower() == "true"
         self._is_busy = False
         logger.info(f"Llama-cpp モデルの初期化設定: {self.__dict__}")
 
@@ -72,6 +74,8 @@ class LlamaCppTranslationService:
                         n_gpu_layers=self.n_gpu_layers,
                         use_mlock=self.use_mlock,
                         use_mmap=self.use_mmap,
+                        flash_attn=self.flash_attn,
+                        verbose=self.verbose,
                     ),
                 )
             else:

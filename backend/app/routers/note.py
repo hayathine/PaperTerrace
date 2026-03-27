@@ -3,15 +3,16 @@ Note Router
 Handles sidebar note functionality.
 """
 
-from fastapi import APIRouter, Form
+from fastapi import APIRouter, Depends, Form
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.auth import OptionalUser, get_user_identifier
 from app.core.config import is_production
+from app.database import get_orm_storage
 from app.domain.features import SidebarNoteService
-from app.providers import get_storage_provider
+from app.providers.orm_storage import ORMStorageAdapter
 
 router = APIRouter(tags=["Notes"])
 
@@ -30,12 +31,17 @@ class NoteRequest(BaseModel):
 
 
 @router.get("/note/{session_id}")
-async def get_notes(session_id: str, user: OptionalUser, paper_id: str | None = None):
+async def get_notes(
+    session_id: str,
+    user: OptionalUser,
+    paper_id: str | None = None,
+    storage: ORMStorageAdapter = Depends(get_orm_storage),
+):
     user_id = get_user_identifier(user, session_id)
 
     # Resolve paper_id if not provided
     if not paper_id:
-        paper_id = get_storage_provider().get_session_paper_id(session_id)
+        paper_id = storage.get_session_paper_id(session_id)
 
     notes = sidebar_note_service.get_notes(
         session_id, paper_id=paper_id, user_id=user_id
@@ -44,13 +50,17 @@ async def get_notes(session_id: str, user: OptionalUser, paper_id: str | None = 
 
 
 @router.post("/note")
-async def add_note(request: NoteRequest, user: OptionalUser):
+async def add_note(
+    request: NoteRequest,
+    user: OptionalUser,
+    storage: ORMStorageAdapter = Depends(get_orm_storage),
+):
     user_id = get_user_identifier(user, request.session_id)
 
     # Resolve paper_id if not provided
     paper_id = request.paper_id
     if not paper_id:
-        paper_id = get_storage_provider().get_session_paper_id(request.session_id)
+        paper_id = storage.get_session_paper_id(request.session_id)
 
     note = sidebar_note_service.add_note(
         request.session_id,

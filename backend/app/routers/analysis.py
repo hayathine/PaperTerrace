@@ -9,11 +9,12 @@ import json
 from typing import Literal
 
 import httpx
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse, StreamingResponse
 
 from app.auth import OptionalUser, get_user_identifier
 from app.core.config import get_worker_api_url
+from app.database import get_orm_storage
 from app.domain.features import (
     AdversarialReviewService,
     FigureInsightService,
@@ -23,8 +24,8 @@ from app.providers import (
     RedisService,
     get_arq_pool,
     get_redis_client,
-    get_storage_provider,
 )
+from app.providers.orm_storage import ORMStorageAdapter
 from app.domain.services.layout_analysis_service import LayoutAnalysisService
 from app.workers.layout_job import enqueue_layout_job, get_job_status
 from common.logger import ServiceLogger
@@ -49,7 +50,9 @@ adversarial_service = AdversarialReviewService()
 redis_service = RedisService()
 
 
-def _get_context(session_id: str) -> tuple[str | None, str | None]:
+def _get_context(
+    session_id: str, storage: ORMStorageAdapter
+) -> tuple[str | None, str | None]:
     """(context, paper_id) のタプルを返す。paper_id は取得できた場合のみ。"""
     # 1. Redis キャッシュを優先
     context = redis_service.get(f"session:{session_id}")
@@ -61,7 +64,6 @@ def _get_context(session_id: str) -> tuple[str | None, str | None]:
         return context, paper_id
 
     # 2. DB から取得（キャッシュミス時）
-    storage = get_storage_provider()
     paper_id = storage.get_session_paper_id(session_id)
     resolved_paper_id = paper_id or session_id
 
@@ -90,9 +92,10 @@ async def summarize(
     key_word: str | None = Form(None),
     force: bool = Form(False),
     user: OptionalUser = None,
+    storage: ORMStorageAdapter = Depends(get_orm_storage),
 ):
     lang = _normalize_lang(lang)
-    context, resolved_paper_id = _get_context(session_id)
+    context, resolved_paper_id = _get_context(session_id, storage)
     if not context:
         log.warning("summarize", "Context not found", session_id=session_id)
 
@@ -102,7 +105,6 @@ async def summarize(
         )
 
     try:
-        storage = get_storage_provider()
         # Resolve paper_id if missing（DBアクセスは _get_context で取得済みの場合は不要）
         if not paper_id:
             paper_id = resolved_paper_id or storage.get_session_paper_id(session_id)
@@ -178,10 +180,13 @@ async def analyze_figure(
 
 @router.post("/critique")
 async def critique(
-    session_id: str = Form(...), lang: str = Form("ja"), user: OptionalUser = None
+    session_id: str = Form(...),
+    lang: str = Form("ja"),
+    user: OptionalUser = None,
+    storage: ORMStorageAdapter = Depends(get_orm_storage),
 ):
     lang = _normalize_lang(lang)
-    context, _ = _get_context(session_id)
+    context, _ = _get_context(session_id, storage)
     if not context:
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 

@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { useAuth } from "@/contexts/AuthContext";
+import { buildAuthHeaders } from "@/lib/auth";
 import { ERROR_KEYS } from "@/lib/errors";
 import { createLogger } from "@/lib/logger";
 import CopyButton from "../Common/CopyButton";
@@ -44,6 +46,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 
 	// スタックされた解析済み図表の配列（新しいものが先頭）
 	const { t } = useTranslation();
+	const { token } = useAuth();
 	const [stackState, setStackState] = useState<FigureResult[]>(
 		globalStackCache[sessionId],
 	);
@@ -103,15 +106,20 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 			return [newEntry, ...prev];
 		});
 
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), 120_000); // 120秒でタイムアウト
+
 		globalRequestingIds[sessionId].add(figureId);
 
 		const idForApi = selectedFigure.id || "transient";
 		fetch(`${API_URL}/api/figures/${idForApi}/explain`, {
 			method: "POST",
-			headers: { "Content-Type": "application/json" },
+			headers: buildAuthHeaders(token, { "Content-Type": "application/json" }),
 			body: JSON.stringify({ image_url: selectedFigure?.image_url }),
+			signal: controller.signal,
 		})
 			.then(async (res) => {
+				clearTimeout(timeoutId);
 				if (res.ok) return res.json();
 				const errorBody = await res.json().catch(() => ({}));
 				const detail =
@@ -152,9 +160,12 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 				}
 			})
 			.catch((e) => {
+				clearTimeout(timeoutId);
+				const isTimeout = e.name === "AbortError";
 				log.error("handle_explain", "Failed to explain figure", {
 					figureId,
 					error: e,
+					isTimeout,
 				});
 				setStack((prev) =>
 					prev.map((r) =>
@@ -162,7 +173,9 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 							? {
 									...r,
 									isLoading: false,
-									error: t(ERROR_KEYS.figure.analysisNetworkError),
+									error: isTimeout
+										? "AI解析がタイムアウトしました。もう一度お試しください。"
+										: t(ERROR_KEYS.figure.analysisNetworkError),
 								}
 							: r,
 					),
@@ -171,7 +184,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 			.finally(() => {
 				globalRequestingIds[sessionId].delete(figureId);
 			});
-	}, [selectedFigure?.id, selectedFigure?.image_url, sessionId]); // selectedFigure, sessionId が変わったときだけ発動
+	}, [selectedFigure?.id, selectedFigure?.image_url, sessionId, token]); // token も依存関係に追加
 
 	if (!selectedFigure && stackState.length === 0) {
 		return (

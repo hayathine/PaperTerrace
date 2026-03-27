@@ -35,13 +35,27 @@ TRANSLATION_COVERAGE_PENALTY = 0
 CT2_INTER_THREADS = 1
 CT2_INTRA_THREADS = 1
 
+# 翻訳モデル設定（Llama.cpp）
+LLAMACPP_MODEL_PATH = ""
+LLAMACPP_CTX_SIZE = 256          # KVキャッシュバッファサイズ
+LLAMACPP_MAX_TOKENS = 1024      # 最大出力トークン数
+LLAMACPP_THREADS = 4             # 推論スレッド数（物理コア数より少なく設定）
+LLAMACPP_THREADS_BATCH = 4       # バッチ処理スレッド数
+LLAMACPP_BATCH_SIZE = 512        # プロンプト評価バッチサイズ
+LLAMACPP_GPU_LAYERS = 0          # GPUオフロードレイヤー数（0=CPU専用）
+LLAMACPP_USE_MLOCK = "true"      # モデルをRAMにピン留め（page faultを防ぎ高速化）
+LLAMACPP_USE_MMAP = "true"       # メモリマップでモデルをロード（初期RAM使用量を削減）
+LLAMACPP_FLASH_ATTN = "true"     # Flash Attention 2を有効化（attention計算を高速化）
+LLAMACPP_FALLBACK_TIMEOUT = 10   # このタイムアウト後にGeminiへフォールバック（秒）
+LLAMACPP_VERBOSE = false         # llama.cpp の詳細な統計ログを出力するか
+
 MAX_PDF_SIZE_MB = 50
 
 # アプリケーション設定
 BATCH_WORDS_LIMIT = 100
 MAX_CONTEXT_LENGTH = 15000
 MAINTENANCE_MODE = false
-OCR_CHUNK_SIZE = 10
+OCR_CHUNK_SIZE = 5 # Cloud runのPDFレンダリングを節約
 PDF_DPI = 150
 MAX_CHAT_PDF_SIZE_MB = 50
 
@@ -67,23 +81,16 @@ INFERENCE_TRANSLATE_URL = ""
 INFERENCE_OCR_TIMEOUT = 120
 INFERENCE_OCR_DISABLED = false
 INFERENCE_OCR_MIN_PAGE_TEXT_LEN = 100
-# OCR フォールバック: レイアウトブロックをライン分割する高さ (px, 150 DPI 基準)
-# 12pt × (150/72) ≈ 25px + 行間 → 35px が標準的な1行高さ
-OCR_LINE_HEIGHT_PX = 35
+OCR_LINE_HEIGHT_PX = 35 # OCR フォールバック: レイアウトブロックをライン分割する高さ (px, 150 DPI 基準)
 RATE_LIMIT_OCR = "120/minute"
 
 # OCR 検出モデルのハイパーパラメータ
-# 入力解像度: 640 が 1280 より高速かつ同等以上の精度（適度なスムージングでノイズ除去）
-# 認識モデルは動的幅対応のため max_w 制約なし → 640 でも行全体を正確に認識可能
-OCR_DET_INPUT_SIZE = 640
-# DB 二値化閾値: 低いほど薄い文字を拾う (0.15〜0.35)
-OCR_DET_THRESH = 0.2
-# 膨張カーネル (W, H): 認識モデルが動的幅対応になったため行レベル bbox でも問題なし
-OCR_DET_DILATE_KSIZE_W = 5
+OCR_DET_INPUT_SIZE = 640 # 認識モデルは動的幅対応のため max_w 制約なし → 640 でも行全体を正確に認識可能
+OCR_DET_THRESH = 0.2 # DB 二値化閾値: 低いほど薄い文字を拾う (0.15〜0.35)
+OCR_DET_DILATE_KSIZE_W = 5 # 膨張カーネル (W, H): 認識モデルが動的幅対応になったため行レベル bbox でも問題なし
 OCR_DET_DILATE_KSIZE_H = 3
 OCR_DET_DILATE_ITER = 1
-# 最小 bbox 幅: 単一文字レベルの細切れ検出を排除（px）
-OCR_DET_MIN_BBOX_WIDTH = 25
+OCR_DET_MIN_BBOX_WIDTH = 25 # 最小 bbox 幅: 単一文字レベルの細切れ検出を排除（px）
 # OpenVINO リクエストプールサイズ（メモリと並列性のトレードオフ）
 # thinkpad (4GB RAM) では小さく設定すること
 OCR_DET_POOL_SIZE = 1
@@ -116,6 +123,7 @@ BQ_LOG_DATASET = "paperterrace_logs_local"
 # Local 特定設定
 GCS_BUCKET_NAME_LOCAL = "paperterrace-papers-local"
 INFERENCE_VERIFY_SSL = false
+LLAMACPP_VERBOSE = true
 
 [staging]
 LOG_LEVEL = "DEBUG"
@@ -128,7 +136,9 @@ BQ_LOG_DATASET = "paperterrace_logs_staging"
 # Staging 特定設定
 GCS_BUCKET_NAME_STAGING = "paperterrace-papers-staging"
 INFERENCE_VERIFY_SSL = false
+LOG_SCHEMA = "logs_staging"
 # LOG_DATABASE_URL_STAGING = "" (環境変数から取得)
+LLAMACPP_VERBOSE = true
 
 [prod]
 LOG_LEVEL = "INFO"
@@ -138,4 +148,6 @@ STORAGE_PROVIDER = "neon"
 IMAGES_DIR = "app/static/paper_images"
 BQ_LOG_DATASET = "paperterrace_logs"
 INFERENCE_VERIFY_SSL = false
+LOG_SCHEMA = "logs"
 # LOG_DATABASE_URL = "" (環境変数から取得)
+LLAMACPP_VERBOSE = false

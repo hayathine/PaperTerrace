@@ -1,13 +1,9 @@
-
-
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import (
     FigureAnalysisResponse,
 )
-from common.dspy_utils.config import setup_dspy
-from common.dspy_utils.modules import VisionFigureModule
-from common.dspy_utils.trace import TraceContext, save_trace
 from common import settings
+from common.dspy_utils.trace import TraceContext, save_trace
 from common.logger import ServiceLogger
 from redis_provider.provider import RedisService
 
@@ -21,8 +17,6 @@ class FigureInsightService:
         self.ai_provider = get_ai_provider()
         self.model = settings.get("FIGURE_EXPLAIN_MODEL", "gemini-2.5-flash")
         self.redis = RedisService()
-        setup_dspy()
-        self.figure_mod = VisionFigureModule()
 
     async def analyze_figure(
         self,
@@ -75,18 +69,32 @@ class FigureInsightService:
                 mime_type=mime_type,
                 using_pdf_cache=pdf_cache_name is not None,
             )
-            analysis: FigureAnalysisResponse = (
-                await self.ai_provider.generate_with_image(
-                    prompt,
-                    image_bytes=image_bytes,
-                    mime_type=mime_type,
-                    model=self.model,
-                    response_model=FigureAnalysisResponse,
-                    image_uri=image_uri,
-                    max_tokens=4096,
-                    cached_content_name=pdf_cache_name,
-                )
+            log.debug(
+                "analyze",
+                "Calling AI provider with timeout",
+                timeout=20,
             )
+            import asyncio
+
+            try:
+                analysis: FigureAnalysisResponse = await asyncio.wait_for(
+                    self.ai_provider.generate_with_image(
+                        prompt,
+                        image_bytes=image_bytes,
+                        mime_type=mime_type,
+                        model=self.model,
+                        response_model=FigureAnalysisResponse,
+                        image_uri=image_uri,
+                        max_tokens=4096,
+                        cached_content_name=pdf_cache_name,
+                    ),
+                    timeout=20.0,  # Vision AI は時間がかかるため長めに設定
+                )
+            except asyncio.TimeoutError:
+                log.error("analyze", "AI provider analysis timed out", timeout=90)
+                raise Exception(
+                    "AI分析がタイムアウトしました。もう一度お試しください。"
+                )
 
             result_lines = [
                 f"### Type & Overview\n{analysis.type_overview}",
@@ -103,10 +111,16 @@ class FigureInsightService:
             save_trace(
                 module_name="VisionFigureModule",
                 signature="VisionAnalyzeFigure",
-                inputs={"caption_hint": caption_hint, "lang_name": lang_name, "image_uri": image_uri or ""},
+                inputs={
+                    "caption_hint": caption_hint,
+                    "lang_name": lang_name,
+                    "image_uri": image_uri or "",
+                },
                 outputs=analysis.model_dump(),
                 latency_ms=elapsed_ms,
-                context=TraceContext(user_id=user_id, session_id=session_id, paper_id=paper_id),
+                context=TraceContext(
+                    user_id=user_id, session_id=session_id, paper_id=paper_id
+                ),
             )
 
             log.info(
@@ -124,12 +138,18 @@ class FigureInsightService:
             save_trace(
                 module_name="VisionFigureModule",
                 signature="VisionAnalyzeFigure",
-                inputs={"caption_hint": caption_hint, "lang_name": lang_name, "image_uri": image_uri or ""},
+                inputs={
+                    "caption_hint": caption_hint,
+                    "lang_name": lang_name,
+                    "image_uri": image_uri or "",
+                },
                 outputs={},
                 latency_ms=elapsed_ms,
                 is_success=False,
                 error_msg=str(e),
-                context=TraceContext(user_id=user_id, session_id=session_id, paper_id=paper_id),
+                context=TraceContext(
+                    user_id=user_id, session_id=session_id, paper_id=paper_id
+                ),
             )
             log.exception(
                 "analyze",

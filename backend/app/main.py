@@ -16,7 +16,13 @@ from sentry_sdk.integrations.sqlalchemy import SqlalchemyIntegration
 from starlette.middleware.cors import CORSMiddleware
 
 from app.core.config import get_app_env, get_neon_auth_url, get_redis_url, is_production
-from app.middleware import LoggingMiddleware, RateLimitMiddleware, TrustedProxyMiddleware, mw_log
+from app.middleware import (
+    LoggingMiddleware,
+    RateLimitMiddleware,
+    StorageMiddleware,
+    TrustedProxyMiddleware,
+    mw_log,
+)
 from app.routers import (
     analysis_router,
     auth_router,
@@ -148,8 +154,9 @@ app.add_middleware(
 )
 
 
-# ミドルウェアの実行順 (Starlette は LIFO): LoggingMW → TrustedProxyMW → RateLimitMW → Routes
+# ミドルウェアの実行順 (Starlette は LIFO): LoggingMW → TrustedProxyMW → StorageMW → RateLimitMW → Routes
 app.add_middleware(RateLimitMiddleware)
+app.add_middleware(StorageMiddleware)
 app.add_middleware(TrustedProxyMiddleware)
 app.add_middleware(LoggingMiddleware)
 
