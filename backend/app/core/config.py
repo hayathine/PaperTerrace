@@ -118,6 +118,15 @@ def get_log_database_url() -> str:
     return url
 
 
+def get_log_schema() -> str:
+    """環境に応じたログ用 PostgreSQL スキーマ名を返す。
+
+    prod/local : "logs"
+    staging    : "logs_staging"（prod データへの混入を防ぐ）
+    """
+    return str(settings.get("LOG_SCHEMA", "logs"))
+
+
 def get_gcs_bucket_name() -> str | None:
     """環境に応じた GCS バケット名を返す。
 
@@ -153,4 +162,4 @@ def get_worker_api_url() -> str | None:
 
 
 # get_redis_url は common.config から re-export
-__all__ = ["get_redis_url"]
+__all__ = ["get_redis_url", "get_log_schema"]

@@ -402,7 +402,10 @@ async def request_upload_url(
     # キャッシュ確認
     storage = get_storage_provider()
     cached_paper = storage.get_paper_by_hash(file_hash)
-    already_cached = cached_paper is not None
+    # Check if BOTH metadata and PDF source exist
+    # If GCS blob is missing, we must NOT use already_cached=True,
+    # because the next stage (/api/pdf/analyze-pdf-hash) checks for it.
+    already_cached = (cached_paper is not None) and pdf_blob_exists(file_hash)
 
     # 署名付き URL 生成（LocalImageStorage なら None が返る）
     upload_url = get_upload_signed_url(file_hash)

@@ -109,7 +109,7 @@ CORS_EXTRA_ORIGINS = ""
 [local]
 LOG_LEVEL = "DEBUG"
 STORAGE_TYPE = "local"
-STORAGE_PROVIDER = "sqlite"
+STORAGE_PROVIDER = "postgresql"
 IMAGES_DIR = "src/static/paper_images"
 BQ_LOG_DATASET = "paperterrace_logs_local"
 

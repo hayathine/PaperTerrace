@@ -8,12 +8,12 @@ import threading
 from sqlalchemy import create_engine, text
 from sqlalchemy.pool import QueuePool
 
-from app.core.config import get_log_database_url
+from app.core.config import get_log_database_url, get_log_schema
 from common.logger import ServiceLogger
 
 log = ServiceLogger("PgLog")
 
-_LOG_SCHEMA = "logs"
+_LOG_SCHEMA = get_log_schema()
 
 
 class PgLogClient:

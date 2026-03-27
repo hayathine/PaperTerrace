@@ -2,17 +2,13 @@
 Storage Provider abstraction layer.
 """
 
-import sqlite3
 from abc import ABC, abstractmethod
-from datetime import datetime
+from typing import Optional
 
-from common.config import settings  # noqa: F401  secrets/.env の一括ロードを保証
+from common.config import settings  # noqa: F401
 from common.logger import ServiceLogger
 
 log = ServiceLogger("Storage")
-
-
-DB_PATH = settings.get("DB_PATH", "ocr_reader.db")
 
 
 class StorageInterface(ABC):
@@ -34,20 +30,20 @@ class StorageInterface(ABC):
         ocr_text: str,
         html_content: str,
         target_language: str,
-        layout_json: str | None = None,
-        owner_id: str | None = None,
+        layout_json: Optional[str] = None,
+        owner_id: Optional[str] = None,
         visibility: str = "private",
     ) -> str:
         """Save a paper to storage. Returns paper_id."""
         ...
 
     @abstractmethod
-    def get_paper(self, paper_id: str) -> dict | None:
+    def get_paper(self, paper_id: str) -> Optional[dict]:
         """Get a paper by ID."""
         ...
 
     @abstractmethod
-    def get_paper_by_hash(self, file_hash: str) -> dict | None:
+    def get_paper_by_hash(self, file_hash: str) -> Optional[dict]:
         """Get a paper by file hash."""
         ...
 
@@ -63,7 +59,7 @@ class StorageInterface(ABC):
 
     @abstractmethod
     def update_paper_abstract(self, paper_id: str, abstract: str) -> bool:
-        """Update the abstract/summary of a paper."""
+        """Update the abstract of a paper."""
         ...
 
     @abstractmethod
@@ -73,12 +69,12 @@ class StorageInterface(ABC):
 
     @abstractmethod
     def update_paper_section_summary(self, paper_id: str, json_summary: str) -> bool:
-        """Update the section summary (JSON) of a paper."""
+        """Update the section summary of a paper."""
         ...
 
     @abstractmethod
     def delete_paper(self, paper_id: str) -> bool:
-        """Delete a paper by ID."""
+        """Delete a paper from storage."""
         ...
 
     @abstractmethod
@@ -88,17 +84,17 @@ class StorageInterface(ABC):
 
     @abstractmethod
     def update_paper_visibility(self, paper_id: str, visibility: str) -> bool:
-        """Update paper visibility."""
+        """Update the visibility of a paper."""
         ...
 
     @abstractmethod
     def increment_like_count(self, paper_id: str) -> bool:
-        """Increment like_count for a paper (floor 0)."""
+        """Increment the like count of a paper."""
         ...
 
     @abstractmethod
     def decrement_like_count(self, paper_id: str) -> bool:
-        """Decrement like_count for a paper (floor 0)."""
+        """Decrement the like count of a paper."""
         ...
 
     # ===== Note methods =====
@@ -110,661 +106,81 @@ class StorageInterface(ABC):
         session_id: str,
         term: str,
         note: str,
-        image_url: str | None = None,
-        page_number: int | None = None,
-        x: float | None = None,
-        y: float | None = None,
-        user_id: str | None = None,
-        paper_id: str | None = None,
+        image_url: Optional[str] = None,
+        page_number: Optional[int] = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
+        user_id: Optional[str] = None,
+        paper_id: Optional[str] = None,
     ) -> str:
-        """Save a note. Returns note_id."""
+        """Save a note to storage. Returns note_id."""
         ...
 
     @abstractmethod
     def get_notes(
-        self, session_id: str, paper_id: str | None = None, user_id: str | None = None
-    ) -> list[dict]:
-        """Get all notes for a session, paper, or user."""
-        ...
-
-    @abstractmethod
-    def delete_note(self, note_id: str) -> bool:
-        """Delete a note by ID."""
-        ...
-
-    # ... (skipping stamp methods for brevity in this replacement block if possible, but replace_file_content replaces contiguous blocks) ...
-    # Wait, I can't skip methods in the middle of a block. I should do it in chunks or be careful.
-    # The Abstract methods are lines 76-94.
-
-    # Let's do SQLiteStorage updates separately or together.
-    # I'll update StorageInterface first.
-
-    # ===== Stamp methods =====
-
-    @abstractmethod
-    def add_paper_stamp(
         self,
-        paper_id: str,
-        stamp_type: str,
-        user_id: str | None = None,
-        page_number: int | None = None,
-        x: float | None = None,
-        y: float | None = None,
-    ) -> str:
-        """Add a stamp to a paper with optional position."""
-        ...
-
-    @abstractmethod
-    def get_paper_stamps(self, paper_id: str) -> list[dict]:
-        """Get stamps for a paper."""
-        ...
-
-    @abstractmethod
-    def delete_paper_stamp(self, stamp_id: str) -> bool:
-        """Delete a stamp from a paper."""
-        ...
-
-    @abstractmethod
-    def add_note_stamp(
-        self,
-        note_id: str,
-        stamp_type: str,
-        user_id: str | None = None,
-        x: float | None = None,
-        y: float | None = None,
-    ) -> str:
-        """Add a stamp to a note with optional position."""
-        ...
-
-    @abstractmethod
-    def get_note_stamps(self, note_id: str) -> list[dict]:
-        """Get stamps for a note."""
-        ...
-
-    @abstractmethod
-    def delete_note_stamp(self, stamp_id: str) -> bool:
-        """Delete a stamp from a note."""
-        ...
-
-    # ===== Figure methods =====
-
-    @abstractmethod
-    def save_figure(
-        self,
-        paper_id: str,
-        page_number: int,
-        bbox: list | tuple,
-        image_url: str,
-        caption: str = "",
-        explanation: str = "",
-        label: str = "figure",
-        latex: str = "",
-    ) -> str:
-        """Save a figure. Returns figure_id."""
-        ...
-
-    @abstractmethod
-    def save_figures_batch(
-        self,
-        paper_id: str,
-        figures: list[dict],
-    ) -> list[str]:
-        """Save multiple figures. figures is a list of dicts with keys matching save_figure args."""
-        ...
-
-    @abstractmethod
-    def get_paper_figures(self, paper_id: str) -> list[dict]:
-        """Get figures for a paper."""
-        ...
-
-    @abstractmethod
-    def get_figure(self, figure_id: str) -> dict | None:
-        """Get a figure by ID."""
-        ...
-
-    @abstractmethod
-    def update_figure_explanation(self, figure_id: str, explanation: str) -> bool:
-        """Update figure explanation."""
-        ...
-
-    @abstractmethod
-    def update_figure_latex(self, figure_id: str, latex: str) -> bool:
-        """Update figure LaTeX."""
-        ...
-
-    # ===== User methods =====
-
-    @abstractmethod
-    def create_user(self, user_data: dict) -> str:
-        """Create a new user. Returns user_id."""
-        ...
-
-    @abstractmethod
-    def get_user(self, user_id: str) -> dict | None:
-        """Get a user by ID."""
-        ...
-
-    @abstractmethod
-    def get_user_by_email(self, email: str) -> dict | None:
-        """Get a user by email address."""
-        ...
-
-    @abstractmethod
-    def update_user(self, user_id: str, data: dict) -> bool:
-        """Update user data."""
-        ...
-
-    def migrate_user_uid(self, old_uid: str, new_uid: str) -> bool:
-        """Migrate user primary key from old UID to new UID (auth provider migration)."""
-        return False
-
-    @abstractmethod
-    def delete_user(self, user_id: str) -> bool:
-        """Delete a user."""
-        ...
-
-    @abstractmethod
-    def get_user_stats(self, user_id: str) -> dict:
-        """Get user statistics."""
-        ...
-
-    # ===== Social paper methods =====
-
-    @abstractmethod
-    def get_user_papers(
-        self, user_id: str, page: int = 1, per_page: int = 20
-    ) -> tuple[list[dict], int]:
-        """Get all papers for a user."""
-        ...
-
-    @abstractmethod
-    def get_user_public_papers(
-        self, user_id: str, page: int = 1, per_page: int = 20
-    ) -> tuple[list[dict], int]:
-        """Get public papers for a user."""
-        ...
-
-    @abstractmethod
-    def get_public_papers(
-        self, page: int = 1, per_page: int = 20, sort: str = "recent"
-    ) -> tuple[list[dict], int]:
-        """Get all public papers for explore page."""
-        ...
-
-    @abstractmethod
-    def search_public_papers(
-        self, query: str, page: int = 1, per_page: int = 20
-    ) -> tuple[list[dict], int]:
-        """Search public papers."""
-        ...
-
-    @abstractmethod
-    def get_popular_tags(self, limit: int = 20) -> list[dict]:
-        """Get popular tags."""
-        ...
-
-    @abstractmethod
-    def get_ocr_cache(self, file_hash: str) -> dict | None:
-        """Get cached OCR text and layout."""
-        ...
-
-    @abstractmethod
-    def save_ocr_cache(
-        self,
-        file_hash: str,
-        ocr_text: str,
-        filename: str,
-        model_name: str,
-        layout_json: str | None = None,
-    ) -> None:
-        """Save OCR text to cache."""
-        ...
-
-    @abstractmethod
-    def save_session_context(self, session_id: str, paper_id: str) -> None:
-        """Save session to paper mapping."""
-        ...
-
-    @abstractmethod
-    def get_session_paper_id(self, session_id: str) -> str | None:
-        """Get paper ID for a session."""
-        ...
-
-    @abstractmethod
-    def clear_all_data(self) -> bool:
-        """Clear all data from the database (papers, figures, stamps, notes, etc.)."""
-        ...
-
-    def close(self) -> None:
-        """ストレージリソースを解放する（デフォルト: 何もしない）。"""
-        pass
-
-
-class SQLiteStorage(StorageInterface):
-    """SQLite storage implementation."""
-
-    def __init__(self, db_path: str = DB_PATH):
-        self.db_path = db_path
-        log.info("init", "SQLiteStorage initialized", db_path=self.db_path)
-
-    def _get_connection(self):
-        """Get a database connection with row factory (context manager)."""
-        from contextlib import contextmanager
-
-        @contextmanager
-        def get_conn():
-            conn = sqlite3.connect(self.db_path)
-            conn.row_factory = sqlite3.Row
-            try:
-                yield conn
-            finally:
-                conn.close()
-
-        return get_conn()
-
-    def init_tables(self) -> None:
-        """Legacy method retained for interface compatibility (now handled by Alembic)."""
-        pass
-
-    # ===== Paper methods =====
-
-    def save_paper(
-        self,
-        paper_id: str,
-        file_hash: str,
-        filename: str,
-        ocr_text: str,
-        html_content: str,
-        target_language: str = "ja",
-        layout_json: str | None = None,
-        owner_id: str | None = None,
-        visibility: str = "private",
-    ) -> str:
-        """Save a paper to storage."""
-        # Sanitize for NUL bytes (consistency with CloudSQL)
-        if ocr_text:
-            ocr_text = ocr_text.replace("\0", "")
-        if html_content:
-            html_content = html_content.replace("\0", "")
-        if layout_json:
-            layout_json = layout_json.replace("\0", "")
-
-        now = datetime.now().isoformat()
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT OR REPLACE INTO papers 
-                (paper_id, file_hash, filename, ocr_text, html_content, target_language, 
-                 layout_json, owner_id, visibility, title, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    paper_id,
-                    file_hash,
-                    filename,
-                    ocr_text,
-                    html_content,
-                    target_language,
-                    layout_json,
-                    owner_id,
-                    visibility,
-                    filename,  # Use filename as default title
-                    now,
-                    now,
-                ),
-            )
-            conn.commit()
-        log.info("save_paper", "Paper saved", paper_id=paper_id, filename=filename)
-        return paper_id
-
-    def get_paper(self, paper_id: str) -> dict | None:
-        """Get a paper by ID."""
-        with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM papers WHERE paper_id = ?", (paper_id,)
-            ).fetchone()
-            if row:
-                return self._parse_paper_row(dict(row))
-            return None
-
-    def _parse_paper_row(self, data: dict) -> dict:
-        """Parse JSON fields in paper row."""
-        import json
-
-        # Parse tags JSON
-        if data.get("tags"):
-            try:
-                data["tags"] = json.loads(data["tags"])
-            except json.JSONDecodeError:
-                data["tags"] = []
-        else:
-            data["tags"] = []
-        return data
-
-    def get_paper_by_hash(self, file_hash: str) -> dict | None:
-        """Get a paper by file hash."""
-        with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM papers WHERE file_hash = ?", (file_hash,)
-            ).fetchone()
-            if row:
-                return self._parse_paper_row(dict(row))
-            return None
-
-    def list_papers(self, limit: int = 50) -> list[dict]:
-        """List recent papers."""
-        with self._get_connection() as conn:
-            rows = conn.execute(
-                """SELECT paper_id, filename, title, target_language, owner_id, visibility, created_at 
-                   FROM papers ORDER BY created_at DESC LIMIT ?""",
-                (limit,),
-            ).fetchall()
-            return [dict(row) for row in rows]
-
-    def update_paper_html(self, paper_id: str, html_content: str) -> bool:
-        """Update the HTML content of a paper."""
-        now = datetime.now().isoformat()
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                "UPDATE papers SET html_content = ?, updated_at = ? WHERE paper_id = ?",
-                (html_content, now, paper_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-
-    def update_paper_abstract(self, paper_id: str, abstract: str) -> bool:
-        """Update the abstract/summary of a paper."""
-        now = datetime.now().isoformat()
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                "UPDATE papers SET abstract = ?, updated_at = ? WHERE paper_id = ?",
-                (abstract, now, paper_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-
-    def update_paper_full_summary(self, paper_id: str, summary: str) -> bool:
-        """Update the full summary of a paper."""
-        now = datetime.now().isoformat()
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                "UPDATE papers SET full_summary = ?, updated_at = ? WHERE paper_id = ?",
-                (summary, now, paper_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-
-    def update_paper_section_summary(self, paper_id: str, json_summary: str) -> bool:
-        """Update the section summary (JSON) of a paper."""
-        now = datetime.now().isoformat()
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                "UPDATE papers SET section_summary_json = ?, updated_at = ? WHERE paper_id = ?",
-                (json_summary, now, paper_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-
-    def delete_paper(self, paper_id: str) -> bool:
-        """Delete a paper by ID."""
-        with self._get_connection() as conn:
-            cursor = conn.execute("DELETE FROM papers WHERE paper_id = ?", (paper_id,))
-            conn.commit()
-            deleted = cursor.rowcount > 0
-            if deleted:
-                log.info("delete_paper", "Paper deleted", paper_id=paper_id)
-            return deleted
-
-    def update_paper_layout(self, paper_id: str, layout_json: str) -> bool:
-        """Update the layout JSON of a paper."""
-        now = datetime.now().isoformat()
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                "UPDATE papers SET layout_json = ?, updated_at = ? WHERE paper_id = ?",
-                (layout_json, now, paper_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-
-    def increment_like_count(self, paper_id: str) -> bool:
-        """Increment like_count (floor 0)."""
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                "UPDATE papers SET like_count = MAX(0, COALESCE(like_count, 0) + 1) WHERE paper_id = ?",
-                (paper_id,),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-
-    def decrement_like_count(self, paper_id: str) -> bool:
-        """Decrement like_count (floor 0)."""
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                "UPDATE papers SET like_count = MAX(0, COALESCE(like_count, 0) - 1) WHERE paper_id = ?",
-                (paper_id,),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-
-    def update_paper_visibility(self, paper_id: str, visibility: str) -> bool:
-        """Update paper visibility."""
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                "UPDATE papers SET visibility = ?, updated_at = ? WHERE paper_id = ?",
-                (visibility, datetime.now().isoformat(), paper_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-
-    # ===== Note methods =====
-
-    def save_note(
-        self,
-        note_id: str,
         session_id: str,
-        term: str,
-        note: str,
-        image_url: str | None = None,
-        page_number: int | None = None,
-        x: float | None = None,
-        y: float | None = None,
-        user_id: str | None = None,
-        paper_id: str | None = None,
-    ) -> str:
-        """Save a note."""
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO notes (note_id, session_id, term, note, image_url, page_number, x, y, user_id, paper_id, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                ON CONFLICT(note_id) DO UPDATE SET
-                    term=excluded.term,
-                    note=excluded.note,
-                    image_url=excluded.image_url,
-                    page_number=excluded.page_number,
-                    x=excluded.x,
-                    y=excluded.y,
-                    user_id=excluded.user_id,
-                    paper_id=excluded.paper_id,
-                    created_at=excluded.created_at
-                """,
-                (
-                    note_id,
-                    session_id,
-                    term,
-                    note,
-                    image_url,
-                    page_number,
-                    x,
-                    y,
-                    user_id,
-                    paper_id,
-                    datetime.now().isoformat(),
-                ),
-            )
-            conn.commit()
-        log.info(
-            "save_note",
-            "Note saved",
-            note_id=note_id,
-            user_id=user_id,
-            paper_id=paper_id,
-        )
-        return note_id
-
-    def get_notes(
-        self, session_id: str, paper_id: str | None = None, user_id: str | None = None
+        paper_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> list[dict]:
-        """Get all notes for a session, paper, or user."""
-        with self._get_connection() as conn:
-            query_parts = ["SELECT * FROM notes"]
-            where_clauses = []
-            query_params = []
+        """Get notes by session ID or paper ID."""
+        ...
 
-            # Filter by paper_id if provided
-            if paper_id:
-                where_clauses.append("paper_id = ?")
-                query_params.append(paper_id)
-
-            # Filter by ownership (User or Session)
-            if user_id:
-                # If user is logged in, show their notes.
-                # Also include session notes if they haven't been claimed yet (implied by design logic, but simplistic here)
-                # Ideally, simple logic: user_id = ? OR (user_id IS NULL AND session_id = ?)
-                where_clauses.append(
-                    "(user_id = ? OR (user_id IS NULL AND session_id = ?))"
-                )
-                query_params.extend([user_id, session_id])
-            else:
-                # Guest user: show notes for this session
-                where_clauses.append("session_id = ?")
-                query_params.append(session_id)
-
-            if where_clauses:
-                query_parts.append("WHERE " + " AND ".join(where_clauses))
-
-            query_parts.append("ORDER BY created_at DESC")
-
-            final_query = " ".join(query_parts)
-            rows = conn.execute(final_query, tuple(query_params)).fetchall()
-            return [dict(row) for row in rows]
-
+    @abstractmethod
     def delete_note(self, note_id: str) -> bool:
-        """Delete a note by ID."""
-        with self._get_connection() as conn:
-            cursor = conn.execute("DELETE FROM notes WHERE note_id = ?", (note_id,))
-            conn.commit()
-            deleted = cursor.rowcount > 0
-            if deleted:
-                log.info("delete_note", "Note deleted", note_id=note_id)
-            return deleted
+        """Delete a note from storage."""
+        ...
 
     # ===== Stamp methods =====
 
+    @abstractmethod
     def add_paper_stamp(
         self,
         paper_id: str,
         stamp_type: str,
-        user_id: str | None = None,
-        page_number: int | None = None,
-        x: float | None = None,
-        y: float | None = None,
+        user_id: Optional[str] = None,
+        page_number: Optional[int] = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
     ) -> str:
         """Add a stamp to a paper."""
-        import uuid6
+        ...
 
-        stamp_id = str(uuid6.uuid7())
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO paper_stamps (id, paper_id, user_id, stamp_type, page_number, x, y, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    stamp_id,
-                    paper_id,
-                    user_id,
-                    stamp_type,
-                    page_number,
-                    x,
-                    y,
-                    datetime.now().isoformat(),
-                ),
-            )
-            conn.commit()
-        log.info(
-            "add_paper_stamp", "Paper stamp added", stamp_id=stamp_id, paper_id=paper_id
-        )
-        return stamp_id
-
+    @abstractmethod
     def get_paper_stamps(self, paper_id: str) -> list[dict]:
         """Get stamps for a paper."""
-        with self._get_connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM paper_stamps WHERE paper_id = ? ORDER BY created_at DESC",
-                (paper_id,),
-            ).fetchall()
-            return [dict(row) for row in rows]
+        ...
 
+    @abstractmethod
     def delete_paper_stamp(self, stamp_id: str) -> bool:
         """Delete a stamp from a paper."""
-        with self._get_connection() as conn:
-            cursor = conn.execute("DELETE FROM paper_stamps WHERE id = ?", (stamp_id,))
-            conn.commit()
-            return cursor.rowcount > 0
+        ...
 
+    @abstractmethod
     def add_note_stamp(
         self,
         note_id: str,
         stamp_type: str,
-        user_id: str | None = None,
-        x: float | None = None,
-        y: float | None = None,
+        user_id: Optional[str] = None,
+        x: Optional[float] = None,
+        y: Optional[float] = None,
     ) -> str:
         """Add a stamp to a note."""
-        import uuid6
+        ...
 
-        stamp_id = str(uuid6.uuid7())
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO note_stamps (id, note_id, user_id, stamp_type, x, y, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    stamp_id,
-                    note_id,
-                    user_id,
-                    stamp_type,
-                    x,
-                    y,
-                    datetime.now().isoformat(),
-                ),
-            )
-            conn.commit()
-        log.info(
-            "add_note_stamp", "Note stamp added", stamp_id=stamp_id, note_id=note_id
-        )
-        return stamp_id
-
+    @abstractmethod
     def get_note_stamps(self, note_id: str) -> list[dict]:
         """Get stamps for a note."""
-        with self._get_connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM note_stamps WHERE note_id = ? ORDER BY created_at DESC",
-                (note_id,),
-            ).fetchall()
-            return [dict(row) for row in rows]
+        ...
 
+    @abstractmethod
     def delete_note_stamp(self, stamp_id: str) -> bool:
         """Delete a stamp from a note."""
-        with self._get_connection() as conn:
-            cursor = conn.execute("DELETE FROM note_stamps WHERE id = ?", (stamp_id,))
-            conn.commit()
-            return cursor.rowcount > 0
+        ...
 
     # ===== Figure methods =====
 
+    @abstractmethod
     def save_figure(
         self,
         paper_id: str,
@@ -776,469 +192,171 @@ class SQLiteStorage(StorageInterface):
         label: str = "figure",
         latex: str = "",
     ) -> str:
-        """Save a figure."""
-        figures = [
-            {
-                "page_number": page_number,
-                "bbox": bbox,
-                "image_url": image_url,
-                "caption": caption,
-                "explanation": explanation,
-                "label": label,
-                "latex": latex,
-            }
-        ]
-        ids = self.save_figures_batch(paper_id, figures)
-        return ids[0]
+        """Save a figure information to storage."""
+        ...
 
-    def save_figures_batch(
-        self,
-        paper_id: str,
-        figures: list[dict],
-    ) -> list[str]:
-        """Save multiple figures."""
-        import json
+    @abstractmethod
+    def save_figures_batch(self, paper_id: str, figures: list[dict]) -> list[str]:
+        """Save a batch of figures to storage."""
+        ...
 
-        import uuid6
-
-        now = datetime.now().isoformat()
-        ids = []
-        batch_data = []
-
-        for fig in figures:
-            fig_id = str(uuid6.uuid7())
-            ids.append(fig_id)
-            bbox_json = json.dumps(fig["bbox"])
-            batch_data.append(
-                (
-                    fig_id,
-                    paper_id,
-                    fig["page_number"],
-                    bbox_json,
-                    fig["image_url"],
-                    fig.get("caption", ""),
-                    fig.get("explanation", ""),
-                    fig.get("label", "figure"),
-                    fig.get("latex", ""),
-                    now,
-                )
-            )
-
-        with self._get_connection() as conn:
-            conn.executemany(
-                """
-                INSERT INTO paper_figures (id, paper_id, page_number, bbox_json, image_url, caption, explanation, label, latex, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                batch_data,
-            )
-            conn.commit()
-        return ids
-
+    @abstractmethod
     def get_paper_figures(self, paper_id: str) -> list[dict]:
-        """Get figures for a paper."""
-        import json
+        """Get all figures of a paper."""
+        ...
 
-        with self._get_connection() as conn:
-            rows = conn.execute(
-                "SELECT * FROM paper_figures WHERE paper_id = ? ORDER BY page_number, created_at",
-                (paper_id,),
-            ).fetchall()
-            results = []
-            for row in rows:
-                d = dict(row)
-                # Ensure frontend-compatible keys
-                d["figure_id"] = d["id"]
-                d["page_num"] = d["page_number"]
-                if d.get("bbox_json"):
-                    try:
-                        d["bbox"] = json.loads(d["bbox_json"])
-                    except Exception:
-                        d["bbox"] = []
-                results.append(d)
-            return results
+    @abstractmethod
+    def get_figure(self, figure_id: str) -> Optional[dict]:
+        """Get a single figure information."""
+        ...
 
-    def get_figure(self, figure_id: str) -> dict | None:
-        """Get a figure by ID."""
-        import json
-
-        with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM paper_figures WHERE id = ?", (figure_id,)
-            ).fetchone()
-            if row:
-                d = dict(row)
-                if d.get("bbox_json"):
-                    try:
-                        d["bbox"] = json.loads(d["bbox_json"])
-                    except Exception:
-                        d["bbox"] = []
-                return d
-            return None
-
+    @abstractmethod
     def update_figure_explanation(self, figure_id: str, explanation: str) -> bool:
         """Update figure explanation."""
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                "UPDATE paper_figures SET explanation = ? WHERE id = ?",
-                (explanation, figure_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+        ...
 
+    @abstractmethod
     def update_figure_latex(self, figure_id: str, latex: str) -> bool:
-        """Update figure LaTeX."""
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                "UPDATE paper_figures SET latex = ? WHERE id = ?",
-                (latex, figure_id),
-            )
-            conn.commit()
-            return cursor.rowcount > 0
+        """Update figure latex command."""
+        ...
 
     # ===== User methods =====
 
+    @abstractmethod
     def create_user(self, user_data: dict) -> str:
         """Create a new user."""
-        import json
+        ...
 
-        with self._get_connection() as conn:
-            conn.execute(
-                """
-                INSERT INTO users (id, email, display_name, affiliation, bio, 
-                                   research_fields, profile_image_url, is_public, 
-                                   created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    user_data["id"],
-                    user_data["email"],
-                    user_data.get("display_name"),
-                    user_data.get("affiliation"),
-                    user_data.get("bio"),
-                    json.dumps(user_data.get("research_fields", [])),
-                    user_data.get("profile_image_url"),
-                    1 if user_data.get("is_public", True) else 0,
-                    user_data.get("created_at", datetime.now()).isoformat(),
-                    user_data.get("updated_at", datetime.now()).isoformat(),
-                ),
-            )
-            conn.commit()
-        log.info("create_user", "User created", user_id=user_data["id"])
-        return user_data["id"]
+    @abstractmethod
+    def get_user(self, user_id: str) -> Optional[dict]:
+        """Get user info by user ID."""
+        ...
 
-    def get_user(self, user_id: str) -> dict | None:
-        """Get a user by ID."""
-        import json
+    @abstractmethod
+    def get_user_by_email(self, email: str) -> Optional[dict]:
+        """Get user info by email."""
+        ...
 
-        with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM users WHERE id = ?", (user_id,)
-            ).fetchone()
-            if row:
-                data = dict(row)
-                data["is_public"] = bool(data.get("is_public", 1))
-                if data.get("research_fields"):
-                    try:
-                        data["research_fields"] = json.loads(data["research_fields"])
-                    except json.JSONDecodeError:
-                        data["research_fields"] = []
-                else:
-                    data["research_fields"] = []
-                return data
-            return None
-
-    def get_user_by_email(self, email: str) -> dict | None:
-        """Get a user by email address."""
-        import json
-
-        with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT * FROM users WHERE email = ?", (email,)
-            ).fetchone()
-            if row:
-                data = dict(row)
-                data["is_public"] = bool(data.get("is_public", 1))
-                if data.get("research_fields"):
-                    try:
-                        data["research_fields"] = json.loads(data["research_fields"])
-                    except json.JSONDecodeError:
-                        data["research_fields"] = []
-                else:
-                    data["research_fields"] = []
-                return data
-            return None
-
+    @abstractmethod
     def update_user(self, user_id: str, data: dict) -> bool:
-        """Update user data."""
-        import json
+        """Update user information."""
+        ...
 
-        fields = []
-        values = []
-        for key, value in data.items():
-            if key in ["id", "created_at"]:
-                continue
-            if key == "research_fields" and isinstance(value, list):
-                value = json.dumps(value)
-            if key == "is_public":
-                value = 1 if value else 0
-            fields.append(f"{key} = ?")
-            values.append(value)
+    @abstractmethod
+    def migrate_user_uid(self, old_uid: str, new_uid: str) -> bool:
+        """Migrate user UID from old to new."""
+        ...
 
-        if not fields:
-            return False
-
-        values.append(user_id)
-        with self._get_connection() as conn:
-            cursor = conn.execute(
-                f"UPDATE users SET {', '.join(fields)} WHERE id = ?", values
-            )
-            conn.commit()
-            return cursor.rowcount > 0
-
+    @abstractmethod
     def delete_user(self, user_id: str) -> bool:
-        """Delete a user."""
-        with self._get_connection() as conn:
-            cursor = conn.execute("DELETE FROM users WHERE id = ?", (user_id,))
-            conn.commit()
-            return cursor.rowcount > 0
+        """Delete user account."""
+        ...
 
+    @abstractmethod
     def get_user_stats(self, user_id: str) -> dict:
         """Get user statistics."""
-        with self._get_connection() as conn:
-            total = conn.execute(
-                "SELECT COUNT(*) FROM papers WHERE owner_id = ?", (user_id,)
-            ).fetchone()[0]
-            public = conn.execute(
-                "SELECT COUNT(*) FROM papers WHERE owner_id = ? AND visibility = 'public'",
-                (user_id,),
-            ).fetchone()[0]
-            views = conn.execute(
-                "SELECT COALESCE(SUM(view_count), 0) FROM papers WHERE owner_id = ?",
-                (user_id,),
-            ).fetchone()[0]
-            likes = conn.execute(
-                "SELECT COALESCE(SUM(like_count), 0) FROM papers WHERE owner_id = ?",
-                (user_id,),
-            ).fetchone()[0]
-            return {
-                "paper_count": total,
-                "public_paper_count": public,
-                "total_views": views,
-                "total_likes": likes,
-            }
-
-    def save_session_context(self, session_id: str, paper_id: str) -> None:
-        """Save session to paper mapping using Redis."""
-        from redis_provider.provider import RedisService
-        RedisService().set(f"session_pid:{session_id}", paper_id, expire=86400)
-        log.info("save_session", "Session context saved to Redis", session_id=session_id)
-
-    def get_session_paper_id(self, session_id: str) -> str | None:
-        """Get paper ID for a session from Redis."""
-        from redis_provider.provider import RedisService
-        val = RedisService().get(f"session_pid:{session_id}")
-        return str(val) if val is not None else None
+        ...
 
     # ===== Social paper methods =====
 
+    @abstractmethod
     def get_user_papers(
         self, user_id: str, page: int = 1, per_page: int = 20
     ) -> tuple[list[dict], int]:
-        """Get all papers for a user."""
-        offset = (page - 1) * per_page
-        with self._get_connection() as conn:
-            total = conn.execute(
-                "SELECT COUNT(*) FROM papers WHERE owner_id = ?", (user_id,)
-            ).fetchone()[0]
-            rows = conn.execute(
-                """SELECT * FROM papers WHERE owner_id = ? 
-                   ORDER BY created_at DESC LIMIT ? OFFSET ?""",
-                (user_id, per_page, offset),
-            ).fetchall()
-            return [dict(row) for row in rows], total
+        """Get papers owned by a user (paginated)."""
+        ...
 
+    @abstractmethod
     def get_user_public_papers(
         self, user_id: str, page: int = 1, per_page: int = 20
     ) -> tuple[list[dict], int]:
-        """Get public papers for a user."""
-        offset = (page - 1) * per_page
-        with self._get_connection() as conn:
-            total = conn.execute(
-                "SELECT COUNT(*) FROM papers WHERE owner_id = ? AND visibility = 'public'",
-                (user_id,),
-            ).fetchone()[0]
-            rows = conn.execute(
-                """SELECT * FROM papers WHERE owner_id = ? AND visibility = 'public'
-                   ORDER BY created_at DESC LIMIT ? OFFSET ?""",
-                (user_id, per_page, offset),
-            ).fetchall()
-            return [dict(row) for row in rows], total
+        """Get public papers owned by a user."""
+        ...
 
+    @abstractmethod
     def get_public_papers(
         self, page: int = 1, per_page: int = 20, sort: str = "recent"
     ) -> tuple[list[dict], int]:
-        """Get all public papers for explore page."""
-        offset = (page - 1) * per_page
-        order_by = "created_at DESC"
-        if sort == "popular":
-            order_by = "view_count DESC"
-        elif sort == "trending":
-            order_by = "like_count DESC"
+        """Get all public papers (paginated)."""
+        ...
 
-        with self._get_connection() as conn:
-            total = conn.execute(
-                "SELECT COUNT(*) FROM papers WHERE visibility = 'public'"
-            ).fetchone()[0]
-            rows = conn.execute(
-                f"""SELECT * FROM papers WHERE visibility = 'public'
-                   ORDER BY {order_by} LIMIT ? OFFSET ?""",
-                (per_page, offset),
-            ).fetchall()
-            return [dict(row) for row in rows], total
-
+    @abstractmethod
     def search_public_papers(
         self, query: str, page: int = 1, per_page: int = 20
     ) -> tuple[list[dict], int]:
-        """Search public papers."""
-        offset = (page - 1) * per_page
-        search_pattern = f"%{query}%"
-        with self._get_connection() as conn:
-            total = conn.execute(
-                """SELECT COUNT(*) FROM papers 
-                   WHERE visibility = 'public' 
-                   AND (title LIKE ? OR authors LIKE ? OR abstract LIKE ? OR filename LIKE ?)""",
-                (search_pattern, search_pattern, search_pattern, search_pattern),
-            ).fetchone()[0]
-            rows = conn.execute(
-                """SELECT * FROM papers 
-                   WHERE visibility = 'public' 
-                   AND (title LIKE ? OR authors LIKE ? OR abstract LIKE ? OR filename LIKE ?)
-                   ORDER BY created_at DESC LIMIT ? OFFSET ?""",
-                (
-                    search_pattern,
-                    search_pattern,
-                    search_pattern,
-                    search_pattern,
-                    per_page,
-                    offset,
-                ),
-            ).fetchall()
-            return [dict(row) for row in rows], total
+        """Search public papers by query."""
+        ...
 
+    @abstractmethod
     def get_popular_tags(self, limit: int = 20) -> list[dict]:
         """Get popular tags."""
-        # For now, return empty list - implement when tags are properly used
-        return []
+        ...
 
-    def get_ocr_cache(self, file_hash: str) -> dict | None:
-        """Get cached OCR text and layout."""
-        with self._get_connection() as conn:
-            row = conn.execute(
-                "SELECT ocr_text, layout_json FROM ocr_reader WHERE file_hash = ?",
-                (file_hash,),
-            ).fetchone()
-            if row:
-                return {"ocr_text": row[0], "layout_json": row[1]}
-            return None
+    # ===== OCR cache methods =====
 
+    @abstractmethod
+    def get_ocr_cache(self, file_hash: str) -> Optional[dict]:
+        """Get OCR cache by file hash."""
+        ...
+
+    @abstractmethod
     def save_ocr_cache(
         self,
         file_hash: str,
         ocr_text: str,
         filename: str,
         model_name: str,
-        layout_json: str | None = None,
+        layout_json: Optional[str] = None,
     ) -> None:
-        """Save OCR text and layout to cache."""
-        with self._get_connection() as conn:
-            conn.execute(
-                """INSERT OR REPLACE INTO ocr_reader 
-                   (file_hash, filename, ocr_text, layout_json, model_name, created_at) 
-                   VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)""",
-                (file_hash, filename, ocr_text, layout_json, model_name),
-            )
-            conn.commit()
+        """Save OCR result to cache."""
+        ...
 
+    # ===== Session methods (Redis/Storage generic) =====
+
+    @abstractmethod
+    def save_session_context(self, session_id: str, paper_id: str) -> None:
+        """Save session context (e.g. current paper ID)."""
+        ...
+
+    @abstractmethod
+    def get_session_paper_id(self, session_id: str) -> Optional[str]:
+        """Get current paper ID by session ID."""
+        ...
+
+    # ===== Chat history methods =====
+
+    @abstractmethod
+    def save_chat_history(self, user_id: str, paper_id: str, messages: list) -> None:
+        """Save chat history."""
+        ...
+
+    @abstractmethod
+    def get_chat_history(self, user_id: str, paper_id: str) -> list:
+        """Get chat history by user and paper."""
+        ...
+
+    @abstractmethod
+    def close(self) -> None:
+        """Close connection or session."""
+        ...
+
+    @abstractmethod
     def clear_all_data(self) -> bool:
-        """Clear all data from the database."""
-        tables = [
-            "papers",
-            "paper_figures",
-            "paper_stamps",
-            "trajectories",
-            "notes",
-            "note_stamps",
-            "ocr_reader",
-            "app_sessions",
-            "chat_histories",
-            "users",
-        ]
-        with self._get_connection() as conn:
-            for table in tables:
-                try:
-                    conn.execute(f"DELETE FROM {table}")
-                except sqlite3.OperationalError:
-                    log.warning(
-                        "clear_all_data", "Table does not exist, skipping.", table=table
-                    )
-
-            conn.commit()
-        log.info("clear_all_data", "All data cleared from SQLite database.")
-        return True
-
-
-# Singleton instance cache
-# SQLiteStorage: fully stateless, safe to share as singleton.
-# ORMStorageAdapter: NOT safe to share a single Session across requests.
-#   A failed DB operation puts the session in an aborted state and all
-#   subsequent requests would get PendingRollbackError.
-#   We therefore cache only the SQLiteStorage singleton; for ORM mode we
-#   create a fresh Session (and adapter) per call.
-_sqlite_singleton: SQLiteStorage | None = None
-_postgresql_singleton = None
-_orm_mode: bool = False
+        """Clear all data from storage."""
+        ...
 
 
 def get_storage_provider() -> StorageInterface:
     """
-    ストレージプロバイダーを返すファクトリ関数。
-
-    PostgreSQL 環境では ORMStorageAdapter を **リクエストごとに新規セッション** で返す。
-    SQLite 環境 (ローカル開発) ではシングルトンの SQLiteStorage を返す。
-
-    DATABASE_URL または DB_USER/DB_HOST 等の環境変数が設定されている場合は
-    PostgreSQL モードになる。
+    Returns the storage provider (ORMStorageAdapter).
+    
+    All environments (local, staging, prod) now use ORM-based storage
+    to ensure consistency and avoid direct SQL dependency.
     """
-    global _sqlite_singleton, _postgresql_singleton, _orm_mode
+    from app.database import SessionLocal
+    from app.providers.orm_storage import ORMStorageAdapter
 
-    database_url = settings.get("DATABASE_URL")
-    default_provider = "postgresql" if database_url else "sqlite"
-    provider_type = str(settings.get("STORAGE_PROVIDER", default_provider)).lower()
-
-    if provider_type in ["postgresql", "neon"]:
-        from app.providers.postgresql_storage import PostgreSQLStorage
-
-        if _postgresql_singleton is None:
-            _postgresql_singleton = PostgreSQLStorage()
-        return _postgresql_singleton
-    elif provider_type in ["cloudsql", "orm"]:
-        # Always create a fresh session per call so that a failed DB
-        # operation in one request cannot poison subsequent requests.
-        from app.database import SessionLocal
-        from app.providers.orm_storage import ORMStorageAdapter
-
-        if not _orm_mode:
-            _orm_mode = True
-            log.info(
-                "init",
-                "ORMStorageAdapter initialized (PostgreSQL/ORM mode, per-call session)",
-            )
-
-        db = SessionLocal()
-        return ORMStorageAdapter(db)
-    else:
-        if _sqlite_singleton is None:
-            _sqlite_singleton = SQLiteStorage()
-            log.info("init", "SQLiteStorage initialized")
-        return _sqlite_singleton
+    # ORMStorageAdapter creates its own internal repositories using the session.
+    # It handles session recovery and management.
+    db = SessionLocal()
+    return ORMStorageAdapter(db)

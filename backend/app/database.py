@@ -15,7 +15,7 @@ def get_url():
         from app.core.config import get_database_url
         url = get_database_url()
     except Exception:
-        # get_database_url が失敗した場合（ローカル開発でDBが未設定など）は個別変数にフォールバック
+        # get_database_url が失敗した場合は settings から直接取得
         url = settings.get("DATABASE_URL")
         if not url:
             user = settings.get("DB_USER")
@@ -25,13 +25,9 @@ def get_url():
 
             if all([user, password, host, dbname]):
                 url = f"postgresql://{user}:{password}@{host}/{dbname}"
-            else:
-                db_path = settings.get("DB_PATH", "ocr_reader.db")
-                url = f"sqlite:///{db_path}"
 
     if not url:
-        db_path = settings.get("DB_PATH", "ocr_reader.db")
-        url = f"sqlite:///{db_path}"
+        raise RuntimeError("DATABASE_URL が設定されていません。環境変数を確認してください。")
 
     # SQLAlchemy requires postgresql:// instead of postgres://
     if url.startswith("postgres://"):
@@ -104,13 +100,13 @@ if _use_pgbouncer:
         connect_args=_connect_args,
     )
 else:
-    # 通常の QueuePool（non-Neon PostgreSQL または SQLite）
+    # 通常の QueuePool (PostgreSQL またはその他)
     engine = create_engine(
         _url,
         pool_pre_ping=True,
         pool_recycle=300,
-        pool_size=5 if _is_postgres else 5,
-        max_overflow=10 if _is_postgres else 10,
+        pool_size=5,
+        max_overflow=10,
         connect_args=_connect_args,
     )
 

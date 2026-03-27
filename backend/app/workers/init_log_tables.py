@@ -11,12 +11,12 @@ import sys
 
 from sqlalchemy import create_engine, text
 
-from app.core.config import get_app_env, get_log_database_url
+from app.core.config import get_app_env, get_log_database_url, get_log_schema
 
-DDL = """
-CREATE SCHEMA IF NOT EXISTS logs;
+DDL_TEMPLATE = """
+CREATE SCHEMA IF NOT EXISTS {schema};
 
-CREATE TABLE IF NOT EXISTS logs.dspy_traces (
+CREATE TABLE IF NOT EXISTS {schema}.dspy_traces (
     trace_id        TEXT PRIMARY KEY,
     module_name     TEXT NOT NULL,
     signature       TEXT NOT NULL,
@@ -37,11 +37,11 @@ CREATE TABLE IF NOT EXISTS logs.dspy_traces (
     created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_dspy_traces_session
-    ON logs.dspy_traces (session_id, created_at DESC);
+    ON {schema}.dspy_traces (session_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_dspy_traces_module
-    ON logs.dspy_traces (module_name, created_at DESC);
+    ON {schema}.dspy_traces (module_name, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS logs.trajectories (
+CREATE TABLE IF NOT EXISTS {schema}.trajectories (
     session_id           TEXT PRIMARY KEY,
     user_id              TEXT NOT NULL,
     paper_id             TEXT,
@@ -65,9 +65,9 @@ CREATE TABLE IF NOT EXISTS logs.trajectories (
     updated_at           TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_trajectories_user
-    ON logs.trajectories (user_id, updated_at DESC);
+    ON {schema}.trajectories (user_id, updated_at DESC);
 
-CREATE TABLE IF NOT EXISTS logs.feedback (
+CREATE TABLE IF NOT EXISTS {schema}.feedback (
     feedback_id  TEXT PRIMARY KEY,
     session_id   TEXT,
     user_id      TEXT NOT NULL,
@@ -79,9 +79,9 @@ CREATE TABLE IF NOT EXISTS logs.feedback (
     created_at   TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_trace
-    ON logs.feedback (trace_id);
+    ON {schema}.feedback (trace_id);
 
-CREATE TABLE IF NOT EXISTS logs.client_error_logs (
+CREATE TABLE IF NOT EXISTS {schema}.client_error_logs (
     error_id   TEXT PRIMARY KEY,
     message    TEXT NOT NULL,
     component  TEXT NOT NULL,
@@ -95,7 +95,7 @@ CREATE TABLE IF NOT EXISTS logs.client_error_logs (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE IF NOT EXISTS logs.user_engagements (
+CREATE TABLE IF NOT EXISTS {schema}.user_engagements (
     user_pseudo_id             TEXT NOT NULL,
     firebase_uid               TEXT,
     event_date                 DATE NOT NULL,
@@ -107,7 +107,7 @@ CREATE TABLE IF NOT EXISTS logs.user_engagements (
     PRIMARY KEY (user_pseudo_id, event_date)
 );
 
-CREATE TABLE IF NOT EXISTS logs.page_view_logs (
+CREATE TABLE IF NOT EXISTS {schema}.page_view_logs (
     user_pseudo_id           TEXT NOT NULL,
     firebase_uid             TEXT,
     ga_session_id            TEXT,
@@ -121,9 +121,9 @@ CREATE TABLE IF NOT EXISTS logs.page_view_logs (
     synced_at                TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_page_view_logs_date
-    ON logs.page_view_logs (event_date DESC);
+    ON {schema}.page_view_logs (event_date DESC);
 
-CREATE TABLE IF NOT EXISTS logs.paper_likes (
+CREATE TABLE IF NOT EXISTS {schema}.paper_likes (
     event_id   TEXT PRIMARY KEY,
     user_id    TEXT NOT NULL,
     paper_id   TEXT NOT NULL,
@@ -131,9 +131,9 @@ CREATE TABLE IF NOT EXISTS logs.paper_likes (
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_paper_likes_paper
-    ON logs.paper_likes (paper_id, created_at DESC);
+    ON {schema}.paper_likes (paper_id, created_at DESC);
 
-CREATE TABLE IF NOT EXISTS logs.prompt_candidates (
+CREATE TABLE IF NOT EXISTS {schema}.prompt_candidates (
     optimization_id TEXT NOT NULL,
     program_name    TEXT NOT NULL,
     candidate_index INTEGER NOT NULL,
@@ -142,7 +142,7 @@ CREATE TABLE IF NOT EXISTS logs.prompt_candidates (
     PRIMARY KEY (optimization_id, candidate_index)
 );
 CREATE INDEX IF NOT EXISTS idx_prompt_candidates_lookup
-    ON logs.prompt_candidates (program_name, created_at DESC);
+    ON {schema}.prompt_candidates (program_name, created_at DESC);
 """
 
 
@@ -169,13 +169,16 @@ def main():
         print(f"✗ {e}", file=sys.stderr)
         sys.exit(1)
 
-    print(f"Initializing log tables (env={env})")
+    schema = get_log_schema()
+    ddl = DDL_TEMPLATE.format(schema=schema)
+
+    print(f"Initializing log tables (env={env}, schema={schema})")
     print(f"  URL: {url[:url.index('@') + 1]}***")  # パスワードを隠す
 
     engine = create_engine(url)
     try:
         with engine.connect() as conn:
-            for statement in DDL.strip().split(";"):
+            for statement in ddl.strip().split(";"):
                 stmt = statement.strip()
                 if stmt:
                     conn.execute(text(stmt))
