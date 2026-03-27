@@ -6,6 +6,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from collections.abc import AsyncGenerator
 from typing import TYPE_CHECKING, Any
 
@@ -190,6 +191,7 @@ class PDFOCRService:
 
                 all_text_parts = []
                 all_layout_parts = []
+                processing_metrics = {}  # {page_num: {"p12": duration, "p3": duration}}
 
                 # --- Chunked Processing (Batch AI + Persistent File) ---
                 CHUNK_SIZE = int(settings.get("OCR_CHUNK_SIZE", "5"))
@@ -219,7 +221,21 @@ class PDFOCRService:
                     # Phase 1+2: 並列実行済みタスクをページ順に収集しつつ即時 yield
                     chunk_page_data = []
                     for task in phase12_tasks:
+                        t_p12_start = time.perf_counter()
                         page_data = await task  # 並列実行済みのタスクをページ順に受け取る
+                        t_p12_end = time.perf_counter()
+                        duration = round(t_p12_end - t_p12_start, 3)
+                        pn = page_data["page_num"]
+                        if pn not in processing_metrics:
+                            processing_metrics[pn] = {}
+                        processing_metrics[pn]["p12"] = duration
+
+                        log.debug(
+                            "extract_text_streaming",
+                            "Phase 1 & 2 done",
+                            page_num=pn,
+                            duration=duration,
+                        )
                         p = page_data["phase1_result"]
                         yield (p[0], p[1], p[2], p[3], p[4], page_data["image_url"], p[6])
                         chunk_page_data.append(page_data)
@@ -265,9 +281,24 @@ class PDFOCRService:
 
                     # Phase 3 結果も完了次第 yield し、DB 保存用に page_num 順で収集
                     chunk_finals = []
-                    for future in asyncio.as_completed(phase3_tasks):
-                        final_result = await future
-                        yield final_result
+                    for task in asyncio.as_completed(phase3_tasks):
+                        t_p3_start = time.perf_counter()
+                        final_result = await task
+                        t_p3_end = time.perf_counter()
+                        if final_result:
+                            pn = final_result[0]
+                            duration = round(t_p3_end - t_p3_start, 3)
+                            if pn not in processing_metrics:
+                                processing_metrics[pn] = {}
+                            processing_metrics[pn]["p3"] = duration
+
+                            log.debug(
+                                "extract_text_streaming",
+                                "Phase 3 completed (OCR/Finalize)",
+                                page_num=pn,
+                                duration=duration,
+                            )
+                            yield final_result
                         chunk_finals.append(final_result)
 
                     chunk_finals.sort(key=lambda r: r[0])
@@ -286,6 +317,7 @@ class PDFOCRService:
                 filename=filename,
                 file_hash=file_hash,
                 total_pages=total_pages,
+                metrics=processing_metrics,
             )
 
         except Exception as e:
@@ -378,6 +410,7 @@ class PDFOCRService:
         self, page, page_idx, total_pages, file_hash, file_bytes: bytes = b""
     ) -> dict:
         """Execute Phase 1 & 2: Native text extraction and image rendering."""
+        t_start = time.perf_counter()
         page_num = page_idx + 1
         is_last = page_idx == total_pages - 1
         resolution = int(settings.get("PDF_DPI", "200"))
@@ -387,10 +420,18 @@ class PDFOCRService:
 
         # Phase 1: Native Text & Links
         try:
+            t_extract_start = time.perf_counter()
             native_words = page.extract_words(
                 use_text_flow=True, x_tolerance=1, y_tolerance=3
             )
             page_text = page.extract_text() or ""
+            t_extract_end = time.perf_counter()
+            log.debug(
+                "_prepare_page_phases_1_2",
+                "Native text extraction done",
+                page_num=page_num,
+                duration=round(t_extract_end - t_extract_start, 3),
+            )
         except Exception as e:
             log.warning(
                 "_prepare_page_phases_1_2",
@@ -430,6 +471,13 @@ class PDFOCRService:
             file_hash,
             None,
             layout_data,
+        )
+        t_end = time.perf_counter()
+        log.debug(
+            "_prepare_page_phases_1_2",
+            "Phase 1 & 2 completed",
+            page_num=page_num,
+            total_duration=round(t_end - t_start, 3),
         )
 
         # Phase 2: Page Image (各スレッドで独立した fitz doc を開いて並列レンダリング)
@@ -820,11 +868,19 @@ class PDFOCRService:
                 page_num=page_num,
             )
             ocr_model = settings.get("MODEL_OCR", settings.get("MODEL_SUMMARY", "gemini-2.5-flash-lite"))
+            t_fallback_start = time.perf_counter()
             text = await ai.generate_with_image(
                 prompt=PDF_EXTRACT_TEXT_OCR_PROMPT,
                 image_bytes=img_bytes,
                 mime_type="image/jpeg",
                 model=ocr_model,
+            )
+            t_fallback_end = time.perf_counter()
+            log.debug(
+                "_ocr_fallback",
+                "Gemini Vision OCR fallback completed",
+                page_num=page_num,
+                duration=round(t_fallback_end - t_fallback_start, 3),
             )
             if text and text.strip():
                 return text.strip()

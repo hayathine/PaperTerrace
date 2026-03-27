@@ -4,6 +4,7 @@ import json
 from collections.abc import Awaitable, Callable
 
 import anyio
+import time
 
 from app.domain.services.paper_processing import process_figure_analysis_task
 from app.providers import get_storage_provider
@@ -143,6 +144,7 @@ class LayoutAnalysisService:
 
         inference_client = await get_inference_client()
         all_figures: list[dict] = []
+        layout_metrics = {}  # {batch_key: duration}
 
         # ----------------------------------------------------------------
         # バッチ処理共通: DB保存 → AI解析タスク起動 → コールバック通知
@@ -219,6 +221,7 @@ class LayoutAnalysisService:
             batch_urls: list[str], batch_pages: list[int]
         ) -> list[dict]:
             try:
+                t_inf_start = time.perf_counter()
                 (
                     results,
                     crops_per_page,
@@ -227,8 +230,15 @@ class LayoutAnalysisService:
                     page_nums=batch_pages,
                     max_batch_size=len(batch_urls),
                 )
-                log.info(
-                    "analyze_layout_lazy", f"URL batch done: pages {batch_pages}"
+                t_inf_end = time.perf_counter()
+                duration = round(t_inf_end - t_inf_start, 3)
+                batch_key = f"{batch_pages[0]}-{batch_pages[-1]}"
+                layout_metrics[batch_key] = duration
+
+                log.debug(
+                    "analyze_layout_lazy",
+                    f"URL batch done: pages {batch_pages}",
+                    duration=duration,
                 )
             except Exception as e:
                 log.error(
@@ -253,6 +263,7 @@ class LayoutAnalysisService:
             batch_imgs: list[bytes], batch_pages: list[int]
         ) -> list[dict]:
             try:
+                t_inf_start = time.perf_counter()
                 (
                     results,
                     crops_per_page,
@@ -261,8 +272,15 @@ class LayoutAnalysisService:
                     page_nums=batch_pages,
                     max_batch_size=len(batch_imgs),
                 )
-                log.info(
-                    "analyze_layout_lazy", f"Batch received: pages {batch_pages}"
+                t_inf_end = time.perf_counter()
+                duration = round(t_inf_end - t_inf_start, 3)
+                batch_key = f"{batch_pages[0]}-{batch_pages[-1]}"
+                layout_metrics[batch_key] = duration
+
+                log.debug(
+                    "analyze_layout_lazy",
+                    f"Batch received: pages {batch_pages}",
+                    duration=duration,
                 )
             except Exception as e:
                 log.error(
@@ -378,4 +396,10 @@ class LayoutAnalysisService:
             except Exception as e:
                 log.warning("update_layout_json", f"Failed to update layout_json: {e}")
 
+        log.info(
+            "analyze_layout_lazy_complete",
+            "Layout analysis completed",
+            paper_id=paper_id,
+            metrics=layout_metrics,
+        )
         return all_figures

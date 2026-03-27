@@ -605,7 +605,7 @@ class GeminiProvider(AIProviderInterface):
             log.exception(
                 "gemini_pdf",
                 "Gemini PDF生成に失敗しました",
-                pdf_size=len(pdf_bytes),
+                pdf_size=len(pdf_bytes) if pdf_bytes else 0,
             )
             raise AIGenerationError(f"PDF analysis failed: {e}") from e
 
