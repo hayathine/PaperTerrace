@@ -392,7 +392,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				const bbox = parseBboxFromSrc(src);
 				if (bbox) {
 					const figure = findFigureByBbox(page.figures, bbox);
-					if (figure && figure.image_url) {
+					if (figure?.image_url) {
 						// /static/... の相対パスの場合は API_URL プレフィックスを付与
 						const imgSrc = figure.image_url.startsWith("http")
 							? figure.image_url
