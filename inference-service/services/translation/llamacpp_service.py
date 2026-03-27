@@ -46,6 +46,7 @@ class LlamaCppTranslationService:
         self._lock = asyncio.Lock()
         self.fallback_timeout = int(settings.get("LLAMACPP_FALLBACK_TIMEOUT", "30"))
         self._abort_event = threading.Event()
+        self._is_busy = False
         logger.info(f"Llama-cpp モデルの初期化設定: {self.__dict__}")
 
     async def initialize(self):
@@ -138,8 +139,12 @@ class LlamaCppTranslationService:
             )
             return "Error: LLM service is not initialized."
 
+        if self._is_busy:
+            raise LlamaBusyError("LlamaCpp is currently busy with another request.")
+
         # ロックを使用して同時実行を制限し、キューイングします
         async with self._lock:
+            self._is_busy = True
             self._abort_event.clear()
 
             from common.dspy_seed_prompt import (
@@ -218,6 +223,8 @@ class LlamaCppTranslationService:
             except Exception as e:
                 logger.error(f"LLM 推論エラー: {e}")
                 return f"Translation error occurred: {str(e)}"
+            finally:
+                self._is_busy = False
 
     async def cleanup(self):
         """リソースを解放します。"""
