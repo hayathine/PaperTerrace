@@ -45,7 +45,6 @@ class LlamaCppTranslationService:
         self.verbose = str(settings.get("LLAMACPP_VERBOSE", "false")).lower() == "true"
         self._lock = asyncio.Lock()
         self.fallback_timeout = int(settings.get("LLAMACPP_FALLBACK_TIMEOUT", "30"))
-        self._abort_event = threading.Event()
         self._is_busy = False
         logger.info(f"Llama-cpp モデルの初期化設定: {self.__dict__}")
 
@@ -145,7 +144,7 @@ class LlamaCppTranslationService:
         # ロックを使用して同時実行を制限し、キューイングします
         async with self._lock:
             self._is_busy = True
-            self._abort_event.clear()
+            abort_event = threading.Event()
 
             from common.dspy_seed_prompt import (
                 DICT_TRANSLATE_LLM_PROMPT,
@@ -173,30 +172,40 @@ class LlamaCppTranslationService:
 
                 llm_ref = self.llm
                 max_tokens = self.max_tokens
-                abort_event = self._abort_event
 
                 def _run():
-                    def should_abort(tokens, logits):
-                        """トークン生成ごとに中断フラグを確認する stopping_criteria コールバック。"""
-                        return abort_event.is_set()
-
-                    raw = llm_ref.create_chat_completion(
+                    full_text = ""
+                    # stream=True を使用して、トークン生成ごとに abort_event をチェックします。
+                    # create_chat_completion は stopping_criteria を直接引数に取らないため、この方法が標準的です。
+                    gen = llm_ref.create_chat_completion(
                         messages=messages,
                         temperature=0.3,
                         max_tokens=max_tokens,
-                        stopping_criteria=should_abort,
+                        stream=True,
                     )
-                    text = raw["choices"][0]["message"]["content"]
-                    # thinking ブロックを除去（一部モデルが出力する場合に対応）
-                    return re.sub(r"<think>.*?</think>", "", text, flags=re.DOTALL).strip()
+                    try:
+                        for chunk in gen:
+                            if abort_event.is_set():
+                                gen.close()  # C++ 側を明示的に終了
+                                break
+                            delta = chunk["choices"][0].get("delta", {})
+                            if "content" in delta:
+                                full_text += delta["content"]
+                    except Exception as e:
+                        logger.error(f"ストリーミング推論中にエラーが発生しました: {e}")
+                        if not full_text:
+                            raise
 
-                executor_future = loop.run_in_executor(None, _run)
+                    # thinking ブロックを除去（一部モデルが出力する場合に対応）
+                    return re.sub(r"<think>.*?</think>", "", full_text, flags=re.DOTALL).strip()
+
                 try:
                     result = await asyncio.wait_for(
-                        asyncio.shield(executor_future), timeout=self.fallback_timeout
+                        loop.run_in_executor(None, _run),
+                        timeout=self.fallback_timeout,
                     )
                 except asyncio.TimeoutError:
-                    self._abort_event.set()
+                    abort_event.set()
                     elapsed = time.time() - start_time
                     logger.warning(
                         f"LLM 推論タイムアウト ({self.fallback_timeout}s): word='{original_word[:30]}', elapsed={elapsed:.2f}s"
@@ -206,7 +215,7 @@ class LlamaCppTranslationService:
                     )
                 except asyncio.CancelledError:
                     # HTTP リクエストがキャンセル/切断された場合、スレッドに中断を通知
-                    self._abort_event.set()
+                    abort_event.set()
                     logger.info(f"LLM 推論がキャンセルされました: word='{original_word[:30]}'")
                     raise
 
