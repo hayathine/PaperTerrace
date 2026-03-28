@@ -15,7 +15,6 @@ from app.domain.services.analysis_service import EnglishAnalysisService
 from app.providers import get_ai_provider
 from app.providers.orm_storage import ORMStorageAdapter
 from common.dspy_utils.modules import (
-    DeepExplanationModule,
     SimpleTranslationModule,
     TranslationModule,
 )
@@ -43,6 +42,7 @@ def build_dict_card_html(
     source: str,
     lang: str = "ja",
     paper_id: str | None = None,
+    paper_title: str | None = None,
     show_deep_btn: bool = True,
     element_id: str | None = None,
     trace_id: str | None = None,
@@ -52,6 +52,7 @@ def build_dict_card_html(
 
     paper_param = f"&paper_id={paper_id}" if paper_id else ""
     element_param = f"&element_id={element_id}" if element_id else ""
+    title_param = f"&paper_title={_html.escape(paper_title)}" if paper_title else ""
 
     # HTML attribute context: HTML-encode to prevent attribute injection
     # These values appear inside HTML attribute strings (onclick="..."), so
@@ -80,7 +81,7 @@ def build_dict_card_html(
     if show_deep_btn:
         deep_btn = f"""
         <button 
-            hx-get="/translate-deep/{lemma}?lang={lang}{paper_param}{element_param}"
+            hx-get="/translate-deep/{lemma}?lang={lang}{paper_param}{element_param}{title_param}"
             hx-target="closest .dict-card"
             hx-swap="outerHTML"
             hx-indicator="#dict-loading"
@@ -173,6 +174,7 @@ class ExplainRequest(BaseModel):
     word: str = Field(..., min_length=1, max_length=2000)
     lang: str = Field(default="ja")
     paper_id: str | None = None
+    paper_title: str | None = None
     session_id: str | None = None
     element_id: str | None = None
     conf: str | None = None
@@ -199,6 +201,7 @@ async def explain_post(
         word=payload.word,
         lang=payload.lang,
         paper_id=payload.paper_id,
+        paper_title=payload.paper_title,
         session_id=payload.session_id,
         element_id=payload.element_id,
         conf=payload.conf,
@@ -213,6 +216,7 @@ async def explain(
     word: str,
     lang: str = "ja",
     paper_id: str | None = None,
+    paper_title: str | None = None,
     session_id: str | None = None,
     element_id: str | None = None,
     conf: str | None = None,
@@ -242,9 +246,8 @@ async def explain(
         f"guest:{session_id}" if session_id else None
     )
 
-    # Fetch paper title for local LLM optimization
-    paper_title = None
-    if paper_id:
+    # Fetch paper title for local LLM optimization (Skip if title is provided by frontend)
+    if not paper_title and paper_id:
         paper_obj = storage.get_paper(paper_id)
         if paper_obj:
             paper_title = paper_obj.get("title")
@@ -279,6 +282,7 @@ async def explain(
                 source,
                 lang,
                 paper_id,
+                paper_title=paper_title,
                 element_id=element_id,
             )
         )
@@ -369,6 +373,7 @@ async def explain(
                 "Gemini AI",
                 lang,
                 paper_id,
+                paper_title=paper_title,
                 element_id=element_id,
                 trace_id=trace_id,
             )
@@ -580,17 +585,16 @@ async def explain_with_context(
 
     try:
         # DSPy version
-        # DeepExplanation uses summary_context, context, word, lang_name
-        deep_mod = DeepExplanationModule()
+        # TranslationModule uses paper_context, target_word, user_persona, lang_name
+        trans_mod = TranslationModule()
         res, trace_id = await trace_dspy_call(
-            "DeepExplanationModule",
-            "DeepExplanation",
-            deep_mod,
+            "TranslationModule",
+            "ContextAwareTranslation",
+            trans_mod,
             {
-                "summary_context": summary_context,
-                "context": req.context,
+                "paper_context": (summary_context + "\n" + req.context).strip(),
                 "target_word": req.word,
-                "user_persona": "Academic Expert",
+                "user_persona": "Professional Academic Translator",
                 "lang_name": lang_name,
             },
             context=TraceContext(
@@ -602,7 +606,7 @@ async def explain_with_context(
                 paper_id=paper_id,
             ),
         )
-        explanation = res.explanation
+        explanation = res.translation_and_explanation.strip()
 
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(

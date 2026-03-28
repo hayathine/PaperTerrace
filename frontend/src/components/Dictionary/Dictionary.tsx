@@ -9,6 +9,7 @@ export type DictionaryEntryWithCoords = DictionaryEntry & {
 
 import { useTranslation } from "react-i18next";
 import { API_URL } from "@/config";
+import { usePaperCache } from "@/db/hooks";
 import { buildAuthHeaders } from "@/lib/auth";
 import { APP_EVENTS } from "@/lib/events";
 import { createLogger } from "@/lib/logger";
@@ -62,7 +63,20 @@ const Dictionary: React.FC<DictionaryProps> = ({
 }) => {
 	const { t, i18n } = useTranslation();
 	const { token } = useAuth();
+	const { getCachedPaper } = usePaperCache();
 	const lang = i18n.language.startsWith("ja") ? "ja" : "en";
+
+	// IndexedDB からタイトルを事前取得してキャッシュ（API の DB 参照を省略し翻訳速度を改善）
+	const paperTitleRef = React.useRef<string | undefined>(undefined);
+	useEffect(() => {
+		if (!paperId) {
+			paperTitleRef.current = undefined;
+			return;
+		}
+		getCachedPaper(paperId).then((cached) => {
+			paperTitleRef.current = cached?.title;
+		});
+	}, [paperId, getCachedPaper]);
 
 	// Sub-tab is controlled from parent (App.tsx -> Sidebar.tsx)
 	// No local state needed for activeSubTab to avoid sync issues/double fetches
@@ -238,6 +252,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 								context: truncatedContext,
 								session_id: sessionId,
 								paper_id: paperId || "",
+								paper_title: paperTitleRef.current,
 								lang: lang,
 							}),
 						});
@@ -248,6 +263,9 @@ const Dictionary: React.FC<DictionaryProps> = ({
 						paper_id: paperId || "",
 						session_id: sessionId || "",
 					});
+					if (paperTitleRef.current) {
+						queryParams.append("paper_title", paperTitleRef.current);
+					}
 					if (context) {
 						queryParams.append("context", context);
 					}

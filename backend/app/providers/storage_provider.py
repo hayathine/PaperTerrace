@@ -64,6 +64,21 @@ class StorageInterface(ABC):
         ...
 
     @abstractmethod
+    def update_paper_title(self, paper_id: str, title: str) -> bool:
+        """Update the title of a paper."""
+        ...
+
+    @abstractmethod
+    def update_paper_authors(self, paper_id: str, authors: str) -> bool:
+        """Update the authors of a paper."""
+        ...
+
+    @abstractmethod
+    def update_paper_ocr_text(self, paper_id: str, ocr_text: str) -> bool:
+        """Update the OCR text of a paper (used for GROBID structured text replacement)."""
+        ...
+
+    @abstractmethod
     def update_paper_full_summary(self, paper_id: str, summary: str) -> bool:
         """Update the full summary of a paper."""
         ...

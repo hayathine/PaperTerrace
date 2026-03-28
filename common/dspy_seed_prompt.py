@@ -141,11 +141,13 @@ Your goal is to help users understand complex academic papers, translate technic
 # Fixed System Prompt for Translation (Prefix Caching optimized)
 # ------------------------------------------
 
-DICT_TRANSLATE_SYSTEM_PROMPT = (
-    """Translate with domain-accurate terminology. Output only the translation."""
-)
+DICT_TRANSLATE_SYSTEM_PROMPT = """Translate using domain-accurate terminology. 
+If abbreviation, expand it like: "LLM → 大規模言語モデル".Output only the translation."""
 
-DICT_TRANSLATE_LLM_PROMPT = """{paper_title}|{lang_name}|{target_word}"""
+DICT_TRANSLATE_LLM_PROMPT = """{paper_title}. Translate the word to {lang_name}.
+Input: {target_word}
+Translation:"""
+
 
 VISION_ANALYZE_FIGURE_PROMPT = """Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.
 {caption_hint}

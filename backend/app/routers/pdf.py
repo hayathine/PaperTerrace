@@ -8,12 +8,11 @@ import re
 import uuid
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, Query, UploadFile
-from pydantic import BaseModel
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
+from pydantic import BaseModel
 
 from app.auth import OptionalUser
 from app.core.config import is_production
-from common import settings
 from app.domain.features import SummaryService
 from app.domain.services.analysis_service import EnglishAnalysisService
 from app.domain.services.paper_processing import (
@@ -27,6 +26,7 @@ from app.providers import (
 )
 from app.providers.image_storage import get_upload_signed_url, pdf_blob_exists
 from app.utils import _get_file_hash
+from common import settings
 from common.logger import ServiceLogger
 from redis_provider.provider import get_is_registered
 
@@ -209,12 +209,17 @@ async def analyze_pdf_json(
     # file.size が None（Content-Length 未送信）の場合に備え、読み込み後にもサイズを検証する
     if len(content) > max_pdf_bytes:
         return JSONResponse(
-            {"error": f"File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB."},
+            {
+                "error": f"File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB."
+            },
             status_code=413,
         )
     file_hash = _get_file_hash(content)
     log.info(
-        "analyze_json", "入力を受け取リました", session_id=session_id, file_hash=file_hash
+        "analyze_json",
+        "入力を受け取リました",
+        session_id=session_id,
+        file_hash=file_hash,
     )
 
     # Detect PDF language
@@ -351,7 +356,9 @@ async def analyze_pdf_json(
         )
 
     except Exception as e:
-        log.error("analyze_json", "予期せぬエラーが発生しました", error=str(e), exc_info=True)
+        log.error(
+            "analyze_json", "予期せぬエラーが発生しました", error=str(e), exc_info=True
+        )
 
         error_msg = (
             str(e)
@@ -397,7 +404,9 @@ async def request_upload_url(
             status_code=413,
         )
     if file_size_bytes <= 0:
-        return JSONResponse({"error": "file_size_bytes must be positive"}, status_code=422)
+        return JSONResponse(
+            {"error": "file_size_bytes must be positive"}, status_code=422
+        )
 
     # キャッシュ確認
     storage = get_storage_provider()
@@ -451,7 +460,9 @@ async def analyze_pdf_hash(
         )
 
     storage = get_storage_provider()
-    user_id = user.uid if user else (f"guest:{req.session_id}" if req.session_id else None)
+    user_id = (
+        user.uid if user else (f"guest:{req.session_id}" if req.session_id else None)
+    )
     is_registered = get_is_registered(user_id)
 
     # キャッシュ確認
@@ -472,7 +483,11 @@ async def analyze_pdf_hash(
             import uuid6
 
             paper_id = str(uuid6.uuid7())
-            log.info("analyze_hash", "キャッシュはヒットしましたが画像が見つかりません。再生成します。", paper_id=paper_id)
+            log.info(
+                "analyze_hash",
+                "キャッシュはヒットしましたが画像が見つかりません。再生成します。",
+                paper_id=paper_id,
+            )
             raw_text = None
         else:
             log.info("analyze_hash", "キャッシュヒット", paper_id=paper_id)
@@ -493,7 +508,9 @@ async def analyze_pdf_hash(
         try:
             storage.save_session_context(req.session_id, paper_id)
         except Exception as e:
-            log.error("analyze_hash", "Failed to pre-save session context", error=str(e))
+            log.error(
+                "analyze_hash", "Failed to pre-save session context", error=str(e)
+            )
 
     task_data = {
         "format": "json",
@@ -630,6 +647,17 @@ async def stream(task_id: str):
     is_registered = data.get("is_registered", False)
     file_hash = data.get("file_hash", "")
     filename = data.get("filename", "unknown.pdf")
+    paper_title = data.get("paper_title")
+
+    # 論文タイトルの事前取得 (HTMX リンク埋め込み用)
+    if not paper_title and paper_id and paper_id != "pending":
+        storage = get_storage_provider()
+        paper_obj = storage.get_paper(paper_id)
+        if paper_obj:
+            paper_title = paper_obj.get("title") or paper_obj.get("filename")
+
+    if not paper_title:
+        paper_title = filename
 
     # --- JSON STREAMING HANDLER ---
     if is_json:
@@ -802,9 +830,36 @@ async def stream(task_id: str):
                             paper_id=new_paper_id,
                         )
 
+                        # PDF メタデータ（fitz.metadata）から title / authors を即時保存
+                        try:
+                            import fitz as _fitz  # noqa: PLC0415
+
+                            with _fitz.open(stream=pdf_content, filetype="pdf") as _doc:
+                                _meta = _doc.metadata
+                            _pdf_title = (_meta.get("title") or "").strip() or None
+                            _pdf_authors = (_meta.get("author") or "").strip() or None
+                            if _pdf_title:
+                                storage.update_paper_title(new_paper_id, _pdf_title)
+                            if _pdf_authors:
+                                storage.update_paper_authors(new_paper_id, _pdf_authors)
+                        except Exception as _meta_err:
+                            log.warning(
+                                "stream",
+                                "PDF メタデータ取得に失敗（無視）",
+                                error=str(_meta_err),
+                            )
+
                         # Trigger background tasks (require DB records)
                         asyncio.create_task(
                             process_paper_summary_task(new_paper_id, lang=lang)
+                        )
+
+                        # GROBID 非同期エンリッチメントジョブをエンキュー
+                        from app.domain.services.paper_processing import (  # noqa: PLC0415
+                            process_grobid_enrichment_task,
+                        )
+                        asyncio.create_task(
+                            process_grobid_enrichment_task(new_paper_id, file_hash)
                         )
 
                         # Save figure metadata for each page
@@ -1147,10 +1202,13 @@ async def stream(task_id: str):
                         word_id = f"w-{page_num}-{j}"
 
                         # 透明なクリック領域を作成
+                        import html as _html
+
+                        safe_title = _html.escape(paper_title) if paper_title else ""
                         words_html.append(
                             f'<a id="{word_id}" class="absolute cursor-pointer hover:bg-yellow-300/30 transition-colors rounded-sm group"'
                             f' style="left:{left}%; top:{top}%; width:{width}%; height:{height}%;"'
-                            f' hx-get="/translate/{word_text}?lang={lang}&element_id={word_id}"'
+                            f' hx-get="/translate/{word_text}?lang={lang}&element_id={word_id}&paper_title={safe_title}"'
                             f' hx-vals=\'js:{{context: document.getElementById("{word_id}").closest(".text-line")?.innerText?.slice(0, 300) || ""}}\''
                             f' hx-trigger="click"'
                             f' hx-target="#dict-stack"'
@@ -1179,6 +1237,7 @@ async def stream(task_id: str):
                         save_to_db=False,
                         lang=lang,
                         session_id=session_id,
+                        paper_title=paper_title,
                     ):
                         yield chunk
                         await asyncio.sleep(0.005)

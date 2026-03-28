@@ -55,11 +55,10 @@ class TranslationService:
         lang_full_name = get_lang_name(target_lang)
         raw_input = original_text or text
 
-        # 単語か文かを判定し、単語ならレマ化（原形への修正）を行う
+        # レマ化（原形への修正）は強力な LLM を使用する場合は不要なためスキップ
         lemma = raw_input
         if NLPService.is_single_word(raw_input):
-            lemma = NLPService.lemmatize(raw_input)
-            logger.info(f"単語を検知: '{raw_input}' -> レマ化: '{lemma}'")
+            logger.info(f"単語を検知: '{raw_input}' (原文のまま翻訳)")
         else:
             logger.info(f"文章を検知: '{raw_input[:30]}...' (そのまま翻訳)")
 
@@ -132,18 +131,12 @@ class TranslationService:
         self, texts: list[str], target_lang: str = "ja", paper_context: str = ""
     ) -> tuple[list[str], list[str], list[float], list[str]]:
         """バッチ翻訳の統合実行"""
-        from .nlp import NLPService
         from .utils import get_lang_name
 
         lang_full_name = get_lang_name(target_lang)
 
-        # 各テキストを判定し、単語ならレマ化
-        input_texts = []
-        for t in texts:
-            if NLPService.is_single_word(t):
-                input_texts.append(NLPService.lemmatize(t))
-            else:
-                input_texts.append(t)
+        # 各テキストを原文のまま使用（レマ化はスキップ）
+        input_texts = texts
 
         # LlamaCpp 単独モードの場合
         if self.inference_type == "translate":

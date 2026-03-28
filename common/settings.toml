@@ -37,8 +37,11 @@ CT2_INTRA_THREADS = 1
 
 # 翻訳モデル設定（Llama.cpp）
 LLAMACPP_MODEL_PATH = ""
-LLAMACPP_CTX_SIZE = 64           # KVキャッシュバッファサイズ（極限まで削減）
+LLAMACPP_CTX_SIZE = 512           # KVキャッシュバッファサイズ
 LLAMACPP_MAX_TOKENS = 64        # 単語翻訳には十分な出力サイズ
+LLAMACPP_TEMPERATURE = 0.0        # 出力の安定性のための温度（0.0で決定論的）
+LLAMACPP_TOP_P = 1.0              # 核サンプリング（1.0で実質無効）
+LLAMACPP_REPEAT_PENALTY = 1.1     # 繰り返し抑制のためのペナルティ
 LLAMACPP_THREADS = 4             # 推論スレッド数（物理コア数より少なく設定）
 LLAMACPP_THREADS_BATCH = 4       # バッチ処理スレッド数
 LLAMACPP_BATCH_SIZE = 512        # プロンプト評価バッチサイズ
@@ -48,6 +51,9 @@ LLAMACPP_USE_MMAP = "true"       # メモリマップでモデルをロード（
 LLAMACPP_FLASH_ATTN = "true"     # Flash Attention 2を有効化（attention計算を高速化）
 LLAMACPP_FALLBACK_TIMEOUT = 30   # このタイムアウト後にGeminiへフォールバック（秒）
 LLAMACPP_VERBOSE = false         # llama.cpp の詳細な統計ログを出力するか
+LLAMACPP_CACHE_TYPE_K = 8        # KVキャッシュのKタイプ (8 = q8_0)
+LLAMACPP_CACHE_TYPE_V = 8        # KVキャッシュのVタイプ (8 = q8_0)
+
 
 MAX_PDF_SIZE_MB = 50
 
@@ -83,6 +89,14 @@ INFERENCE_OCR_DISABLED = false
 INFERENCE_OCR_MIN_PAGE_TEXT_LEN = 100
 OCR_LINE_HEIGHT_PX = 35 # OCR フォールバック: レイアウトブロックをライン分割する高さ (px, 150 DPI 基準)
 RATE_LIMIT_OCR = "120/minute"
+
+# Tesseract OCR フォールバック（スキャンPDF用）
+TESSERACT_LANG = "eng+jpn"
+TESSERACT_CONFIG = "--oem 1 --psm 3"
+
+# GROBID 論文構造解析（非同期バックグラウンド処理）
+GROBID_URL = ""   # ローカル: 空（スキップ）
+GROBID_TIMEOUT = 120
 
 # OCR 検出モデルのハイパーパラメータ
 OCR_DET_INPUT_SIZE = 640 # 認識モデルは動的幅対応のため max_w 制約なし → 640 でも行全体を正確に認識可能
@@ -139,6 +153,7 @@ INFERENCE_VERIFY_SSL = false
 LOG_SCHEMA = "logs_staging"
 # LOG_DATABASE_URL_STAGING = "" (環境変数から取得)
 LLAMACPP_VERBOSE = true
+GROBID_URL = "http://grobid.inference.svc.cluster.local:8070"
 
 [prod]
 LOG_LEVEL = "INFO"
@@ -151,3 +166,4 @@ INFERENCE_VERIFY_SSL = false
 LOG_SCHEMA = "logs"
 # LOG_DATABASE_URL = "" (環境変数から取得)
 LLAMACPP_VERBOSE = false
+GROBID_URL = "http://grobid.inference.svc.cluster.local:8070"

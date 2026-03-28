@@ -38,6 +38,9 @@ dependencies = [
     "pymupdf4llm>=0.3.4",
     "python-jose[cryptography]>=3.5.0",
     "google-cloud-vision>=3.12.1",
+    # OCR
+    "pytesseract>=0.3.13",
+    "lxml>=5.0.0",
 ]
 
 [dependency-groups]

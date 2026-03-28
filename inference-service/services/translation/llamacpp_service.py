@@ -31,18 +31,35 @@ class LlamaCppTranslationService:
         self.n_ctx = int(settings.get("LLAMACPP_CTX_SIZE", "512"))
         # 安全性のため、物理コア数(6)より少ないスレッド数(4)をデフォルトに設定します。
         self.n_threads = int(settings.get("LLAMACPP_THREADS", "4"))
-        self.n_threads_batch = int(settings.get("LLAMACPP_THREADS_BATCH", str(self.n_threads)))
+        self.n_threads_batch = int(
+            settings.get("LLAMACPP_THREADS_BATCH", str(self.n_threads))
+        )
         # Batch size controls peak memory during prompt evaluation.
         self.n_batch = int(settings.get("LLAMACPP_BATCH_SIZE", "512"))
         self.n_gpu_layers = int(
             settings.get("LLAMACPP_GPU_LAYERS", "0")
         )  # CPU実行をデフォルトに
-        self.use_mlock = str(settings.get("LLAMACPP_USE_MLOCK", "true")).lower() == "true"
+        self.use_mlock = (
+            str(settings.get("LLAMACPP_USE_MLOCK", "true")).lower() == "true"
+        )
         # mmap allows the model to be loaded from disk on demand, reducing initial RAM usage.
         self.use_mmap = str(settings.get("LLAMACPP_USE_MMAP", "true")).lower() == "true"
-        self.flash_attn = str(settings.get("LLAMACPP_FLASH_ATTN", "true")).lower() == "true"
+        self.flash_attn = (
+            str(settings.get("LLAMACPP_FLASH_ATTN", "true")).lower() == "true"
+        )
         self.max_tokens = int(settings.get("LLAMACPP_MAX_TOKENS", "2048"))
+        self.temperature = float(settings.get("LLAMACPP_TEMPERATURE", "0.0"))
+        self.top_p = float(settings.get("LLAMACPP_TOP_P", "1.0"))
+        self.repeat_penalty = float(settings.get("LLAMACPP_REPEAT_PENALTY", "1.1"))
         self.verbose = str(settings.get("LLAMACPP_VERBOSE", "false")).lower() == "true"
+        # KVキャッシュの量子化設定 (8 = q8_0, 1 = f16, etc.)
+        self.type_k = settings.get("LLAMACPP_CACHE_TYPE_K")
+        if self.type_k is not None:
+            self.type_k = int(self.type_k)
+        self.type_v = settings.get("LLAMACPP_CACHE_TYPE_V")
+        if self.type_v is not None:
+            self.type_v = int(self.type_v)
+
         self._lock = asyncio.Lock()
         self.fallback_timeout = int(settings.get("LLAMACPP_FALLBACK_TIMEOUT", "30"))
         self._is_busy = False
@@ -78,6 +95,8 @@ class LlamaCppTranslationService:
                         use_mlock=self.use_mlock,
                         use_mmap=self.use_mmap,
                         flash_attn=self.flash_attn,
+                        type_k=self.type_k,
+                        type_v=self.type_v,
                         verbose=self.verbose,
                     ),
                 )
@@ -152,7 +171,7 @@ class LlamaCppTranslationService:
             )
 
             user_content = DICT_TRANSLATE_LLM_PROMPT.format(
-                paper_title=paper_context, # The argument name is still paper_context for now to avoid breaking the client immediately
+                paper_title=paper_context,  # The argument name is still paper_context for now to avoid breaking the client immediately
                 target_word=original_word,
                 lang_name=lang_name,
             )
@@ -172,6 +191,9 @@ class LlamaCppTranslationService:
 
                 llm_ref = self.llm
                 max_tokens = self.max_tokens
+                temperature = self.temperature
+                top_p = self.top_p
+                repeat_penalty = self.repeat_penalty
 
                 def _run():
                     full_text = ""
@@ -179,7 +201,9 @@ class LlamaCppTranslationService:
                     # create_chat_completion は stopping_criteria を直接引数に取らないため、この方法が標準的です。
                     gen = llm_ref.create_chat_completion(
                         messages=messages,
-                        temperature=0.3,
+                        temperature=temperature,
+                        top_p=top_p,
+                        repeat_penalty=repeat_penalty,
                         max_tokens=max_tokens,
                         stream=True,
                     )
@@ -197,7 +221,9 @@ class LlamaCppTranslationService:
                             raise
 
                     # thinking ブロックを除去（一部モデルが出力する場合に対応）
-                    return re.sub(r"<think>.*?</think>", "", full_text, flags=re.DOTALL).strip()
+                    return re.sub(
+                        r"<think>.*?</think>", "", full_text, flags=re.DOTALL
+                    ).strip()
 
                 try:
                     result = await asyncio.wait_for(
@@ -216,7 +242,9 @@ class LlamaCppTranslationService:
                 except asyncio.CancelledError:
                     # HTTP リクエストがキャンセル/切断された場合、スレッドに中断を通知
                     abort_event.set()
-                    logger.info(f"LLM 推論がキャンセルされました: word='{original_word[:30]}'")
+                    logger.info(
+                        f"LLM 推論がキャンセルされました: word='{original_word[:30]}'"
+                    )
                     raise
 
                 elapsed = time.time() - start_time

@@ -208,7 +208,9 @@ class VisionAnalyzeFigure(dspy.Signature):
 class PaperRecommendation(dspy.Signature):
     __doc__ = PAPER_RECOMMENDATION_SEED
 
-    input_data: str = dspy.InputField(desc="Analysis of the current paper and user profile")
+    input_data: str = dspy.InputField(
+        desc="Analysis of the current paper and user profile"
+    )
     recommendations: list[str] = dspy.OutputField(
         desc="List of recommended papers (including titles and reasons)"
     )

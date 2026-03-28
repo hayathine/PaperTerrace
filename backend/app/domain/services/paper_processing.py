@@ -1,5 +1,6 @@
 from app.domain.features.figure_insight import FigureInsightService
 from app.domain.features.summary import SummaryService
+from app.domain.services.grobid_service import GROBIDService
 from app.providers import get_storage_provider
 from common.logger import ServiceLogger
 
@@ -144,6 +145,72 @@ async def process_paper_summary_task(
         log.error(
             "summary_task",
             "Summary FAILED",
+            paper_id=paper_id,
+            error=str(e),
+            exc_info=True,
+        )
+    finally:
+        storage.close()
+
+
+async def process_grobid_enrichment_task(paper_id: str, file_hash: str) -> None:
+    """
+    GROBID で論文構造解析を行い DB を更新するバックグラウンドタスク。
+
+    title / authors / abstract / ocr_text（構造化 Markdown）を更新する。
+    GROBID が無効・失敗した場合は静かに終了する。
+    """
+    if not paper_id or not file_hash:
+        return
+
+    grobid = GROBIDService()
+    if not grobid.is_available():
+        log.info("grobid_task", "GROBID 無効のためスキップ", paper_id=paper_id)
+        return
+
+    log.info("grobid_task", "GROBID エンリッチメント開始", paper_id=paper_id)
+
+    storage = get_storage_provider()
+    try:
+        paper = storage.get_paper(paper_id)
+        if not paper:
+            log.warning("grobid_task", "Paper が見つからない", paper_id=paper_id)
+            return
+
+        from app.providers.image_storage import get_image_storage  # noqa: PLC0415
+
+        img_storage = get_image_storage()
+        pdf_bytes = img_storage.get_doc_bytes(img_storage.get_doc_path(file_hash))
+
+        result = await grobid.process_fulltext_document(pdf_bytes)
+        if not result:
+            log.warning("grobid_task", "GROBID 解析失敗", paper_id=paper_id)
+            return
+
+        if result.title:
+            storage.update_paper_title(paper_id, result.title)
+        if result.authors:
+            storage.update_paper_authors(paper_id, result.authors)
+        if result.abstract:
+            storage.update_paper_abstract(paper_id, result.abstract)
+
+        # 構造化 Markdown でテキストモードを改善（セクションがある場合のみ）
+        md = grobid.build_markdown(result)
+        if md:
+            storage.update_paper_ocr_text(paper_id, md)
+
+        log.info(
+            "grobid_task",
+            "GROBID エンリッチメント完了",
+            paper_id=paper_id,
+            title=result.title,
+            sections=len(result.sections),
+        )
+
+    except Exception as e:
+        log.error(
+            "grobid_task",
+            "GROBID エンリッチメント失敗",
             paper_id=paper_id,
             error=str(e),
             exc_info=True,

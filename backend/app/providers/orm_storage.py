@@ -205,6 +205,21 @@ class ORMStorageAdapter(StorageInterface):
             lambda: self.papers.update_abstract(paper_id, abstract)
         )
 
+    def update_paper_title(self, paper_id: str, title: str) -> bool:
+        return self._with_recovery(
+            lambda: self.papers.update_title(paper_id, title)
+        )
+
+    def update_paper_authors(self, paper_id: str, authors: str) -> bool:
+        return self._with_recovery(
+            lambda: self.papers.update_authors(paper_id, authors)
+        )
+
+    def update_paper_ocr_text(self, paper_id: str, ocr_text: str) -> bool:
+        return self._with_recovery(
+            lambda: self.papers.update_ocr_text(paper_id, ocr_text)
+        )
+
     def update_paper_full_summary(self, paper_id: str, summary: str) -> bool:
         return self._with_recovery(
             lambda: self.papers.update_full_summary(paper_id, summary)
@@ -476,11 +491,15 @@ class ORMStorageAdapter(StorageInterface):
     def save_session_context(self, session_id: str, paper_id: str) -> None:
         """セッション→論文マッピングをRedisに保存する。"""
         from redis_provider.provider import RedisService
-        RedisService().set(f"session_pid:{session_id}", paper_id, expire=self._SESSION_PAPER_TTL)
+
+        RedisService().set(
+            f"session_pid:{session_id}", paper_id, expire=self._SESSION_PAPER_TTL
+        )
 
     def get_session_paper_id(self, session_id: str) -> Optional[str]:
         """RedisからセッションIDに対応する論文IDを取得する。"""
         from redis_provider.provider import RedisService
+
         val = RedisService().get(f"session_pid:{session_id}")
         return str(val) if val is not None else None
 

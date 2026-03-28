@@ -26,6 +26,7 @@ class TokenizationService:
         save_to_db: bool = True,
         lang: str = "ja",
         session_id: str | None = None,
+        paper_title: str | None = None,
     ):
         """Processes text paragraph by paragraph and yields interactive HTML."""
         paragraphs = re.split(r"\n{2,}", text.replace("\r\n", "\n"))
@@ -78,13 +79,15 @@ class TokenizationService:
 
                 paper_param = f"&paper_id={paper_id}" if paper_id else ""
                 session_param = f"&session_id={session_id}" if session_id else ""
+                import html as _html
+                title_param = f"&paper_title={_html.escape(paper_title)}" if paper_title else ""
                 token_id = f"{unique_id}-{j}"
                 # hx-vals を使い、クリック時にスパンが属する段落のテキストを context として渡す。
                 # JS 式でクリック要素の最近接 .paragraph-container のテキストを取得し、
                 # 先頭 800 文字に制限してコンテキスト過大によるURL肥大化を防ぐ。
                 p_tokens_html.append(
                     f'<span id="{token_id}" class="cursor-pointer border-b transition-colors {color}'
-                    f'" hx-get="/translate/{lemma}?lang={lang}{paper_param}{session_param}&element_id={token_id}" hx-trigger="click" '
+                    f'" hx-get="/translate/{lemma}?lang={lang}{paper_param}{session_param}{title_param}&element_id={token_id}" hx-trigger="click" '
                     f'hx-vals=\'js:{{context: (document.getElementById("{token_id}").closest(".paragraph-container, p") || document.getElementById("{token_id}").parentElement)?.innerText?.slice(0, 800) || ""}}\' '
                     f'hx-indicator="#dict-loading" '
                     f'hx-target="#dict-stack" hx-swap="afterbegin">{text}</span>{whitespace}'

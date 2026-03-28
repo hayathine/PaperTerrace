@@ -54,21 +54,78 @@ def _is_garbled_text(text: str) -> bool:
         return True
 
     # 2. Unicode 置換文字 U+FFFD
-    repl_count = text.count("\uFFFD")
+    repl_count = text.count("\ufffd")
     if repl_count >= 5 or (repl_count > 0 and repl_count / text_len > threshold_ratio):
         return True
 
     # 3. Unicode Private Use Area (BMP): U+E000〜U+F8FF
-    pua_count = sum(1 for c in text if "\uE000" <= c <= "\uF8FF")
+    pua_count = sum(1 for c in text if "\ue000" <= c <= "\uf8ff")
     if pua_count >= 5 or (pua_count > 0 and pua_count / text_len > threshold_ratio):
         return True
 
     # 4. Unicode Supplementary PUA: U+F0000〜U+FFFFF
-    sup_pua_count = sum(1 for c in text if "\U000F0000" <= c <= "\U000FFFFF")
-    if sup_pua_count >= 5 or (sup_pua_count > 0 and sup_pua_count / text_len > threshold_ratio):
+    sup_pua_count = sum(1 for c in text if "\U000f0000" <= c <= "\U000fffff")
+    if sup_pua_count >= 5 or (
+        sup_pua_count > 0 and sup_pua_count / text_len > threshold_ratio
+    ):
         return True
 
     return False
+
+
+def _parse_hocr_words(
+    hocr_bytes: bytes, img_width: int, img_height: int
+) -> list[dict]:
+    """
+    Tesseract の hOCR 出力から単語レベルの bbox を抽出する。
+
+    hOCR の <span class='ocrx_word' title='bbox x0 y0 x1 y1; x_wconf NN'>
+    を解析し、フロントエンドの PageWord フォーマット互換のリストを返す。
+
+    Args:
+        hocr_bytes: pytesseract.image_to_pdf_or_hocr() の hOCR 出力
+        img_width: 元画像の幅（px）
+        img_height: 元画像の高さ（px）
+
+    Returns:
+        [{"word": str, "bbox": [x0, y0, x1, y1], "conf": float}, ...]
+    """
+    from lxml import etree
+
+    words: list[dict] = []
+    try:
+        root = etree.fromstring(hocr_bytes)
+        ns = root.nsmap.get(None, "")
+        tag_prefix = f"{{{ns}}}" if ns else ""
+        span_tag = f"{tag_prefix}span"
+
+        for span in root.iter(span_tag):
+            cls = span.get("class", "")
+            if "ocrx_word" not in cls:
+                continue
+            title = span.get("title", "")
+            word_text = (span.text_content() if hasattr(span, "text_content") else "".join(span.itertext())).strip()
+            if not word_text:
+                continue
+
+            # "bbox x0 y0 x1 y1; x_wconf NN" をパース
+            bbox_match = re.search(r"bbox\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)", title)
+            conf_match = re.search(r"x_wconf\s+(\d+)", title)
+            if not bbox_match:
+                continue
+
+            x0, y0, x1, y1 = (int(bbox_match.group(i)) for i in range(1, 5))
+            conf = int(conf_match.group(1)) / 100.0 if conf_match else 1.0
+
+            # 信頼度が低い単語（10%未満）はノイズとして除外
+            if conf < 0.1:
+                continue
+
+            words.append({"word": word_text, "bbox": [x0, y0, x1, y1], "conf": conf})
+    except Exception:
+        pass
+
+    return words
 
 
 def _fix_indentation_artifacts(text: str) -> str:
@@ -222,7 +279,9 @@ class PDFOCRService:
                     chunk_page_data = []
                     for task in phase12_tasks:
                         t_p12_start = time.perf_counter()
-                        page_data = await task  # 並列実行済みのタスクをページ順に受け取る
+                        page_data = (
+                            await task
+                        )  # 並列実行済みのタスクをページ順に受け取る
                         t_p12_end = time.perf_counter()
                         duration = round(t_p12_end - t_p12_start, 3)
                         pn = page_data["page_num"]
@@ -237,7 +296,15 @@ class PDFOCRService:
                             duration=duration,
                         )
                         p = page_data["phase1_result"]
-                        yield (p[0], p[1], p[2], p[3], p[4], page_data["image_url"], p[6])
+                        yield (
+                            p[0],
+                            p[1],
+                            p[2],
+                            p[3],
+                            p[4],
+                            page_data["image_url"],
+                            p[6],
+                        )
                         chunk_page_data.append(page_data)
 
                     # バッチOCR: phase1 テキストが空または文字化けのページを事前検出して一括送信
@@ -246,12 +313,19 @@ class PDFOCRService:
                         (pd["page_num"], pd["img_bytes"])
                         for pd in chunk_page_data
                         if not (pd.get("phase1_result") or ("",) * 7)[2].strip()
-                        or _is_garbled_text((pd.get("phase1_result") or ("",) * 7)[2] or "")
-                        or len(((pd.get("phase1_result") or ("",) * 7)[2] or "").strip()) < _min_len
+                        or _is_garbled_text(
+                            (pd.get("phase1_result") or ("",) * 7)[2] or ""
+                        )
+                        or len(
+                            ((pd.get("phase1_result") or ("",) * 7)[2] or "").strip()
+                        )
+                        < _min_len
                     ]
-                    batch_ocr_results: dict[int, str] = {}
+                    batch_ocr_results: dict[int, tuple[str, list[dict]]] = {}
                     if ocr_candidate_pages:
-                        batch_ocr_results = await self._ocr_fallback_batch(ocr_candidate_pages)
+                        batch_ocr_results = await self._ocr_fallback_batch(
+                            ocr_candidate_pages
+                        )
                         log.info(
                             "batch_ocr",
                             "Batch OCR completed",
@@ -260,7 +334,9 @@ class PDFOCRService:
                         )
                         for pd in chunk_page_data:
                             if pd["page_num"] in batch_ocr_results:
-                                pd["ocr_text_override"] = batch_ocr_results[pd["page_num"]]
+                                pd["ocr_text_override"] = batch_ocr_results[
+                                    pd["page_num"]
+                                ]
 
                     phase3_tasks = [
                         asyncio.create_task(
@@ -538,7 +614,7 @@ class PDFOCRService:
         file_hash: str,
         pdf_path: str | None = None,
         file_bytes: bytes = b"",
-        ocr_text_override: str | None = None,
+        ocr_text_override: tuple[str, list[dict]] | None = None,
     ) -> tuple:
         """Execute Phase 3: Layout refinement, Markdown generation, and Figure cropping."""
         page_num = page_data["page_num"]
@@ -598,8 +674,12 @@ class PDFOCRService:
                 # pymupdf4llm はフォントエンコーディングエラーを ASCII シフト文字として出力するため
                 # そのパターンを検出できない場合がある。pdfplumber (Phase 1) は \uFFFD を出力するため
                 # 両方をチェックして文字化けを正確に判定する。
-                phase1_text = (page_data.get("phase1_result") or ("", "", "", "", "", "", ""))[2] or ""
-                is_garbled = _is_garbled_text(page_text) or _is_garbled_text(phase1_text)
+                phase1_text = (
+                    page_data.get("phase1_result") or ("", "", "", "", "", "", "")
+                )[2] or ""
+                is_garbled = _is_garbled_text(page_text) or _is_garbled_text(
+                    phase1_text
+                )
                 _min_page_text_len = int(
                     settings.get("INFERENCE_OCR_MIN_PAGE_TEXT_LEN", 100)
                 )
@@ -615,15 +695,18 @@ class PDFOCRService:
                         else "too_short_text"
                     )
                     if ocr_text_override is not None:
-                        # バッチOCRで事前取得済みのテキストを使用
+                        # バッチOCRで事前取得済みのテキストと word bbox を使用
                         log.info(
                             "_finalize_page_phase_3",
                             "Using pre-fetched batch OCR result",
                             reason=reason,
                             page_num=page_num,
                         )
-                        if ocr_text_override:
-                            page_text = ocr_text_override
+                        ocr_text, ocr_words = ocr_text_override
+                        if ocr_text:
+                            page_text = ocr_text
+                        if ocr_words:
+                            layout_data["words"] = ocr_words
                     else:
                         log.warning(
                             "_finalize_page_phase_3",
@@ -633,15 +716,17 @@ class PDFOCRService:
                             text_len=len(page_text.strip()),
                             cid_count=page_text.count("(cid:"),
                         )
-                        fallback = await self._ocr_fallback(
+                        fallback_text, fallback_words = await self._ocr_fallback(
                             page_data["img_bytes"],
                             page_num,
                             layout_blocks=layout_blocks,
                             img_width=int(layout_data.get("width", 0)),
                             img_height=int(layout_data.get("height", 0)),
                         )
-                        if fallback:
-                            page_text = fallback
+                        if fallback_text:
+                            page_text = fallback_text
+                        if fallback_words:
+                            layout_data["words"] = fallback_words
 
                 # 3. Post-process layout blocks (equations, figures)
                 # y座標を保持して後で本文中の適切な位置に挿入するため、リストで管理する
@@ -851,130 +936,114 @@ class PDFOCRService:
         layout_blocks: list | None = None,
         img_width: int = 0,
         img_height: int = 0,
-    ) -> str:
+    ) -> tuple[str, list[dict]]:
         """
-        テキスト抽出が失敗した場合に Gemini Vision でフォールバック OCR を実行する。
+        テキスト抽出が失敗した場合に Tesseract でフォールバック OCR を実行する。
 
-        ページ画像を Gemini に渡し、タイトル・見出しを考慮した Markdown 形式で
-        本文テキストを抽出する。図表キャプションは除去される。
+        ページ画像を Tesseract に渡しテキストと word bbox リストを返す。
+        hOCR 出力から単語座標を抽出し click mode オーバーレイに使用する。
+
+        Returns:
+            (text, words): テキストと {"word", "bbox", "conf"} のリスト。
         """
-        from common.dspy_seed_prompt import PDF_EXTRACT_TEXT_OCR_PROMPT
+        import io
+
+        import pytesseract
+        from PIL import Image
+
+        lang = settings.get("TESSERACT_LANG", "eng+jpn")
+        config = settings.get("TESSERACT_CONFIG", "--oem 1 --psm 3")
 
         try:
-            ai = await get_ai_provider()
+            img = Image.open(io.BytesIO(img_bytes))
             log.info(
                 "_ocr_fallback",
-                "Gemini Vision OCR fallback",
+                "Tesseract OCR fallback",
                 page_num=page_num,
+                lang=lang,
             )
-            ocr_model = settings.get("MODEL_OCR", settings.get("MODEL_SUMMARY", "gemini-2.5-flash-lite"))
-            t_fallback_start = time.perf_counter()
-            text = await ai.generate_with_image(
-                prompt=PDF_EXTRACT_TEXT_OCR_PROMPT,
-                image_bytes=img_bytes,
-                mime_type="image/jpeg",
-                model=ocr_model,
+            t_start = time.perf_counter()
+
+            text, hocr_bytes = await asyncio.gather(
+                asyncio.to_thread(
+                    pytesseract.image_to_string, img, lang=lang, config=config
+                ),
+                asyncio.to_thread(
+                    pytesseract.image_to_pdf_or_hocr,
+                    img,
+                    lang=lang,
+                    config=config,
+                    extension="hocr",
+                ),
             )
-            t_fallback_end = time.perf_counter()
+
+            words = _parse_hocr_words(hocr_bytes, img.width, img.height)
             log.debug(
                 "_ocr_fallback",
-                "Gemini Vision OCR fallback completed",
+                "Tesseract OCR fallback completed",
                 page_num=page_num,
-                duration=round(t_fallback_end - t_fallback_start, 3),
+                duration=round(time.perf_counter() - t_start, 3),
+                word_count=len(words),
             )
-            if text and text.strip():
-                return text.strip()
+            return text.strip(), words
+
         except Exception as e:
             log.warning(
                 "_ocr_fallback",
-                "Gemini Vision OCR fallback failed",
+                "Tesseract OCR fallback failed",
                 page_num=page_num,
                 error=str(e),
             )
-
-        return ""
+            return "", []
 
     async def _ocr_fallback_batch(
         self,
         pages: list[tuple[int, bytes]],
-    ) -> dict[int, str]:
+    ) -> dict[int, tuple[str, list[dict]]]:
         """
-        複数ページ画像を一括で Gemini Vision に送り OCR 結果を返す。
+        複数ページ画像を並列で Tesseract OCR し結果を返す。
 
         Args:
             pages: [(page_num, img_bytes), ...] のリスト
 
         Returns:
-            {page_num: ocr_text} の辞書。失敗ページは含まない。
+            {page_num: (ocr_text, words)} の辞書。失敗ページは含まない。
         """
-        from common.dspy_seed_prompt import PDF_EXTRACT_TEXT_OCR_BATCH_PROMPT
-
         if not pages:
             return {}
 
-        try:
-            ai = await get_ai_provider()
-            ocr_model = settings.get("MODEL_OCR", settings.get("MODEL_SUMMARY", "gemini-2.5-flash-lite"))
-            ocr_max_tokens = int(settings.get("OCR_MAX_OUTPUT_TOKENS", 8192))
+        log.info(
+            "_ocr_fallback_batch",
+            "Tesseract parallel OCR",
+            page_nums=[p[0] for p in pages],
+        )
 
-            page_nums = [p[0] for p in pages]
-            images_list = [p[1] for p in pages]
+        results_list = await asyncio.gather(
+            *[self._ocr_fallback(img_bytes, page_num) for page_num, img_bytes in pages],
+            return_exceptions=True,
+        )
 
-            # ページ番号を明示したプロンプトを生成
-            page_labels = ", ".join(f"PAGE_{n}" for n in page_nums)
-            prompt = (
-                f"Process the following {len(pages)} page image(s) in order: {page_labels}.\n\n"
-                + PDF_EXTRACT_TEXT_OCR_BATCH_PROMPT
-            )
+        results: dict[int, tuple[str, list[dict]]] = {}
+        for (page_num, _), result in zip(pages, results_list):
+            if isinstance(result, Exception):
+                log.warning(
+                    "_ocr_fallback_batch",
+                    "Page OCR failed",
+                    page_num=page_num,
+                    error=str(result),
+                )
+                continue
+            text, words = result
+            if text:
+                results[page_num] = (text, words)
 
-            log.info(
-                "_ocr_fallback_batch",
-                "Gemini batch OCR",
-                page_nums=page_nums,
-                image_count=len(images_list),
-            )
-
-            raw = await ai.generate_with_images(
-                prompt=prompt,
-                images_list=images_list,
-                mime_type="image/jpeg",
-                model=ocr_model,
-                max_tokens=ocr_max_tokens,
-            )
-
-            if not raw:
-                return {}
-
-            # ===PAGE_N=== デリミタでパース
-            results: dict[int, str] = {}
-            parts = re.split(r"={3}PAGE_(\d+)={3}", raw)
-            # parts = ["前文", "1", "ページ1テキスト", "2", "ページ2テキスト", ...]
-            i = 1
-            while i + 1 < len(parts):
-                try:
-                    pn = int(parts[i])
-                    text = parts[i + 1].strip()
-                    if text:
-                        results[pn] = text
-                except ValueError:
-                    pass
-                i += 2
-
-            log.info(
-                "_ocr_fallback_batch",
-                "Batch OCR parsed",
-                requested=page_nums,
-                parsed=list(results.keys()),
-            )
-            return results
-
-        except Exception as e:
-            log.warning(
-                "_ocr_fallback_batch",
-                "Batch OCR failed, will fall back to per-page OCR",
-                error=str(e),
-            )
-            return {}
+        log.info(
+            "_ocr_fallback_batch",
+            "Batch OCR completed",
+            requested=[p[0] for p in pages],
+            parsed=list(results.keys()),
+        )
+        return results
 
     def _extract_markdown_sequential(
         self, file_bytes: bytes, idx: int, exclude_bboxes_pt: list

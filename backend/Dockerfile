@@ -16,6 +16,12 @@ COPY --from=ghcr.io/astral-sh/uv:0.10.10 /uv /usr/local/bin/uv
 # 依存関係ファイルのコピー
 COPY backend/pyproject.toml backend/uv.lock ./
 
+# Tesseract: pytesseract のビルド時依存
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr tesseract-ocr-eng tesseract-ocr-jpn
+
 RUN --mount=type=cache,target=/root/.cache/uv \
     uv sync --frozen --no-dev
 
@@ -33,7 +39,8 @@ RUN rm -f /etc/apt/apt.conf.d/docker-clean; echo 'Binary::apt::APT::Keep-Downloa
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     --mount=type=cache,target=/var/lib/apt,sharing=locked \
     apt-get update && apt-get install -y --no-install-recommends \
-    libpq5 curl ca-certificates
+    libpq5 curl ca-certificates \
+    tesseract-ocr tesseract-ocr-eng tesseract-ocr-jpn
 
 RUN useradd -m -r appuser && chown -R appuser:appuser /app
 COPY --chown=appuser:appuser --from=runtime-builder /app/.venv /app/.venv
