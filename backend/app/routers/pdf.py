@@ -6,6 +6,8 @@ Handles PDF upload, OCR processing, and streaming text analysis.
 import asyncio
 import re
 import uuid
+import json
+import time
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, Query, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
@@ -616,10 +618,10 @@ async def analyze_paper(
 
 @router.get("/stream/{task_id}")
 async def stream(task_id: str):
-    import json
-    import time
-
     stream_start = time.time()
+    last_heartbeat = time.time()
+    HEARTBEAT_INTERVAL = 15.0
+
     log.info("stream", "開始", task_id=task_id)
 
     data = redis_service.get(f"task:{task_id}")
@@ -663,387 +665,403 @@ async def stream(task_id: str):
     if is_json:
 
         async def _inner_json_generate():
+            nonlocal last_heartbeat
             storage = get_storage_provider()
-            if data.get("pending_ocr"):
-                pdf_path = data.get("pdf_path")
-                pdf_b64 = data.get("pdf_b64", "")
+            try:
+                if data.get("pending_ocr"):
+                    pdf_path = data.get("pdf_path")
+                    pdf_b64 = data.get("pdf_b64", "")
 
-                if pdf_path:
-                    try:
-                        pdf_content = img_storage.get_doc_bytes(pdf_path)
-                    except Exception as e:
-                        log.error(
-                            "stream",
-                            f"Failed to read PDF from {pdf_path}: {e}",
-                            task_id=task_id,
-                            pdf_path=pdf_path,
-                        )
-
-                        yield f"data: {json.dumps({'type': 'error', 'message': 'PDF source not found or inaccessible'})}\n\n"
-                        return
-                elif pdf_b64:
-                    import base64
-
-                    pdf_content = base64.b64decode(pdf_b64)
-                else:
-                    log.error("stream", "PDFソースが見つかりません", task_id=task_id)
-
-                    yield f"data: {json.dumps({'type': 'error', 'message': 'PDF source not found'})}\n\n"
-                    return
-
-                full_text_fragments = []
-                all_layout_data = []
-
-                # User plan lookup
-                user_plan = "free"
-                if user_id:
-                    user_data = storage.get_user(user_id)
-                    if user_data:
-                        user_plan = user_data.get("plan", "free")
-
-                log.info(
-                    "stream",
-                    "OCR抽出を開始します",
-                    task_id=task_id,
-                    filename=filename,
-                )
-
-                # Collect figures to save later
-                collected_figures = []
-
-                page_count = 0
-                async for result_tuple in service.ocr_service.extract_text_streaming(
-                    pdf_content, filename, user_plan=user_plan
-                ):
-                    if len(result_tuple) != 7:
-                        log.error(
-                            "stream",
-                            f"UNEXPECTED TUPLE LENGTH: {len(result_tuple)} - {result_tuple}",
-                            task_id=task_id,
-                        )
-                        continue
-
-                    (
-                        page_num,
-                        total_pages,
-                        page_text,
-                        is_last,
-                        f_hash,
-                        page_image_url,
-                        layout_data,
-                    ) = result_tuple
-                    page_count += 1
-                    if page_text and page_text.startswith("ERROR_API_FAILED:"):
-                        error_msg = page_text.replace("ERROR_API_FAILED: ", "")
-                        yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
-                        yield "event: close\ndata: done\n\n"
-                        return
-
-                    # Skip phase 1 (text only) to prevent frontend crash due to null image_url
-                    if not page_image_url:
-                        continue
-
-                    # Prepare Page Data
-                    page_payload = {
-                        "page_num": page_num,
-                        "image_url": page_image_url,
-                        "width": 0,
-                        "height": 0,
-                        "words": [],
-                        "figures": [],
-                        "content": "",
-                    }
-
-                    if page_text is not None:
-                        page_payload["content"] = page_text
-                        full_text_fragments.append(page_text)
-
-                        if layout_data:
-                            page_payload["width"] = layout_data["width"]
-                            page_payload["height"] = layout_data["height"]
-                            page_payload["words"] = layout_data.get("words", [])
-                            page_payload["figures"] = layout_data.get("figures", [])
-
-                            # Debug: Log what we're sending to frontend
-
-                            # Collect figures if present
-                            if "figures" in layout_data:
-                                collected_figures.extend(layout_data["figures"])
-
-                            all_layout_data.append(layout_data)
-                        else:
-                            log.warning(
-                                "stream",
-                                f"Page {page_num} has no layout_data!",
-                                task_id=task_id,
-                                page_num=page_num,
-                            )
-
-                            all_layout_data.append(None)
-
-                    yield f"event: message\ndata: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
-                    await asyncio.sleep(0.01)
-
-                # End of OCR
-
-                # Send coordinates ready event (Phase 2 completion)
-                yield f"event: message\ndata: {json.dumps({'type': 'coordinates_ready', 'page_count': page_count})}\n\n"
-                await asyncio.sleep(0.01)
-
-                # Send assist mode ready event
-                yield f"event: message\ndata: {json.dumps({'type': 'assist_mode_ready'})}\n\n"
-                await asyncio.sleep(0.01)
-
-                full_text = "\n\n---\n\n".join(full_text_fragments)
-                # paper_id is now pre-generated and passed in task data
-                new_paper_id = paper_id
-
-                # Save to permanent DB ONLY for registered users (prevent DB clutter for transient guest sessions)
-                # Transient sessions rely on Redis and Frontend IndexedDB.
-                if is_registered:
-                    try:
-                        from app.crud import save_figure_to_db
-                        from app.domain.services.paper_processing import (
-                            process_figure_analysis_task,
-                            process_paper_summary_task,
-                        )
-
-                        storage.save_paper(
-                            paper_id=new_paper_id,
-                            file_hash=file_hash,
-                            filename=filename,
-                            ocr_text=full_text,
-                            html_content="",
-                            target_language="ja",
-                            layout_json=json.dumps(all_layout_data),
-                            owner_id=user_id,
-                        )
-                        # DBにもセッションマッピングを保存
-                        if session_id:
-                            storage.save_session_context(session_id, new_paper_id)
-
-                        log.info(
-                            "stream",
-                            f"ユーザー {user_id} の論文をDBに保存しました",
-                            task_id=task_id,
-                            user_id=user_id,
-                            paper_id=new_paper_id,
-                        )
-
-                        # PDF メタデータ（fitz.metadata）から title / authors を即時保存
+                    if pdf_path:
                         try:
-                            import fitz as _fitz  # noqa: PLC0415
-
-                            with _fitz.open(stream=pdf_content, filetype="pdf") as _doc:
-                                _meta = _doc.metadata
-                            _pdf_title = (_meta.get("title") or "").strip() or None
-                            _pdf_authors = (_meta.get("author") or "").strip() or None
-                            if _pdf_title:
-                                storage.update_paper_title(new_paper_id, _pdf_title)
-                            if _pdf_authors:
-                                storage.update_paper_authors(new_paper_id, _pdf_authors)
-                        except Exception as _meta_err:
-                            log.warning(
-                                "stream",
-                                "PDF メタデータ取得に失敗（無視）",
-                                error=str(_meta_err),
-                            )
-
-                        # Trigger background tasks (require DB records)
-                        asyncio.create_task(
-                            process_paper_summary_task(new_paper_id, lang=lang)
-                        )
-
-                        # GROBID 非同期エンリッチメントジョブをエンキュー
-                        from app.domain.services.paper_processing import (  # noqa: PLC0415
-                            process_grobid_enrichment_task,
-                        )
-                        asyncio.create_task(
-                            process_grobid_enrichment_task(new_paper_id, file_hash)
-                        )
-
-                        # Save figure metadata for each page
-                        # The original code iterated collected_figures, which was a flat list.
-                        # The new code iterates all_layout_data and then figures within each page.
-                        # To maintain consistency with the original's collected_figures logic,
-                        # we'll use collected_figures here.
-                        if collected_figures:
-                            for fig in collected_figures:
-                                fid = save_figure_to_db(
-                                    paper_id=new_paper_id,
-                                    page_number=fig[
-                                        "page_num"
-                                    ],  # Use page_num from collected_figures
-                                    bbox=fig.get("bbox", []),
-                                    image_url=fig.get("image_url", ""),
-                                    label=fig.get("label", "figure"),
-                                    latex=fig.get("latex", ""),  # Keep latex if present
-                                )
-                                # Optional: Trigger detailed figure analysis in background
-                                asyncio.create_task(
-                                    process_figure_analysis_task(
-                                        fid, fig.get("image_url", "")
-                                    )
-                                )
-                    except Exception as db_err:
-                        log.error(
-                            "stream",
-                            f"DBへの保存に失敗しました: {db_err}",
-                            task_id=task_id,
-                            paper_id=new_paper_id,
-                        )
-
-                else:
-                    log.warning(
-                        "stream",
-                        "DBへの保存をスキップ: is_registered=False (ゲストまたは未登録ユーザー)",
-                        task_id=task_id,
-                        user_id=user_id,
-                        is_guest=str(user_id).startswith("guest") if user_id else True,
-                    )
-
-                # Redis session context (1-hour sliding limit, TRUNCATED to 20k chars to prevent OOM)
-                s_id = session_id or new_paper_id
-                # Store only the first 20,000 characters in Redis as "recent context"
-                recent_context = full_text[:20000]
-                redis_service.set(f"session:{s_id}", recent_context, expire=3600)
-
-                yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': new_paper_id})}\n\n"
-                await asyncio.sleep(0.01)
-
-            else:
-                # Cached content
-                from app.providers.image_storage import get_page_images
-
-                paper_data = storage.get_paper(paper_id)
-                layout_list = []
-                pages_text = []
-                if paper_data:
-                    if paper_data.get("layout_json"):
-                        try:
-                            layout_list = json.loads(paper_data["layout_json"])
-                            log.debug(
-                                "stream",
-                                "DBからレイアウト情報を読み込みました",
-                                task_id=task_id,
-                                pages=len(layout_list),
-                            )
+                            pdf_content = img_storage.get_doc_bytes(pdf_path)
                         except Exception as e:
                             log.error(
                                 "stream",
-                                f"Failed to parse layout_json: {e}",
+                                f"Failed to read PDF from {pdf_path}: {e}",
                                 task_id=task_id,
+                                pdf_path=pdf_path,
+                            )
+
+                            yield f"data: {json.dumps({'type': 'error', 'message': 'PDF source not found or inaccessible'})}\n\n"
+                            return
+                    elif pdf_b64:
+                        import base64
+
+                        pdf_content = base64.b64decode(pdf_b64)
+                    else:
+                        log.error("stream", "PDFソースが見つかりません", task_id=task_id)
+
+                        yield f"data: {json.dumps({'type': 'error', 'message': 'PDF source not found'})}\n\n"
+                        return
+
+                    full_text_fragments = []
+                    all_layout_data = []
+
+                    # User plan lookup
+                    user_plan = "free"
+                    if user_id:
+                        user_data = storage.get_user(user_id)
+                        if user_data:
+                            user_plan = user_data.get("plan", "free")
+
+                    log.info(
+                        "stream",
+                        "OCR抽出を開始します",
+                        task_id=task_id,
+                        filename=filename,
+                    )
+
+                    # Collect figures to save later
+                    collected_figures = []
+
+                    page_count = 0
+                    async for result_tuple in service.ocr_service.extract_text_streaming(
+                        pdf_content, filename, user_plan=user_plan
+                    ):
+                        # Check for Heartbeat
+                        now = time.time()
+                        if now - last_heartbeat > HEARTBEAT_INTERVAL:
+                            yield ": heartbeat\n\n"
+                            last_heartbeat = now
+
+                        if len(result_tuple) != 7:
+                            log.error(
+                                "stream",
+                                f"UNEXPECTED TUPLE LENGTH: {len(result_tuple)} - {result_tuple}",
+                                task_id=task_id,
+                            )
+                            continue
+
+                        (
+                            page_num,
+                            total_pages,
+                            page_text,
+                            is_last,
+                            f_hash,
+                            page_image_url,
+                            layout_data,
+                        ) = result_tuple
+                        page_count += 1
+                        if page_text and page_text.startswith("ERROR_API_FAILED:"):
+                            error_msg = page_text.replace("ERROR_API_FAILED: ", "")
+                            yield f"data: {json.dumps({'type': 'error', 'message': error_msg})}\n\n"
+                            yield "event: close\ndata: done\n\n"
+                            return
+
+                        # Skip phase 1 (text only) to prevent frontend crash due to null image_url
+                        if not page_image_url:
+                            continue
+
+                        # Prepare Page Data
+                        page_payload = {
+                            "page_num": page_num,
+                            "image_url": page_image_url,
+                            "width": 0,
+                            "height": 0,
+                            "words": [],
+                            "figures": [],
+                            "content": "",
+                        }
+
+                        if page_text is not None:
+                            page_payload["content"] = page_text
+                            full_text_fragments.append(page_text)
+
+                            if layout_data:
+                                page_payload["width"] = layout_data["width"]
+                                page_payload["height"] = layout_data["height"]
+                                page_payload["words"] = layout_data.get("words", [])
+                                page_payload["figures"] = layout_data.get("figures", [])
+
+                                # Debug: Log what we're sending to frontend
+
+                                # Collect figures if present
+                                if "figures" in layout_data:
+                                    collected_figures.extend(layout_data["figures"])
+
+                                all_layout_data.append(layout_data)
+                            else:
+                                log.warning(
+                                    "stream",
+                                    f"Page {page_num} has no layout_data!",
+                                    task_id=task_id,
+                                    page_num=page_num,
+                                )
+
+                                all_layout_data.append(None)
+
+                        yield f"event: message\ndata: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
+                        await asyncio.sleep(0.01)
+
+                    # End of OCR
+
+                    # Send coordinates ready event (Phase 2 completion)
+                    yield f"event: message\ndata: {json.dumps({'type': 'coordinates_ready', 'page_count': page_count})}\n\n"
+                    await asyncio.sleep(0.01)
+
+                    # Send assist mode ready event
+                    yield f"event: message\ndata: {json.dumps({'type': 'assist_mode_ready'})}\n\n"
+                    await asyncio.sleep(0.01)
+
+                    full_text = "\n\n---\n\n".join(full_text_fragments)
+                    # paper_id is now pre-generated and passed in task data
+                    new_paper_id = paper_id
+
+                    # Save to permanent DB ONLY for registered users (prevent DB clutter for transient guest sessions)
+                    # Transient sessions rely on Redis and Frontend IndexedDB.
+                    if is_registered:
+                        try:
+                            from app.crud import save_figure_to_db
+                            from app.domain.services.paper_processing import (
+                                process_figure_analysis_task,
+                                process_paper_summary_task,
+                            )
+
+                            storage.save_paper(
+                                paper_id=new_paper_id,
+                                file_hash=file_hash,
+                                filename=filename,
+                                ocr_text=full_text,
+                                html_content="",
+                                target_language="ja",
+                                layout_json=json.dumps(all_layout_data),
+                                owner_id=user_id,
+                            )
+                            # DBにもセッションマッピングを保存
+                            if session_id:
+                                storage.save_session_context(session_id, new_paper_id)
+
+                            log.info(
+                                "stream",
+                                f"ユーザー {user_id} の論文をDBに保存しました",
+                                task_id=task_id,
+                                user_id=user_id,
+                                paper_id=new_paper_id,
+                            )
+
+                            # PDF メタデータ（fitz.metadata）から title / authors を即時保存
+                            try:
+                                import fitz as _fitz  # noqa: PLC0415
+
+                                with _fitz.open(stream=pdf_content, filetype="pdf") as _doc:
+                                    _meta = _doc.metadata
+                                _pdf_title = (_meta.get("title") or "").strip() or None
+                                _pdf_authors = (_meta.get("author") or "").strip() or None
+                                if _pdf_title:
+                                    storage.update_paper_title(new_paper_id, _pdf_title)
+                                if _pdf_authors:
+                                    storage.update_paper_authors(new_paper_id, _pdf_authors)
+                            except Exception as _meta_err:
+                                log.warning(
+                                    "stream",
+                                    "PDF メタデータ取得に失敗（無視）",
+                                    error=str(_meta_err),
+                                )
+
+                            # Trigger background tasks (require DB records)
+                            asyncio.create_task(
+                                process_paper_summary_task(new_paper_id, lang=lang)
+                            )
+
+                            # GROBID 非同期エンリッチメントジョブをエンキュー
+                            from app.domain.services.paper_processing import (  # noqa: PLC0415
+                                process_grobid_enrichment_task,
+                            )
+                            asyncio.create_task(
+                                process_grobid_enrichment_task(new_paper_id, file_hash)
+                            )
+
+                            # Save figure metadata for each page
+                            # The original code iterated collected_figures, which was a flat list.
+                            # The new code iterates all_layout_data and then figures within each page.
+                            # To maintain consistency with the original's collected_figures logic,
+                            # we'll use collected_figures here.
+                            if collected_figures:
+                                for fig in collected_figures:
+                                    fid = save_figure_to_db(
+                                        paper_id=new_paper_id,
+                                        page_number=fig[
+                                            "page_num"
+                                        ],  # Use page_num from collected_figures
+                                        bbox=fig.get("bbox", []),
+                                        image_url=fig.get("image_url", ""),
+                                        label=fig.get("label", "figure"),
+                                        latex=fig.get("latex", ""),  # Keep latex if present
+                                    )
+                                    # Optional: Trigger detailed figure analysis in background
+                                    asyncio.create_task(
+                                        process_figure_analysis_task(
+                                            fid, fig.get("image_url", "")
+                                        )
+                                    )
+                        except Exception as db_err:
+                            log.error(
+                                "stream",
+                                f"DBへの保存に失敗しました: {db_err}",
+                                task_id=task_id,
+                                paper_id=new_paper_id,
                             )
 
                     else:
                         log.warning(
                             "stream",
-                            "No layout_json in paper_data!",
+                            "DBへの保存をスキップ: is_registered=False (ゲストまたは未登録ユーザー)",
                             task_id=task_id,
+                            user_id=user_id,
+                            is_guest=str(user_id).startswith("guest") if user_id else True,
                         )
 
-                    if paper_data.get("ocr_text"):
-                        pages_text = paper_data["ocr_text"].split("\n\n---\n\n")
+                    # Redis session context (1-hour sliding limit, TRUNCATED to 20k chars to prevent OOM)
+                    s_id = session_id or new_paper_id
+                    # Store only the first 20,000 characters in Redis as "recent context"
+                    recent_context = full_text[:20000]
+                    redis_service.set(f"session:{s_id}", recent_context, expire=3600)
 
-                f_hash = data.get("file_hash")
-                log.info(
-                    "stream",
-                    "Cache path for paper",
-                    task_id=task_id,
-                    paper_id=paper_id,
-                    f_hash=f_hash,
-                )
+                    yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': new_paper_id})}\n\n"
+                    await asyncio.sleep(0.01)
 
-                if f_hash:
-                    cached_images = get_page_images(f_hash)
-                    log.info(
-                        "stream",
-                        "キャッシュされた画像が見つかりました",
-                        task_id=task_id,
-                        count=len(cached_images),
-                    )
+                else:
+                    # Cached content
+                    from app.providers.image_storage import get_page_images
 
-                    for i, img_url in enumerate(cached_images):
-                        page_payload = {
-                            "page_num": i + 1,
-                            "image_url": img_url,
-                            "width": 0,
-                            "height": 0,
-                            "words": [],
-                            "figures": [],
-                            "content": pages_text[i] if i < len(pages_text) else "",
-                        }
-                        if len(layout_list) > i and layout_list[i]:
-                            page_payload["width"] = layout_list[i].get("width", 0)
-                            page_payload["height"] = layout_list[i].get("height", 0)
-                            page_payload["words"] = layout_list[i].get("words", [])
-                            page_payload["figures"] = layout_list[i].get("figures", [])
-
-                            log.debug(
-                                "stream",
-                                f"ページ {i + 1} をキャッシュから読み込みました",
-                                task_id=task_id,
-                                page_num=i + 1,
-                                words=len(page_payload["words"]),
-                                width=page_payload["width"],
-                                height=page_payload["height"],
-                            )
+                    paper_data = storage.get_paper(paper_id)
+                    layout_list = []
+                    pages_text = []
+                    if paper_data:
+                        if paper_data.get("layout_json"):
+                            try:
+                                layout_list = json.loads(paper_data["layout_json"])
+                                log.debug(
+                                    "stream",
+                                    "DBからレイアウト情報を読み込みました",
+                                    task_id=task_id,
+                                    pages=len(layout_list),
+                                )
+                            except Exception as e:
+                                log.error(
+                                    "stream",
+                                    f"Failed to parse layout_json: {e}",
+                                    task_id=task_id,
+                                )
 
                         else:
                             log.warning(
                                 "stream",
-                                f"Page {i + 1} missing from layout_list!",
+                                "No layout_json in paper_data!",
                                 task_id=task_id,
-                                page_num=i + 1,
-                                layout_list_len=len(layout_list),
                             )
 
-                        yield f"event: message\ndata: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
-                        await asyncio.sleep(0.01)
+                        if paper_data.get("ocr_text"):
+                            pages_text = paper_data["ocr_text"].split("\n\n---\n\n")
 
-                    # キャッシュされたデータの場合、座標は既に準備済み
-                    yield f"event: message\ndata: {json.dumps({'type': 'coordinates_ready', 'page_count': len(cached_images)})}\n\n"
-                    await asyncio.sleep(0.01)
-
-                    # キャッシュされたデータの場合もassist_mode_readyイベントを送信
-                    yield f"event: message\ndata: {json.dumps({'type': 'assist_mode_ready'})}\n\n"
-                    await asyncio.sleep(0.01)
-
-                # キャッシュ時もセッションコンテキストを保存（Summary等のため）
-                s_id = session_id or paper_id
-                if s_id and paper_data and paper_data.get("ocr_text"):
-                    redis_service.set(
-                        f"session:{s_id}", paper_data["ocr_text"], expire=3600
-                    )  # Align TTL to 1 hour
+                    f_hash = data.get("file_hash")
                     log.info(
                         "stream",
-                        "セッションコンテキストを復元しました",
-                        s_id=s_id,
+                        "Cache path for paper",
+                        task_id=task_id,
+                        paper_id=paper_id,
+                        f_hash=f_hash,
                     )
 
-                # DBのセッション→論文マッピングも更新（レビュー等が正しい論文を参照するため）
-                if is_registered and session_id and paper_id:
-                    try:
-                        storage.save_session_context(session_id, paper_id)
-                    except Exception as e:
-                        log.warning(
+                    if f_hash:
+                        cached_images = get_page_images(f_hash)
+                        log.info(
                             "stream",
-                            "キャッシュ論文のセッションコンテキスト保存に失敗しました",
-                            session_id=session_id,
-                            paper_id=paper_id,
-                            error=str(e),
+                            "キャッシュされた画像が見つかりました",
+                            task_id=task_id,
+                            count=len(cached_images),
                         )
 
-                else:
-                    log.warning(
-                        "stream",
-                        "セッションコンテキストの復元に失敗しました",
-                        session_id=session_id,
-                        has_paper_data=paper_data is not None,
-                    )
+                        for i, img_url in enumerate(cached_images):
+                            page_payload = {
+                                "page_num": i + 1,
+                                "image_url": img_url,
+                                "width": 0,
+                                "height": 0,
+                                "words": [],
+                                "figures": [],
+                                "content": pages_text[i] if i < len(pages_text) else "",
+                            }
+                            if len(layout_list) > i and layout_list[i]:
+                                page_payload["width"] = layout_list[i].get("width", 0)
+                                page_payload["height"] = layout_list[i].get("height", 0)
+                                page_payload["words"] = layout_list[i].get("words", [])
+                                page_payload["figures"] = layout_list[i].get("figures", [])
 
-                yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': paper_id, 'cached': True})}\n\n"
-                await asyncio.sleep(0.01)
+                                log.debug(
+                                    "stream",
+                                    f"ページ {i + 1} をキャッシュから読み込みました",
+                                    task_id=task_id,
+                                    page_num=i + 1,
+                                    words=len(page_payload["words"]),
+                                    width=page_payload["width"],
+                                    height=page_payload["height"],
+                                )
+
+                            else:
+                                log.warning(
+                                    "stream",
+                                    f"Page {i + 1} missing from layout_list!",
+                                    task_id=task_id,
+                                    page_num=i + 1,
+                                    layout_list_len=len(layout_list),
+                                )
+
+                            yield f"event: message\ndata: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
+                            await asyncio.sleep(0.01)
+
+                        # キャッシュされたデータの場合、座標は既に準備済み
+                        yield f"event: message\ndata: {json.dumps({'type': 'coordinates_ready', 'page_count': len(cached_images)})}\n\n"
+                        await asyncio.sleep(0.01)
+
+                        # キャッシュされたデータの場合もassist_mode_readyイベントを送信
+                        yield f"event: message\ndata: {json.dumps({'type': 'assist_mode_ready'})}\n\n"
+                        await asyncio.sleep(0.01)
+
+                    # キャッシュ時もセッションコンテキストを保存（Summary等のため）
+                    s_id = session_id or paper_id
+                    if s_id and paper_data and paper_data.get("ocr_text"):
+                        redis_service.set(
+                            f"session:{s_id}", paper_data["ocr_text"], expire=3600
+                        )  # Align TTL to 1 hour
+                        log.info(
+                            "stream",
+                            "セッションコンテキストを復元しました",
+                            s_id=s_id,
+                        )
+
+                    # DBのセッション→論文マッピングも更新（レビュー等が正しい論文を参照するため）
+                    if is_registered and session_id and paper_id:
+                        try:
+                            storage.save_session_context(session_id, paper_id)
+                        except Exception as e:
+                            log.warning(
+                                "stream",
+                                "キャッシュ論文のセッションコンテキスト保存に失敗しました",
+                                session_id=session_id,
+                                paper_id=paper_id,
+                                error=str(e),
+                            )
+
+                    else:
+                        log.warning(
+                            "stream",
+                            "セッションコンテキストの復元に失敗しました",
+                            session_id=session_id,
+                            has_paper_data=paper_data is not None,
+                        )
+
+                    yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': paper_id, 'cached': True})}\n\n"
+                    await asyncio.sleep(0.01)
+
+            except Exception as e:
+                log.error("stream_inner", f"Error in generator: {e}", task_id=task_id, exc_info=True)
+                yield f"event: message\ndata: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            finally:
+                if storage:
+                    storage.close()
+                    log.debug("stream_inner", "Closed DB storage session", task_id=task_id)
 
             log.info("stream", "JSON生成が完了しました", task_id=task_id)
 
@@ -1254,6 +1272,7 @@ async def stream(task_id: str):
                         ocr_text=full_text,
                         html_content="",
                         target_language="ja",
+                        layout_json=json.dumps(all_layout_data),
                         owner_id=user_id,
                     )
                     log.info("ocr_generate", "Paper record saved", paper_id=paper_id)

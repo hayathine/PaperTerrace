@@ -138,6 +138,7 @@ BQ_LOG_DATASET = "paperterrace_logs_local"
 GCS_BUCKET_NAME_LOCAL = "paperterrace-papers-local"
 INFERENCE_VERIFY_SSL = false
 LLAMACPP_VERBOSE = true
+GROBID_URL = "http://localhost:8070"
 
 [staging]
 LOG_LEVEL = "DEBUG"
@@ -153,7 +154,7 @@ INFERENCE_VERIFY_SSL = false
 LOG_SCHEMA = "logs_staging"
 # LOG_DATABASE_URL_STAGING = "" (環境変数から取得)
 LLAMACPP_VERBOSE = true
-GROBID_URL = "http://grobid.inference.svc.cluster.local:8070"
+GROBID_URL = "http://inference-grobid.inference.svc.cluster.local:8070"
 
 [prod]
 LOG_LEVEL = "INFO"
@@ -166,4 +167,4 @@ INFERENCE_VERIFY_SSL = false
 LOG_SCHEMA = "logs"
 # LOG_DATABASE_URL = "" (環境変数から取得)
 LLAMACPP_VERBOSE = false
-GROBID_URL = "http://grobid.inference.svc.cluster.local:8070"
+GROBID_URL = "http://inference-grobid.inference.svc.cluster.local:8070"

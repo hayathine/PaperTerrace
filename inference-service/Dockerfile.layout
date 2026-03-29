@@ -27,7 +27,10 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libgcc-s1 \
     libgomp1 \
     libgl1 \
-    libglib2.0-0
+    libglib2.0-0 \
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-jpn
 
 RUN useradd -m -r appuser && chown -R appuser:appuser /app
 # 仮想環境とアプリケーションコードのコピー

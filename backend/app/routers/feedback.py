@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Request
 
-from app.models.bigquery.schemas import FeedbackData
+from app.models.log_schemas.schemas import FeedbackData
 from app.models.repositories.feedback_repository import FeedbackRepository
 from app.schemas.feedback import FeedbackRequest
 from common.logger import ServiceLogger

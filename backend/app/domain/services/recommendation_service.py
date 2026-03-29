@@ -4,7 +4,7 @@ import time
 from fastapi import HTTPException
 
 from app.domain.services.paper_acquisition import PaperAcquisitionService
-from app.models.bigquery.schemas import FeedbackData, TrajectoryData
+from app.models.log_schemas.schemas import FeedbackData, TrajectoryData
 from app.models.repositories.feedback_repository import FeedbackRepository
 from app.models.repositories.trajectory_repository import TrajectoryRepository
 from app.schemas.recommendation import (
@@ -47,12 +47,12 @@ class RecommendationService:
         時間経過やセッション終了時、対話中にフロントから定期送信して
         Trajectoryに行動データを追記/作成する。
         ハイブリッド構成: 高頻度な更新はRedisでキャッシュし、
-        60分経過またはセッション切れ（明示的な終了等）でBigQueryに保存する。
+        60分経過またはセッション切れ（明示的な終了等）で PostgreSQL に保存する。
         """
         redis_client = RedisService()
         cache_key = f"trajectory:{req.session_id}"
 
-        # 1. 既存データの取得 (Redis → BigQueryの順)
+        # 1. 既存データの取得 (Redis → PostgreSQLの順)
         cached_data = redis_client.get(cache_key)
 
         if cached_data:
@@ -64,9 +64,9 @@ class RecommendationService:
             elif not isinstance(cached_data, dict):
                 cached_data = {}
         else:
-            # No Redis data - check BigQuery for historical data
+            # No Redis data - check PostgreSQL for historical data
             repo = TrajectoryRepository()
-            trajectory = repo._query_bigquery(req.session_id)
+            trajectory = repo._query_pg(req.session_id)
             if trajectory:
                 cached_data = trajectory.to_cache_dict()
             else:
@@ -105,13 +105,13 @@ class RecommendationService:
         SESSION_TIMEOUT = 3600
         redis_client.set(cache_key, cached_data, expire=SESSION_TIMEOUT)
 
-        # 3. BigQueryへの同期判定
+        # 3. PostgreSQLへの同期判定
         last_sync = cached_data.get("last_db_sync", 0)
         current_time = time.time()
         SYNC_INTERVAL = 7200  # 2時間ごとに定期保存
 
         if (current_time - last_sync) > SYNC_INTERVAL or req.is_final:
-            # BigQueryに反映
+            # PostgreSQL に反映
             repo = TrajectoryRepository()
             trajectory_data = TrajectoryData(
                 session_id=req.session_id,
@@ -139,9 +139,9 @@ class RecommendationService:
             redis_client.set(cache_key, cached_data, expire=SESSION_TIMEOUT)
 
             sync_msg = (
-                "BigQuery synced (Interval/Final)"
+                "PostgreSQL synced (Interval/Final)"
                 if not req.is_final
-                else "BigQuery synced (Session Closed)"
+                else "PostgreSQL synced (Session Closed)"
             )
             return {
                 "status": "ok",
@@ -167,7 +167,7 @@ class RecommendationService:
                 status_code=404, detail="Session not found to attach feedback"
             )
 
-        # Record feedback in BigQuery
+        # Record feedback in PostgreSQL
         feedback = FeedbackData(
             session_id=req.session_id,
             user_id=current_user_id,

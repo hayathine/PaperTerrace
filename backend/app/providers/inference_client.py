@@ -615,11 +615,11 @@ class InferenceServiceClient:
 
 
 class OcrInferenceClient:
-    """ローカル OCR 推論サービスクライアント（PaddleOCR / OpenVINO）。"""
+    """ローカル OCR 推論サービスクライアント（Tesseract）。"""
 
     def __init__(self) -> None:
         self.ocr_url: str = settings.get("INFERENCE_OCR_URL", "")
-        self.timeout: int = int(settings.get("INFERENCE_OCR_TIMEOUT", "30"))
+        self.timeout: int = int(settings.get("INFERENCE_OCR_TIMEOUT", "120"))
         self.is_disabled: bool = not self.ocr_url or str(
             settings.get("INFERENCE_OCR_DISABLED", "false")
         ).lower() == "true"
@@ -652,14 +652,14 @@ class OcrInferenceClient:
 
     async def ocr_page(
         self, img_bytes: bytes, bboxes: list[dict] | None = None
-    ) -> str:
-        """画像バイトを OCR サービスに送り、認識テキストを返す。
+    ) -> tuple[str, list[dict]]:
+        """画像バイトを OCR サービスに送り、認識テキストと単語リストを返す。
 
         Args:
             img_bytes: ページ画像バイト（JPEG/PNG 等）
             bboxes: テキスト領域 bbox のリスト（省略時は自動検出）
         Returns:
-            認識テキスト文字列
+            (認識テキスト文字列, 単語情報のリスト)
         """
         if not self.is_available():
             raise InferenceServiceDownError("OCR service circuit open or disabled")
@@ -678,7 +678,7 @@ class OcrInferenceClient:
 
             if result.get("success"):
                 self._cb["failure_count"] = 0
-                return result.get("text", "")
+                return result.get("text", ""), result.get("words", [])
 
             raise InferenceServiceError(result.get("message", "OCR failed"))
 

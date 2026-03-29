@@ -73,7 +73,7 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "translate"]:
 
 if INFERENCE_TYPE in ["all", "ocr"] or (INFERENCE_TYPE == "layout" and ENABLE_OCR_CROPS):
     try:
-        from services.ocr.ocr_service import PaddleOpenVinoOcrService
+        from services.ocr.ocr_service import TesseractOcrService
     except ImportError:
         logger.warning("OCR dependencies not found, skipping import")
 
@@ -221,8 +221,8 @@ async def ensure_initialized():
             logger.info("TranslationService orchestrator initialized")
 
         if INFERENCE_TYPE in ["all", "ocr"] or (INFERENCE_TYPE == "layout" and ENABLE_OCR_CROPS):
-            ocr_service = PaddleOpenVinoOcrService()
-            logger.info("PaddleOpenVinoOcrService initialized")
+            ocr_service = TesseractOcrService()
+            logger.info("TesseractOcrService initialized")
 
         _initialized = True
         logger.info(
@@ -605,7 +605,7 @@ if INFERENCE_TYPE in ["all", "layout"]:
                 crop = img.crop((x_min, y_min, x_max, y_max))
                 buf = io.BytesIO()
                 crop.save(buf, format="JPEG", quality=90)
-                text = ocr_service.ocr_page(buf.getvalue())
+                text, _ = ocr_service.ocr_page(buf.getvalue())
                 if text.strip():
                     lines.append(text.strip())
 
@@ -740,7 +740,7 @@ if INFERENCE_TYPE in ["all", "translation", "m2m100", "translate"]:
 
 
 # --------------------------------------------------
-# OCR（PaddleOCR / OpenVINO）
+# OCR（Tesseract）
 # --------------------------------------------------
 
 
@@ -763,10 +763,11 @@ if INFERENCE_TYPE in ["all", "ocr"]:
         try:
             image_bytes = await file.read()
             bboxes = json.loads(bboxes_json) if bboxes_json else None
-            text = await run_in_threadpool(ocr_service.ocr_page, image_bytes, bboxes)
+            text, words = await run_in_threadpool(ocr_service.ocr_page, image_bytes, bboxes)
             return OcrPageResponse(
                 success=True,
                 text=text,
+                words=words,
                 processing_time=time.time() - start_time,
             )
         except Exception as e:

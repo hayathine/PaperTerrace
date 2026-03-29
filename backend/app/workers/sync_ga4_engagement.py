@@ -17,7 +17,7 @@ from datetime import date, datetime, timedelta
 import structlog
 from google.cloud import bigquery
 
-from app.models.bigquery.schemas import PageViewLogData, UserEngagementData
+from app.models.log_schemas.schemas import PageViewLogData, UserEngagementData
 from app.providers.pg_log import PgLogClient
 from common.config import settings
 

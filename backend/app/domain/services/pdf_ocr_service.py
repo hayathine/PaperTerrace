@@ -73,59 +73,7 @@ def _is_garbled_text(text: str) -> bool:
     return False
 
 
-def _parse_hocr_words(
-    hocr_bytes: bytes, img_width: int, img_height: int
-) -> list[dict]:
-    """
-    Tesseract の hOCR 出力から単語レベルの bbox を抽出する。
 
-    hOCR の <span class='ocrx_word' title='bbox x0 y0 x1 y1; x_wconf NN'>
-    を解析し、フロントエンドの PageWord フォーマット互換のリストを返す。
-
-    Args:
-        hocr_bytes: pytesseract.image_to_pdf_or_hocr() の hOCR 出力
-        img_width: 元画像の幅（px）
-        img_height: 元画像の高さ（px）
-
-    Returns:
-        [{"word": str, "bbox": [x0, y0, x1, y1], "conf": float}, ...]
-    """
-    from lxml import etree
-
-    words: list[dict] = []
-    try:
-        root = etree.fromstring(hocr_bytes)
-        ns = root.nsmap.get(None, "")
-        tag_prefix = f"{{{ns}}}" if ns else ""
-        span_tag = f"{tag_prefix}span"
-
-        for span in root.iter(span_tag):
-            cls = span.get("class", "")
-            if "ocrx_word" not in cls:
-                continue
-            title = span.get("title", "")
-            word_text = (span.text_content() if hasattr(span, "text_content") else "".join(span.itertext())).strip()
-            if not word_text:
-                continue
-
-            # "bbox x0 y0 x1 y1; x_wconf NN" をパース
-            bbox_match = re.search(r"bbox\s+(\d+)\s+(\d+)\s+(\d+)\s+(\d+)", title)
-            conf_match = re.search(r"x_wconf\s+(\d+)", title)
-            if not bbox_match:
-                continue
-
-            x0, y0, x1, y1 = (int(bbox_match.group(i)) for i in range(1, 5))
-            conf = int(conf_match.group(1)) / 100.0 if conf_match else 1.0
-
-            # 信頼度が低い単語（10%未満）はノイズとして除外
-            if conf < 0.1:
-                continue
-
-            words.append({"word": word_text, "bbox": [x0, y0, x1, y1], "conf": conf})
-    except Exception:
-        pass
-
-    return words
 
 
 def _fix_indentation_artifacts(text: str) -> str:
@@ -175,19 +123,20 @@ class PDFOCRService:
         self, file_bytes: bytes, filename: str = "unknown.pdf", user_plan: str = "free"
     ) -> AsyncGenerator:
         """Processes PDF pages in chunks for efficiency while streaming results."""
-        file_hash = _get_file_hash(file_bytes)
-
-        log.info(
-            "extract_start",
-            "Starting OCR extraction (Batched & Persistent File)",
-            filename=filename,
-            file_hash=file_hash,
-            file_size=len(file_bytes),
-            user_plan=user_plan,
-        )
-
+        file_hash = "unknown"
         tmp_path = None
         try:
+            file_hash = _get_file_hash(file_bytes)
+
+            log.info(
+                "extract_start",
+                "Starting OCR extraction (Batched & Persistent File)",
+                filename=filename,
+                file_hash=file_hash,
+                file_size=len(file_bytes),
+                user_plan=user_plan,
+            )
+
             # 1. Cache handling
             cached_result = await self._handle_cache(file_hash)
             if cached_result:
@@ -323,20 +272,27 @@ class PDFOCRService:
                     ]
                     batch_ocr_results: dict[int, tuple[str, list[dict]]] = {}
                     if ocr_candidate_pages:
-                        batch_ocr_results = await self._ocr_fallback_batch(
-                            ocr_candidate_pages
-                        )
-                        log.info(
-                            "batch_ocr",
-                            "Batch OCR completed",
-                            candidate_count=len(ocr_candidate_pages),
-                            result_count=len(batch_ocr_results),
-                        )
-                        for pd in chunk_page_data:
-                            if pd["page_num"] in batch_ocr_results:
-                                pd["ocr_text_override"] = batch_ocr_results[
-                                    pd["page_num"]
-                                ]
+                        try:
+                            batch_ocr_results = await self._ocr_fallback_batch(
+                                ocr_candidate_pages
+                            )
+                            log.info(
+                                "batch_ocr",
+                                "Batch OCR completed",
+                                candidate_count=len(ocr_candidate_pages),
+                                result_count=len(batch_ocr_results),
+                            )
+                            for pd in chunk_page_data:
+                                if pd["page_num"] in batch_ocr_results:
+                                    pd["ocr_text_override"] = batch_ocr_results[
+                                        pd["page_num"]
+                                    ]
+                        except Exception as e:
+                            log.error(
+                                "batch_ocr",
+                                "Target batch OCR failed completely",
+                                error=str(e),
+                            )
 
                     phase3_tasks = [
                         asyncio.create_task(
@@ -686,6 +642,19 @@ class PDFOCRService:
                 is_too_short = (
                     not is_empty and len(page_text.strip()) < _min_page_text_len
                 )
+
+                log.info(
+                    "_finalize_page_phase_3",
+                    "Checking OCR Fallback conditions",
+                    page_num=page_num,
+                    is_empty=is_empty,
+                    is_garbled=is_garbled,
+                    is_too_short=is_too_short,
+                    page_text_len=len(page_text.strip()),
+                    phase1_text_len=len(phase1_text.strip()),
+                    min_page_text_len=_min_page_text_len,
+                )
+
                 if is_empty or is_garbled or is_too_short:
                     reason = (
                         "empty_text"
@@ -722,6 +691,13 @@ class PDFOCRService:
                             layout_blocks=layout_blocks,
                             img_width=int(layout_data.get("width", 0)),
                             img_height=int(layout_data.get("height", 0)),
+                        )
+                        log.info(
+                            "_finalize_page_phase_3",
+                            "OCR fallback results retrieved",
+                            page_num=page_num,
+                            fallback_text_len=len(fallback_text) if fallback_text else 0,
+                            fallback_words_count=len(fallback_words) if fallback_words else 0,
                         )
                         if fallback_text:
                             page_text = fallback_text
@@ -938,54 +914,30 @@ class PDFOCRService:
         img_height: int = 0,
     ) -> tuple[str, list[dict]]:
         """
-        テキスト抽出が失敗した場合に Tesseract でフォールバック OCR を実行する。
-
-        ページ画像を Tesseract に渡しテキストと word bbox リストを返す。
-        hOCR 出力から単語座標を抽出し click mode オーバーレイに使用する。
-
-        Returns:
-            (text, words): テキストと {"word", "bbox", "conf"} のリスト。
+        テキスト抽出が失敗した場合に推論サービス経由で Tesseract フォールバック OCR を実行する。
         """
-        import io
-
-        import pytesseract
-        from PIL import Image
-
-        lang = settings.get("TESSERACT_LANG", "eng+jpn")
-        config = settings.get("TESSERACT_CONFIG", "--oem 1 --psm 3")
+        from app.providers.inference_client import get_ocr_client
 
         try:
-            img = Image.open(io.BytesIO(img_bytes))
             log.info(
                 "_ocr_fallback",
-                "Tesseract OCR fallback",
+                "Tesseract OCR fallback via Inference Service",
                 page_num=page_num,
-                lang=lang,
             )
             t_start = time.perf_counter()
 
-            text, hocr_bytes = await asyncio.gather(
-                asyncio.to_thread(
-                    pytesseract.image_to_string, img, lang=lang, config=config
-                ),
-                asyncio.to_thread(
-                    pytesseract.image_to_pdf_or_hocr,
-                    img,
-                    lang=lang,
-                    config=config,
-                    extension="hocr",
-                ),
-            )
+            client = await get_ocr_client()
+            text, words_list = await client.ocr_page(img_bytes)
 
-            words = _parse_hocr_words(hocr_bytes, img.width, img.height)
             log.debug(
                 "_ocr_fallback",
                 "Tesseract OCR fallback completed",
                 page_num=page_num,
                 duration=round(time.perf_counter() - t_start, 3),
-                word_count=len(words),
+                word_count=len(words_list),
+                text_len=len(text.strip()),
             )
-            return text.strip(), words
+            return text.strip(), words_list
 
         except Exception as e:
             log.warning(

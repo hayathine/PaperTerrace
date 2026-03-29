@@ -22,6 +22,8 @@ dependencies = [
 
 [dependency-groups]
 layout = [
+    "pytesseract>=0.3.13",
+    "lxml>=5.1.0",
     "onnxruntime>=1.23.2",
     "openvino>=2024.0.0",
     "opencv-python-headless>=4.13.0.92",
@@ -29,8 +31,8 @@ layout = [
     "Pillow>=11.0.0",
 ]
 ocr = [
-    "openvino>=2024.0.0",
-    "opencv-python-headless>=4.13.0.92",
+    "pytesseract>=0.3.13",
+    "lxml>=5.1.0",
     "Pillow>=11.0.0",
 ]
 dev = [

@@ -9,7 +9,7 @@ from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.auth import CurrentUser, OptionalUser
-from app.models.bigquery.schemas import PaperLikeData
+from app.models.log_schemas.schemas import PaperLikeData
 from app.providers import get_storage_provider
 from app.providers.pg_log import PgLogClient
 from common.logger import ServiceLogger
@@ -126,7 +126,7 @@ async def delete_paper(paper_id: str, user: OptionalUser = None):
 async def like_paper(paper_id: str, user: CurrentUser):
     """
     論文にいいねを付ける。
-    BigQuery にイベントログを記録し、Neon の like_count をインクリメントする。
+    logs PostgreSQL にイベントログを記録し、Neon の like_count をインクリメントする。
     """
     storage = get_storage_provider()
     paper = storage.get_paper(paper_id)
@@ -148,7 +148,7 @@ async def like_paper(paper_id: str, user: CurrentUser):
 async def unlike_paper(paper_id: str, user: CurrentUser):
     """
     論文のいいねを取り消す。
-    BigQuery にイベントログを記録し、Neon の like_count をデクリメントする。
+    logs PostgreSQL にイベントログを記録し、Neon の like_count をデクリメントする。
     """
     storage = get_storage_provider()
     paper = storage.get_paper(paper_id)

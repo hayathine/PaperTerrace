@@ -367,8 +367,19 @@ class LayoutAnalysisService:
         if all_figures and user_id and paper:
             try:
                 existing_layout = paper.get("layout_json")
+                layout_list = []
                 if existing_layout:
-                    layout_list = json.loads(existing_layout)
+                    try:
+                        layout_list = json.loads(existing_layout)
+                    except Exception as e:
+                        log.warning("analyze_layout_lazy", f"Failed to parse existing layout_json: {e}")
+
+                if not layout_list and all_figures:
+                    # layout_json が空の場合は、all_figures の page_num の最大値までスケルトンを作成
+                    max_page = max(f["page_num"] for f in all_figures)
+                    layout_list = [{"width": 0, "height": 0, "words": [], "figures": []} for _ in range(max_page)]
+
+                if layout_list:
                     page_figures: dict[int, list] = {}
                     for fig in all_figures:
                         pn = fig["page_num"]
@@ -388,13 +399,16 @@ class LayoutAnalysisService:
                         pn = i + 1
                         if pn in page_figures:
                             layout["figures"] = page_figures[pn]
+
                     await anyio.to_thread.run_sync(
                         self.storage.update_paper_layout,
                         paper_id,
                         json.dumps(layout_list),
                     )
+                else:
+                    log.warning("analyze_layout_lazy", f"No layout structure available to update for paper {paper_id}")
             except Exception as e:
-                log.warning("update_layout_json", f"Failed to update layout_json: {e}")
+                log.warning("update_layout_json", f"Failed to update layout_json: {e}", exc_info=True)
 
         log.info(
             "analyze_layout_lazy_complete",

@@ -1,13 +1,13 @@
 """
 クライアントエラーログエンドポイント。
-フロントエンドからのエラーを受け取り BigQuery に蓄積する。
+フロントエンドからのエラーを受け取り logs PostgreSQL に蓄積する。
 """
 
 import json
 
 from fastapi import APIRouter, Request
 
-from app.models.bigquery.schemas import ClientErrorData
+from app.models.log_schemas.schemas import ClientErrorData
 from app.models.repositories.client_error_repository import ClientErrorRepository
 from app.schemas.client_error import ClientErrorRequest
 from common.logger import ServiceLogger
@@ -23,7 +23,7 @@ async def report_client_error(
     request: Request,
 ) -> None:
     """
-    フロントエンドで発生したエラーを受け取り BigQuery に保存する。
+    フロントエンドで発生したエラーを受け取り logs PostgreSQL に保存する。
     ユーザーには生のエラー情報を返さない。
     """
     user_id = getattr(request.state, "user_id", None) or (

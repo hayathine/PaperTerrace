@@ -69,5 +69,6 @@ class OcrPageResponse(BaseModel):
     """OCRページ認識レスポンス"""
     success: bool
     text: str
+    words: Optional[List[dict]] = None
     processing_time: float
     message: Optional[str] = None
