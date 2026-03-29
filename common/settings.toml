@@ -85,13 +85,14 @@ INFERENCE_TRANSLATE_URL = ""
 
 # OCR 推論サービス（ローカル PaddleOCR / OpenVINO）
 INFERENCE_OCR_TIMEOUT = 120
+INFERENCE_OCR_PDF_TIMEOUT = 300  # OCRmyPDF は複数ページ処理のためページOCRより長めに設定
 INFERENCE_OCR_DISABLED = false
 INFERENCE_OCR_MIN_PAGE_TEXT_LEN = 100
 OCR_LINE_HEIGHT_PX = 35 # OCR フォールバック: レイアウトブロックをライン分割する高さ (px, 150 DPI 基準)
 RATE_LIMIT_OCR = "120/minute"
 
 # Tesseract OCR フォールバック（スキャンPDF用）
-TESSERACT_LANG = "eng+jpn"
+TESSERACT_LANG = "eng"
 TESSERACT_CONFIG = "--oem 1 --psm 3"
 
 # GROBID 論文構造解析（非同期バックグラウンド処理）
@@ -168,3 +169,6 @@ LOG_SCHEMA = "logs"
 # LOG_DATABASE_URL = "" (環境変数から取得)
 LLAMACPP_VERBOSE = false
 GROBID_URL = "http://inference-grobid.inference.svc.cluster.local:8070"
+INFERENCE_OCR_URL = "https://inference-ocr.paperterrace.page"
+INFERENCE_LAYOUT_URL = "https://inference-layout.paperterrace.page"
+INFERENCE_TRANSLATE_URL = "https://inference-translate.paperterrace.page"

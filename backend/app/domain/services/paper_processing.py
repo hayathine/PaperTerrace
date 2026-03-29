@@ -187,6 +187,36 @@ async def process_grobid_enrichment_task(paper_id: str, file_hash: str) -> None:
             log.warning("grobid_task", "GROBID 解析失敗", paper_id=paper_id)
             return
 
+        # GROBID がセクションも要旨も取得できなかった場合（スキャン PDF の可能性）、
+        # OCRmyPDF でテキストレイヤーを付与してリトライする
+        if not result.sections and not result.abstract:
+            log.info(
+                "grobid_task",
+                "GROBID がテキスト抽出できず。OCRmyPDF でリトライします",
+                paper_id=paper_id,
+            )
+            from app.providers.inference_client import get_ocr_client  # noqa: PLC0415
+
+            ocr_client = await get_ocr_client()
+            searchable_pdf = await ocr_client.ocr_pdf(pdf_bytes)
+            if searchable_pdf:
+                result = await grobid.process_fulltext_document(searchable_pdf)
+                if not result:
+                    log.warning(
+                        "grobid_task", "OCRmyPDF 後も GROBID 解析失敗", paper_id=paper_id
+                    )
+                    return
+                log.info(
+                    "grobid_task",
+                    "OCRmyPDF リトライ後に GROBID 解析成功",
+                    paper_id=paper_id,
+                    sections=len(result.sections),
+                )
+            else:
+                log.warning(
+                    "grobid_task", "OCRmyPDF が使用不可のためリトライをスキップ", paper_id=paper_id
+                )
+
         if result.title:
             storage.update_paper_title(paper_id, result.title)
         if result.authors:

@@ -778,3 +778,35 @@ if INFERENCE_TYPE in ["all", "ocr"]:
                 processing_time=time.time() - start_time,
                 message=str(e),
             )
+
+    @app.post("/api/v1/ocr-pdf")
+    @limiter.limit("10/minute")
+    async def ocr_pdf(
+        request: Request,
+        file: UploadFile = File(...),
+    ):
+        """スキャン PDF にテキストレイヤーを付与してサーチャブル PDF を返す。
+
+        GROBID への入力として使用することを想定。
+        ネイティブテキストが既にあるページは再 OCR をスキップする（skip_text=True）。
+        """
+        await ensure_initialized()
+
+        if not ocr_service:
+            raise HTTPException(status_code=503, detail="OCR service unavailable")
+
+        from fastapi.responses import Response as FastAPIResponse  # noqa: PLC0415
+
+        start_time = time.time()
+        try:
+            pdf_bytes = await file.read()
+            logger.info(f"ocr_pdf: received PDF ({len(pdf_bytes)} bytes)")
+            searchable_pdf = await run_in_threadpool(ocr_service.ocr_pdf_to_searchable, pdf_bytes)
+            logger.info(f"ocr_pdf: done in {time.time() - start_time:.1f}s")
+            return FastAPIResponse(
+                content=searchable_pdf,
+                media_type="application/pdf",
+            )
+        except Exception as e:
+            logger.exception("ocr_pdf failed")
+            raise HTTPException(status_code=500, detail=str(e))

@@ -34,6 +34,7 @@ ocr = [
     "pytesseract>=0.3.13",
     "lxml>=5.1.0",
     "Pillow>=11.0.0",
+    "ocrmypdf>=16.0.0",
 ]
 dev = [
     "pyright>=1.1.408",

@@ -1232,6 +1232,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	const loadExistingPaper = async (id: string) => {
 		setStatus("processing");
 		setLoadedPaperId(id);
+		setPages([]);
 		// setStamps([]);
 
 		try {

@@ -202,6 +202,24 @@ class InferenceServiceClient:
 
             except httpx.HTTPError as e:
                 last_exception = e
+                
+                # エラー詳細の取得
+                status_code = getattr(e.response, "status_code", None) if hasattr(e, "response") else None
+                response_body = ""
+                if hasattr(e, "response") and e.response:
+                    try:
+                        response_body = e.response.text[:500]
+                    except Exception:
+                        response_body = "<binary or unreadable>"
+
+                log.warning(
+                    "request_failed",
+                    f"推論サービスへのリクエストに失敗しました (試行 {attempt + 1}/{self.max_retries + 1})",
+                    url=f"{base_url}{endpoint}",
+                    status=status_code,
+                    error=str(e),
+                    body=response_body
+                )
 
                 # SSLエラー・接続エラー・503(Busy)はリトライせず即座に失敗させる
                 error_str = str(e).lower()
@@ -685,10 +703,64 @@ class OcrInferenceClient:
         except httpx.HTTPError as e:
             self._cb["failure_count"] += 1
             self._cb["last_failure_time"] = time.time()
+            
+            # エラー詳細の取得
+            status_code = getattr(e.response, "status_code", None) if hasattr(e, "response") else None
+            response_body = ""
+            if hasattr(e, "response") and e.response:
+                try:
+                    response_body = e.response.text[:500]
+                except Exception:
+                    response_body = "<binary or unreadable>"
+
+            log.error(
+                "ocr_page_failed",
+                "OCR リクエスト失敗",
+                url=f"{self.ocr_url}/api/v1/ocr-page",
+                status=status_code,
+                error=str(e),
+                body=response_body
+            )
+
             if self._cb["failure_count"] >= self.failure_threshold:
                 self._cb["circuit_open"] = True
                 log.error("ocr_page", "OCR サービスの回路ブレーカーを開きました")
-            raise InferenceServiceDownError(f"OCR request failed: {e}") from e
+            
+            error_detail = f"status={status_code}, error={e}"
+            if response_body:
+                error_detail += f", body={response_body}"
+                
+            raise InferenceServiceDownError(f"OCR request failed: {error_detail}") from e
+
+
+    async def ocr_pdf(self, pdf_bytes: bytes) -> bytes | None:
+        """スキャン PDF を OCR サービスに送りサーチャブル PDF を返す。
+
+        GROBID が解析できなかったスキャン PDF を前処理する用途。
+        失敗時は None を返す（呼び出し元は元の PDF にフォールバックする）。
+
+        Args:
+            pdf_bytes: 入力 PDF のバイト列
+        Returns:
+            テキストレイヤー付き PDF のバイト列、または None（失敗時）
+        """
+        if not self.is_available():
+            log.warning("ocr_pdf", "OCR サービス無効のためスキップ")
+            return None
+
+        timeout = int(settings.get("INFERENCE_OCR_PDF_TIMEOUT", "300"))
+        try:
+            resp = await self.client.post(
+                f"{self.ocr_url}/api/v1/ocr-pdf",
+                files={"file": ("paper.pdf", pdf_bytes, "application/pdf")},
+                timeout=timeout,
+            )
+            resp.raise_for_status()
+            log.info("ocr_pdf", "サーチャブル PDF 取得完了", size=len(resp.content))
+            return resp.content
+        except Exception as e:
+            log.warning("ocr_pdf", "OCRmyPDF リクエスト失敗", error=str(e))
+            return None
 
 
 # シングルトンインスタンス

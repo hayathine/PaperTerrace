@@ -324,10 +324,11 @@ class PDFOCRService:
                                 processing_metrics[pn] = {}
                             processing_metrics[pn]["p3"] = duration
 
-                            log.debug(
+                            log.info(
                                 "extract_text_streaming",
-                                "Phase 3 completed (OCR/Finalize)",
+                                "Phase 3 completed",
                                 page_num=pn,
+                                final_text_len=len(final_result[2].strip()) if final_result[2] else 0,
                                 duration=duration,
                             )
                             yield final_result
@@ -505,11 +506,13 @@ class PDFOCRService:
             layout_data,
         )
         t_end = time.perf_counter()
-        log.debug(
+        log.info(
             "_prepare_page_phases_1_2",
-            "Phase 1 & 2 completed",
+            "Phase 1 (native text) completed",
             page_num=page_num,
-            total_duration=round(t_end - t_start, 3),
+            native_text_len=len(page_text.strip()),
+            native_word_count=len(native_words),
+            duration=round(t_end - t_start, 3),
         )
 
         # Phase 2: Page Image (各スレッドで独立した fitz doc を開いて並列レンダリング)
@@ -624,6 +627,14 @@ class PDFOCRService:
 
                 # 2段組みレイアウトによるインデントアーティファクトを修正
                 page_text = _fix_indentation_artifacts(page_text)
+
+                log.info(
+                    "_finalize_page_phase_3",
+                    "Markdown extracted",
+                    page_num=page_num,
+                    raw_md_len=len(raw_md.strip()),
+                    page_text_len=len(page_text.strip()),
+                )
 
                 # テキストが空（スキャン PDF）、(cid:N) 文字化け、または極端に短い場合は OCR フォールバックへ
                 is_empty = not page_text.strip()
@@ -919,17 +930,21 @@ class PDFOCRService:
         from app.providers.inference_client import get_ocr_client
 
         try:
+            client = await get_ocr_client()
             log.info(
                 "_ocr_fallback",
                 "Tesseract OCR fallback via Inference Service",
                 page_num=page_num,
+                ocr_url=client.ocr_url,
+                is_disabled=client.is_disabled,
+                circuit_open=client._cb.get("circuit_open", False),
+                failure_count=client._cb.get("failure_count", 0),
             )
             t_start = time.perf_counter()
 
-            client = await get_ocr_client()
             text, words_list = await client.ocr_page(img_bytes)
 
-            log.debug(
+            log.info(
                 "_ocr_fallback",
                 "Tesseract OCR fallback completed",
                 page_num=page_num,

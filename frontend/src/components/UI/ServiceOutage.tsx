@@ -13,7 +13,10 @@ const ServiceOutage: React.FC<ServiceOutageProps> = ({
 	const { t } = useTranslation();
 
 	return (
-		<div className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xl transition-all duration-700">
+		<div
+			data-testid="service-outage"
+			className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xl transition-all duration-700"
+		>
 			<div className="relative max-w-lg w-full overflow-hidden bg-white/80 backdrop-blur-md rounded-[2.5rem] shadow-[0_32px_128px_-16px_rgba(0,0,0,0.3)] border border-white/50 animate-in fade-in zoom-in-95 duration-500 flex flex-col items-center text-center p-12">
 				{/* Aesthetic Background Shapes */}
 				<div className="absolute top-0 right-0 -mr-20 -mt-20 w-64 h-64 bg-orange-100 rounded-full mix-blend-multiply filter blur-3xl opacity-30 animate-pulse"></div>
