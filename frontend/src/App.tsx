@@ -143,19 +143,25 @@ function App() {
 	const syncStatus = useSyncStatus();
 
 	useEffect(() => {
+		// コールドスタート対策: 最大3回リトライ（2s, 4s インターバル）
 		const fetchConfig = async () => {
-			try {
-				const res = await fetch(`${API_URL}/api/config`);
-				const data = await res.json();
-				if (data?.app_env) {
-					setAppEnv(data.app_env);
+			for (let attempt = 0; attempt < 3; attempt++) {
+				try {
+					const res = await fetch(`${API_URL}/api/config`, {
+						signal: AbortSignal.timeout(10000),
+					});
+					const data = await res.json();
+					if (data?.app_env) setAppEnv(data.app_env);
+					if (data?.max_pdf_size_mb) setMaxPdfSize(data.max_pdf_size_mb);
+					return;
+				} catch (err) {
+					if (attempt < 2) {
+						await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+					} else {
+						log.error("fetch_config", "Failed to fetch config", { error: err });
+						reportFailure(503);
+					}
 				}
-				if (data?.max_pdf_size_mb) {
-					setMaxPdfSize(data.max_pdf_size_mb);
-				}
-			} catch (err) {
-				log.error("fetch_config", "Failed to fetch config", { error: err });
-				reportFailure(503);
 			}
 		};
 		fetchConfig();
@@ -176,20 +182,30 @@ function App() {
 		}
 
 		const fetchPapers = async () => {
-			try {
-				const headers = { Authorization: `Bearer ${token}` };
-
-				const res = await fetch(`${API_URL}/api/papers`, { headers });
-				const data = await res.json();
-				if (data && Array.isArray(data.papers)) {
-					setUploadedPapers(data.papers);
-				} else {
-					setUploadedPapers([]);
+			// コールドスタート対策: 最大3回リトライ（2s, 4s インターバル）
+			for (let attempt = 0; attempt < 3; attempt++) {
+				try {
+					const headers = { Authorization: `Bearer ${token}` };
+					const res = await fetch(`${API_URL}/api/papers`, {
+						headers,
+						signal: AbortSignal.timeout(10000),
+					});
+					const data = await res.json();
+					if (data && Array.isArray(data.papers)) {
+						setUploadedPapers(data.papers);
+					} else {
+						setUploadedPapers([]);
+					}
+					return;
+				} catch (err) {
+					if (attempt < 2) {
+						await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
+					} else {
+						log.error("fetch_papers", "Failed to fetch papers", { error: err });
+						reportFailure(503);
+						setUploadedPapers([]);
+					}
 				}
-			} catch (err) {
-				log.error("fetch_papers", "Failed to fetch papers", { error: err });
-				reportFailure(503);
-				setUploadedPapers([]);
 			}
 		};
 

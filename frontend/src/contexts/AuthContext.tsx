@@ -10,6 +10,41 @@ import { API_URL } from "@/config";
 import { authClient, getNeonJWT } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 
+const AppSplash: React.FC = () => (
+	<div className="fixed inset-0 flex items-center justify-center bg-white z-50">
+		<div className="flex flex-col items-center gap-6">
+			<div className="relative">
+				<div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-orange-600 to-amber-500 shadow-lg shadow-orange-200 flex items-center justify-center">
+					<svg
+						className="w-8 h-8 text-white"
+						fill="none"
+						stroke="currentColor"
+						viewBox="0 0 24 24"
+					>
+						<path
+							strokeLinecap="round"
+							strokeLinejoin="round"
+							strokeWidth="2"
+							d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+						/>
+					</svg>
+				</div>
+				<div className="absolute -bottom-1 -right-1 w-5 h-5 rounded-full border-2 border-white bg-orange-50 flex items-center justify-center">
+					<div className="w-3 h-3 rounded-full border-2 border-orange-600 border-t-transparent animate-spin" />
+				</div>
+			</div>
+			<div className="text-center">
+				<div className="text-2xl font-black text-slate-800 tracking-tight">
+					Paper<span className="text-orange-600">Terrace</span>
+				</div>
+				<div className="text-xs text-slate-400 font-medium mt-1">
+					準備しています...
+				</div>
+			</div>
+		</div>
+	</div>
+);
+
 const log = createLogger("Auth");
 
 /** Better Auth / Neon Auth が返すユーザーオブジェクトの型 */
@@ -64,27 +99,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 				setIsGuest(false);
 				// session.session.token は opaque token のため、JWT を別途取得する
 				getNeonJWT()
-					.then(async (jwt) => {
+					.then((jwt) => {
 						setToken(jwt);
 						// バックエンド DB にユーザーを登録（未登録の場合は新規作成）
-						// await することで登録完了前に論文アップロードが走るレースコンディションを防ぐ
+						// バックグラウンドで実行し、JWT 取得後すぐに画面を表示する。
+						// 失敗時は自動リトライ（コールドスタート対策）。
 						if (jwt) {
-							try {
-								await fetch(`${API_URL}/api/auth/register`, {
-									method: "POST",
-									headers: { Authorization: `Bearer ${jwt}` },
-								});
-							} catch (err) {
-								log.error("register", "Failed to register user in backend", {
-									err,
-								});
-							}
+							const registerWithRetry = async (retries = 3) => {
+								for (let i = 0; i < retries; i++) {
+									try {
+										const res = await fetch(`${API_URL}/api/auth/register`, {
+											method: "POST",
+											headers: { Authorization: `Bearer ${jwt}` },
+										});
+										if (res.ok) return;
+									} catch (err) {
+										if (i < retries - 1) {
+											await new Promise((r) => setTimeout(r, 2000 * (i + 1)));
+										} else {
+											log.error(
+												"register",
+												"Failed to register user in backend",
+												{ err },
+											);
+										}
+									}
+								}
+							};
+							registerWithRetry();
 						}
+						setLoading(false);
 					})
 					.catch(() => {
 						setToken(null);
-					})
-					.finally(() => {
 						setLoading(false);
 					});
 			} else {
@@ -150,7 +197,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 				isGuest,
 			}}
 		>
-			{!loading && children}
+			{loading ? <AppSplash /> : children}
 		</AuthContext.Provider>
 	);
 };

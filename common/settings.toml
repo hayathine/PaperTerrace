@@ -123,8 +123,9 @@ RATE_LIMIT_GUEST = 30
 RATE_LIMIT_LAYOUT = "60/minute"
 RATE_LIMIT_TRANSLATE = "300/minute"
 
-# BigQuery
-BQ_LOCATION_LOGS = "asia-northeast1"
+# GA4 Data API
+GA4_PROPERTY_ID = ""         # GA4 プロパティ数値 ID（例: "123456789"）
+GA4_USER_ID_DIMENSION = ""   # firebase_uid 用カスタムディメンション名（例: "customUser:user_id"）
 
 # CORS
 CORS_EXTRA_ORIGINS = ""
@@ -134,8 +135,6 @@ LOG_LEVEL = "DEBUG"
 STORAGE_TYPE = "local"
 STORAGE_PROVIDER = "postgresql"
 IMAGES_DIR = "src/static/paper_images"
-BQ_LOG_DATASET = "paperterrace_logs_local"
-
 # Local 特定設定
 GCS_BUCKET_NAME_LOCAL = "paperterrace-papers-local"
 INFERENCE_VERIFY_SSL = false
@@ -148,8 +147,6 @@ SENTRY_ENABLED = true
 STORAGE_TYPE = "gcs"
 STORAGE_PROVIDER = "neon"
 IMAGES_DIR = "app/static/paper_images"
-BQ_LOG_DATASET = "paperterrace_logs_staging"
-
 # Staging 特定設定
 GCS_BUCKET_NAME_STAGING = "paperterrace-papers-staging"
 INFERENCE_VERIFY_SSL = false
@@ -164,7 +161,6 @@ SENTRY_ENABLED = true
 STORAGE_TYPE = "gcs"
 STORAGE_PROVIDER = "neon"
 IMAGES_DIR = "app/static/paper_images"
-BQ_LOG_DATASET = "paperterrace_logs"
 INFERENCE_VERIFY_SSL = false
 LOG_SCHEMA = "logs"
 # LOG_DATABASE_URL = "" (環境変数から取得)
