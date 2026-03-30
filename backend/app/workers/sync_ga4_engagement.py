@@ -171,7 +171,7 @@ def sync_engagement(
 
     # 既存データを削除してから再挿入（冪等性確保）
     pg_log.execute_dml(
-        "DELETE FROM logs.user_engagements WHERE event_date = :event_date",
+        f"DELETE FROM {pg_log.table_ref('user_engagements')} WHERE event_date = :event_date",
         {"event_date": iso_date},
     )
 
@@ -233,7 +233,7 @@ def sync_page_views(
 
     # 既存データを削除してから再挿入（冪等性確保）
     pg_log.execute_dml(
-        "DELETE FROM logs.page_view_logs WHERE event_date = :event_date",
+        f"DELETE FROM {pg_log.table_ref('page_view_logs')} WHERE event_date = :event_date",
         {"event_date": iso_date},
     )
 

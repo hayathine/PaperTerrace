@@ -125,6 +125,9 @@ class PDFOCRService:
         """Processes PDF pages in chunks for efficiency while streaming results."""
         file_hash = "unknown"
         tmp_path = None
+        all_text_parts: list = []
+        all_layout_parts: list = []
+        _finalized = False
         try:
             file_hash = _get_file_hash(file_bytes)
 
@@ -195,8 +198,6 @@ class PDFOCRService:
                     filename=filename,
                 )
 
-                all_text_parts = []
-                all_layout_parts = []
                 processing_metrics = {}  # {page_num: {"p12": duration, "p3": duration}}
 
                 # --- Chunked Processing (Batch AI + Persistent File) ---
@@ -344,6 +345,7 @@ class PDFOCRService:
                 "finalize_start", "Finalizing OCR and saving to DB", file_hash=file_hash
             )
             self._finalize_ocr(file_hash, filename, all_text_parts, all_layout_parts)
+            _finalized = True
             log.info(
                 "extract_complete",
                 "OCR extraction completed",
@@ -368,6 +370,22 @@ class PDFOCRService:
                 error_msg = "Internal Server Error during OCR"
             yield (0, 0, f"ERROR_API_FAILED: {error_msg}", True, file_hash, None, None)
         finally:
+            if not _finalized and all_text_parts and file_hash != "unknown":
+                try:
+                    self._finalize_ocr(file_hash, filename, all_text_parts, all_layout_parts)
+                    log.info(
+                        "partial_save",
+                        "部分的なOCR結果を保存しました",
+                        file_hash=file_hash,
+                        page_count=len(all_text_parts),
+                    )
+                except Exception as save_err:
+                    log.warning(
+                        "partial_save_failed",
+                        "部分OCR保存に失敗しました",
+                        file_hash=file_hash,
+                        error=str(save_err),
+                    )
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
 

@@ -27,7 +27,10 @@ from typing import TYPE_CHECKING, Callable
 
 import dspy
 from common.logger import get_logger
-from backend.app.core.config import get_log_database_url, get_log_schema
+try:
+    from app.core.config import get_log_database_url, get_log_schema
+except ImportError:
+    from backend.app.core.config import get_log_database_url, get_log_schema
 
 log = get_logger(__name__)
 

@@ -49,27 +49,32 @@ log = ServiceLogger("Main")
 # ============================================================================
 # Sentry / GlitchTip 初期化
 # ============================================================================
-_sentry_dsn = str(getattr(settings, "SENTRY_DSN", "") or "")
-_sentry_enabled = bool(getattr(settings, "SENTRY_ENABLED", False))
 
-if _sentry_enabled and _sentry_dsn:
-    sentry_sdk.init(
-        dsn=_sentry_dsn,
-        integrations=[
-            FastApiIntegration(),
-            SqlalchemyIntegration(),
-            LoggingIntegration(),  # ERROR 以上を自動キャプチャ
-        ],
-        traces_sample_rate=float(getattr(settings, "SENTRY_TRACES_SAMPLE_RATE", 0.1)),
-        profiles_sample_rate=float(
-            getattr(settings, "SENTRY_PROFILES_SAMPLE_RATE", 0.1)
-        ),
-        environment=get_app_env(),
-        send_default_pii=False,
-    )
-    log.info("sentry", "Sentry initialized", dsn=_sentry_dsn[:40] + "...")
-else:
-    log.info("sentry", "Sentry disabled")
+
+def init_sentry():
+    """Sentry / GlitchTip の初期化を行う。"""
+    _sentry_dsn = str(settings.get("SENTRY_DSN", "") or "")
+    _sentry_enabled = bool(settings.get("SENTRY_ENABLED", False))
+
+    if _sentry_enabled and _sentry_dsn:
+        sentry_sdk.init(
+            dsn=_sentry_dsn,
+            integrations=[
+                FastApiIntegration(),
+                SqlalchemyIntegration(),
+                LoggingIntegration(),  # ERROR 以上を自動キャプチャ
+            ],
+            traces_sample_rate=float(settings.get("SENTRY_TRACES_SAMPLE_RATE", 0.1)),
+            profiles_sample_rate=float(settings.get("SENTRY_PROFILES_SAMPLE_RATE", 0.1)),
+            environment=get_app_env(),
+            send_default_pii=False,
+        )
+        log.info("sentry", "Sentry initialized", dsn=_sentry_dsn[:40] + "...")
+    else:
+        log.info("sentry", "Sentry disabled")
+
+
+init_sentry()
 
 
 # Neon Auth Config for Frontend

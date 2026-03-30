@@ -42,7 +42,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libpq5 curl ca-certificates \
     tesseract-ocr tesseract-ocr-eng tesseract-ocr-jpn
 
-RUN useradd -m -r appuser && chown -R appuser:appuser /app
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 COPY --chown=appuser:appuser --from=runtime-builder /app/.venv /app/.venv
 # Use pre-built frontend dist
 COPY --chown=appuser:appuser frontend/dist ./app/static/dist

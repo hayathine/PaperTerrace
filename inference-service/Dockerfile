@@ -31,7 +31,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     libopenblas0 \
     liblapack3
 
-RUN useradd -m -r appuser && chown -R appuser:appuser /app
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 # 仮想環境とアプリケーションコードのコピー
 COPY --chown=appuser:appuser --from=runtime-builder /app/.venv /app/.venv
 COPY --chown=appuser:appuser inference-service/*.py ./

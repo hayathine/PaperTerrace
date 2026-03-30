@@ -141,12 +141,31 @@ Your goal is to help users understand complex academic papers, translate technic
 # Fixed System Prompt for Translation (Prefix Caching optimized)
 # ------------------------------------------
 
-DICT_TRANSLATE_SYSTEM_PROMPT = """Translate using domain-accurate terminology. 
+DICT_TRANSLATE_SYSTEM_PROMPT = """Translate using domain-accurate terminology.
 If abbreviation, expand it like: "LLM → 大規模言語モデル".Output only the translation."""
 
 DICT_TRANSLATE_LLM_PROMPT = """{paper_title}. Translate the word to {lang_name}.
 Input: {target_word}
 Translation:"""
+
+TRANSLATE_FROM_PDF_PROMPT = """Translate the following term from the academic paper above.
+Respond entirely in {lang_name}.
+Prioritize domain-specific accuracy over literal translation.
+If the term is a proper noun, acronym, or project name that should remain in English, use the original term.
+Output ONLY the translation or a concise translation with a brief context-aware explanation.
+Do NOT include meta-comments like "(そのまま)" or "(As-is)".
+{context_line}
+Term: {target_word}
+Translation:"""
+
+EXPLAIN_FROM_PDF_PROMPT = """Explain the following term from the academic paper above.
+Respond entirely in {lang_name}.
+Do NOT just translate — focus on its specific meaning, role, or technical significance within this paper.
+If it is a technical term, explain the underlying concept briefly.
+If it refers to a methodology or result, explain its importance.
+{context_line}
+Term: {target_word}
+Explanation:"""
 
 
 VISION_ANALYZE_FIGURE_PROMPT = """Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.

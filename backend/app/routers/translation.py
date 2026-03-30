@@ -24,7 +24,10 @@ from app.core.config import is_local
 from common import settings
 from common.dspy_seed_prompt import (
     CORE_SYSTEM_PROMPT,
+    TRANSLATE_FROM_PDF_PROMPT,
+    EXPLAIN_FROM_PDF_PROMPT,
 )
+from redis_provider.provider import RedisService
 
 log = ServiceLogger("Translation")
 
@@ -33,6 +36,7 @@ router = APIRouter(tags=["Translation"])
 
 # Services
 service = EnglishAnalysisService()
+redis_service = RedisService()
 
 
 def build_dict_card_html(
@@ -292,54 +296,74 @@ async def explain(
 
     try:
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
+        trace_id = None
 
-        # Fetch paper summary context
-        paper_context = ""
-        if paper_id:
-            paper = storage.get_paper(paper_id)
-            if paper:
-                summary = paper.get("abstract") or paper.get("summary")
-                if summary:
-                    paper_context = f"\n[Paper Context / Summary]\n{summary}\n"
+        # PDF コンテキストキャッシュが存在すれば直接 API 呼び出しで論文全文を活用
+        pdf_cache_name = redis_service.get(f"paper_cache_pdf:{paper_id}") if paper_id else None
 
-        if context:
-            paper_context += f"\n[Surrounding Context]\n...{context}...\n"
-
-        is_phrase = " " in lemma.strip()
-        if is_phrase:
-            trans_mod = TranslationModule()
-            res, trace_id = await trace_dspy_call(
-                "TranslationModule",
-                "ContextAwareTranslation",
-                trans_mod,
-                {
-                    "paper_context": paper_context,
-                    "target_word": original_word,
-                    "user_persona": "Professional Academic Translator",
-                    "lang_name": lang_name,
-                },
-                context=TraceContext(
-                    user_id=current_user_id, session_id=session_id, paper_id=paper_id
-                ),
+        if pdf_cache_name:
+            context_line = f"\nSurrounding context: ...{context}...\n" if context else ""
+            prompt = TRANSLATE_FROM_PDF_PROMPT.format(
+                target_word=original_word,
+                context_line=context_line,
+                lang_name=lang_name,
             )
-            translation = res.translation_and_explanation.strip()
+            ai_provider = get_ai_provider()
+            raw = await ai_provider.generate(
+                prompt=prompt,
+                model=settings.get("MODEL_TRANSLATE", "gemini-2.5-flash-lite"),
+                cached_content_name=pdf_cache_name,
+            )
+            translation = (str(raw) if raw else "").strip()
+            log.info("explain", "Translated with PDF context cache", lemma=lemma)
         else:
-            simple_mod = SimpleTranslationModule()
-            res, trace_id = await trace_dspy_call(
-                "SimpleTranslationModule",
-                "SimpleTranslation",
-                simple_mod,
-                {
-                    "paper_context": paper_context,
-                    "target_word": lemma,
-                    "user_persona": "Professional Academic Translator",
-                    "lang_name": lang_name,
-                },
-                context=TraceContext(
-                    user_id=current_user_id, session_id=session_id, paper_id=paper_id
-                ),
-            )
-            translation = res.translation.strip()
+            # キャッシュなし: abstract + 周辺テキストで DSPy 経由
+            paper_context = ""
+            if paper_id:
+                paper = storage.get_paper(paper_id)
+                if paper:
+                    summary = paper.get("abstract") or paper.get("summary")
+                    if summary:
+                        paper_context = f"\n[Paper Context / Summary]\n{summary}\n"
+
+            if context:
+                paper_context += f"\n[Surrounding Context]\n...{context}...\n"
+
+            is_phrase = " " in lemma.strip()
+            if is_phrase:
+                trans_mod = TranslationModule()
+                res, trace_id = await trace_dspy_call(
+                    "TranslationModule",
+                    "ContextAwareTranslation",
+                    trans_mod,
+                    {
+                        "paper_context": paper_context,
+                        "target_word": original_word,
+                        "user_persona": "Professional Academic Translator",
+                        "lang_name": lang_name,
+                    },
+                    context=TraceContext(
+                        user_id=current_user_id, session_id=session_id, paper_id=paper_id
+                    ),
+                )
+                translation = res.translation_and_explanation.strip()
+            else:
+                simple_mod = SimpleTranslationModule()
+                res, trace_id = await trace_dspy_call(
+                    "SimpleTranslationModule",
+                    "SimpleTranslation",
+                    simple_mod,
+                    {
+                        "paper_context": paper_context,
+                        "target_word": lemma,
+                        "user_persona": "Professional Academic Translator",
+                        "lang_name": lang_name,
+                    },
+                    context=TraceContext(
+                        user_id=current_user_id, session_id=session_id, paper_id=paper_id
+                    ),
+                )
+                translation = res.translation.strip()
 
         service.translation_cache[lemma] = translation
         service.word_cache[lemma] = False
@@ -446,39 +470,57 @@ async def explain_deep(
     # Stage 3: Gemini translation
     try:
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
-
-        # Fetch paper summary context
-        paper_context = ""
-        if paper_id:
-            paper = storage.get_paper(paper_id)
-            if paper:
-                summary = paper.get("abstract") or paper.get("summary")
-                if summary:
-                    paper_context = f"\n[Paper Context / Summary]\n{summary}\n"
-
-        if context:
-            paper_context += f"\n[Surrounding Context]\n...{context}...\n"
+        trace_id = None
 
         log.info("explain_deep", "Gemini call", lemma=lemma)
 
-        # DSPy version
-        trans_mod = TranslationModule()
-        # Single words might need different prompt, but for now use context aware phrase translation
-        res, trace_id = await trace_dspy_call(
-            "TranslationModule",
-            "ContextAwareTranslation",
-            trans_mod,
-            {
-                "paper_context": paper_context,
-                "target_word": original_word,
-                "user_persona": "Professional Academic Translator",
-                "lang_name": lang_name,
-            },
-            context=TraceContext(
-                user_id=current_user_id, session_id=session_id, paper_id=paper_id
-            ),
-        )
-        translation = res.translation_and_explanation.strip()
+        # PDF コンテキストキャッシュが存在すれば直接 API 呼び出しで論文全文を活用
+        pdf_cache_name = redis_service.get(f"paper_cache_pdf:{paper_id}") if paper_id else None
+
+        if pdf_cache_name:
+            context_line = f"\nSurrounding context: ...{context}...\n" if context else ""
+            prompt = TRANSLATE_FROM_PDF_PROMPT.format(
+                target_word=original_word,
+                context_line=context_line,
+                lang_name=lang_name,
+            )
+            ai_provider = get_ai_provider()
+            raw = await ai_provider.generate(
+                prompt=prompt,
+                model=settings.get("MODEL_TRANSLATE", "gemini-2.5-flash-lite"),
+                cached_content_name=pdf_cache_name,
+            )
+            translation = (str(raw) if raw else "").strip()
+            log.info("explain_deep", "Translated with PDF context cache", lemma=lemma)
+        else:
+            # キャッシュなし: abstract + 周辺テキストで DSPy 経由
+            paper_context = ""
+            if paper_id:
+                paper = storage.get_paper(paper_id)
+                if paper:
+                    summary = paper.get("abstract") or paper.get("summary")
+                    if summary:
+                        paper_context = f"\n[Paper Context / Summary]\n{summary}\n"
+
+            if context:
+                paper_context += f"\n[Surrounding Context]\n...{context}...\n"
+
+            trans_mod = TranslationModule()
+            res, trace_id = await trace_dspy_call(
+                "TranslationModule",
+                "ContextAwareTranslation",
+                trans_mod,
+                {
+                    "paper_context": paper_context,
+                    "target_word": original_word,
+                    "user_persona": "Professional Academic Translator",
+                    "lang_name": lang_name,
+                },
+                context=TraceContext(
+                    user_id=current_user_id, session_id=session_id, paper_id=paper_id
+                ),
+            )
+            translation = res.translation_and_explanation.strip()
 
         service.translation_cache[lemma] = translation
         service.word_cache[lemma] = False
@@ -584,29 +626,49 @@ async def explain_with_context(
                 summary_context = f"\n[Document Summary]\n{paper['abstract']}\n"
 
     try:
-        # DSPy version
-        # TranslationModule uses paper_context, target_word, user_persona, lang_name
-        trans_mod = TranslationModule()
-        res, trace_id = await trace_dspy_call(
-            "TranslationModule",
-            "ContextAwareTranslation",
-            trans_mod,
-            {
-                "paper_context": (summary_context + "\n" + req.context).strip(),
-                "target_word": req.word,
-                "user_persona": "Professional Academic Translator",
-                "lang_name": lang_name,
-            },
-            context=TraceContext(
-                user_id=(
-                    getattr(request.state, "user_id", None)
-                    or (f"guest:{req.session_id}" if req.session_id else None)
+        trace_id = None
+
+        # PDF コンテキストキャッシュが存在すれば直接 API 呼び出しで論文全文を活用
+        pdf_cache_name = redis_service.get(f"paper_cache_pdf:{paper_id}") if paper_id else None
+
+        if pdf_cache_name:
+            context_line = f"\nSurrounding context: ...{req.context}...\n"
+            prompt = EXPLAIN_FROM_PDF_PROMPT.format(
+                target_word=req.word,
+                context_line=context_line,
+                lang_name=lang_name,
+            )
+            ai_provider = get_ai_provider()
+            raw = await ai_provider.generate(
+                prompt=prompt,
+                model=settings.get("MODEL_TRANSLATE", "gemini-2.5-flash-lite"),
+                cached_content_name=pdf_cache_name,
+            )
+            explanation = (str(raw) if raw else "").strip()
+            log.info("explain_context", "Explained with PDF context cache", word=req.word)
+        else:
+            # キャッシュなし: abstract + 周辺テキストで DSPy 経由
+            trans_mod = TranslationModule()
+            res, trace_id = await trace_dspy_call(
+                "TranslationModule",
+                "ContextAwareTranslation",
+                trans_mod,
+                {
+                    "paper_context": (summary_context + "\n" + req.context).strip(),
+                    "target_word": req.word,
+                    "user_persona": "Professional Academic Translator",
+                    "lang_name": lang_name,
+                },
+                context=TraceContext(
+                    user_id=(
+                        getattr(request.state, "user_id", None)
+                        or (f"guest:{req.session_id}" if req.session_id else None)
+                    ),
+                    session_id=req.session_id,
+                    paper_id=paper_id,
                 ),
-                session_id=req.session_id,
-                paper_id=paper_id,
-            ),
-        )
-        explanation = res.translation_and_explanation.strip()
+            )
+            explanation = res.translation_and_explanation.strip()
 
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(
