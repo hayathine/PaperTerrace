@@ -128,6 +128,7 @@ class PDFOCRService:
         all_text_parts: list = []
         all_layout_parts: list = []
         _finalized = False
+        _ocrmypdf_task: asyncio.Task[dict[int, str]] | None = None
         try:
             file_hash = _get_file_hash(file_bytes)
 
@@ -199,6 +200,7 @@ class PDFOCRService:
                 )
 
                 processing_metrics = {}  # {page_num: {"p12": duration, "p3": duration}}
+                _ocrmypdf_result: dict[int, str] | None = None
 
                 # --- Chunked Processing (Batch AI + Persistent File) ---
                 CHUNK_SIZE = int(settings.get("OCR_CHUNK_SIZE", "5"))
@@ -272,28 +274,93 @@ class PDFOCRService:
                         < _min_len
                     ]
                     batch_ocr_results: dict[int, tuple[str, list[dict]]] = {}
+                    candidate_page_nums = [pn for pn, _ in ocr_candidate_pages]
+                    log.info(
+                        "batch_ocr",
+                        "OCR候補ページ検出",
+                        chunk=f"{chunk_start + 1}-{chunk_end}",
+                        candidate_count=len(ocr_candidate_pages),
+                        candidate_pages=candidate_page_nums,
+                    )
                     if ocr_candidate_pages:
-                        try:
-                            batch_ocr_results = await self._ocr_fallback_batch(
-                                ocr_candidate_pages
+                        # OCR候補が初めて検出された時点でOCRmyPDFタスクを起動
+                        if _ocrmypdf_task is None:
+                            _ocrmypdf_task = asyncio.create_task(
+                                self._run_ocrmypdf(file_bytes)
                             )
                             log.info(
                                 "batch_ocr",
-                                "Batch OCR completed",
-                                candidate_count=len(ocr_candidate_pages),
-                                result_count=len(batch_ocr_results),
+                                "OCRmyPDFタスク起動",
+                                pdf_size=len(file_bytes),
+                                trigger_page=candidate_page_nums[0],
                             )
-                            for pd in chunk_page_data:
-                                if pd["page_num"] in batch_ocr_results:
-                                    pd["ocr_text_override"] = batch_ocr_results[
-                                        pd["page_num"]
-                                    ]
-                        except Exception as e:
-                            log.error(
+
+                        # OCRmyPDF結果が未取得の場合は待機
+                        if _ocrmypdf_result is None:
+                            log.info("batch_ocr", "OCRmyPDF結果を待機中...")
+                            try:
+                                _ocrmypdf_result = await _ocrmypdf_task
+                                log.info(
+                                    "batch_ocr",
+                                    "OCRmyPDF結果取得完了",
+                                    page_count=len(_ocrmypdf_result),
+                                    pages_with_text=sorted(_ocrmypdf_result.keys()),
+                                )
+                            except Exception as e:
+                                log.warning("batch_ocr", "OCRmyPDF失敗 → Tesseractへフォールバック", error=str(e))
+                                _ocrmypdf_result = {}
+
+                        # OCRmyPDF結果をバッチ結果にセット
+                        if _ocrmypdf_result:
+                            for pn, _img in ocr_candidate_pages:
+                                if pn in _ocrmypdf_result:
+                                    text_len = len(_ocrmypdf_result[pn])
+                                    batch_ocr_results[pn] = (_ocrmypdf_result[pn], [])
+                                    log.info(
+                                        "batch_ocr",
+                                        "OCRmyPDF結果適用",
+                                        page_num=pn,
+                                        text_len=text_len,
+                                    )
+
+                        # OCRmyPDFで取得できなかったページはTesseractでフォールバック
+                        remaining = [
+                            (pn, img) for pn, img in ocr_candidate_pages
+                            if pn not in batch_ocr_results
+                        ]
+                        if remaining:
+                            log.info(
                                 "batch_ocr",
-                                "Target batch OCR failed completely",
-                                error=str(e),
+                                "Tesseractフォールバック対象",
+                                page_nums=[pn for pn, _ in remaining],
                             )
+                            try:
+                                fallback_results = await self._ocr_fallback_batch(remaining)
+                                batch_ocr_results.update(fallback_results)
+                                log.info(
+                                    "batch_ocr",
+                                    "Tesseractフォールバック完了",
+                                    success_pages=list(fallback_results.keys()),
+                                )
+                            except Exception as e:
+                                log.error(
+                                    "batch_ocr",
+                                    "Target batch OCR failed completely",
+                                    error=str(e),
+                                )
+
+                        log.info(
+                            "batch_ocr",
+                            "Batch OCR completed",
+                            candidate_count=len(ocr_candidate_pages),
+                            result_count=len(batch_ocr_results),
+                            missing_pages=[pn for pn, _ in ocr_candidate_pages if pn not in batch_ocr_results],
+                        )
+                        for pd in chunk_page_data:
+                            if pd["page_num"] in batch_ocr_results:
+                                pd["ocr_text_override"] = batch_ocr_results[
+                                    pd["page_num"]
+                                ]
 
                     phase3_tasks = [
                         asyncio.create_task(
@@ -388,6 +455,8 @@ class PDFOCRService:
                     )
             if tmp_path and os.path.exists(tmp_path):
                 os.remove(tmp_path)
+            if _ocrmypdf_task is not None and not _ocrmypdf_task.done():
+                _ocrmypdf_task.cancel()
 
     async def _handle_cache(self, file_hash: str) -> list | None:
         """Check if OCR is cached and return formatted pages if so."""
@@ -1030,6 +1099,70 @@ class PDFOCRService:
         )
         return results
 
+    async def _run_ocrmypdf(self, file_bytes: bytes) -> dict[int, str]:
+        """OCRmyPDFでサーチャブルPDFを生成し、ページごとのテキスト辞書を返す。
+
+        Returns:
+            {page_num(1始まり): text} の辞書。OCR失敗ページは含まない。
+        """
+        from app.providers.inference_client import get_ocr_client  # noqa: PLC0415
+
+        client = await get_ocr_client()
+        log.info(
+            "_run_ocrmypdf",
+            "OCRmyPDFリクエスト送信",
+            pdf_size=len(file_bytes),
+            ocr_url=client.ocr_url,
+            is_disabled=client.is_disabled,
+        )
+        t_start = time.perf_counter()
+
+        searchable_pdf = await client.ocr_pdf(file_bytes)
+
+        if not searchable_pdf:
+            log.warning(
+                "_run_ocrmypdf",
+                "OCRmyPDF失敗: Noneが返却されました（inference-ocrサービス未応答または無効）",
+                ocr_url=client.ocr_url,
+            )
+            return {}
+
+        duration = round(time.perf_counter() - t_start, 3)
+        log.info(
+            "_run_ocrmypdf",
+            "OCRmyPDFサーチャブルPDF取得完了",
+            duration=duration,
+            input_size=len(file_bytes),
+            output_size=len(searchable_pdf),
+        )
+
+        result: dict[int, str] = {}
+        import pdfplumber  # noqa: PLC0415
+
+        with pdfplumber.open(io.BytesIO(searchable_pdf)) as pdf:
+            total = len(pdf.pages)
+            for i, page in enumerate(pdf.pages):
+                text = (page.extract_text() or "").strip()
+                log.info(
+                    "_run_ocrmypdf",
+                    "ページテキスト抽出",
+                    page_num=i + 1,
+                    total_pages=total,
+                    text_len=len(text),
+                    has_text=bool(text),
+                )
+                if text:
+                    result[i + 1] = text
+
+        log.info(
+            "_run_ocrmypdf",
+            "全ページテキスト抽出完了",
+            total_pages=total,
+            extracted_pages=len(result),
+            empty_pages=total - len(result),
+        )
+        return result
+
     def _extract_markdown_sequential(
         self, file_bytes: bytes, idx: int, exclude_bboxes_pt: list
     ) -> str:
@@ -1301,6 +1434,27 @@ class PDFOCRService:
             p.replace("\0", "") if p else "" for p in all_text_parts
         ]
         full_text = "\n\n---\n\n".join(sanitized_text_parts)
+
+        # テキストが実質空の場合（区切り文字のみ）はキャッシュしない
+        stripped = full_text.replace("\n\n---\n\n", "").strip()
+        if not stripped:
+            log.warning(
+                "_finalize_ocr",
+                "OCR結果が空のためキャッシュをスキップします（再アップロードで再試行可能）",
+                filename=filename,
+                file_hash=file_hash,
+                page_count=len(all_text_parts),
+            )
+            return
+
+        log.info(
+            "_finalize_ocr",
+            "DBへ保存開始",
+            filename=filename,
+            file_hash=file_hash,
+            page_count=len(all_text_parts),
+            total_text_len=len(full_text),
+        )
 
         sanitized_layout = None
         if all_layout_parts:
