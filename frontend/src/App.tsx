@@ -16,6 +16,7 @@ import UploadScreen from "./components/Upload/UploadScreen";
 import { useAuth } from "./contexts/AuthContext";
 import { useLoading } from "./contexts/LoadingContext";
 import { usePaperCache } from "./db/hooks";
+import { db, isDbAvailable } from "./db/index";
 import { useSyncStatus } from "./db/sync";
 import { useLayoutState } from "./hooks/useLayoutState";
 import { usePinchZoom } from "./hooks/usePinchZoom";
@@ -125,7 +126,7 @@ function App() {
 	// サインイン遷移検知用（null = ゲスト確定、undefined = 初回レンダリング前）
 	const prevUserRef = useRef<typeof user | undefined>(undefined);
 
-	const { getCachedPaper } = usePaperCache();
+	const { getCachedPaper, deletePaperCache } = usePaperCache();
 
 	const handleScroll = useScrollTracking(currentPaperId || uploadFile?.name);
 	const {
@@ -211,6 +212,34 @@ function App() {
 
 		fetchPapers();
 	}, [user, token]);
+
+	// ゲスト: IndexedDBのキャッシュから論文一覧を読み込む
+	useEffect(() => {
+		if (!isGuest) return;
+		const loadGuestPapers = async () => {
+			if (!isDbAvailable()) {
+				setUploadedPapers([]);
+				return;
+			}
+			try {
+				const cached = await db.papers
+					.orderBy("last_accessed")
+					.reverse()
+					.toArray();
+				setUploadedPapers(
+					cached.map((p) => ({
+						paper_id: p.id,
+						title: p.title,
+						filename: p.title,
+						created_at: new Date(p.last_accessed).toISOString(),
+					})),
+				);
+			} catch {
+				setUploadedPapers([]);
+			}
+		};
+		loadGuestPapers();
+	}, [isGuest]);
 
 	// ゲスト → サインイン遷移を検知し、表示中の論文をライブラリに保存する
 	useEffect(() => {
@@ -368,6 +397,29 @@ function App() {
 		setUploadFile(null);
 		setCurrentPaperId(paper.paper_id);
 		setIsRightSidebarOpen(true);
+	};
+
+	const handleDeletePaper = async (e: React.MouseEvent, paper: any) => {
+		e.stopPropagation();
+		if (user && token) {
+			try {
+				await fetch(`${API_URL}/api/papers/${paper.paper_id}`, {
+					method: "DELETE",
+					headers: { Authorization: `Bearer ${token}` },
+				});
+			} catch (err) {
+				log.error("delete_paper", "Failed to delete paper from DB", {
+					error: err,
+				});
+			}
+		}
+		await deletePaperCache(paper.paper_id);
+		setUploadedPapers((prev) =>
+			prev.filter((p) => p.paper_id !== paper.paper_id),
+		);
+		if (currentPaperId === paper.paper_id) {
+			setCurrentPaperId(null);
+		}
 	};
 
 	const handleDirectFileSelect = (file: File) => {
@@ -594,43 +646,69 @@ function App() {
 									</div>
 								) : (
 									uploadedPapers.map((paper) => (
-										<button
-											type="button"
-											key={paper.paper_id}
-											onClick={() => handlePaperSelect(paper)}
-											className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-200 group relative ${
-												currentPaperId === paper.paper_id
-													? "bg-orange-500 text-white shadow-lg shadow-orange-900/10"
-													: "text-slate-500 hover:bg-slate-50"
-											}`}
-										>
-											<div className="flex items-start gap-3">
-												<div
-													className={`mt-0.5 shrink-0 w-1.5 h-1.5 rounded-full ${
-														currentPaperId === paper.paper_id
-															? "bg-orange-300"
-															: "bg-slate-200 group-hover:bg-slate-300"
-													}`}
-												/>
-												<div className="overflow-hidden">
-													<p
-														className={`text-sm font-medium leading-tight truncate ${
+										<div key={paper.paper_id} className="relative group/card">
+											<button
+												type="button"
+												onClick={() => handlePaperSelect(paper)}
+												className={`w-full text-left px-3 py-2.5 rounded-lg transition-all duration-200 group relative ${
+													currentPaperId === paper.paper_id
+														? "bg-orange-500 text-white shadow-lg shadow-orange-900/10"
+														: "text-slate-500 hover:bg-slate-50"
+												}`}
+											>
+												<div className="flex items-start gap-3">
+													<div
+														className={`mt-0.5 shrink-0 w-1.5 h-1.5 rounded-full ${
 															currentPaperId === paper.paper_id
-																? "text-white"
-																: "text-slate-700"
+																? "bg-orange-300"
+																: "bg-slate-200 group-hover:bg-slate-300"
 														}`}
-													>
-														{paper.title || paper.filename}
-													</p>
-													<p className="text-[10px] opacity-50 mt-1 uppercase tracking-wider">
-														{new Date(paper.created_at).toLocaleDateString()}
-													</p>
+													/>
+													<div className="overflow-hidden pr-5">
+														<p
+															className={`text-sm font-medium leading-tight truncate ${
+																currentPaperId === paper.paper_id
+																	? "text-white"
+																	: "text-slate-700"
+															}`}
+														>
+															{paper.title || paper.filename}
+														</p>
+														<p className="text-[10px] opacity-50 mt-1 uppercase tracking-wider">
+															{new Date(paper.created_at).toLocaleDateString()}
+														</p>
+													</div>
 												</div>
-											</div>
-											{currentPaperId === paper.paper_id && (
-												<div className="absolute left-0 top-2 bottom-2 w-1 bg-white rounded-r-full" />
-											)}
-										</button>
+												{currentPaperId === paper.paper_id && (
+													<div className="absolute left-0 top-2 bottom-2 w-1 bg-white rounded-r-full" />
+												)}
+											</button>
+											<button
+												type="button"
+												onClick={(e) => handleDeletePaper(e, paper)}
+												className={`absolute right-2 top-1/2 -translate-y-1/2 opacity-0 group-hover/card:opacity-100 transition-opacity p-1 rounded ${
+													currentPaperId === paper.paper_id
+														? "text-white/60 hover:text-white hover:bg-white/20"
+														: "text-slate-300 hover:text-red-500 hover:bg-red-50"
+												}`}
+												title="削除"
+											>
+												<svg
+													xmlns="http://www.w3.org/2000/svg"
+													width="12"
+													height="12"
+													viewBox="0 0 24 24"
+													fill="none"
+													stroke="currentColor"
+													strokeWidth="2.5"
+													strokeLinecap="round"
+													strokeLinejoin="round"
+												>
+													<line x1="18" y1="6" x2="6" y2="18" />
+													<line x1="6" y1="6" x2="18" y2="18" />
+												</svg>
+											</button>
+										</div>
 									))
 								)}
 							</div>
