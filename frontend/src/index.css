@@ -45,7 +45,7 @@
 /* Performance: content-visibility for off-screen page containers */
 .pdf-page-container {
 	content-visibility: auto;
-	contain-intrinsic-size: auto 800px;
+	contain-intrinsic-size: 0px 800px;
 	contain: layout style paint;
 }
 

@@ -137,11 +137,13 @@ async def process_paper_summary_task(
             user_id=user_id,
             session_id=session_id,
         )
+        storage.update_processing_status(paper_id, "summary_status", "success")
         log.info(
             "summary_task", "SUCCESS: generated summary for paper", paper_id=paper_id
         )
 
     except Exception as e:
+        storage.update_processing_status(paper_id, "summary_status", "failed")
         log.error(
             "summary_task",
             "Summary FAILED",
@@ -166,6 +168,11 @@ async def process_grobid_enrichment_task(paper_id: str, file_hash: str) -> None:
     grobid = GROBIDService()
     if not grobid.is_available():
         log.info("grobid_task", "GROBID 無効のためスキップ", paper_id=paper_id)
+        storage = get_storage_provider()
+        try:
+            storage.update_processing_status(paper_id, "grobid_status", "skipped")
+        finally:
+            storage.close()
         return
 
     log.info("grobid_task", "GROBID エンリッチメント開始", paper_id=paper_id)
@@ -224,11 +231,12 @@ async def process_grobid_enrichment_task(paper_id: str, file_hash: str) -> None:
         if result.abstract:
             storage.update_paper_abstract(paper_id, result.abstract)
 
-        # 構造化 Markdown でテキストモードを改善（セクションがある場合のみ）
-        md = grobid.build_markdown(result)
-        if md:
-            storage.update_paper_ocr_text(paper_id, md)
+        # GROBID Markdown は保存しない。
+        # ocr_text を上書きすると "\n\n---\n\n" ページ区切りが失われ
+        # キャッシュ読込時のページ分割が壊れるため廃止。
+        # タイトル・著者・アブストラクトは上記で既に保存済み。
 
+        storage.update_processing_status(paper_id, "grobid_status", "success")
         log.info(
             "grobid_task",
             "GROBID エンリッチメント完了",
@@ -238,6 +246,7 @@ async def process_grobid_enrichment_task(paper_id: str, file_hash: str) -> None:
         )
 
     except Exception as e:
+        storage.update_processing_status(paper_id, "grobid_status", "failed")
         log.error(
             "grobid_task",
             "GROBID エンリッチメント失敗",

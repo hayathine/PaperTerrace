@@ -255,7 +255,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 			aria-label={`${t("viewer.page")} ${page.page_num}`}
 			id={`page-${page.page_num}`}
 			className="pdf-page-container relative mb-8 shadow-2xl rounded-xl overflow-hidden bg-white transition-all duration-300 border border-slate-200/50 mx-auto"
-			style={{ maxWidth: "100%" }}
+			style={{ width: "100%", maxWidth: "100%" }}
 			onMouseUp={handleMouseUp}
 		>
 			{/* Header / Page Number */}

@@ -1,3 +1,80 @@
+def is_garbled_text(text: str) -> bool:
+    """
+    フォントエンコーディング由来の文字化けが含まれるか判定する。
+
+    以下の4パターンをカバーする:
+
+    1. (cid:N) ― pdfplumber が ToUnicode CMap 欠損時に出力するリテラル文字列。
+    2. Unicode 置換文字 U+FFFD ― デコード失敗を示す明示的マーカー。
+    3. Unicode Private Use Area U+E000〜U+F8FF ― PDFカスタムフォントが
+       グリフをPUA領域にマッピングする場合に発生。
+    4. Unicode Supplementary PUA U+F0000〜U+FFFFF ― 同上、補助面版。
+
+    各パターンについて「5文字以上」または「テキスト全体の0.5%以上」で
+    文字化けと判定する。
+    """
+    if not text:
+        return False
+
+    text_len = max(len(text), 1)
+    threshold_ratio = 0.005
+
+    # 1. (cid:N) パターン
+    cid_count = text.count("(cid:")
+    if cid_count >= 5 or (cid_count > 0 and cid_count / text_len > threshold_ratio):
+        return True
+
+    # 2. Unicode 置換文字 U+FFFD
+    repl_count = text.count("\ufffd")
+    if repl_count >= 5 or (repl_count > 0 and repl_count / text_len > threshold_ratio):
+        return True
+
+    # 3. Unicode Private Use Area (BMP): U+E000〜U+F8FF
+    pua_count = sum(1 for c in text if "\ue000" <= c <= "\uf8ff")
+    if pua_count >= 5 or (pua_count > 0 and pua_count / text_len > threshold_ratio):
+        return True
+
+    # 4. Unicode Supplementary PUA: U+F0000〜U+FFFFF
+    sup_pua_count = sum(1 for c in text if "\U000f0000" <= c <= "\U000fffff")
+    if sup_pua_count >= 5 or (
+        sup_pua_count > 0 and sup_pua_count / text_len > threshold_ratio
+    ):
+        return True
+
+    return False
+
+
+def fix_indentation_artifacts(text: str) -> str:
+    """
+    2段組みPDFから生じるインデントアーティファクトを修正する。
+
+    pymupdf4llmが2段組みレイアウトを処理する際、右カラムのテキストが
+    大きなインデントとして抽出され、Markdownのコードブロックとして
+    誤レンダリングされる問題を解決する。
+    """
+    lines = text.split("\n")
+    result = []
+    for line in lines:
+        # 4スペース以上のインデントがある行（Markdownコードブロックの条件）
+        if (
+            len(line) > 4
+            and line.startswith("    ")
+            and not line.startswith("        ")
+        ):
+            stripped = line.lstrip()
+            # Markdownの構造要素（見出し、引用、リスト、コードフェンス等）は変更しない
+            if stripped and stripped[0] not in "#>-*+|`":
+                # コードらしき記号の割合を検査
+                code_chars = sum(1 for c in stripped if c in "{}()[];=><!/\\@$%^&")
+                ratio = code_chars / max(len(stripped), 1)
+                # コード記号が10%未満なら自然言語テキストとみなしインデントを除去
+                if ratio < 0.10:
+                    result.append(stripped)
+                    continue
+        result.append(line)
+    return "\n".join(result)
+
+
 def clean_text_for_tokenization(text: str) -> str:
     """
     テキストから余分な改行や空白を除去し、単語処理に適した形式にする。

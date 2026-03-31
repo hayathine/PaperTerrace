@@ -10,8 +10,10 @@ from datetime import datetime, timezone
 from typing import Any
 
 JOB_KEY_PREFIX = "layout_job:"
-JOB_TTL = 3600  # 1時間
+JOB_TTL = 3600  # 1時間（ポーリング用）
 JOB_PUB_PREFIX = "layout_job_pub:"
+JOB_DONE_KEY_PREFIX = "layout_job_done:"
+JOB_DONE_TTL = 86400  # 完了/失敗ジョブのアーカイブ: 24時間
 
 # ジョブステータスのアトミック更新用 Lua スクリプト
 # KEYS[1]: ジョブキー, ARGV[1]: TTL秒, ARGV[2]: JSON形式の更新フィールド
@@ -67,12 +69,18 @@ async def enqueue_layout_job(
 
 
 def get_job_status(redis_client, job_id: str) -> dict | None:
-    """ジョブのステータス・結果を取得する
+    """ジョブのステータス・結果を取得する。
+
+    アクティブキー (layout_job:) が TTL 切れの場合、アーカイブキー
+    (layout_job_done:) にフォールバックする。
 
     Note: Redis cjson は空配列 [] を空オブジェクト {} にエンコードするため、
     result フィールドがリストでない場合はリストに正規化する。
     """
     data = redis_client.get(f"{JOB_KEY_PREFIX}{job_id}")
+    if not data:
+        # アクティブキーが TTL 切れの場合はアーカイブキーを確認
+        data = redis_client.get(f"{JOB_DONE_KEY_PREFIX}{job_id}")
     if not data:
         return None
     job = json.loads(data)
@@ -112,6 +120,12 @@ def set_job_completed(redis_client, job_id: str, result: Any) -> None:
         "result": result,
     }
     _atomic_update(redis_client, job_id, updates)
+    # アーカイブキーに24時間保存（アクティブキーのTTL切れ後もポーリング可能にする）
+    try:
+        archived = json.dumps(updates)
+        redis_client.setex(f"{JOB_DONE_KEY_PREFIX}{job_id}", JOB_DONE_TTL, archived)
+    except Exception:
+        pass
     # Pub/Sub で完了を通知（失敗しても問題なし）
     try:
         redis_client.publish(
@@ -141,6 +155,12 @@ def set_job_failed(redis_client, job_id: str, error: str) -> None:
         "error": error,
     }
     _atomic_update(redis_client, job_id, updates)
+    # アーカイブキーに24時間保存
+    try:
+        archived = json.dumps(updates)
+        redis_client.setex(f"{JOB_DONE_KEY_PREFIX}{job_id}", JOB_DONE_TTL, archived)
+    except Exception:
+        pass
     # Pub/Sub で失敗を通知（失敗しても問題なし）
     try:
         redis_client.publish(

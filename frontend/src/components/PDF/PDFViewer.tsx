@@ -1593,14 +1593,18 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	return (
 		<div className="w-full max-w-5xl mx-auto p-2 md:p-4 relative min-h-full pb-20">
 			{/* Non-blocking status indicators */}
-			{(status === "uploading" || status === "processing") && (
+			{(status === "uploading" ||
+				status === "processing" ||
+				status === "layout_analysis") && (
 				<div className="fixed bottom-4 right-4 z-50 bg-white rounded-full shadow-lg p-3 border border-orange-200">
 					<div className="flex items-center gap-2">
 						<div className="animate-spin rounded-full h-4 w-4 border-2 border-orange-200 border-t-orange-600"></div>
 						<span className="text-xs text-orange-600 font-medium">
 							{status === "uploading"
 								? t("viewer.uploading_pdf")
-								: "読み込み中..."}
+								: status === "layout_analysis"
+									? "構造化解析中..."
+									: "読み込み中..."}
 						</span>
 					</div>
 				</div>

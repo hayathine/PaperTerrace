@@ -13,6 +13,7 @@ from PIL import Image
 
 from common import settings
 from common.logger import logger
+from common.ocr import ocrmypdf_run
 
 
 class TesseractOcrService:
@@ -84,26 +85,18 @@ class TesseractOcrService:
         Returns:
             テキストレイヤー付き PDF のバイト列
         Raises:
+            concurrent.futures.TimeoutError: 全体処理タイムアウト（240秒）
             Exception: OCRmyPDF の実行に失敗した場合
         """
-        import io
-        import ocrmypdf  # noqa: PLC0415
-
-        input_buf = io.BytesIO(pdf_bytes)
-        output_buf = io.BytesIO()
+        import concurrent.futures
 
         logger.info(f"ocr_pdf_to_searchable: starting OCRmyPDF (lang={self.lang}, size={len(pdf_bytes)})")
 
-        ocrmypdf.ocr(
-            input_file=input_buf,
-            output_file=output_buf,
-            language=self.lang,
-            skip_text=True,      # テキストレイヤー済みのページはスキップ
-            progress_bar=False,
-            optimize=0,          # 速度優先（圧縮最適化なし）
-            output_type="pdf",
-        )
+        # ProcessPoolExecutor でサブプロセス化し、タイムアウト超過時に強制終了できるようにする
+        # ocrmypdf_run はモジュールレベル関数（pickle 可能）
+        with concurrent.futures.ProcessPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(ocrmypdf_run, pdf_bytes, self.lang)
+            result = future.result(timeout=240)  # 240秒で全体タイムアウト
 
-        result = output_buf.getvalue()
         logger.info(f"ocr_pdf_to_searchable: done (output size={len(result)})")
         return result

@@ -56,7 +56,7 @@ async def update_session_context(
         # Redis のセッションコンテキストも更新
         paper = storage.get_paper(paper_id)
         if paper and paper.get("ocr_text"):
-            redis_service.set(f"session:{session_id}", paper["ocr_text"], expire=3600)
+            redis_service.set(f"session:ctx:{session_id}", paper["ocr_text"], expire=3600)
         log.info(
             "session_context",
             "セッションコンテキストを更新しました",
@@ -766,30 +766,21 @@ async def stream(task_id: str):
 
                         if page_text is not None:
                             page_payload["content"] = page_text
-                            full_text_fragments.append(page_text)
 
                             if layout_data:
+                                # Phase 3 確定結果のみ DB 保存用データに追加
+                                full_text_fragments.append(page_text)
                                 page_payload["width"] = layout_data["width"]
                                 page_payload["height"] = layout_data["height"]
                                 page_payload["words"] = layout_data.get("words", [])
                                 page_payload["figures"] = layout_data.get("figures", [])
-
-                                # Debug: Log what we're sending to frontend
 
                                 # Collect figures if present
                                 if "figures" in layout_data:
                                     collected_figures.extend(layout_data["figures"])
 
                                 all_layout_data.append(layout_data)
-                            else:
-                                log.warning(
-                                    "stream",
-                                    f"Page {page_num} has no layout_data!",
-                                    task_id=task_id,
-                                    page_num=page_num,
-                                )
-
-                                all_layout_data.append(None)
+                            # layout_data=None は Phase 1/2 の速報値（DB保存対象外）
 
                         yield f"event: message\ndata: {json.dumps({'type': 'page', 'data': page_payload})}\n\n"
                         await asyncio.sleep(0.01)
@@ -807,6 +798,24 @@ async def stream(task_id: str):
                     full_text = "\n\n---\n\n".join(full_text_fragments)
                     # paper_id is now pre-generated and passed in task data
                     new_paper_id = paper_id
+
+                    # 処理フラグ集計: ページごとの _ocr_engine からペーパー全体のエンジンを算出
+                    _page_engines = {
+                        ld.get("_ocr_engine", "native")
+                        for ld in all_layout_data
+                        if ld and isinstance(ld, dict)
+                    }
+                    _scanned_count = sum(
+                        1
+                        for ld in all_layout_data
+                        if ld and isinstance(ld, dict) and ld.get("_ocr_engine") in ("ocrmypdf", "tesseract")
+                    )
+                    if len(_page_engines) == 1:
+                        _ocr_engine = next(iter(_page_engines))
+                    elif _page_engines:
+                        _ocr_engine = "mixed"
+                    else:
+                        _ocr_engine = "native"
 
                     # Save to permanent DB ONLY for registered users (prevent DB clutter for transient guest sessions)
                     # Transient sessions rely on Redis and Frontend IndexedDB.
@@ -827,6 +836,8 @@ async def stream(task_id: str):
                                 target_language="ja",
                                 layout_json=json.dumps(all_layout_data),
                                 owner_id=user_id,
+                                ocr_engine=_ocr_engine,
+                                scanned_page_count=_scanned_count,
                             )
                             # DBにもセッションマッピングを保存
                             if session_id:
@@ -916,7 +927,7 @@ async def stream(task_id: str):
                     s_id = session_id or new_paper_id
                     # Store only the first 20,000 characters in Redis as "recent context"
                     recent_context = full_text[:20000]
-                    redis_service.set(f"session:{s_id}", recent_context, expire=3600)
+                    redis_service.set(f"session:ctx:{s_id}", recent_context, expire=3600)
 
                     yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': new_paper_id})}\n\n"
                     await asyncio.sleep(0.01)
@@ -1023,7 +1034,7 @@ async def stream(task_id: str):
                     s_id = session_id or paper_id
                     if s_id and paper_data and paper_data.get("ocr_text"):
                         redis_service.set(
-                            f"session:{s_id}", paper_data["ocr_text"], expire=3600
+                            f"session:ctx:{s_id}", paper_data["ocr_text"], expire=3600
                         )  # Align TTL to 1 hour
                         log.info(
                             "stream",
@@ -1336,7 +1347,7 @@ async def stream(task_id: str):
 
             # Redisセッションコンテキストを1時間保持 (sliding)
             if session_id:
-                redis_service.set(f"session:{session_id}", full_text, expire=3600)
+                redis_service.set(f"session:ctx:{session_id}", full_text, expire=3600)
 
             # 完了処理
             redis_service.delete(f"task:{task_id}")

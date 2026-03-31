@@ -93,6 +93,10 @@ class ORMStorageAdapter(StorageInterface):
     InvalidRequestError を捕捉するとセッションを置き換えて一度だけリトライする。
     """
 
+    _PAPER_META_TTL = 3600       # 論文メタデータキャッシュ: 1時間
+    _PUBLIC_PAPERS_TTL = 3600    # 公開論文リストキャッシュ: 1時間
+    _POPULAR_TAGS_TTL = 7200     # 人気タグキャッシュ: 2時間
+
     def __init__(self, db: Session):
         self._db = db
         self._init_repositories(db)
@@ -166,6 +170,8 @@ class ORMStorageAdapter(StorageInterface):
         layout_json: Optional[str] = None,
         owner_id: Optional[str] = None,
         visibility: str = "private",
+        ocr_engine: Optional[str] = None,
+        scanned_page_count: int = 0,
     ) -> str:
         return self._with_recovery(
             lambda: self.papers.upsert(
@@ -178,12 +184,38 @@ class ORMStorageAdapter(StorageInterface):
                 layout_json=layout_json,
                 owner_id=owner_id,
                 visibility=visibility,
+                ocr_engine=ocr_engine,
+                scanned_page_count=scanned_page_count,
             )
         )
 
+    def _invalidate_paper_cache(self, paper_id: str) -> None:
+        """論文メタデータキャッシュを削除する。"""
+        from redis_provider.provider import RedisService
+
+        RedisService().delete(f"paper_meta:{paper_id}")
+
+    def update_processing_status(self, paper_id: str, field: str, status: str) -> bool:
+        """grobid_status / summary_status / layout_status を更新する。"""
+        result = self._with_recovery(
+            lambda: self.papers.update_processing_status(paper_id, field, status)
+        )
+        self._invalidate_paper_cache(paper_id)
+        return result
+
     def get_paper(self, paper_id: str) -> Optional[dict]:
+        from redis_provider.provider import RedisService
+
+        redis = RedisService()
+        cached = redis.get(f"paper_meta:{paper_id}")
+        if cached is not None:
+            return cached
         paper = self._with_recovery(lambda: self.papers.get_by_id(paper_id))
-        return _paper_to_dict(paper) if paper else None
+        if paper is None:
+            return None
+        d = _paper_to_dict(paper)
+        redis.set(f"paper_meta:{paper_id}", d, expire=self._PAPER_META_TTL)
+        return d
 
     def get_paper_by_hash(self, file_hash: str) -> Optional[dict]:
         paper = self._with_recovery(lambda: self.papers.get_by_hash(file_hash))
@@ -196,58 +228,64 @@ class ORMStorageAdapter(StorageInterface):
         ]
 
     def update_paper_html(self, paper_id: str, html_content: str) -> bool:
-        return self._with_recovery(
-            lambda: self.papers.update_html(paper_id, html_content)
-        )
+        result = self._with_recovery(lambda: self.papers.update_html(paper_id, html_content))
+        self._invalidate_paper_cache(paper_id)
+        return result
 
     def update_paper_abstract(self, paper_id: str, abstract: str) -> bool:
-        return self._with_recovery(
-            lambda: self.papers.update_abstract(paper_id, abstract)
-        )
+        result = self._with_recovery(lambda: self.papers.update_abstract(paper_id, abstract))
+        self._invalidate_paper_cache(paper_id)
+        return result
 
     def update_paper_title(self, paper_id: str, title: str) -> bool:
-        return self._with_recovery(
-            lambda: self.papers.update_title(paper_id, title)
-        )
+        result = self._with_recovery(lambda: self.papers.update_title(paper_id, title))
+        self._invalidate_paper_cache(paper_id)
+        return result
 
     def update_paper_authors(self, paper_id: str, authors: str) -> bool:
-        return self._with_recovery(
-            lambda: self.papers.update_authors(paper_id, authors)
-        )
+        result = self._with_recovery(lambda: self.papers.update_authors(paper_id, authors))
+        self._invalidate_paper_cache(paper_id)
+        return result
 
     def update_paper_ocr_text(self, paper_id: str, ocr_text: str) -> bool:
-        return self._with_recovery(
-            lambda: self.papers.update_ocr_text(paper_id, ocr_text)
-        )
+        result = self._with_recovery(lambda: self.papers.update_ocr_text(paper_id, ocr_text))
+        self._invalidate_paper_cache(paper_id)
+        return result
 
     def update_paper_full_summary(self, paper_id: str, summary: str) -> bool:
-        return self._with_recovery(
-            lambda: self.papers.update_full_summary(paper_id, summary)
-        )
+        result = self._with_recovery(lambda: self.papers.update_full_summary(paper_id, summary))
+        self._invalidate_paper_cache(paper_id)
+        return result
 
     def update_paper_section_summary(self, paper_id: str, json_summary: str) -> bool:
-        return self._with_recovery(
-            lambda: self.papers.update_section_summary(paper_id, json_summary)
-        )
+        result = self._with_recovery(lambda: self.papers.update_section_summary(paper_id, json_summary))
+        self._invalidate_paper_cache(paper_id)
+        return result
 
     def delete_paper(self, paper_id: str) -> bool:
-        return self._with_recovery(lambda: self.papers.delete(paper_id))
+        result = self._with_recovery(lambda: self.papers.delete(paper_id))
+        self._invalidate_paper_cache(paper_id)
+        return result
 
     def update_paper_layout(self, paper_id: str, layout_json: str) -> bool:
-        return self._with_recovery(
-            lambda: self.papers.update_layout(paper_id, layout_json)
-        )
+        result = self._with_recovery(lambda: self.papers.update_layout(paper_id, layout_json))
+        self._invalidate_paper_cache(paper_id)
+        return result
 
     def update_paper_visibility(self, paper_id: str, visibility: str) -> bool:
-        return self._with_recovery(
-            lambda: self.papers.update_visibility(paper_id, visibility)
-        )
+        result = self._with_recovery(lambda: self.papers.update_visibility(paper_id, visibility))
+        self._invalidate_paper_cache(paper_id)
+        return result
 
     def increment_like_count(self, paper_id: str) -> bool:
-        return self._with_recovery(lambda: self.papers.increment_like_count(paper_id))
+        result = self._with_recovery(lambda: self.papers.increment_like_count(paper_id))
+        self._invalidate_paper_cache(paper_id)
+        return result
 
     def decrement_like_count(self, paper_id: str) -> bool:
-        return self._with_recovery(lambda: self.papers.decrement_like_count(paper_id))
+        result = self._with_recovery(lambda: self.papers.decrement_like_count(paper_id))
+        self._invalidate_paper_cache(paper_id)
+        return result
 
     # ===== Note methods =====
 
@@ -449,10 +487,17 @@ class ORMStorageAdapter(StorageInterface):
     def get_public_papers(
         self, page: int = 1, per_page: int = 20, sort: str = "recent"
     ) -> tuple[list[dict], int]:
-        rows, total = self._with_recovery(
-            lambda: self.papers.list_public(page, per_page, sort)
-        )
-        return [_paper_to_dict(p) for p in rows], total
+        from redis_provider.provider import RedisService
+
+        cache_key = f"papers:public:{page}:{per_page}:{sort}"
+        redis = RedisService()
+        cached = redis.get(cache_key)
+        if cached is not None:
+            return cached["papers"], cached["total"]
+        rows, total = self._with_recovery(lambda: self.papers.list_public(page, per_page, sort))
+        result = [_paper_to_dict(p) for p in rows]
+        redis.set(cache_key, {"papers": result, "total": total}, expire=self._PUBLIC_PAPERS_TTL)
+        return result, total
 
     def search_public_papers(
         self, query: str, page: int = 1, per_page: int = 20
@@ -463,7 +508,16 @@ class ORMStorageAdapter(StorageInterface):
         return [_paper_to_dict(p) for p in rows], total
 
     def get_popular_tags(self, limit: int = 20) -> list[dict]:
-        return self._with_recovery(lambda: self.papers.get_popular_tags(limit))
+        from redis_provider.provider import RedisService
+
+        cache_key = f"popular_tags:{limit}"
+        redis = RedisService()
+        cached = redis.get(cache_key)
+        if cached is not None:
+            return cached
+        result = self._with_recovery(lambda: self.papers.get_popular_tags(limit))
+        redis.set(cache_key, result, expire=self._POPULAR_TAGS_TTL)
+        return result
 
     # ===== OCR cache methods =====
 

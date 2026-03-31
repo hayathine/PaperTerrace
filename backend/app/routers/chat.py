@@ -90,15 +90,15 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
     # 3. History key
     if is_registered:
         history_key = (
-            f"chat:{user_id}:{request.paper_id if request.paper_id else 'global'}"
+            f"chat:user:{user_id}:{request.paper_id if request.paper_id else 'global'}"
         )
         expire = 7 * 24 * 3600
     else:
-        history_key = f"chat:{request.session_id}:{request.paper_id if request.paper_id else 'global'}"
+        history_key = f"chat:guest:{request.session_id}:{request.paper_id if request.paper_id else 'global'}"
         expire = 3600
 
     # 4. Context & History from Redis
-    session_key = f"session:{request.session_id}"
+    session_key = f"session:ctx:{request.session_id}"
     context_raw, history_raw = redis_service.mget(session_key, history_key)
     context = context_raw or ""
     history = history_raw or []
@@ -219,7 +219,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
     # Save update
     redis_service.set(history_key, json.dumps(history), expire=expire)
     if context:
-        redis_service.expire(f"session:{request.session_id}", 3600)
+        redis_service.expire(f"session:ctx:{request.session_id}", 3600)
 
     # Permament storage
     if is_registered and paper_id:
@@ -247,9 +247,9 @@ async def get_chat_history(
     is_registered = get_is_registered(user_id)
 
     if is_registered:
-        history_key = f"chat:{user_id}:{paper_id if paper_id else 'global'}"
+        history_key = f"chat:user:{user_id}:{paper_id if paper_id else 'global'}"
     else:
-        history_key = f"chat:{session_id}:{paper_id if paper_id else 'global'}"
+        history_key = f"chat:guest:{session_id}:{paper_id if paper_id else 'global'}"
 
     history = redis_service.get(history_key) or []
 
@@ -280,9 +280,9 @@ async def clear_chat(
     is_registered = get_is_registered(user_id)
 
     if is_registered:
-        history_key = f"chat:{user_id}:{paper_id if paper_id else 'global'}"
+        history_key = f"chat:user:{user_id}:{paper_id if paper_id else 'global'}"
     else:
-        history_key = f"chat:{session_id}:{paper_id if paper_id else 'global'}"
+        history_key = f"chat:guest:{session_id}:{paper_id if paper_id else 'global'}"
 
     redis_service.delete(history_key)
     return JSONResponse({"status": "ok"})

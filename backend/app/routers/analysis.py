@@ -55,10 +55,10 @@ def _get_context(
 ) -> tuple[str | None, str | None]:
     """(context, paper_id) のタプルを返す。paper_id は取得できた場合のみ。"""
     # 1. Redis キャッシュを優先
-    context = redis_service.get(f"session:{session_id}")
+    context = redis_service.get(f"session:ctx:{session_id}")
     if context:
         log.debug("get_context", "Cache HIT", session_id=session_id)
-        redis_service.expire(f"session:{session_id}", 3600)
+        redis_service.expire(f"session:ctx:{session_id}", 3600)
         # paper_id も別キーでキャッシュしている場合は返す
         paper_id = redis_service.get(f"session_pid:{session_id}")
         return context, paper_id

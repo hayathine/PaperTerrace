@@ -20,91 +20,13 @@ from app.utils import _get_file_hash
 from common import settings
 from common.logger import ServiceLogger
 from common.utils.bbox import scale_bbox
+from common.utils.text import fix_indentation_artifacts, is_garbled_text
 
-from .figure_service import FigureService
 from .language_service import LanguageService
 
 log = ServiceLogger("OCR")
 
 
-def _is_garbled_text(text: str) -> bool:
-    """
-    フォントエンコーディング由来の文字化けが含まれるか判定する。
-
-    以下の4パターンをカバーする:
-
-    1. (cid:N) ― pdfplumber が ToUnicode CMap 欠損時に出力するリテラル文字列。
-    2. Unicode 置換文字 U+FFFD ― デコード失敗を示す明示的マーカー。
-    3. Unicode Private Use Area U+E000〜U+F8FF ― PDFカスタムフォントが
-       グリフをPUA領域にマッピングする場合に発生（本PDFの主因）。
-    4. Unicode Supplementary PUA U+F0000〜U+FFFFF ― 同上、補助面版。
-
-    各パターンについて「5文字以上」または「テキスト全体の0.5%以上」で
-    文字化けと判定する。
-    """
-    if not text:
-        return False
-
-    text_len = max(len(text), 1)
-    threshold_ratio = 0.005
-
-    # 1. (cid:N) パターン
-    cid_count = text.count("(cid:")
-    if cid_count >= 5 or (cid_count > 0 and cid_count / text_len > threshold_ratio):
-        return True
-
-    # 2. Unicode 置換文字 U+FFFD
-    repl_count = text.count("\ufffd")
-    if repl_count >= 5 or (repl_count > 0 and repl_count / text_len > threshold_ratio):
-        return True
-
-    # 3. Unicode Private Use Area (BMP): U+E000〜U+F8FF
-    pua_count = sum(1 for c in text if "\ue000" <= c <= "\uf8ff")
-    if pua_count >= 5 or (pua_count > 0 and pua_count / text_len > threshold_ratio):
-        return True
-
-    # 4. Unicode Supplementary PUA: U+F0000〜U+FFFFF
-    sup_pua_count = sum(1 for c in text if "\U000f0000" <= c <= "\U000fffff")
-    if sup_pua_count >= 5 or (
-        sup_pua_count > 0 and sup_pua_count / text_len > threshold_ratio
-    ):
-        return True
-
-    return False
-
-
-
-
-
-def _fix_indentation_artifacts(text: str) -> str:
-    """
-    2段組みPDFから生じるインデントアーティファクトを修正する。
-
-    pymupdf4llmが2段組みレイアウトを処理する際、右カラムのテキストが
-    大きなインデントとして抽出され、Markdownのコードブロックとして
-    誤レンダリングされる問題を解決する。
-    """
-    lines = text.split("\n")
-    result = []
-    for line in lines:
-        # 4スペース以上のインデントがある行（Markdownコードブロックの条件）
-        if (
-            len(line) > 4
-            and line.startswith("    ")
-            and not line.startswith("        ")
-        ):
-            stripped = line.lstrip()
-            # Markdownの構造要素（見出し、引用、リスト、コードフェンス等）は変更しない
-            if stripped and stripped[0] not in "#>-*+|`":
-                # コードらしき記号の割合を検査
-                code_chars = sum(1 for c in stripped if c in "{}()[];=><!/\\@$%^&")
-                ratio = code_chars / max(len(stripped), 1)
-                # コード記号が10%未満なら自然言語テキストとみなしインデントを除去
-                if ratio < 0.10:
-                    result.append(stripped)
-                    continue
-        result.append(line)
-    return "\n".join(result)
 
 
 class PDFOCRService:
@@ -116,7 +38,6 @@ class PDFOCRService:
     def __init__(self, model):
         self.ai_provider = get_ai_provider()
         self.model = model
-        self.figure_service = FigureService(self.ai_provider, self.model)
         self.language_service = LanguageService(self.ai_provider, self.model)
 
     async def extract_text_streaming(
@@ -255,7 +176,7 @@ class PDFOCRService:
                             p[3],
                             p[4],
                             page_data["image_url"],
-                            p[6],
+                            None,  # Phase 1/2 preliminary: layout_data=None でPhase 3と区別
                         )
                         chunk_page_data.append(page_data)
 
@@ -265,7 +186,7 @@ class PDFOCRService:
                         (pd["page_num"], pd["img_bytes"])
                         for pd in chunk_page_data
                         if not (pd.get("phase1_result") or ("",) * 7)[2].strip()
-                        or _is_garbled_text(
+                        or is_garbled_text(
                             (pd.get("phase1_result") or ("",) * 7)[2] or ""
                         )
                         or len(
@@ -314,13 +235,14 @@ class PDFOCRService:
                         if _ocrmypdf_result:
                             for pn, _img in ocr_candidate_pages:
                                 if pn in _ocrmypdf_result:
-                                    text_len = len(_ocrmypdf_result[pn])
-                                    batch_ocr_results[pn] = (_ocrmypdf_result[pn], [])
+                                    ocr_text, ocr_words = _ocrmypdf_result[pn]
+                                    batch_ocr_results[pn] = (ocr_text, ocr_words)
                                     log.info(
                                         "batch_ocr",
                                         "OCRmyPDF結果適用",
                                         page_num=pn,
-                                        text_len=text_len,
+                                        text_len=len(ocr_text),
+                                        word_count=len(ocr_words),
                                     )
 
                         # OCRmyPDFで取得できなかったページはTesseractでフォールバック
@@ -713,7 +635,7 @@ class PDFOCRService:
                 page_text = re.sub(r"!\[.*?\]\(.*?\)", "", raw_md).strip()
 
                 # 2段組みレイアウトによるインデントアーティファクトを修正
-                page_text = _fix_indentation_artifacts(page_text)
+                page_text = fix_indentation_artifacts(page_text)
 
                 log.info(
                     "_finalize_page_phase_3",
@@ -731,7 +653,7 @@ class PDFOCRService:
                 phase1_text = (
                     page_data.get("phase1_result") or ("", "", "", "", "", "", "")
                 )[2] or ""
-                is_garbled = _is_garbled_text(page_text) or _is_garbled_text(
+                is_garbled = is_garbled_text(page_text) or is_garbled_text(
                     phase1_text
                 )
                 _min_page_text_len = int(
@@ -773,7 +695,40 @@ class PDFOCRService:
                         if ocr_text:
                             page_text = ocr_text
                         if ocr_words:
-                            layout_data["words"] = ocr_words
+                            # OCRmyPDF由来のwordsはPDF座標系のため、image座標系にスケール変換
+                            img_w = layout_data.get("width", 0)
+                            img_h = layout_data.get("height", 0)
+                            if fitz_doc is not None:
+                                pdf_rect = fitz_doc[page_idx].rect
+                            elif file_bytes:
+                                import fitz as _fitz  # noqa: PLC0415
+                                _tmp_fitz = _fitz.open(stream=file_bytes, filetype="pdf")
+                                try:
+                                    pdf_rect = _tmp_fitz[page_idx].rect
+                                finally:
+                                    _tmp_fitz.close()
+                            else:
+                                pdf_rect = None
+                            if img_w and img_h and pdf_rect and pdf_rect.width > 0:
+                                sx = img_w / pdf_rect.width
+                                sy = img_h / pdf_rect.height
+                                layout_data["words"] = [
+                                    {
+                                        "word": w["word"],
+                                        "bbox": [
+                                            w["bbox"][0] * sx,
+                                            w["bbox"][1] * sy,
+                                            w["bbox"][2] * sx,
+                                            w["bbox"][3] * sy,
+                                        ],
+                                        "conf": w.get("conf", 1.0),
+                                    }
+                                    for w in ocr_words
+                                ]
+                            else:
+                                layout_data["words"] = ocr_words
+                        # OCRmyPDFを使用したページ
+                        layout_data["_ocr_engine"] = "ocrmypdf"
                     else:
                         log.warning(
                             "_finalize_page_phase_3",
@@ -801,6 +756,8 @@ class PDFOCRService:
                             page_text = fallback_text
                         if fallback_words:
                             layout_data["words"] = fallback_words
+                        # Tesseractフォールバックを使用したページ
+                        layout_data["_ocr_engine"] = "tesseract"
 
                 # 3. Post-process layout blocks (equations, figures)
                 # y座標を保持して後で本文中の適切な位置に挿入するため、リストで管理する
@@ -923,16 +880,6 @@ class PDFOCRService:
                             paragraphs.insert(insert_idx, ref)
                             offset += 1
                         page_text = "\n\n".join(paragraphs)
-            else:
-                # Fallback implementation
-                from app.domain.services.markdown_builder import (
-                    generate_markdown_from_layout,
-                )
-
-                page_text = generate_markdown_from_layout(
-                    layout_data["words"], layout_blocks
-                )
-
         except Exception as e:
             log.error(
                 "_finalize_page_phase_3",
@@ -952,56 +899,6 @@ class PDFOCRService:
             image_url,
             layout_data,
         )
-
-    @staticmethod
-    def _make_line_bboxes_from_layout(
-        layout_blocks: list,
-        img_width: int,
-        img_height: int,
-        line_height: int,
-    ) -> list[dict]:
-        """レイアウトブロックを水平ラインストリップに分割して OCR 用 bbox リストを生成する。
-
-        各テキスト系ブロックを line_height px のストリップに縦分割する。
-        図・グラフ等の非テキストブロックは除外する。
-        """
-        NON_TEXT_CLASSES = {"figure", "picture", "chart", "image", "seal"}
-        bboxes: list[dict] = []
-
-        for block in layout_blocks:
-            class_name = block.get("class_name", "").lower()
-            if any(cls in class_name for cls in NON_TEXT_CLASSES):
-                continue
-
-            raw_bbox = block.get("bbox", {})
-            if not isinstance(raw_bbox, dict):
-                continue
-
-            x_min = max(0, int(raw_bbox.get("x_min", 0)))
-            y_min = max(0, int(raw_bbox.get("y_min", 0)))
-            x_max = min(img_width, int(raw_bbox.get("x_max", img_width)))
-            y_max = min(img_height, int(raw_bbox.get("y_max", img_height)))
-
-            if x_max <= x_min or y_max <= y_min:
-                continue
-
-            # ブロックを line_height px のストリップに縦分割
-            y = y_min
-            while y < y_max:
-                strip_y_max = min(y + line_height, y_max)
-                # 高さが line_height の半分未満のストリップは認識精度が低いため除外
-                if (strip_y_max - y) >= line_height // 2:
-                    bboxes.append(
-                        {
-                            "x_min": x_min,
-                            "y_min": y,
-                            "x_max": x_max,
-                            "y_max": strip_y_max,
-                        }
-                    )
-                y += line_height
-
-        return bboxes
 
     async def _ocr_fallback(
         self,
@@ -1136,27 +1033,77 @@ class PDFOCRService:
             output_size=len(searchable_pdf),
         )
 
-        result: dict[int, str] = {}
-        import pdfplumber  # noqa: PLC0415
+        result: dict[int, tuple[str, list[dict]]] = {}
+        import fitz          # noqa: PLC0415
+        import pdfplumber    # noqa: PLC0415
+        import pymupdf4llm  # noqa: PLC0415
 
-        with pdfplumber.open(io.BytesIO(searchable_pdf)) as pdf:
-            total = len(pdf.pages)
-            for i, page in enumerate(pdf.pages):
-                text = (page.extract_text() or "").strip()
-                log.info(
-                    "_run_ocrmypdf",
-                    "ページテキスト抽出",
-                    page_num=i + 1,
-                    total_pages=total,
-                    text_len=len(text),
-                    has_text=bool(text),
-                )
-                if text:
-                    result[i + 1] = text
+        fitz_doc = fitz.open(stream=searchable_pdf, filetype="pdf")
+        total = fitz_doc.page_count
+        try:
+            with pdfplumber.open(io.BytesIO(searchable_pdf)) as pdf_p:
+                for i in range(total):
+                    # 単語のbboxをPDF座標系で抽出（_finalize_page_phase_3でimage座標にスケール）
+                    plumber_page = pdf_p.pages[i] if i < len(pdf_p.pages) else None
+                    words: list[dict] = []
+                    if plumber_page is not None:
+                        raw_words = plumber_page.extract_words(
+                            use_text_flow=True, x_tolerance=1, y_tolerance=3
+                        )
+                        words = [
+                            {
+                                "word": w["text"],
+                                "bbox": [w["x0"], w["top"], w["x1"], w["bottom"]],
+                                "conf": 1.0,
+                            }
+                            for w in raw_words
+                            if w["text"].strip()
+                        ]
+
+                    try:
+                        md = pymupdf4llm.to_markdown(
+                            fitz_doc,
+                            pages=[i],
+                            show_progress=False,
+                            write_images=False,
+                            force_text=True,  # OCRmyPDFの隠しテキスト層も確実に抽出
+                        )
+                        # 画像参照（スキャン画像のFigure等）を除去しインデントを修正
+                        md_text = re.sub(r"!\[.*?\]\(.*?\)", "", md).strip()
+                        md_text = fix_indentation_artifacts(md_text)
+                        log.info(
+                            "_run_ocrmypdf",
+                            "ページMarkdown変換完了",
+                            page_num=i + 1,
+                            total_pages=total,
+                            md_len=len(md_text),
+                            has_text=bool(md_text),
+                            word_count=len(words),
+                        )
+                        if md_text:
+                            result[i + 1] = (md_text, words)
+                        elif words:
+                            # Markdown抽出は空だがwordsがある場合はテキストを再構成
+                            fallback_text = " ".join(w["word"] for w in words)
+                            result[i + 1] = (fallback_text, words)
+                    except Exception as page_err:
+                        # ページ単位の失敗 → pdfplumberのテキストでフォールバック
+                        log.warning(
+                            "_run_ocrmypdf",
+                            "pymupdf4llm変換失敗、pdfplumberにフォールバック",
+                            page_num=i + 1,
+                            error=str(page_err),
+                        )
+                        if plumber_page is not None:
+                            text = (plumber_page.extract_text() or "").strip()
+                            if text:
+                                result[i + 1] = (text, words)
+        finally:
+            fitz_doc.close()
 
         log.info(
             "_run_ocrmypdf",
-            "全ページテキスト抽出完了",
+            "全ページMarkdown変換完了",
             total_pages=total,
             extracted_pages=len(result),
             empty_pages=total - len(result),
@@ -1182,21 +1129,12 @@ class PDFOCRService:
         import pymupdf4llm  # noqa: PLC0415
 
         page_obj = doc[idx]
-        page_area = page_obj.rect.width * page_obj.rect.height
 
-        all_exclude = list(exclude_bboxes_pt)
-        for drawing in page_obj.get_drawings():
-            rect = drawing["rect"]
-            area = rect.width * rect.height
-            aspect = rect.width / rect.height if rect.height > 0 else 999
-            # ページ全体を覆う背景矩形（>80%）はredact対象外にする
-            if area > page_area * 0.80:
-                continue
-            if area > page_area * 0.01 and aspect < 20:
-                all_exclude.append([rect.x0, rect.y0, rect.x1, rect.y1])
-
-        if all_exclude:
-            for bbox_pt in all_exclude:
+        # 明示的に指定された figure/table bbox のみを除外する。
+        # 以前は page_obj.get_drawings() から自動検出していたが、
+        # テキスト列の枠線・罫線も誤って除外してしまい本文が消える問題があったため廃止。
+        if exclude_bboxes_pt:
+            for bbox_pt in exclude_bboxes_pt:
                 page_obj.add_redact_annot(fitz.Rect(*bbox_pt))
             page_obj.apply_redactions()
 
@@ -1259,173 +1197,6 @@ class PDFOCRService:
             )
 
         return links
-
-    async def _extract_native_or_vision_text(
-        self, page, img_bytes, img_pil, zoom, exclude_bboxes=None
-    ):
-        """Try to extract text from PDF directly, fallback to Vision API or Gemini."""
-        page_num = page.page_number
-        log.debug(
-            "_extract_native_or_vision_text",
-            "Attempting native word extraction",
-            page_num=page_num,
-        )
-
-        words = page.extract_words(use_text_flow=True, x_tolerance=1, y_tolerance=3)
-        if words:
-            # Filter words that are inside any figure bbox
-            if exclude_bboxes:
-                log.debug(
-                    "_extract_native_or_vision_text",
-                    "Filtering words against figure boxes",
-                    page_num=page_num,
-                    box_count=len(exclude_bboxes),
-                )
-
-                filtered_words = []
-                for w in words:
-                    # Convert word coords to zoom coords for comparison
-                    wx_center = (w["x0"] + w["x1"]) / 2 * zoom
-                    wy_center = (w["top"] + w["bottom"]) / 2 * zoom
-
-                    is_inside = False
-                    for b in exclude_bboxes:
-                        # b is [x1, y1, x2, y2] in zoom/px coords
-                        if b[0] <= wx_center <= b[2] and b[1] <= wy_center <= b[3]:
-                            is_inside = True
-                            break
-                    if not is_inside:
-                        filtered_words.append(w)
-                words = filtered_words
-
-            log.info(
-                "_extract_native_or_vision_text",
-                "Native word extraction successful",
-                page_num=page_num,
-                word_count=len(words),
-            )
-
-            word_list = [
-                {
-                    "word": w["text"],
-                    "bbox": [
-                        w["x0"] * zoom,
-                        w["top"] * zoom,
-                        w["x1"] * zoom,
-                        w["bottom"] * zoom,
-                    ],
-                }
-                for w in words
-            ]
-            page_text = " ".join([w["text"] for w in words])
-            layout = {
-                "width": img_pil.width,
-                "height": img_pil.height,
-                "words": word_list,
-            }
-            return page_text, layout
-
-        # Try secondary native extraction if words is empty but text exists
-        log.info(
-            "_extract_native_or_vision_text",
-            "Native words empty, trying extract_text()",
-            page_num=page_num,
-        )
-        text_fallback = page.extract_text()
-        if text_fallback and text_fallback.strip():
-            log.info(
-                "_extract_native_or_vision_text",
-                "Native extract_text succeeded",
-                page_num=page_num,
-                text_length=len(text_fallback),
-            )
-
-            layout = {"width": img_pil.width, "height": img_pil.height, "words": []}
-            return text_fallback, layout
-
-        # Fallback to Vision OCR
-        log.warning(
-            "_extract_native_or_vision_text",
-            "No native text found. Falling back to Vision API",
-            page_num=page_num,
-        )
-
-        try:
-            from app.providers.vision_ocr import VisionOCRService
-
-            vision = VisionOCRService()
-            if vision.is_available():
-                log.info(
-                    "_extract_native_or_vision_text",
-                    "Using Vision API for extraction",
-                    page_num=page_num,
-                )
-                text, layout = await vision.detect_text_with_layout(img_bytes)
-                if layout:
-                    log.info(
-                        "_extract_native_or_vision_text",
-                        "Vision API successful",
-                        page_num=page_num,
-                    )
-                    layout.update({"width": img_pil.width, "height": img_pil.height})
-                    return text, layout
-                else:
-                    log.warning(
-                        "_extract_native_or_vision_text",
-                        "Vision API returned no layout/text",
-                        page_num=page_num,
-                    )
-            else:
-                log.warning(
-                    "_extract_native_or_vision_text",
-                    "Vision API is not available (check credentials)",
-                    page_num=page_num,
-                )
-
-        except Exception as e:
-            log.error(
-                "_extract_native_or_vision_text",
-                "Vision OCR failed",
-                page_num=page_num,
-                error=str(e),
-            )
-
-        # Final fallback to Gemini
-        log.warning(
-            "_extract_native_or_vision_text",
-            "All native/Vision attempts failed. Falling back to Gemini",
-            page_num=page_num,
-        )
-
-        try:
-            from common.dspy_seed_prompt import PDF_EXTRACT_TEXT_OCR_PROMPT
-
-            text = await self.ai_provider.generate_with_image(
-                PDF_EXTRACT_TEXT_OCR_PROMPT, img_bytes, "image/webp", model=self.model
-            )
-            if text and text.strip():
-                log.info(
-                    "_extract_native_or_vision_text",
-                    "Gemini OCR successful",
-                    page_num=page_num,
-                    text_length=len(text),
-                )
-                return text, None
-            else:
-                log.error(
-                    "_extract_native_or_vision_text",
-                    "Gemini OCR returned empty text",
-                    page_num=page_num,
-                )
-                return "", None
-        except Exception as e:
-            log.error(
-                "_extract_native_or_vision_text",
-                "Gemini OCR failed",
-                page_num=page_num,
-                error=str(e),
-            )
-            return "", None
 
     def _finalize_ocr(self, file_hash, filename, all_text_parts, all_layout_parts=None):
         """Save final OCR output to database."""
