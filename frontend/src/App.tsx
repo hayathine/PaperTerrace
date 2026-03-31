@@ -686,7 +686,7 @@ function App() {
 											<button
 												type="button"
 												onClick={(e) => handleDeletePaper(e, paper)}
-												className={`absolute right-2 top-1/2 -translate-y-1/2 z-10 opacity-0 group-hover/card:opacity-100 transition-opacity p-1.5 rounded ${
+												className={`absolute right-2 top-1/2 -translate-y-1/2 z-10 opacity-100 sm:opacity-0 sm:group-hover/card:opacity-100 transition-opacity p-1.5 rounded ${
 													currentPaperId === paper.paper_id
 														? "text-white/70 hover:text-white hover:bg-white/20"
 														: "text-slate-400 hover:text-red-500 hover:bg-red-50"
