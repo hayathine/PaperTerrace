@@ -39,6 +39,19 @@ const Login: React.FC = () => {
 				error: err,
 			});
 
+			const msg: string = err?.message ?? "";
+			const isColdStart =
+				msg.includes("Connection terminated") ||
+				msg.includes("connection timeout") ||
+				msg.includes("signal timed out");
+
+			if (isColdStart) {
+				// authClient のシングルトン状態が破損しているため、ページリロードでリセットする
+				setError(t("auth.cold_start_reloading"));
+				setTimeout(() => window.location.reload(), 5000);
+				return;
+			}
+
 			setError(t("auth.login_failed"));
 		} finally {
 			setLoading(null);

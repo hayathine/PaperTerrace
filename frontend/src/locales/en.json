@@ -65,7 +65,8 @@
 		"redirect_hint": "If popup doesn't work, try redirect:",
 		"terms_hint": "By signing in, you agree to our Terms of Service and Privacy Policy.",
 		"signing_in": "Signing in...",
-		"login_failed": "Login failed. Please try again."
+		"login_failed": "Login failed. Please try again.",
+		"cold_start_reloading": "System is starting up. Reloading automatically..."
 	},
 	"sidebar": {
 		"tabs": {
