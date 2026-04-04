@@ -1046,7 +1046,9 @@ function App() {
 									onScroll={handleScroll}
 									onWheel={handleZoomWheel}
 									className={`w-full h-full ${zoom > 1 ? "overflow-auto" : "overflow-y-auto overflow-x-hidden"} custom-scrollbar`}
-									style={{ touchAction: zoom > 1 ? "pan-x pan-y" : "pan-y" }}
+									style={{
+										touchAction: zoom > 1 ? "pan-x pan-y" : "pan-y pinch-zoom",
+									}}
 								>
 									{/* スペーサー: transform後の視覚サイズに合わせてスクロール領域を確保 */}
 									<div

@@ -123,6 +123,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	} = usePaperCache();
 	// syncStatus lifted to App.tsx
 	const [pages, setPages] = useState<PageData[]>([]);
+	const [grobidText, setGrobidText] = useState<string | null>(null);
 	const [status, setStatus] = useState<
 		"idle" | "uploading" | "processing" | "layout_analysis" | "done" | "error"
 	>("idle");
@@ -699,6 +700,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		setStatus("uploading");
 		setUploadProgress(0);
 		setPages([]);
+		setGrobidText(null);
 		setLoadedPaperId(null);
 
 		try {
@@ -1176,10 +1178,27 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	);
 	*/
 
-	const pagesWithLines: PageWithLines[] = useMemo(
-		() => groupWordsIntoLines(pages),
-		[pages],
-	);
+	const pagesWithLines: PageWithLines[] = useMemo(() => {
+		// grobid_text がある場合は論文全体を1ページとして表示する。
+		// OCR の "\n\n---\n\n" ページ区切りとは別に保存された構造化 Markdown を優先する。
+		if (grobidText) {
+			const firstPage = pages[0];
+			return [
+				{
+					page_num: 1,
+					content: grobidText,
+					lines: [],
+					words: [],
+					figures: firstPage?.figures || [],
+					links: firstPage?.links || [],
+					image_url: firstPage?.image_url || "",
+					width: firstPage?.width || 0,
+					height: firstPage?.height || 0,
+				},
+			];
+		}
+		return groupWordsIntoLines(pages);
+	}, [pages, grobidText]);
 
 	// figure 画像が実際にサーバー上に存在するか確認する（最初の1枚をHEADリクエストで検証）
 	const checkFigureImagesExist = async (
@@ -1233,6 +1252,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		setStatus("processing");
 		setLoadedPaperId(id);
 		setPages([]);
+		setGrobidText(null);
 		// setStamps([]);
 
 		try {
@@ -1408,6 +1428,11 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						const layoutList = JSON.parse(paperData.layout_json);
 						const ocrParts = (paperData.ocr_text || "").split("\n\n---\n\n");
 						const fileHash = paperData.file_hash;
+
+						// grobid_text があればテキストモード用に設定する
+						if (paperData.grobid_text) {
+							setGrobidText(paperData.grobid_text);
+						}
 
 						const fullPages: PageData[] = layoutList.map(
 							(layout: any, i: number) => ({

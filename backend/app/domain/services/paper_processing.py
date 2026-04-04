@@ -231,10 +231,17 @@ async def process_grobid_enrichment_task(paper_id: str, file_hash: str) -> None:
         if result.abstract:
             storage.update_paper_abstract(paper_id, result.abstract)
 
-        # GROBID Markdown は保存しない。
-        # ocr_text を上書きすると "\n\n---\n\n" ページ区切りが失われ
-        # キャッシュ読込時のページ分割が壊れるため廃止。
-        # タイトル・著者・アブストラクトは上記で既に保存済み。
+        # GROBID Markdown を grobid_text カラムに保存する。
+        # ocr_text は "\n\n---\n\n" ページ区切りを維持するため上書きしない。
+        grobid_md = grobid.build_markdown(result)
+        if grobid_md:
+            storage.update_paper_grobid_text(paper_id, grobid_md)
+            log.info(
+                "grobid_task",
+                "GROBID Markdown を grobid_text に保存しました",
+                paper_id=paper_id,
+                md_len=len(grobid_md),
+            )
 
         storage.update_processing_status(paper_id, "grobid_status", "success")
         log.info(

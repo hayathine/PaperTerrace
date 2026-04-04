@@ -252,6 +252,11 @@ class ORMStorageAdapter(StorageInterface):
         self._invalidate_paper_cache(paper_id)
         return result
 
+    def update_paper_grobid_text(self, paper_id: str, grobid_text: str) -> bool:
+        result = self._with_recovery(lambda: self.papers.update_grobid_text(paper_id, grobid_text))
+        self._invalidate_paper_cache(paper_id)
+        return result
+
     def update_paper_full_summary(self, paper_id: str, summary: str) -> bool:
         result = self._with_recovery(lambda: self.papers.update_full_summary(paper_id, summary))
         self._invalidate_paper_cache(paper_id)

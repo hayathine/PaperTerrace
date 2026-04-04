@@ -79,6 +79,11 @@ class StorageInterface(ABC):
         ...
 
     @abstractmethod
+    def update_paper_grobid_text(self, paper_id: str, grobid_text: str) -> bool:
+        """Update the GROBID structured Markdown text of a paper."""
+        ...
+
+    @abstractmethod
     def update_paper_full_summary(self, paper_id: str, summary: str) -> bool:
         """Update the full summary of a paper."""
         ...
