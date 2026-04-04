@@ -168,15 +168,29 @@ class LlamaCppTranslationService:
             from common.dspy_seed_prompt import (
                 DICT_TRANSLATE_LLM_PROMPT,
                 DICT_TRANSLATE_SYSTEM_PROMPT,
+                DICT_TRANSLATE_LONG_SYSTEM_PROMPT,
+                DICT_TRANSLATE_LONG_LLM_PROMPT,
             )
 
-            user_content = DICT_TRANSLATE_LLM_PROMPT.format(
-                paper_title=paper_context,  # The argument name is still paper_context for now to avoid breaking the client immediately
-                target_word=original_word,
-                lang_name=lang_name,
-            )
+            is_long_text = " " in original_word.strip() or len(original_word) > 25
+            if is_long_text:
+                context_line = f"Context: {paper_context}" if paper_context and paper_context != "No specific context available." else ""
+                user_content = DICT_TRANSLATE_LONG_LLM_PROMPT.format(
+                    lang_name=lang_name,
+                    context_line=context_line,
+                    target_text=original_word,
+                )
+                system_content = DICT_TRANSLATE_LONG_SYSTEM_PROMPT
+            else:
+                user_content = DICT_TRANSLATE_LLM_PROMPT.format(
+                    paper_title=paper_context,
+                    target_word=original_word,
+                    lang_name=lang_name,
+                )
+                system_content = DICT_TRANSLATE_SYSTEM_PROMPT
+
             messages = [
-                {"role": "system", "content": DICT_TRANSLATE_SYSTEM_PROMPT},
+                {"role": "system", "content": system_content},
                 {"role": "user", "content": user_content},
             ]
 
@@ -184,7 +198,7 @@ class LlamaCppTranslationService:
                 import time
 
                 logger.info(
-                    f"LLM 翻訳実行開始: word='{original_word[:50]}', lang='{lang_name}', context_len={len(paper_context)}"
+                    f"LLM 翻訳実行開始: {'長文' if is_long_text else '単語'}='{original_word[:50]}', lang='{lang_name}', context_len={len(paper_context)}"
                 )
                 start_time = time.time()
                 loop = asyncio.get_running_loop()

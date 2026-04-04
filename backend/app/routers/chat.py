@@ -110,10 +110,11 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
 
     # 5. Chat turn limit
     user_msg_count = sum(1 for m in history if m.get("role") == "user")
-    if user_msg_count >= 10:
+    max_turns = int(settings.get("MAX_CHAT_TURNS", "50"))
+    if user_msg_count >= max_turns:
         return JSONResponse(
             {
-                "response": "チャットの最大回数（10回）に達しました。新しいセッションを開始するか、履歴をクリアしてください。"
+                "response": f"チャットの最大回数（{max_turns}回）に達しました。新しいセッションを開始するか、履歴をクリアしてください。"
             }
         )
 
@@ -213,8 +214,9 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
     )
 
     # Trim history
-    if len(history) > 40:
-        history = history[-40:]
+    max_history = int(settings.get("MAX_CHAT_HISTORY_MESSAGES", "200"))
+    if len(history) > max_history:
+        history = history[-max_history:]
 
     # Save update
     redis_service.set(history_key, json.dumps(history), expire=expire)

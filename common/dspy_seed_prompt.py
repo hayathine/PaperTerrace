@@ -148,6 +148,17 @@ DICT_TRANSLATE_LLM_PROMPT = """{paper_title}. Translate the word to {lang_name}.
 Input: {target_word}
 Translation:"""
 
+DICT_TRANSLATE_LONG_SYSTEM_PROMPT = """Translate the following academic text accurately and naturally.
+Maintain technical terminology, sentence structure, and meaning.
+Output only the translation without any commentary."""
+
+DICT_TRANSLATE_LONG_LLM_PROMPT = """Translate the following text to {lang_name}.
+{context_line}
+Input:
+{target_text}
+
+Translation:"""
+
 TRANSLATE_FROM_PDF_PROMPT = """Translate the following term from the academic paper above.
 Respond entirely in {lang_name}.
 Prioritize domain-specific accuracy over literal translation.

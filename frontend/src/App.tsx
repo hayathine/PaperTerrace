@@ -18,7 +18,7 @@ import { useLoading } from "./contexts/LoadingContext";
 import { usePaperCache } from "./db/hooks";
 import { db, isDbAvailable } from "./db/index";
 import { useSyncStatus } from "./db/sync";
-import { useLayoutState } from "./hooks/useLayoutState";
+import { clampWidth, useLayoutState } from "./hooks/useLayoutState";
 import { usePinchZoom } from "./hooks/usePinchZoom";
 import { useScrollTracking } from "./hooks/useScrollTracking";
 import { useSearchState } from "./hooks/useSearchState";
@@ -120,6 +120,7 @@ function App() {
 	} = useLayoutState();
 	const [activeEvidence, setActiveEvidence] = useState<any>(null);
 	const [uploadedPapers, setUploadedPapers] = useState<any[]>([]);
+	const [isPapersLoading, setIsPapersLoading] = useState(false);
 
 	const prevPaperIdRef = useRef<string | null>(null);
 	const paperStartTimeRef = useRef<number | null>(null);
@@ -179,9 +180,11 @@ function App() {
 	useEffect(() => {
 		if (!user || !token) {
 			setUploadedPapers([]);
+			setIsPapersLoading(false);
 			return;
 		}
 
+		setIsPapersLoading(true);
 		const fetchPapers = async () => {
 			// コールドスタート対策: 最大3回リトライ（2s, 4s インターバル）
 			for (let attempt = 0; attempt < 3; attempt++) {
@@ -197,6 +200,7 @@ function App() {
 					} else {
 						setUploadedPapers([]);
 					}
+					setIsPapersLoading(false);
 					return;
 				} catch (err) {
 					if (attempt < 2) {
@@ -205,6 +209,7 @@ function App() {
 						log.error("fetch_papers", "Failed to fetch papers", { error: err });
 						reportFailure(503);
 						setUploadedPapers([]);
+						setIsPapersLoading(false);
 					}
 				}
 			}
@@ -216,9 +221,11 @@ function App() {
 	// ゲスト: IndexedDBのキャッシュから論文一覧を読み込む
 	useEffect(() => {
 		if (!isGuest) return;
+		setIsPapersLoading(true);
 		const loadGuestPapers = async () => {
 			if (!isDbAvailable()) {
 				setUploadedPapers([]);
+				setIsPapersLoading(false);
 				return;
 			}
 			try {
@@ -236,6 +243,8 @@ function App() {
 				);
 			} catch {
 				setUploadedPapers([]);
+			} finally {
+				setIsPapersLoading(false);
 			}
 		};
 		loadGuestPapers();
@@ -401,6 +410,7 @@ function App() {
 
 	const handleDeletePaper = async (e: React.MouseEvent, paper: any) => {
 		e.stopPropagation();
+		if (!window.confirm(t("common.confirm_delete"))) return;
 		if (user && token) {
 			try {
 				await fetch(`${API_URL}/api/papers/${paper.paper_id}`, {
@@ -610,7 +620,7 @@ function App() {
 							: "-translate-x-full md:translate-x-0 w-72 md:w-0 overflow-hidden"
 					}`}
 				>
-					<div className="w-64 p-4 flex flex-col h-full">
+					<div className="w-full p-4 flex flex-col h-full">
 						<div className="flex items-center gap-3 mb-8">
 							<button
 								type="button"
@@ -640,7 +650,16 @@ function App() {
 							</p>
 
 							<div className="space-y-1">
-								{uploadedPapers.length === 0 ? (
+								{isPapersLoading ? (
+									<div className="space-y-1.5 px-1">
+										{[0, 1, 2].map((i) => (
+											<div
+												key={i}
+												className="h-10 rounded-lg bg-slate-100 animate-pulse"
+											/>
+										))}
+									</div>
+								) : uploadedPapers.length === 0 ? (
 									<div className="px-2 py-4 text-xs text-gray-500 italic">
 										{t("nav.no_papers")}
 									</div>
@@ -697,14 +716,16 @@ function App() {
 													xmlns="http://www.w3.org/2000/svg"
 													width="14"
 													height="14"
-													viewBox="0 0 14 14"
+													viewBox="0 0 24 24"
 													fill="none"
 													stroke="currentColor"
 													strokeWidth="2"
 													strokeLinecap="round"
+													strokeLinejoin="round"
 												>
-													<line x1="1" y1="1" x2="13" y2="13" />
-													<line x1="13" y1="1" x2="1" y2="13" />
+													<path d="M3 6h18" />
+													<path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6" />
+													<path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2" />
 												</svg>
 											</button>
 										</div>
@@ -881,8 +902,8 @@ function App() {
 				</div>
 
 				{/* Main Content Area */}
-				<div className="flex-1 flex flex-col h-full relative transition-all duration-300">
-					<header className="h-14 sm:h-12 bg-white border-b border-slate-200 flex items-center px-2 sm:px-4 header-container">
+				<div className="flex-1 min-w-0 flex flex-col h-full relative transition-all duration-300">
+					<header className="h-14 sm:h-12 bg-white border-b border-slate-200 flex items-center px-2 sm:px-4 header-container overflow-hidden">
 						{!isLeftSidebarOpen && (
 							<button
 								type="button"
@@ -967,9 +988,9 @@ function App() {
 								</div>
 							</>
 						)}
-						<div className="flex-1" />
+						<div className="flex-1 min-w-0" />
 						{uploadFile && (
-							<span className="header-shrink-text font-bold text-slate-400 uppercase tracking-wider mr-2 sm:mr-4 truncate max-w-[80px] sm:max-w-xs">
+							<span className="header-shrink-text font-bold text-slate-400 uppercase tracking-wider mr-2 sm:mr-4 truncate max-w-[120px] sm:max-w-xs">
 								{uploadFile.name}
 							</span>
 						)}
@@ -1102,9 +1123,13 @@ function App() {
 							}}
 							onKeyDown={(e) => {
 								if (e.key === "ArrowLeft") {
-									setSidebarWidth((w: number) => Math.max(150, w - 10));
+									setSidebarWidth((w: number) =>
+										clampWidth(w - 10, window.innerWidth, isLeftSidebarOpen),
+									);
 								} else if (e.key === "ArrowRight") {
-									setSidebarWidth((w: number) => Math.min(500, w + 10));
+									setSidebarWidth((w: number) =>
+										clampWidth(w + 10, window.innerWidth, isLeftSidebarOpen),
+									);
 								}
 							}}
 						/>

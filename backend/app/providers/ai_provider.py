@@ -81,6 +81,7 @@ class AIProviderInterface(ABC):
         pdf_bytes: bytes | None = None,
         model: str | None = None,
         cached_content_name: str | None = None,
+        max_tokens: int | None = None,
     ) -> str:
         """Generate text response from prompt with PDF input."""
         ...
@@ -133,6 +134,7 @@ class AIProviderInterface(ABC):
         pdf_bytes: bytes | None = None,
         model: str | None = None,
         cached_content_name: str | None = None,
+        max_tokens: int | None = None,
     ):
         """Yield text chunks from prompt with PDF."""
         ...
@@ -591,6 +593,7 @@ class GeminiProvider(AIProviderInterface):
         pdf_bytes: bytes | None = None,
         model: str | None = None,
         cached_content_name: str | None = None,
+        max_tokens: int | None = None,
     ) -> str:
         """Generate text response from prompt with PDF input."""
         target_model = model or self.model
@@ -605,7 +608,7 @@ class GeminiProvider(AIProviderInterface):
 
             config_params: GenConfig = {
                 "temperature": self.temperature,
-                "max_output_tokens": self.max_tokens,
+                "max_output_tokens": max_tokens or self.max_tokens,
             }
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name
@@ -627,7 +630,7 @@ class GeminiProvider(AIProviderInterface):
                 config=config,
             )
             self._check_truncation(
-                response, target_model, "gemini_pdf", self.max_tokens
+                response, target_model, "gemini_pdf", max_tokens or self.max_tokens
             )
             result = str(response.text or "").strip()
             log.debug(
@@ -736,6 +739,7 @@ class GeminiProvider(AIProviderInterface):
         pdf_bytes: bytes | None = None,
         model: str | None = None,
         cached_content_name: str | None = None,
+        max_tokens: int | None = None,
     ):
         """Generate streaming response from Gemini with PDF."""
         target_model = model or self.model
@@ -1216,6 +1220,7 @@ class VertexAIProvider(AIProviderInterface):
         pdf_bytes: bytes | str | None = None,
         model: str | None = None,
         cached_content_name: str | None = None,
+        max_tokens: int | None = None,
     ) -> str:
         """Generate text response from prompt with PDF input."""
         target_model = model or self.model
@@ -1231,7 +1236,7 @@ class VertexAIProvider(AIProviderInterface):
 
             config_params: GenConfig = {
                 "temperature": self.temperature,
-                "max_output_tokens": self.max_tokens,
+                "max_output_tokens": max_tokens or self.max_tokens,
             }
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name
@@ -1244,7 +1249,7 @@ class VertexAIProvider(AIProviderInterface):
                 config=config,
             )
             self._check_truncation(
-                response, target_model, "vertex_pdf", self.max_tokens
+                response, target_model, "vertex_pdf", max_tokens or self.max_tokens
             )
             return str(response.text or "").strip()
 
@@ -1343,13 +1348,14 @@ class VertexAIProvider(AIProviderInterface):
         pdf_bytes: bytes | None = None,
         model: str | None = None,
         cached_content_name: str | None = None,
+        max_tokens: int | None = None,
     ):
         """Generate streaming response from Vertex AI with PDF."""
         target_model = model or self.model
         try:
             config_params: dict = {
                 "temperature": self.temperature,
-                "max_output_tokens": self.max_tokens,
+                "max_output_tokens": max_tokens or self.max_tokens,
             }
             if cached_content_name:
                 config_params["cached_content"] = cached_content_name

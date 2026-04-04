@@ -22,6 +22,7 @@
 		"save": "保存",
 		"cancel": "キャンセル",
 		"delete": "削除",
+		"confirm_delete": "本当に削除してもよろしいですか？",
 		"edit": "編集",
 		"close": "閉じる",
 		"feedback": {

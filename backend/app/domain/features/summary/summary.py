@@ -36,6 +36,7 @@ class SummaryService:
         self.redis = RedisService()
         self.model = settings.get("MODEL_SUMMARY", "gemini-2.5-flash-lite")
         self.token_limit = int(settings.get("MAX_INPUT_TOKENS", "900000"))
+        self.summary_token_limit = int(settings.get("SUMMARY_MAX_OUTPUT_TOKENS", "8192"))
 
         # Initialize DSPy
         setup_dspy()
@@ -94,6 +95,7 @@ class SummaryService:
                 pdf_bytes = None
 
         try:
+            formatted_text = None
             if pdf_bytes:
                 # PDF-based summary with context cache
                 keyword_focus = ""
@@ -142,13 +144,22 @@ class SummaryService:
                     pdf_size=len(pdf_bytes),
                     cached=pdf_cache_name is not None,
                 )
-                formatted_text = await self.ai_provider.generate_with_pdf(
-                    prompt,
-                    pdf_bytes=pdf_bytes if not pdf_cache_name else None,
-                    cached_content_name=pdf_cache_name,
-                    model=self.model,
-                )
-            else:
+                try:
+                    formatted_text = await self.ai_provider.generate_with_pdf(
+                        prompt,
+                        pdf_bytes=pdf_bytes if not pdf_cache_name else None,
+                        cached_content_name=pdf_cache_name,
+                        model=self.model,
+                        max_tokens=self.summary_token_limit,
+                    )
+                except Exception:
+                    log.exception("summarize_full", "PDF要約に失敗しました。テキストベースにフォールバックします")
+                    if not text:
+                        raise
+                    # Set formatted_text to None to trigger text-based logic below
+                    formatted_text = None
+
+            if not formatted_text:
                 # Text-based summary logic (Restored)
                 safe_text = await self._truncate_to_token_limit(text)
                 keyword_focus = ""

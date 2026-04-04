@@ -66,7 +66,8 @@ class ChatService:
             AI-generated response (dict with text, trace_id, and optionally grounding)
         """
         # Build conversation context
-        recent_history = history[-10:] if len(history) > 10 else history
+        max_context_history = int(settings.get("CHAT_CONTEXT_HISTORY_MESSAGES", "40"))
+        recent_history = history[-max_context_history:] if len(history) > max_context_history else history
         current_conversation = recent_history + [
             {"role": "user", "content": user_message}
         ]
@@ -244,7 +245,8 @@ class ChatService:
         Stream a chat response based on user message and document context.
         Yields tokens as they are generated.
         """
-        recent_history = history[-10:] if len(history) > 10 else history
+        max_context_history = int(settings.get("CHAT_CONTEXT_HISTORY_MESSAGES", "40"))
+        recent_history = history[-max_context_history:] if len(history) > max_context_history else history
         current_conversation = recent_history + [
             {"role": "user", "content": user_message}
         ]

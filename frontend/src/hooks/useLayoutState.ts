@@ -8,7 +8,7 @@ const LEFT_SIDEBAR_WIDTH = 256;
 const RESIZER_WIDTH = 6;
 
 /** 右サイドバーの幅を viewport に収まる範囲にクランプする */
-function clampWidth(
+export function clampWidth(
 	width: number,
 	viewportWidth: number,
 	leftOpen: boolean,
@@ -60,6 +60,14 @@ export function useLayoutState() {
 		};
 		window.addEventListener("resize", adjustWidth);
 		return () => window.removeEventListener("resize", adjustWidth);
+	}, [isLeftSidebarOpen]);
+
+	// 左サイドバー開閉時に右サイドバー幅を即座に再計算（モバイルは fixed overlay なので影響なし）
+	useEffect(() => {
+		if (window.innerWidth < 768) return;
+		setSidebarWidth((prev) =>
+			clampWidth(prev, window.innerWidth, isLeftSidebarOpen),
+		);
 	}, [isLeftSidebarOpen]);
 
 	// サイドバーリサイズ
