@@ -8,13 +8,13 @@ from common.dspy_utils.signatures import (
     BuildDecisionProfile,
     ChatGeneral,
     ContextAwareTranslation,
-    DeepExplanation,
     ExtractUserTraits,
     PaperRecommendation,
     PaperSummary,
     PaperSummaryContext,
     PaperSummarySections,
     PersonaAdapterSignature,
+    SentenceTranslation,
     SimpleTranslation,
     SolveTask,
     SystemContextSignature,
@@ -165,7 +165,6 @@ class UniversalTaskModule(dspy.Module):
         "PaperSummaryContext": "Generate a brief context summary of a paper segment.",
         "ContextAwareTranslation": "Translate a technical word with academic context awareness.",
         "SimpleTranslation": "Translate a word or phrase concisely.",
-        "DeepExplanation": "Explain a technical concept in depth using paper context.",
         "PaperRecommendation": "Recommend related academic papers based on the current paper.",
         "AdversarialCritique": "Critically review an academic paper for hidden assumptions and risks.",
         "VisionAnalyzeFigure": "Analyze a figure or chart from an academic paper.",
@@ -326,14 +325,13 @@ class SimpleTranslationModule(UniversalTaskModule):
         )
 
 
-class DeepExplanationModule(UniversalTaskModule):
+class SentenceTranslationModule(UniversalTaskModule):
     def __init__(self):
-        super().__init__(DeepExplanation)
+        super().__init__(SentenceTranslation)
 
-    def forward(self, summary_context: str, context: str, target_word: str, **kwargs):
+    def forward(self, paper_context: str, target_word: str, **kwargs):
         return super().forward(
-            summary_context=summary_context,
-            context=context,
+            paper_context=paper_context,
             input_data=target_word,
             **kwargs,
         )

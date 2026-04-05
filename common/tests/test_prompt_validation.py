@@ -47,13 +47,13 @@ def test_prompt_placeholders_syntax():
 @pytest.mark.parametrize(
     "prompt_name, expected_keys",
     [
-        ("DICT_TRANSLATE_LLM_PROMPT", ["paper_title", "target_word", "lang_name"]),
+        ("PROMPT_DIRECT_DICT_TRANSLATE_USER", ["paper_title", "target_word", "lang_name"]),
         ("PAPER_SUMMARY_FROM_PDF_PROMPT", ["lang_name", "keyword_focus"]),
         (
             "CHAT_GENERAL_FROM_PDF_PROMPT",
             ["lang_name", "history_text", "user_message"],
         ),
-        ("ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT", ["lang_name"]),
+        ("PROMPT_PDF_ADVERSARIAL_CRITIQUE", ["lang_name"]),
     ],
 )
 def test_specific_prompt_keys(prompt_name, expected_keys):

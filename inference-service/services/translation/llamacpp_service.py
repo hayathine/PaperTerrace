@@ -149,7 +149,7 @@ class LlamaCppTranslationService:
     ) -> str:
         """
         論文の文脈を考慮した翻訳を実行します。
-        DICT_TRANSLATE_LLM_PROMPT を直接使用し、DSPy を経由しません。
+        PROMPT_DIRECT_DICT_TRANSLATE_USER を直接使用し、DSPy を経由しません。
         """
         if self.llm is None:
             logger.error(
@@ -166,23 +166,23 @@ class LlamaCppTranslationService:
             abort_event = threading.Event()
 
             from common.dspy_seed_prompt import (
-                DICT_TRANSLATE_LLM_PROMPT,
+                PROMPT_DIRECT_DICT_TRANSLATE_USER,
                 DICT_TRANSLATE_SYSTEM_PROMPT,
                 DICT_TRANSLATE_LONG_SYSTEM_PROMPT,
-                DICT_TRANSLATE_LONG_LLM_PROMPT,
+                PROMPT_DIRECT_DICT_TRANSLATE_LONG_USER,
             )
 
             is_long_text = " " in original_word.strip() or len(original_word) > 25
             if is_long_text:
                 context_line = f"Context: {paper_context}" if paper_context and paper_context != "No specific context available." else ""
-                user_content = DICT_TRANSLATE_LONG_LLM_PROMPT.format(
+                user_content = PROMPT_DIRECT_DICT_TRANSLATE_LONG_USER.format(
                     lang_name=lang_name,
                     context_line=context_line,
                     target_text=original_word,
                 )
                 system_content = DICT_TRANSLATE_LONG_SYSTEM_PROMPT
             else:
-                user_content = DICT_TRANSLATE_LLM_PROMPT.format(
+                user_content = PROMPT_DIRECT_DICT_TRANSLATE_USER.format(
                     paper_title=paper_context,
                     target_word=original_word,
                     lang_name=lang_name,

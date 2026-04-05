@@ -4,14 +4,13 @@ from common.dspy_seed_prompt import (
     ADVERSARIAL_CRITIQUE_SEED,
     CHAT_GENERAL_SEED,
     CONTEXT_AWARE_TRANSLATION_SEED,
-    DEEP_EXPLANATION_SEED,
     PAPER_RECOMMENDATION_SEED,
     PAPER_SUMMARY_SECTIONS_SEED,
     PAPER_SUMMARY_SEED,
     PERSONA_ADAPTER_SEED,
+    SENTENCE_TRANSLATION_SEED,
     SIMPLE_TRANSLATION_SEED,
     SYSTEM_CONTEXT_SEED,
-    USER_PROFILE_ESTIMATION_SEED,
     VISION_FIGURE_SEED,
 )
 
@@ -219,23 +218,6 @@ class PaperRecommendation(dspy.Signature):
     )
 
 
-class UserProfileEstimation(dspy.Signature):
-    __doc__ = USER_PROFILE_ESTIMATION_SEED
-
-    paper_summary: str = dspy.InputField(desc="Summary of the paper")
-    conversation_history: str = dspy.InputField(desc="Conversation history")
-    word_clicks: str = dspy.InputField(desc="List of words clicked by the user")
-    created_at: str = dspy.InputField(
-        desc="Timestamp when the trace was recorded (UTC)"
-    )
-    knowledge_level: str = dspy.OutputField(desc="Beginner / Intermediate / Advanced")
-    interests: list[str] = dspy.OutputField(desc="Interesting topics")
-    unknown_concepts: list[str] = dspy.OutputField(desc="Concepts not yet understood")
-    preferred_direction: str = dspy.OutputField(
-        desc="Deep dive / Broadening / Application / Fundamentals"
-    )
-
-
 # =============================================================
 # Translation (翻訳系) の DSPy Signatures
 # =============================================================
@@ -261,10 +243,9 @@ class SimpleTranslation(dspy.Signature):
     translation: str = dspy.OutputField(desc="Concise translation")
 
 
-class DeepExplanation(dspy.Signature):
-    __doc__ = DEEP_EXPLANATION_SEED
+class SentenceTranslation(dspy.Signature):
+    __doc__ = SENTENCE_TRANSLATION_SEED
 
-    input_data: str = dspy.InputField(desc="The word or concept to explain")
-    summary_context: str = dspy.InputField(desc="Abstract or summary of the paper")
-    context: str = dspy.InputField(desc="Surrounding text context")
-    explanation: str = dspy.OutputField(desc="Concise context-aware explanation")
+    input_data: str = dspy.InputField(desc="The sentence to translate")
+    paper_context: str = dspy.InputField(desc="Academic paper context")
+    translation: str = dspy.OutputField(desc="Full translation of the sentence")

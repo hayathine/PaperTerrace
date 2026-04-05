@@ -15,6 +15,7 @@ from app.domain.services.analysis_service import EnglishAnalysisService
 from app.providers import get_ai_provider
 from app.providers.orm_storage import ORMStorageAdapter
 from common.dspy_utils.modules import (
+    SentenceTranslationModule,
     SimpleTranslationModule,
     TranslationModule,
 )
@@ -24,8 +25,9 @@ from app.core.config import is_local
 from common import settings
 from common.dspy_seed_prompt import (
     CORE_SYSTEM_PROMPT,
-    TRANSLATE_FROM_PDF_PROMPT,
     EXPLAIN_FROM_PDF_PROMPT,
+    SENTENCE_TRANSLATE_FROM_PDF_PROMPT,
+    TRANSLATE_FROM_PDF_PROMPT,
 )
 from redis_provider.provider import RedisService
 
@@ -301,9 +303,12 @@ async def explain(
         # PDF コンテキストキャッシュが存在すれば直接 API 呼び出しで論文全文を活用
         pdf_cache_name = redis_service.get(f"paper_cache_pdf:{paper_id}") if paper_id else None
 
+        is_long_text = len(original_word) > 20 or " " in original_word.strip()
+
         if pdf_cache_name:
             context_line = f"\nSurrounding context: ...{context}...\n" if context else ""
-            prompt = TRANSLATE_FROM_PDF_PROMPT.format(
+            prompt_template = SENTENCE_TRANSLATE_FROM_PDF_PROMPT if is_long_text else TRANSLATE_FROM_PDF_PROMPT
+            prompt = prompt_template.format(
                 target_word=original_word,
                 context_line=context_line,
                 lang_name=lang_name,
@@ -329,13 +334,12 @@ async def explain(
             if context:
                 paper_context += f"\n[Surrounding Context]\n...{context}...\n"
 
-            is_phrase = " " in lemma.strip()
-            if is_phrase:
-                trans_mod = TranslationModule()
+            if is_long_text:
+                sent_mod = SentenceTranslationModule()
                 res, trace_id = await trace_dspy_call(
-                    "TranslationModule",
-                    "ContextAwareTranslation",
-                    trans_mod,
+                    "SentenceTranslationModule",
+                    "SentenceTranslation",
+                    sent_mod,
                     {
                         "paper_context": paper_context,
                         "target_word": original_word,
@@ -346,7 +350,7 @@ async def explain(
                         user_id=current_user_id, session_id=session_id, paper_id=paper_id
                     ),
                 )
-                translation = res.translation_and_explanation.strip()
+                translation = res.translation.strip()
             else:
                 simple_mod = SimpleTranslationModule()
                 res, trace_id = await trace_dspy_call(
@@ -631,13 +635,22 @@ async def explain_with_context(
         # PDF コンテキストキャッシュが存在すれば直接 API 呼び出しで論文全文を活用
         pdf_cache_name = redis_service.get(f"paper_cache_pdf:{paper_id}") if paper_id else None
 
+        is_long_text = len(req.word) > 20 or " " in req.word.strip()
+
         if pdf_cache_name:
             context_line = f"\nSurrounding context: ...{req.context}...\n"
-            prompt = EXPLAIN_FROM_PDF_PROMPT.format(
-                target_word=req.word,
-                context_line=context_line,
-                lang_name=lang_name,
-            )
+            if is_long_text:
+                prompt = SENTENCE_TRANSLATE_FROM_PDF_PROMPT.format(
+                    target_word=req.word,
+                    context_line=context_line,
+                    lang_name=lang_name,
+                )
+            else:
+                prompt = EXPLAIN_FROM_PDF_PROMPT.format(
+                    target_word=req.word,
+                    context_line=context_line,
+                    lang_name=lang_name,
+                )
             ai_provider = get_ai_provider()
             raw = await ai_provider.generate(
                 prompt=prompt,
@@ -648,27 +661,51 @@ async def explain_with_context(
             log.info("explain_context", "Explained with PDF context cache", word=req.word)
         else:
             # キャッシュなし: abstract + 周辺テキストで DSPy 経由
-            trans_mod = TranslationModule()
-            res, trace_id = await trace_dspy_call(
-                "TranslationModule",
-                "ContextAwareTranslation",
-                trans_mod,
-                {
-                    "paper_context": (summary_context + "\n" + req.context).strip(),
-                    "target_word": req.word,
-                    "user_persona": "Professional Academic Translator",
-                    "lang_name": lang_name,
-                },
-                context=TraceContext(
-                    user_id=(
-                        getattr(request.state, "user_id", None)
-                        or (f"guest:{req.session_id}" if req.session_id else None)
+            paper_context = (summary_context + "\n" + req.context).strip()
+            if is_long_text:
+                sent_mod = SentenceTranslationModule()
+                res, trace_id = await trace_dspy_call(
+                    "SentenceTranslationModule",
+                    "SentenceTranslation",
+                    sent_mod,
+                    {
+                        "paper_context": paper_context,
+                        "target_word": req.word,
+                        "user_persona": "Professional Academic Translator",
+                        "lang_name": lang_name,
+                    },
+                    context=TraceContext(
+                        user_id=(
+                            getattr(request.state, "user_id", None)
+                            or (f"guest:{req.session_id}" if req.session_id else None)
+                        ),
+                        session_id=req.session_id,
+                        paper_id=paper_id,
                     ),
-                    session_id=req.session_id,
-                    paper_id=paper_id,
-                ),
-            )
-            explanation = res.translation_and_explanation.strip()
+                )
+                explanation = res.translation.strip()
+            else:
+                trans_mod = TranslationModule()
+                res, trace_id = await trace_dspy_call(
+                    "TranslationModule",
+                    "ContextAwareTranslation",
+                    trans_mod,
+                    {
+                        "paper_context": paper_context,
+                        "target_word": req.word,
+                        "user_persona": "Professional Academic Translator",
+                        "lang_name": lang_name,
+                    },
+                    context=TraceContext(
+                        user_id=(
+                            getattr(request.state, "user_id", None)
+                            or (f"guest:{req.session_id}" if req.session_id else None)
+                        ),
+                        session_id=req.session_id,
+                        paper_id=paper_id,
+                    ),
+                )
+                explanation = res.translation_and_explanation.strip()
 
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(
