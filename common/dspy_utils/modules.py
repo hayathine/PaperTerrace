@@ -235,9 +235,17 @@ class RecommendationModule(UniversalTaskModule):
     def __init__(self):
         super().__init__(PaperRecommendation)
 
-    def forward(self, paper_analysis: str, **kwargs):
+    def forward(
+        self,
+        paper_title: str,
+        paper_abstract: str,
+        user_profile: str,
+        **kwargs,
+    ):
         result = super().forward(
-            input_data=paper_analysis,
+            paper_title=paper_title,
+            paper_abstract=paper_abstract,
+            user_profile=user_profile,
             **kwargs,
         )
 
@@ -245,11 +253,9 @@ class RecommendationModule(UniversalTaskModule):
         dspy.Assert(len(result.recommendations) >= 3, "推薦は3件以上必要")
         dspy.Assert(len(result.search_queries) >= 2, "検索クエリは2件以上必要")
 
-        # user_persona または kwargs から情報を取得して Suggest を行う
-        user_persona = kwargs.get("user_persona", "")
-        persona_lower = user_persona.lower()
+        profile_lower = user_profile.lower()
         dspy.Suggest(
-            not ("初級" in user_persona or "beginner" in persona_lower)
+            not ("初級" in user_profile or "beginner" in profile_lower)
             or any("survey" in r.lower() for r in result.recommendations),
             "初級ユーザーにはsurvey論文を含めることを推奨",
         )
@@ -326,15 +332,18 @@ class SimpleTranslationModule(UniversalTaskModule):
         )
 
 
-class SentenceTranslationModule(UniversalTaskModule):
-    def __init__(self):
-        super().__init__(SentenceTranslation)
+class SentenceTranslationModule(dspy.Module):
+    """文章全体を翻訳するシンプルなモジュール。UniversalTaskModule を経由しない直接 Predict。"""
 
-    def forward(self, paper_context: str, target_word: str, **kwargs):
-        return super().forward(
-            paper_context=paper_context,
+    def __init__(self):
+        super().__init__()
+        self.translate = dspy.Predict(SentenceTranslation)
+
+    def forward(self, paper_context: str, target_word: str, lang_name: str = "Japanese", **kwargs):
+        return self.translate(
             input_data=target_word,
-            **kwargs,
+            paper_context=paper_context,
+            lang_name=lang_name,
         )
 
 

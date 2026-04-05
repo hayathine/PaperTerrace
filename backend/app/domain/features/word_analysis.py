@@ -38,34 +38,33 @@ class WordAnalysisService:
         inf_client = await get_inference_client()
         
         if not inf_client.translate_disabled:
-            # 長文やフレーズ(スペースあり)は Gemini に任せ、単語のみ Translation Pod を使用する
-            is_phrase = " " in lemma.strip()
-            is_too_long = len(lemma) > 25
+            is_long_text = " " in lemma.strip() or len(lemma) > 25
 
-            if is_phrase or is_too_long:
-                log.debug("translate", "長文またはフレーズのため Translation Pod をスキップします", word=lemma)
+            # 単語は paper_title/context を短く切り詰めて渡す
+            # 長文・フレーズはテキスト自体が文脈を持つため context は渡さない
+            # (LlamaCpp 側で is_long_text を判定しプロンプトを分岐)
+            safe_title = (paper_title[:60] + "...") if paper_title and len(paper_title) > 65 else paper_title
+            if is_long_text:
+                input_context = None
             else:
-                try:
-                    # 80 トークン制限に合わせ、タイトル・文脈を極限まで切り詰める
-                    # lemma > 10 char の場合は、LLMのリソース節約のためコンテキストをスキップする
-                    safe_title = (paper_title[:60] + "...") if paper_title and len(paper_title) > 65 else paper_title
-                    input_context = (safe_title if safe_title else (context[:30] if context else None)) if len(lemma) <= 10 else None
-                    
-                    log.info("translate", "Translation AI 開始(64-token mode)", word=lemma, ctx=input_context)
-                    translation = await inf_client.translate_text(
-                        text=lemma,
-                        tgt_lang=lang,
-                        paper_context=input_context
-                    )
-                    if translation:
-                        self.translation_cache[lemma] = translation
-                        return {
-                            "word": lemma,
-                            "translation": translation,
-                            "source": "Translation AI",
-                        }
-                except Exception as e:
-                    log.warning("translate", "Translation Pod翻訳に失敗しました", error=str(e))
+                input_context = (safe_title if safe_title else (context[:30] if context else None)) if len(lemma) <= 10 else None
+
+            try:
+                log.info("translate", "Translation AI 開始", word=lemma, is_long=is_long_text)
+                translation = await inf_client.translate_text(
+                    text=lemma,
+                    tgt_lang=lang,
+                    paper_context=input_context
+                )
+                if translation:
+                    self.translation_cache[lemma] = translation
+                    return {
+                        "word": lemma,
+                        "translation": translation,
+                        "source": "Translation AI",
+                    }
+            except Exception as e:
+                log.warning("translate", "Translation Pod翻訳に失敗しました", error=str(e))
 
         # 3. Gemini Translation (Context-aware if context provided)
         if context:
@@ -86,31 +85,53 @@ class WordAnalysisService:
     ) -> dict | None:
         """
         Translate word using document context.
+        長文・フレーズは SentenceTranslationModule、単語は SimpleTranslationModule を使用。
         """
         max_context_length = int(settings.get("MAX_CONTEXT_LENGTH", "800"))
         truncated = truncate_context(context, word, max_context_length)
         lang_name = SUPPORTED_LANGUAGES.get(lang, lang)
 
+        is_long_text = len(word) > 20 or " " in word.strip()
+
         try:
             from common.dspy_utils.config import setup_dspy
-            from common.dspy_utils.modules import SimpleTranslationModule
+            from common.dspy_utils.modules import (
+                SentenceTranslationModule,
+                SimpleTranslationModule,
+            )
             from common.dspy_utils.trace import TraceContext, trace_dspy_call
 
             setup_dspy()
-            trans_mod = SimpleTranslationModule()
-            res, trace_id = await trace_dspy_call(
-                "SimpleTranslationModule",
-                "SimpleTranslation",
-                trans_mod,
-                {
-                    "target_word": word,
-                    "paper_context": truncated,
-                    "user_persona": "Professional Translator",
-                    "lang_name": lang_name,
-                },
-                context=TraceContext(user_id=user_id, session_id=session_id),
-            )
-            translation = res.translation.strip()
+
+            if is_long_text:
+                sent_mod = SentenceTranslationModule()
+                res, trace_id = await trace_dspy_call(
+                    "SentenceTranslationModule",
+                    "SentenceTranslation",
+                    sent_mod,
+                    {
+                        "target_word": word,
+                        "paper_context": truncated,
+                        "lang_name": lang_name,
+                    },
+                    context=TraceContext(user_id=user_id, session_id=session_id),
+                )
+                translation = res.translation.strip()
+            else:
+                trans_mod = SimpleTranslationModule()
+                res, trace_id = await trace_dspy_call(
+                    "SimpleTranslationModule",
+                    "SimpleTranslation",
+                    trans_mod,
+                    {
+                        "target_word": word,
+                        "paper_context": truncated,
+                        "user_persona": "Professional Translator",
+                        "lang_name": lang_name,
+                    },
+                    context=TraceContext(user_id=user_id, session_id=session_id),
+                )
+                translation = res.translation.strip()
 
             self.translation_cache[word] = translation
             self.redis.set(f"trans:{lang}:{word}", translation, expire=604800)

@@ -204,13 +204,16 @@ class RecommendationService:
         repo = TrajectoryRepository()
         trajectory = repo.get_by_session_id(req.session_id)
 
+        paper_title = trajectory.paper_title or "" if trajectory else ""
+        paper_abstract = trajectory.paper_abstract or "" if trajectory else ""
+
         # 履歴がないか空白の場合は、冷え切り状態 (Cold Start)
         if not trajectory or not trajectory.conversation_history:
-            user_persona = f"Interested in: {', '.join(trajectory.paper_keywords or []) if trajectory else 'machine learning'}. Prefers fundamentals."
-            paper_analysis = (
-                trajectory.paper_abstract
-                if trajectory and trajectory.paper_abstract
-                else "No paper selected yet."
+            keywords = ", ".join(trajectory.paper_keywords or []) if trajectory else ""
+            user_profile = (
+                f"Interested in: {keywords}. Prefers fundamentals."
+                if keywords
+                else "Prefers fundamentals."
             )
         else:
             # プロファイル推定
@@ -232,16 +235,15 @@ class RecommendationService:
                     paper_id=trajectory.paper_id if trajectory else None,
                 ),
             )
-            user_persona = profile_res.user_persona
-            paper_analysis = f"{trajectory.paper_title}\n{trajectory.paper_abstract}"
+            user_profile = profile_res.user_persona
 
             # 軌跡にもプロファイルを更新しておく（後方互換性と分析用）
             trajectory.knowledge_level = "Extracted"  # 以前の構造化フィールドは固定値へ
             repo.upsert(trajectory)
 
-        # ユーザーの具体的なリクエストがあれば persona に追記
+        # ユーザーの具体的なリクエストがあれば profile に追記
         if req.user_query:
-            user_persona = f"{user_persona}\n\nUser's specific request: {req.user_query}"
+            user_profile = f"{user_profile}\n\nUser's specific request: {req.user_query}"
 
         # 論文推薦クエリ生成
         rec_mod = RecommendationService._get_recommendation_module()
@@ -251,8 +253,9 @@ class RecommendationService:
             "PaperRecommendation",
             rec_mod,
             {
-                "paper_analysis": paper_analysis,
-                "user_persona": user_persona,
+                "paper_title": paper_title,
+                "paper_abstract": paper_abstract,
+                "user_profile": user_profile,
                 "lang_name": "en",
             },
             context=TraceContext(

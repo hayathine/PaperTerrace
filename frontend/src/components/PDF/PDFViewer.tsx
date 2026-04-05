@@ -1265,7 +1265,10 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	const loadExistingPaper = async (id: string) => {
 		setStatus("processing");
 		setLoadedPaperId(id);
-		setPages([]);
+		// setPages([]) はここで呼ばない。
+		// キャッシュ or API データが届くまで古いページを表示し続けることで
+		// 論文切り替え時のスケルトンちらつきを防ぐ。
+		// データが揃った時点で setPages(newPages) で上書きする。
 		setGrobidText(null);
 		// setStamps([]);
 

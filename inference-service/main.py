@@ -79,6 +79,61 @@ if INFERENCE_TYPE in ["all", "ocr"] or (INFERENCE_TYPE == "layout" and ENABLE_OC
 
 _CROP_TARGET_CLASSES = {"table", "figure", "picture", "formula", "chart", "algorithm", "equation"}
 
+_TITLE_TO_BODY_CLASSES: dict[str, set[str]] = {
+    "figure-title": {"picture", "figure"},
+    "table-title":  {"table"},
+    "chart-title":  {"chart"},
+}
+_CAPTION_MAX_GAP_PX = 80
+_CAPTION_MIN_X_OVERLAP_RATIO = 0.3
+
+
+def _associate_captions(results: list) -> dict[int, dict]:
+    """本体ブロックインデックス → 関連タイトルブロックのマッピングを返す。"""
+    bodies = [
+        (i, r) for i, r in enumerate(results)
+        if r.get("class_name", "").lower() in _CROP_TARGET_CLASSES
+    ]
+    titles = [
+        r for r in results
+        if r.get("class_name", "").lower() in _TITLE_TO_BODY_CLASSES
+    ]
+
+    # body_idx -> (best_gap, title_block)
+    association: dict[int, tuple[float, dict]] = {}
+
+    for title in titles:
+        t_name = title.get("class_name", "").lower()
+        body_classes = _TITLE_TO_BODY_CLASSES[t_name]
+        tb = title["bbox"]
+
+        best_body_idx, best_gap = None, float("inf")
+        for body_idx, body in bodies:
+            if body.get("class_name", "").lower() not in body_classes:
+                continue
+            bb = body["bbox"]
+            body_w = bb["x_max"] - bb["x_min"]
+            if body_w <= 0:
+                continue
+            overlap = max(0, min(bb["x_max"], tb["x_max"]) - max(bb["x_min"], tb["x_min"]))
+            if overlap / body_w < _CAPTION_MIN_X_OVERLAP_RATIO:
+                continue
+            gap_below = tb["y_min"] - bb["y_max"]
+            gap_above = bb["y_min"] - tb["y_max"]
+            candidates = [g for g in [gap_below, gap_above] if g >= 0]
+            if not candidates:
+                continue
+            gap = min(candidates)
+            if gap <= _CAPTION_MAX_GAP_PX and gap < best_gap:
+                best_gap = gap
+                best_body_idx = body_idx
+
+        if best_body_idx is not None:
+            if best_body_idx not in association or best_gap < association[best_body_idx][0]:
+                association[best_body_idx] = (best_gap, title)
+
+    return {idx: title for idx, (_, title) in association.items()}
+
 
 def _crop_page_figures(img_bytes: bytes, serialized_results: list) -> list[dict]:
 	"""検出結果から対象クラスをクロップしてbase64エンコードで返す（スレッド内実行用）。"""
@@ -91,7 +146,9 @@ def _crop_page_figures(img_bytes: bytes, serialized_results: list) -> list[dict]
 	except Exception:
 		return crops
 
-	for res in serialized_results:
+	caption_map = _associate_captions(serialized_results)
+
+	for i, res in enumerate(serialized_results):
 		class_name = res.get("class_name", "").lower()
 		if class_name not in _CROP_TARGET_CLASSES:
 			continue
@@ -107,12 +164,15 @@ def _crop_page_figures(img_bytes: bytes, serialized_results: list) -> list[dict]
 			crop = img.crop((x_min, y_min, x_max, y_max))
 			buf = io.BytesIO()
 			crop.save(buf, format="JPEG", quality=85)
-			crops.append({
+			entry: dict = {
 				"class_name": class_name,
 				"bbox": {"x_min": x_min, "y_min": y_min, "x_max": x_max, "y_max": y_max},
 				"image_b64": base64.b64encode(buf.getvalue()).decode(),
 				"score": res.get("score"),
-			})
+			}
+			if i in caption_map:
+				entry["title_bbox"] = caption_map[i]["bbox"]
+			crops.append(entry)
 		except Exception:
 			pass
 	return crops

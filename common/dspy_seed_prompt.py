@@ -63,7 +63,10 @@ Examples(Japanese):
 - Context: outperforms SOTA models. Target: SOTA → 最先端の
 - Context: Large Language Models (LLMs). Target: LLMs → 大規模言語モデル """
 
-SEED_SENTENCE_TRANSLATION_MODULE = """Translate the following academic sentence into {lang_name}. Keep meaning and technical terms. Output only the translation."""
+SEED_SENTENCE_TRANSLATION_MODULE = """Translate the ENTIRE input sentence into the target language specified by lang_name.
+Translate ALL words and clauses — do NOT abbreviate, summarize, or extract only the main term.
+Preserve technical terms, acronyms, and sentence structure accurately.
+Output ONLY the complete translated sentence, nothing else."""
 
 
 # --- 2. Standard Direct API (PROMPT_DIRECT_...) ---
@@ -262,10 +265,18 @@ Verbalize visual information so it can be understood without seeing the figure.
 Output in {lang_name}.
 """
 
-PAPER_RECOMMENDATION_SEED = """Recommend the next academic papers the user should read based on their knowledge level, interests, and unknown concepts.
-- Provide at least 3 recommended papers with titles and reasons.
-- Generate at least 2 search queries for Semantic Scholar.
-- For beginner users, including survey papers is preferred."""
+PAPER_RECOMMENDATION_SEED = """Recommend the next academic papers the user should read, focusing on papers that are closely related to the current paper.
+
+Rules for search_queries:
+- Each query MUST be grounded in the current paper's title, methods, or key concepts.
+- Include the paper's main topic keywords and at least one specific technical term from the paper.
+- Do NOT generate generic queries like "machine learning survey" unless the paper itself is a survey.
+- Example: if the current paper is about "transformer-based protein folding", queries should be like "transformer protein structure prediction", "attention mechanism biological sequence modeling".
+
+Rules for recommendations:
+- Recommended papers must be directly related to the current paper (same domain, method, or problem).
+- Provide at least 3 papers with titles and reasons.
+- For beginner users, including survey papers in the same domain is preferred."""
 
 # =================================================================
 # LEGACY ALIASES (For backward compatibility)
@@ -286,7 +297,7 @@ DEEP_EXPLANATION_SEED = SEED_DEEP_EXPLANATION_MODULE
 CHAT_GENERAL_FROM_PDF_PROMPT = PROMPT_PDF_CHAT_GENERAL
 CHAT_WITH_FIGURE_PROMPT = PROMPT_PDF_CHAT_WITH_FIGURE
 CORE_SYSTEM_PROMPT = PROMPT_CORE_SYSTEM
-PAPER_SUMMARY_FROM_PDF_PROMPT = PAPER_SUMMARY_FROM_PDF_PROMPT 
+PAPER_SUMMARY_FROM_PDF_PROMPT = PAPER_SUMMARY_FROM_PDF_PROMPT
 VISION_ANALYZE_FROM_PDF_PROMPT = PROMPT_PDF_VISION_ANALYZE
 VISION_ANALYZE_FIGURE_PROMPT = PROMPT_PDF_VISION_ANALYZE
 EXPLAIN_FROM_PDF_PROMPT = PROMPT_PDF_TERM_EXPLAIN
@@ -296,3 +307,9 @@ TRANSLATE_FROM_PDF_PROMPT = PROMPT_PDF_TERM_TRANSLATE
 # Inference Service / LlamaCpp Aliases
 DICT_TRANSLATE_SYSTEM_PROMPT = PROMPT_DIRECT_DICT_TRANSLATE_SYSTEM
 DICT_TRANSLATE_LONG_SYSTEM_PROMPT = PROMPT_DIRECT_DICT_TRANSLATE_LONG_SYSTEM
+
+USER_PROFILE_ESTIMATION_SEED = """Estimate the user's understanding, interests, and unknown concepts from their behavioral data.
+- Knowledge level: Beginner / Intermediate / Advanced
+- Extract interesting topics
+- Identify concepts the user might not understand
+- Recommended direction: Deep dive / Broadening / Application / Fundamentals"""

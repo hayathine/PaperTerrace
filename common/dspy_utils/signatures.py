@@ -4,6 +4,7 @@ from common.dspy_seed_prompt import (
     ADVERSARIAL_CRITIQUE_SEED,
     CHAT_GENERAL_SEED,
     CONTEXT_AWARE_TRANSLATION_SEED,
+    DEEP_EXPLANATION_SEED,
     PAPER_RECOMMENDATION_SEED,
     PAPER_SUMMARY_SECTIONS_SEED,
     PAPER_SUMMARY_SEED,
@@ -11,8 +12,8 @@ from common.dspy_seed_prompt import (
     SENTENCE_TRANSLATION_SEED,
     SIMPLE_TRANSLATION_SEED,
     SYSTEM_CONTEXT_SEED,
+    USER_PROFILE_ESTIMATION_SEED,
     VISION_FIGURE_SEED,
-    DEEP_EXPLANATION_SEED,
 )
 
 # =============================================================
@@ -208,14 +209,42 @@ class VisionAnalyzeFigure(dspy.Signature):
 class PaperRecommendation(dspy.Signature):
     __doc__ = PAPER_RECOMMENDATION_SEED
 
-    input_data: str = dspy.InputField(
-        desc="Analysis of the current paper and user profile"
+    paper_title: str = dspy.InputField(
+        desc="Title of the paper the user is currently reading"
+    )
+    paper_abstract: str = dspy.InputField(
+        desc="Abstract of the paper the user is currently reading"
+    )
+    user_profile: str = dspy.InputField(
+        desc="User's knowledge level, interests, and unknown concepts"
     )
     recommendations: list[str] = dspy.OutputField(
-        desc="List of recommended papers (including titles and reasons)"
+        desc="List of recommended papers (including titles and reasons), all directly related to the current paper"
     )
     search_queries: list[str] = dspy.OutputField(
-        desc="Search queries for Semantic Scholar"
+        desc="Search queries grounded in the current paper's title and key concepts"
+    )
+
+
+# =============================================================
+# User Profile Estimation の DSPy Signature
+# =============================================================
+
+
+class UserProfileEstimation(dspy.Signature):
+    __doc__ = USER_PROFILE_ESTIMATION_SEED
+
+    paper_summary: str = dspy.InputField(desc="Summary of the paper")
+    conversation_history: str = dspy.InputField(desc="Conversation history")
+    word_clicks: str = dspy.InputField(desc="List of words clicked by the user")
+    created_at: str = dspy.InputField(
+        desc="Timestamp when the trace was recorded (UTC)"
+    )
+    knowledge_level: str = dspy.OutputField(desc="Beginner / Intermediate / Advanced")
+    interests: list[str] = dspy.OutputField(desc="Interesting topics")
+    unknown_concepts: list[str] = dspy.OutputField(desc="Concepts not yet understood")
+    preferred_direction: str = dspy.OutputField(
+        desc="Deep dive / Broadening / Application / Fundamentals"
     )
 
 
@@ -247,9 +276,14 @@ class SimpleTranslation(dspy.Signature):
 class SentenceTranslation(dspy.Signature):
     __doc__ = SENTENCE_TRANSLATION_SEED
 
-    input_data: str = dspy.InputField(desc="The sentence to translate")
+    input_data: str = dspy.InputField(
+        desc="The complete sentence to translate — translate every word and clause"
+    )
     paper_context: str = dspy.InputField(desc="Academic paper context")
-    translation: str = dspy.OutputField(desc="Full translation of the sentence")
+    lang_name: str = dspy.InputField(desc="Target language name (e.g., 'Japanese')")
+    translation: str = dspy.OutputField(
+        desc="Complete translation of the entire input sentence — must not omit any part"
+    )
 
 
 class DeepExplanation(dspy.Signature):

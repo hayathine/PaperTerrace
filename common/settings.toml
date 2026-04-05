@@ -131,6 +131,9 @@ RATE_LIMIT_TRANSLATE = "300/minute"
 GA4_PROPERTY_ID = ""         # GA4 プロパティ数値 ID（例: "123456789"）
 GA4_USER_ID_DIMENSION = ""   # firebase_uid 用カスタムディメンション名（例: "customUser:user_id"）
 
+# 学術論文検索 API
+CORE_API_KEY = ""            # CORE API キー (https://core.ac.uk/services/api) — 未設定時は CORE 検索をスキップ
+
 # CORS
 CORS_EXTRA_ORIGINS = ""
 
@@ -159,6 +162,15 @@ LOG_SCHEMA = "logs_staging"
 LLAMACPP_VERBOSE = true
 GROBID_URL = "https://inference-grobid.paperterrace.page"
 
+# AI Models (Staging)
+VERTEX_MODEL = "gemini-2.0-flash"
+MODEL_CHAT = "gemini-3.1-pro"
+MODEL_SUMMARY = "gemini-2.0-flash"
+MODEL_TRANSLATE = "gemini-2.0-flash"
+MODEL_OCR = "gemini-2.0-flash"
+FIGURE_EXPLAIN_MODEL = "gemini-3.1-pro"
+DSPY_MODEL = "vertex_ai/gemini-2.0-flash"
+
 [prod]
 LOG_LEVEL = "INFO"
 SENTRY_ENABLED = true
@@ -172,4 +184,14 @@ LLAMACPP_VERBOSE = false
 GROBID_URL = "https://inference-grobid.paperterrace.page"
 INFERENCE_OCR_URL = "https://inference-ocr.paperterrace.page"
 INFERENCE_LAYOUT_URL = "https://inference-layout.paperterrace.page"
+INFERENCE_LAYOUT_EXTRA_URLS = "https://inference-layout-g3.paperterrace.page"
 INFERENCE_TRANSLATE_URL = "https://inference-translate.paperterrace.page"
+
+# AI Models (Production)
+VERTEX_MODEL = "gemini-2.5-flash-lite"
+MODEL_CHAT = "gemini-2.5-flash-lite"
+MODEL_SUMMARY = "gemini-2.5-flash-lite"
+MODEL_TRANSLATE = "gemini-2.5-flash-lite"
+MODEL_OCR = "gemini-2.5-flash-lite"
+FIGURE_EXPLAIN_MODEL = "gemini-2.5-flash-lite"
+DSPY_MODEL = "vertex_ai/gemini-2.5-flash-lite"

@@ -57,10 +57,11 @@ vi.mock("@/contexts/LoadingContext", () => ({
 }));
 
 // Mock Hooks
+const mockGetCachedPaper = vi.fn();
 const mockDeletePaperCache = vi.fn();
 vi.mock("@/db/hooks", () => ({
 	usePaperCache: () => ({
-		getCachedPaper: vi.fn(),
+		getCachedPaper: mockGetCachedPaper,
 		deletePaperCache: mockDeletePaperCache,
 	}),
 }));
@@ -278,8 +279,7 @@ describe("App Interactions", () => {
 			file_hash: "hash123",
 			ocr_text: "text",
 		};
-		const { getCachedPaper } = (await import("@/db/hooks")).usePaperCache();
-		(getCachedPaper as any).mockResolvedValue(mockPaper);
+		mockGetCachedPaper.mockResolvedValue(mockPaper);
 
 		const { rerender } = render(<App />);
 

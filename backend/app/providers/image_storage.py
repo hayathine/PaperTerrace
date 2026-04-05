@@ -630,3 +630,10 @@ def get_upload_signed_url(file_hash: str, expiration_seconds: int = 900) -> str 
 def pdf_blob_exists(file_hash: str) -> bool:
     """指定ハッシュの PDF がストレージに存在するか確認する。"""
     return _get_instance().pdf_exists(file_hash)
+
+
+def get_pdf_bytes(file_hash: str) -> bytes:
+    """指定ハッシュの PDF バイト列を返す。"""
+    instance = _get_instance()
+    doc_path = instance.get_doc_path(file_hash)
+    return instance.get_doc_bytes(doc_path)

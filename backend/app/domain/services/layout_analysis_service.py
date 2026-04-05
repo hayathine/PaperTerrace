@@ -1,5 +1,6 @@
 import asyncio
 import base64
+import io
 import json
 from collections.abc import Awaitable, Callable
 
@@ -8,11 +9,41 @@ import time
 
 from app.domain.services.paper_processing import process_figure_analysis_task
 from app.providers import get_storage_provider
-from app.providers.image_storage import async_save_page_image
+from app.providers.image_storage import async_save_page_image, get_pdf_bytes
 from app.providers.inference_client import get_inference_client
 from common.logger import ServiceLogger
 
 log = ServiceLogger("LayoutAnalysis")
+
+_PDF_DPI = 200  # ページ画像のレンダリング DPI（inference-service と同じ値）
+_PDF_ZOOM = _PDF_DPI / 72  # pixel → PDF points 変換係数の逆数
+
+
+def _extract_caption_pdfplumber(
+    pdf_bytes: bytes, page_num: int, title_bbox_px: dict
+) -> str:
+    """pdfplumber でタイトル bbox のテキストを抽出する（同期）。
+
+    Args:
+        pdf_bytes: PDF バイト列。
+        page_num: 1-indexed ページ番号。
+        title_bbox_px: image pixel 座標系 (DPI=200) の bbox dict。
+    """
+    import pdfplumber  # noqa: PLC0415
+
+    x0 = title_bbox_px.get("x_min", 0) / _PDF_ZOOM
+    y0 = title_bbox_px.get("y_min", 0) / _PDF_ZOOM
+    x1 = title_bbox_px.get("x_max", 0) / _PDF_ZOOM
+    y1 = title_bbox_px.get("y_max", 0) / _PDF_ZOOM
+    try:
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            if page_num < 1 or page_num > len(pdf.pages):
+                return ""
+            page = pdf.pages[page_num - 1]
+            text = page.crop((x0, y0, x1, y1)).extract_text() or ""
+            return text.strip()
+    except Exception:
+        return ""
 
 
 class LayoutAnalysisService:
@@ -34,6 +65,7 @@ class LayoutAnalysisService:
         page_num: int,
         crops: list[dict],
         file_hash: str,
+        pdf_bytes: bytes | None = None,
     ) -> list[dict]:
         """推論podから受け取ったクロップ済み画像をGCSに並列保存してfiguresリストを返す。"""
         async def _save_one(fig_idx: int, crop: dict) -> dict | None:
@@ -48,6 +80,12 @@ class LayoutAnalysisService:
                 figure_image_url = await async_save_page_image(
                     file_hash, img_name, img_bytes, "jpg"
                 )
+                caption = ""
+                title_bbox = crop.get("title_bbox")
+                if title_bbox and pdf_bytes:
+                    caption = await anyio.to_thread.run_sync(
+                        _extract_caption_pdfplumber, pdf_bytes, page_num, title_bbox
+                    )
                 return {
                     "page_num": page_num,
                     "bbox": [
@@ -59,6 +97,7 @@ class LayoutAnalysisService:
                     "label": class_name,
                     "image_url": figure_image_url,
                     "conf": crop.get("score"),
+                    "caption": caption,
                 }
             except Exception as e:
                 log.warning(
@@ -146,6 +185,14 @@ class LayoutAnalysisService:
         all_figures: list[dict] = []
         layout_metrics = {}  # {batch_key: duration}
 
+        # キャプションテキスト抽出用に PDF を一度だけ取得する
+        try:
+            _pdf_bytes: bytes | None = await anyio.to_thread.run_sync(
+                get_pdf_bytes, file_hash
+            )
+        except Exception:
+            _pdf_bytes = None
+
         # ----------------------------------------------------------------
         # バッチ処理共通: DB保存 → AI解析タスク起動 → コールバック通知
         # ----------------------------------------------------------------
@@ -160,7 +207,7 @@ class LayoutAnalysisService:
                         "page_number": fig["page_num"],
                         "bbox": fig["bbox"],
                         "image_url": fig.get("image_url", ""),
-                        "caption": "",
+                        "caption": fig.get("caption", ""),
                         "explanation": "",
                         "label": fig.get("label", "figure"),
                         "latex": "",
@@ -258,7 +305,7 @@ class LayoutAnalysisService:
                 if not crops:
                     continue
                 page_figs = await self._save_crops_from_inference(
-                    page_num, crops, file_hash
+                    page_num, crops, file_hash, _pdf_bytes
                 )
                 batch_figures.extend(page_figs)
 
@@ -300,7 +347,7 @@ class LayoutAnalysisService:
                 if not crops:
                     continue
                 page_figs = await self._save_crops_from_inference(
-                    page_num, crops, file_hash
+                    page_num, crops, file_hash, _pdf_bytes
                 )
                 batch_figures.extend(page_figs)
 
@@ -308,63 +355,67 @@ class LayoutAnalysisService:
             return batch_figures
 
         all_figures: list[dict] = []
-        use_signed_urls = True  # 最初は署名付きURL方式を試みる
 
-        for batch_raw in batches_raw:
-            batch_page_nums = [pn for pn, _ in batch_raw]
-            batch_image_urls_raw = [url for _, url in batch_raw]
+        # ----------------------------------------------------------------
+        # 全バッチの署名付きURLを並列生成し、全Pod に分散して並列処理
+        # ----------------------------------------------------------------
+        signed_url_results: list[list[str | None]] = list(
+            await asyncio.gather(*[
+                asyncio.gather(*[asyncio.to_thread(get_signed_url, url) for _, url in batch_raw])
+                for batch_raw in batches_raw
+            ])
+        )
+        use_signed_urls = all(
+            all(su is not None for su in signed) for signed in signed_url_results
+        )
 
-            if use_signed_urls:
-                signed = list(
-                    await asyncio.gather(
-                        *[
-                            asyncio.to_thread(get_signed_url, url)
-                            for url in batch_image_urls_raw
-                        ]
-                    )
-                )
-                if all(su is not None for su in signed):
-                    log.info(
-                        "analyze_layout_lazy",
-                        f"Using signed URL approach for pages {batch_page_nums}",
-                    )
-                    batch_figs = await _process_url_batch(signed, batch_page_nums)
-                    all_figures.extend(batch_figs)
-                    continue
-                else:
-                    log.info(
-                        "analyze_layout_lazy",
-                        "Signed URL generation failed, switching to byte transfer",
-                    )
-                    use_signed_urls = False
-
-            # バイト転送フォールバック
+        if use_signed_urls:
             log.info(
                 "analyze_layout_lazy",
-                f"Using byte transfer approach for pages {batch_page_nums}",
+                f"Parallel URL batch: {len(batches_raw)} batches across pods",
             )
-            load_results = await asyncio.gather(
-                *[_load_page(pn, url) for pn, url in batch_raw],
-                return_exceptions=True,
+            batch_results = list(
+                await asyncio.gather(*[
+                    _process_url_batch(list(signed), [pn for pn, _ in batch_raw])
+                    for batch_raw, signed in zip(batches_raw, signed_url_results)
+                ])
             )
-            imgs: list[bytes] = []
-            pnums: list[int] = []
-            for res in load_results:
-                if isinstance(res, Exception):
-                    log.error("load_page", f"Failed to load page image: {res}")
-                    continue
-                pn, img = res
-                imgs.append(img)
-                pnums.append(pn)
-
-            if imgs:
-                batch_figs = await _process_byte_batch(imgs, pnums)
+            for batch_figs in batch_results:
                 all_figures.extend(batch_figs)
-            else:
+        else:
+            log.info(
+                "analyze_layout_lazy",
+                "Signed URL generation failed, switching to parallel byte transfer",
+            )
+
+            async def _load_and_process_batch(batch_raw: list[tuple[int, str]]) -> list[dict]:
+                batch_page_nums = [pn for pn, _ in batch_raw]
+                load_results = await asyncio.gather(
+                    *[_load_page(pn, url) for pn, url in batch_raw],
+                    return_exceptions=True,
+                )
+                imgs: list[bytes] = []
+                pnums: list[int] = []
+                for res in load_results:
+                    if isinstance(res, Exception):
+                        log.error("load_page", f"Failed to load page image: {res}")
+                        continue
+                    pn, img = res
+                    imgs.append(img)
+                    pnums.append(pn)
+                if imgs:
+                    return await _process_byte_batch(imgs, pnums)
                 log.warning(
                     "analyze_layout_lazy",
                     f"No valid images for pages {batch_page_nums}",
                 )
+                return []
+
+            batch_results = list(
+                await asyncio.gather(*[_load_and_process_batch(b) for b in batches_raw])
+            )
+            for batch_figs in batch_results:
+                all_figures.extend(batch_figs)
 
         if not all_figures and not pages_to_process:
             raise Exception("No valid images to process")
