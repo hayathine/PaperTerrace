@@ -902,28 +902,42 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							);
 						})();
 
-						// レイアウト解析中は "layout_analysis" ステータスを維持し、
-						// 完了後に "done" へ遷移することで GlobalLoading を正しいタイミングで消す
-						// finalPages を明示的に渡す: pagesRef は useEffect 経由で同期されるため、
-						// "done" イベント時点では stale な可能性がある
-						// フォールバックタイムアウト: SSE の内部タイムアウト(130s)より長く設定し、
-						// promise が settle しない極端なケースのみ UI ブロックを解除する
-						setStatus("layout_analysis");
-						const layoutTimeout = setTimeout(() => setStatus("done"), 135_000);
-						triggerLazyLayoutAnalysis(pId, finalPages)
-							.catch((err) =>
-								log.warn(
-									"trigger_lazy_layout_analysis",
-									"Lazy analysis failed",
-									{
-										error: err,
-									},
-								),
-							)
-							.finally(() => {
-								clearTimeout(layoutTimeout);
-								setStatus("done");
-							});
+						// db_saved === false はバックエンドの DB 保存失敗を示す。
+						// paper_id が DB に存在しないため layout 解析ジョブを送信しない。
+						if (eventData.db_saved === false) {
+							log.warn(
+								"sse_event",
+								"DB save failed on backend, skipping layout analysis",
+								{ paper_id: pId },
+							);
+							setStatus("done");
+						} else {
+							// レイアウト解析中は "layout_analysis" ステータスを維持し、
+							// 完了後に "done" へ遷移することで GlobalLoading を正しいタイミングで消す
+							// finalPages を明示的に渡す: pagesRef は useEffect 経由で同期されるため、
+							// "done" イベント時点では stale な可能性がある
+							// フォールバックタイムアウト: SSE の内部タイムアウト(130s)より長く設定し、
+							// promise が settle しない極端なケースのみ UI ブロックを解除する
+							setStatus("layout_analysis");
+							const layoutTimeout = setTimeout(
+								() => setStatus("done"),
+								135_000,
+							);
+							triggerLazyLayoutAnalysis(pId, finalPages)
+								.catch((err) =>
+									log.warn(
+										"trigger_lazy_layout_analysis",
+										"Lazy analysis failed",
+										{
+											error: err,
+										},
+									),
+								)
+								.finally(() => {
+									clearTimeout(layoutTimeout);
+									setStatus("done");
+								});
+						}
 					} else {
 						setStatus("done");
 					}

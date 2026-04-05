@@ -289,6 +289,14 @@ async def health_check(request: Request):
     )
 
 
+@app.get("/liveness")
+async def liveness_check():
+    """生存確認用エンドポイント。常に 200 を返すことで、
+    モデル読み込み中の 503 により Kubernetes に kill されるのを防ぐ。
+    """
+    return {"status": "alive"}
+
+
 # --------------------------------------------------
 # レイアウト解析（画像）
 # --------------------------------------------------

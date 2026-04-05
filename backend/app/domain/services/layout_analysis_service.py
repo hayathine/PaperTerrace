@@ -190,6 +190,12 @@ class LayoutAnalysisService:
                         "save_and_notify",
                         f"DB save failed for paper {paper_id}, falling back to transient UUIDs: {db_err}",
                     )
+                    # ForeignKeyViolation は削除済み論文の stale Redis キャッシュが原因の可能性が高い。
+                    # キャッシュを無効化して次回以降の誤ヒットを防ぐ。
+                    try:
+                        self.storage._invalidate_paper_cache(paper_id)
+                    except Exception:
+                        pass
                     import uuid6
 
                     for fig in batch_figures:

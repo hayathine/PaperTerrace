@@ -819,6 +819,7 @@ async def stream(task_id: str):
 
                     # Save to permanent DB ONLY for registered users (prevent DB clutter for transient guest sessions)
                     # Transient sessions rely on Redis and Frontend IndexedDB.
+                    _db_saved = True  # DB 保存成功フラグ（フロントエンドの layout 解析トリガー制御用）
                     if is_registered:
                         try:
                             from app.crud import save_figure_to_db
@@ -913,6 +914,7 @@ async def stream(task_id: str):
                                 task_id=task_id,
                                 paper_id=new_paper_id,
                             )
+                            _db_saved = False
 
                     else:
                         log.warning(
@@ -929,7 +931,7 @@ async def stream(task_id: str):
                     recent_context = full_text[:20000]
                     redis_service.set(f"session:ctx:{s_id}", recent_context, expire=3600)
 
-                    yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': new_paper_id})}\n\n"
+                    yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': new_paper_id, 'db_saved': _db_saved})}\n\n"
                     await asyncio.sleep(0.01)
 
                 else:
