@@ -6,7 +6,6 @@
 import asyncio
 import json
 import os
-import time
 from typing import Any
 
 import httpx
@@ -14,6 +13,7 @@ import httpx
 from common.config import settings
 from common.logger import ServiceLogger
 from common.schemas.inference import LayoutAnalysisRequest
+from common.utils.resilience import CircuitBreaker, CircuitBreakerError  # noqa: F401
 
 
 class InferenceServiceError(Exception):
@@ -33,11 +33,6 @@ class InferenceServiceDownError(InferenceServiceError):
 
     pass
 
-
-class CircuitBreakerError(Exception):
-    """回路ブレーカーエラー"""
-
-    pass
 
 
 log = ServiceLogger("InferenceClient")
@@ -81,13 +76,7 @@ class InferenceServiceClient:
         )
 
         # 回路ブレーカー設定
-        self.failure_threshold = 5
-        self.recovery_timeout = 60  # 1分
-        all_urls = self.layout_urls + ([self.ocr_crops_url] if self.ocr_crops_url else []) + ([self.translate_url] if self.translate_url else [])
-        self._circuit_state: dict[str, dict] = {
-            url: {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
-            for url in all_urls
-        }
+        self._breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=60.0)
 
         # SSL検証設定
         verify_env = str(settings.get("INFERENCE_VERIFY_SSL", "true")).lower()
@@ -121,53 +110,10 @@ class InferenceServiceClient:
         for _ in range(len(self.layout_urls)):
             url = self.layout_urls[self._rr_index % len(self.layout_urls)]
             self._rr_index += 1
-            state = self._circuit_state[url]
-            if not state["circuit_open"]:
-                return url
-            # 回復タイムアウト経過済みなら復旧して返す
-            if state["last_failure_time"] and time.time() - state["last_failure_time"] > self.recovery_timeout:
-                state["circuit_open"] = False
-                state["failure_count"] = 0
+            if self._breaker.is_available(url):
                 return url
         # 全URL遮断中はとりあえず先頭を返す
         return self.layout_urls[0]
-
-    def _check_circuit_breaker(self, service: str):
-        """回路ブレーカーの状態チェック"""
-        state = self._circuit_state[service]
-        if state["circuit_open"]:
-            if (
-                state["last_failure_time"]
-                and time.time() - state["last_failure_time"] > self.recovery_timeout
-            ):
-                state["circuit_open"] = False
-                state["failure_count"] = 0
-                log.info("circuit_breaker", "回路ブレーカーをリセットしました", service=service)
-            else:
-                raise CircuitBreakerError("推論サービスの回路ブレーカーが開いています")
-
-    def _record_success(self, service: str):
-        """成功時の記録"""
-        state = self._circuit_state[service]
-        state["failure_count"] = 0
-        if state["circuit_open"]:
-            state["circuit_open"] = False
-            log.info("circuit_breaker", "推論サービスが復旧しました", service=service)
-
-    def _record_failure(self, service: str):
-        """失敗時の記録"""
-        state = self._circuit_state[service]
-        state["failure_count"] += 1
-        state["last_failure_time"] = time.time()
-
-        if state["failure_count"] >= self.failure_threshold:
-            state["circuit_open"] = True
-            log.error(
-                "circuit_breaker",
-                "推論サービスの回路ブレーカーを開きました",
-                service=service,
-                failure_count=state["failure_count"],
-            )
 
     async def _make_request_with_retry(
         self, base_url: str, method: str, endpoint: str, service: str | None = None, timeout: int | None = None, **kwargs
@@ -182,11 +128,8 @@ class InferenceServiceClient:
             )
 
         # circuit breaker キーは base_url を使用（後方互換で service も受け付ける）
-        cb_key = base_url if base_url in self._circuit_state else (service or base_url)
-        if cb_key not in self._circuit_state:
-            self._circuit_state[cb_key] = {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
-
-        self._check_circuit_breaker(cb_key)
+        cb_key = base_url if base_url in self.layout_urls else (service or base_url)
+        self._breaker.check(cb_key)
 
         last_exception = None
 
@@ -197,7 +140,7 @@ class InferenceServiceClient:
                 response = await self.client.request(method, url, timeout=request_timeout, **kwargs)
                 response.raise_for_status()
 
-                self._record_success(cb_key)
+                self._breaker.record_success(cb_key)
                 return response.json()
 
             except httpx.HTTPError as e:
@@ -251,7 +194,7 @@ class InferenceServiceClient:
                     wait_time = 2**attempt
                     await asyncio.sleep(wait_time)
                 else:
-                    self._record_failure(cb_key)
+                    self._breaker.record_failure(cb_key)
 
         # 全ての試行が失敗
         if isinstance(last_exception, httpx.TimeoutException):
@@ -544,9 +487,7 @@ class InferenceServiceClient:
             raise InferenceServiceDownError("OCR crops service not configured (INFERENCE_OCR_CROPS_URL not set)")
 
         cb_key = self.ocr_crops_url
-        if cb_key not in self._circuit_state:
-            self._circuit_state[cb_key] = {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
-        self._check_circuit_breaker(cb_key)
+        self._breaker.check(cb_key)
 
         timeout = int(settings.get("INFERENCE_OCR_TIMEOUT", "120"))
 
@@ -563,14 +504,14 @@ class InferenceServiceClient:
             resp.raise_for_status()
             result = resp.json()
 
-            self._record_success(cb_key)
+            self._breaker.record_success(cb_key)
             if result.get("success"):
                 return result.get("text", "")
 
             raise InferenceServiceError(result.get("message", "OCR crops failed"))
 
         except httpx.HTTPError as e:
-            self._record_failure(cb_key)
+            self._breaker.record_failure(cb_key)
             raise InferenceServiceDownError(f"OCR crops request failed: {e}") from e
 
     async def translate_text(
@@ -581,9 +522,7 @@ class InferenceServiceClient:
             raise InferenceServiceDownError("Translation service not configured (INFERENCE_TRANSLATE_URL not set)")
 
         cb_key = self.translate_url
-        if cb_key not in self._circuit_state:
-            self._circuit_state[cb_key] = {"failure_count": 0, "last_failure_time": None, "circuit_open": False}
-        self._check_circuit_breaker(cb_key)
+        self._breaker.check(cb_key)
 
         timeout = int(settings.get("INFERENCE_TRANSLATE_TIMEOUT", "120"))
 
@@ -603,7 +542,7 @@ class InferenceServiceClient:
             resp.raise_for_status()
             result = resp.json()
 
-            self._record_success(cb_key)
+            self._breaker.record_success(cb_key)
             if result.get("success"):
                 log.info("translate_text", "翻訳成功", word=text[:20])
                 return result.get("translation", "")
@@ -611,7 +550,7 @@ class InferenceServiceClient:
             raise InferenceServiceError(result.get("message", "Translation failed"))
 
         except httpx.HTTPError as e:
-            self._record_failure(cb_key)
+            self._breaker.record_failure(cb_key)
             log.error("translate_text", "翻訳リクエスト失敗", error=str(e))
             raise InferenceServiceDownError(f"Translation request failed: {e}") from e
 
@@ -623,10 +562,10 @@ class InferenceServiceClient:
             response = await self.client.get(url, timeout=5.0)  # 5 second timeout
             response.raise_for_status()
 
-            self._record_success("layout")
+            self._breaker.record_success("layout")
             return response.json()
         except Exception as e:
-            self._record_failure("layout")
+            self._breaker.record_failure("layout")
             log.error("health_check", "ヘルスチェックエラー", error=str(e))
 
             raise
@@ -643,13 +582,7 @@ class OcrInferenceClient:
         ).lower() == "true"
 
         # 回路ブレーカー（InferenceServiceClient と同構造）
-        self._cb: dict = {
-            "failure_count": 0,
-            "last_failure_time": None,
-            "circuit_open": False,
-        }
-        self.failure_threshold: int = 5
-        self.recovery_timeout: int = 60
+        self._breaker = CircuitBreaker(failure_threshold=5, recovery_timeout=60.0)
 
         self.client = httpx.AsyncClient(
             timeout=httpx.Timeout(self.timeout, connect=10.0),
@@ -660,13 +593,7 @@ class OcrInferenceClient:
         """OCR サービスが利用可能かを確認する。"""
         if self.is_disabled:
             return False
-        if self._cb["circuit_open"]:
-            last_fail = self._cb["last_failure_time"]
-            if last_fail and time.time() - last_fail > self.recovery_timeout:
-                self._cb.update({"circuit_open": False, "failure_count": 0})
-                return True
-            return False
-        return True
+        return self._breaker.is_available(self.ocr_url)
 
     async def ocr_page(
         self, img_bytes: bytes, bboxes: list[dict] | None = None
@@ -695,14 +622,13 @@ class OcrInferenceClient:
             result = resp.json()
 
             if result.get("success"):
-                self._cb["failure_count"] = 0
+                self._breaker.record_success(self.ocr_url)
                 return result.get("text", ""), result.get("words", [])
 
             raise InferenceServiceError(result.get("message", "OCR failed"))
 
         except httpx.HTTPError as e:
-            self._cb["failure_count"] += 1
-            self._cb["last_failure_time"] = time.time()
+            self._breaker.record_failure(self.ocr_url)
             
             # エラー詳細の取得
             status_code = getattr(e.response, "status_code", None) if hasattr(e, "response") else None
@@ -721,10 +647,6 @@ class OcrInferenceClient:
                 error=str(e),
                 body=response_body
             )
-
-            if self._cb["failure_count"] >= self.failure_threshold:
-                self._cb["circuit_open"] = True
-                log.error("ocr_page", "OCR サービスの回路ブレーカーを開きました")
             
             error_detail = f"status={status_code}, error={e}"
             if response_body:

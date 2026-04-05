@@ -3,16 +3,20 @@ Papers Router
 Handles paper management (list, get, delete, claim, like).
 """
 
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from app.auth import CurrentUser, OptionalUser
+from app.core.config import get_worker_api_url
 from app.models.log_schemas.schemas import PaperLikeData
-from app.providers import get_storage_provider
+from app.providers import get_arq_pool, get_redis_client, get_storage_provider
 from app.providers.pg_log import PgLogClient
 from common.logger import ServiceLogger
+from common.processing_status import get_analysis_needs
 
 log = ServiceLogger("Papers")
 
@@ -83,6 +87,9 @@ async def get_paper(paper_id: str, user: OptionalUser = None):
     """
     Get a paper by ID.
     Performs ownership/visibility check.
+
+    オーナーがアクセスした場合、未完了処理（summary/grobid/layout_status修復）を
+    バックグラウンドで自動再トリガーする。
     """
     storage = get_storage_provider()
     paper = storage.get_paper(paper_id)
@@ -101,7 +108,85 @@ async def get_paper(paper_id: str, user: OptionalUser = None):
             {"error": "Access denied / アクセス権限がありません"}, status_code=403
         )
 
+    # オーナーアクセス時: 未完了処理をバックグラウンドで自動修復
+    # layout は重い処理のため include_layout=False（手動エンドポイントのみ）
+    if is_owner and get_analysis_needs(paper).any:
+        asyncio.create_task(
+            _auto_heal_paper(paper, user_id=user.uid, storage=storage)
+        )
+
     return JSONResponse(jsonable_encoder(paper))
+
+
+async def _auto_heal_paper(paper: dict, user_id: str, storage) -> None:
+    """GET アクセス時にバックグラウンドで未完了処理を修復する。
+
+    layout 再解析（重い処理）は行わず、summary / grobid の再実行と
+    layout_status のステータス修復のみを行う。
+    """
+    from app.domain.services.paper_reanalysis import trigger_pending_analyses  # noqa: PLC0415
+
+    try:
+        await trigger_pending_analyses(
+            paper=paper,
+            user_id=user_id,
+            storage=storage,
+            include_layout=False,
+        )
+    except Exception as e:
+        log.warning(
+            "_auto_heal_paper",
+            "自動修復に失敗",
+            paper_id=paper["paper_id"],
+            error=str(e),
+        )
+
+
+@router.post("/papers/{paper_id}/reanalyze")
+async def reanalyze_paper(paper_id: str, user: CurrentUser):
+    """
+    論文の未完了処理（layout / summary / grobid）を手動で再実行する。
+
+    オーナーのみ実行可能。各ステータスが "success" / "skipped" でない場合のみ
+    対応するタスクをトリガーする。layout_json が存在するが layout_status が
+    未設定の場合はステータス修復のみ行う。
+    """
+    from app.domain.services.paper_reanalysis import trigger_pending_analyses  # noqa: PLC0415
+
+    storage = get_storage_provider()
+    paper = storage.get_paper(paper_id)
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+
+    if paper.get("owner_id") != user.uid:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    needs = get_analysis_needs(paper)
+    if not needs.any:
+        return JSONResponse({"triggered": {}, "message": "全ての処理が完了済みです"})
+
+    worker_api_url = get_worker_api_url()
+    arq_pool = await get_arq_pool()
+    sync_redis = get_redis_client()
+
+    triggered = await trigger_pending_analyses(
+        paper=paper,
+        user_id=user.uid,
+        storage=storage,
+        worker_api_url=worker_api_url,
+        arq_pool=arq_pool,
+        sync_redis=sync_redis,
+        include_layout=True,
+    )
+
+    log.info(
+        "reanalyze_paper",
+        "再解析トリガー完了",
+        paper_id=paper_id,
+        triggered=triggered,
+        uid=user.uid,
+    )
+    return JSONResponse({"triggered": triggered})
 
 
 @router.delete("/papers/{paper_id}")

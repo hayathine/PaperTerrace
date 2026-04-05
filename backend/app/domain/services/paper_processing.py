@@ -117,6 +117,7 @@ async def process_paper_summary_task(
             log.warning(
                 "summary_task", "Paper or its text not found", paper_id=paper_id
             )
+            storage.update_processing_status(paper_id, "summary_status", "skipped")
             return
 
         # Skip if already has summary
@@ -126,6 +127,7 @@ async def process_paper_summary_task(
                 "Paper already has full summary, skipping.",
                 paper_id=paper_id,
             )
+            storage.update_processing_status(paper_id, "summary_status", "success")
             return
 
         # Execute summary
@@ -192,6 +194,7 @@ async def process_grobid_enrichment_task(paper_id: str, file_hash: str) -> None:
         result = await grobid.process_fulltext_document(pdf_bytes)
         if not result:
             log.warning("grobid_task", "GROBID 解析失敗", paper_id=paper_id)
+            storage.update_processing_status(paper_id, "grobid_status", "failed")
             return
 
         # GROBID がセクションも要旨も取得できなかった場合（スキャン PDF の可能性）、
@@ -212,6 +215,7 @@ async def process_grobid_enrichment_task(paper_id: str, file_hash: str) -> None:
                     log.warning(
                         "grobid_task", "OCRmyPDF 後も GROBID 解析失敗", paper_id=paper_id
                     )
+                    storage.update_processing_status(paper_id, "grobid_status", "failed")
                     return
                 log.info(
                     "grobid_task",

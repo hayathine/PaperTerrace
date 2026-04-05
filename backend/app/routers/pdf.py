@@ -844,6 +844,9 @@ async def stream(task_id: str):
                             if session_id:
                                 storage.save_session_context(session_id, new_paper_id)
 
+                            # layout_json はインライン処理で保存済みのため layout_status を更新
+                            storage.update_processing_status(new_paper_id, "layout_status", "success")
+
                             log.info(
                                 "stream",
                                 f"ユーザー {user_id} の論文をDBに保存しました",
@@ -1288,6 +1291,8 @@ async def stream(task_id: str):
                         layout_json=json.dumps(all_layout_data),
                         owner_id=user_id,
                     )
+                    # layout_json はインライン処理で保存済みのため layout_status を更新
+                    storage.update_processing_status(paper_id, "layout_status", "success")
                     log.info("ocr_generate", "Paper record saved", paper_id=paper_id)
 
                     # Save Collected Figures and Explain
