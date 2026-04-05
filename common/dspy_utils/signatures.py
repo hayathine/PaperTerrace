@@ -12,6 +12,7 @@ from common.dspy_seed_prompt import (
     SIMPLE_TRANSLATION_SEED,
     SYSTEM_CONTEXT_SEED,
     VISION_FIGURE_SEED,
+    DEEP_EXPLANATION_SEED,
 )
 
 # =============================================================
@@ -249,3 +250,13 @@ class SentenceTranslation(dspy.Signature):
     input_data: str = dspy.InputField(desc="The sentence to translate")
     paper_context: str = dspy.InputField(desc="Academic paper context")
     translation: str = dspy.OutputField(desc="Full translation of the sentence")
+
+
+class DeepExplanation(dspy.Signature):
+    __doc__ = DEEP_EXPLANATION_SEED
+
+    input_data: str = dspy.InputField(desc="The target word or phrase to explain")
+    summary_context: str = dspy.InputField(desc="Paper summary context")
+    context: str = dspy.InputField(desc="Immediate surrounding text context")
+
+    explanation: str = dspy.OutputField(desc="Detailed technical explanation")

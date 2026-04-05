@@ -8,6 +8,7 @@ from common.dspy_utils.signatures import (
     BuildDecisionProfile,
     ChatGeneral,
     ContextAwareTranslation,
+    DeepExplanation,
     ExtractUserTraits,
     PaperRecommendation,
     PaperSummary,
@@ -332,6 +333,19 @@ class SentenceTranslationModule(UniversalTaskModule):
     def forward(self, paper_context: str, target_word: str, **kwargs):
         return super().forward(
             paper_context=paper_context,
+            input_data=target_word,
+            **kwargs,
+        )
+
+
+class DeepExplanationModule(UniversalTaskModule):
+    def __init__(self):
+        super().__init__(DeepExplanation)
+
+    def forward(self, summary_context: str, context: str, target_word: str, **kwargs):
+        return super().forward(
+            summary_context=summary_context,
+            context=context,
             input_data=target_word,
             **kwargs,
         )

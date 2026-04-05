@@ -244,6 +244,11 @@ Explain the following points:
 
 Verbalize visual information so it can be understood without seeing the figure."""
 
+SEED_DEEP_EXPLANATION_MODULE = """Provide a deep, academic explanation for the target word or phrase based on the context.
+Respond entirely in the language specified by `lang_name`.
+The explanation should go beyond simple translation, covering technical nuances, conceptual background, and its significance in the provided context (paper summary and surrounding excerpt).
+Output ONLY the detailed explanation."""
+
 PROMPT_PDF_VISION_ANALYZE = """Analyze this figure (graph, table, or diagram) and explain the following points in {lang_name}.
 {caption_hint}
 
@@ -275,12 +280,13 @@ CHAT_GENERAL_SEED = SEED_CHAT_MODULE
 ADVERSARIAL_CRITIQUE_SEED = SEED_ADVERSARIAL_MODULE
 ADVERSARIAL_CRITIQUE_FROM_PDF_PROMPT = PROMPT_PDF_ADVERSARIAL_CRITIQUE
 VISION_FIGURE_SEED = SEED_VISION_FIGURE_MODULE
+DEEP_EXPLANATION_SEED = SEED_DEEP_EXPLANATION_MODULE
 
 # Additional Aliases for Domain Services
 CHAT_GENERAL_FROM_PDF_PROMPT = PROMPT_PDF_CHAT_GENERAL
 CHAT_WITH_FIGURE_PROMPT = PROMPT_PDF_CHAT_WITH_FIGURE
 CORE_SYSTEM_PROMPT = PROMPT_CORE_SYSTEM
-PAPER_SUMMARY_FROM_PDF_PROMPT = PAPER_SUMMARY_FROM_PDF_PROMPT # (Self-aliased or already exists)
+PAPER_SUMMARY_FROM_PDF_PROMPT = PAPER_SUMMARY_FROM_PDF_PROMPT 
 VISION_ANALYZE_FROM_PDF_PROMPT = PROMPT_PDF_VISION_ANALYZE
 VISION_ANALYZE_FIGURE_PROMPT = PROMPT_PDF_VISION_ANALYZE
 EXPLAIN_FROM_PDF_PROMPT = PROMPT_PDF_TERM_EXPLAIN
@@ -290,4 +296,3 @@ TRANSLATE_FROM_PDF_PROMPT = PROMPT_PDF_TERM_TRANSLATE
 # Inference Service / LlamaCpp Aliases
 DICT_TRANSLATE_SYSTEM_PROMPT = PROMPT_DIRECT_DICT_TRANSLATE_SYSTEM
 DICT_TRANSLATE_LONG_SYSTEM_PROMPT = PROMPT_DIRECT_DICT_TRANSLATE_LONG_SYSTEM
-
