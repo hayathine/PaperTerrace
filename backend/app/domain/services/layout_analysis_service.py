@@ -11,11 +11,12 @@ from app.domain.services.paper_processing import process_figure_analysis_task
 from app.providers import get_storage_provider
 from app.providers.image_storage import async_save_page_image, get_pdf_bytes
 from app.providers.inference_client import get_inference_client
+from common import settings
 from common.logger import ServiceLogger
 
 log = ServiceLogger("LayoutAnalysis")
 
-_PDF_DPI = 200  # ページ画像のレンダリング DPI（inference-service と同じ値）
+_PDF_DPI = int(settings.get("PDF_DPI", 150))  # ページ画像のレンダリング DPI（pdf_ocr_service と同じ値）
 _PDF_ZOOM = _PDF_DPI / 72  # pixel → PDF points 変換係数の逆数
 
 

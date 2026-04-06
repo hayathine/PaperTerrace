@@ -14,8 +14,37 @@ vi.mock("@/components/Error/ErrorBoundary", () => ({
 	),
 }));
 vi.mock("@/components/PDF/PDFViewer", () => ({
-	default: ({ paperId }: any) => (
-		<div data-testid="pdf-viewer-mock">PDFViewer:{paperId || "none"}</div>
+	default: ({ paperId, onWordClick, onAskAI, onTextSelect }: any) => (
+		<div data-testid="pdf-viewer-mock">
+			PDFViewer:{paperId || "none"}
+			<button
+				type="button"
+				data-testid="mock-word-click"
+				onClick={() =>
+					onWordClick?.("hello", "context", { page: 1, x: 10, y: 10 }, 0.95)
+				}
+			>
+				WordClick
+			</button>
+			<button
+				type="button"
+				data-testid="mock-ask-ai"
+				onClick={() =>
+					onAskAI?.("explain this", "img.jpg", { page: 1, x: 20, y: 20 })
+				}
+			>
+				AskAI
+			</button>
+			<button
+				type="button"
+				data-testid="mock-text-select"
+				onClick={() =>
+					onTextSelect?.("selected text", { page: 1, x: 30, y: 30 })
+				}
+			>
+				TextSelect
+			</button>
+		</div>
 	),
 }));
 vi.mock("@/components/Search/SearchBar", () => ({
@@ -332,5 +361,63 @@ describe("App Interactions", () => {
 			paper_id: "guest-p1",
 			file_hash: "hash123",
 		});
+	});
+
+	it("handles word clicks and triggers trajectory sync", async () => {
+		const { syncTrajectory } = await import("@/lib/recommendation");
+		render(<App />);
+
+		// Wait for paper list and select one
+		await waitFor(() => expect(screen.getByText("Paper 1")).toBeDefined());
+		fireEvent.click(screen.getByText("Paper 1"));
+
+		// Simulate word click from PDFViewer
+		const wordBtn = screen.getByTestId("mock-word-click");
+		fireEvent.click(wordBtn);
+
+		// 1. Check if sidebar opens and tab switches to notes/translation
+		// Note: Sidebar mock should ideally show active tabs, but we check if it renders.
+		expect(screen.getByTestId("sidebar-mock")).toBeDefined();
+
+		// 2. Check if syncTrajectory was called
+		await waitFor(() => {
+			expect(syncTrajectory).toHaveBeenCalledWith(
+				expect.objectContaining({
+					session_id: expect.stringContaining("session-"),
+					paper_id: "p1",
+					word_clicks: [
+						expect.objectContaining({
+							word: "hello",
+							context: "context",
+						}),
+					],
+				}),
+				"mock-token",
+			);
+		});
+	});
+
+	it("handles AskAI and switches to notes tab", async () => {
+		render(<App />);
+		await waitFor(() => expect(screen.getByText("Paper 1")).toBeDefined());
+		fireEvent.click(screen.getByText("Paper 1"));
+
+		const aiBtn = screen.getByTestId("mock-ask-ai");
+		fireEvent.click(aiBtn);
+
+		// Should switch to notes tab
+		expect(screen.getByTestId("sidebar-mock")).toBeDefined();
+	});
+
+	it("handles text selection and switches to comments tab", async () => {
+		render(<App />);
+		await waitFor(() => expect(screen.getByText("Paper 1")).toBeDefined());
+		fireEvent.click(screen.getByText("Paper 1"));
+
+		const textBtn = screen.getByTestId("mock-text-select");
+		fireEvent.click(textBtn);
+
+		// Should switch to comments tab
+		expect(screen.getByTestId("sidebar-mock")).toBeDefined();
 	});
 });

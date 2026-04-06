@@ -216,7 +216,8 @@ function App() {
 		};
 
 		fetchPapers();
-	}, [user, token]);
+		// eslint-disable-next-line react-hooks/exhaustive-deps
+	}, [user?.id, token]);
 
 	// ゲスト: IndexedDBのキャッシュから論文一覧を読み込む
 	useEffect(() => {
@@ -283,7 +284,10 @@ function App() {
 							headers: { Authorization: `Bearer ${token}` },
 						});
 						const data = await papersRes.json();
-						if (data?.papers) setUploadedPapers(data.papers);
+						if (data?.papers) {
+							setUploadedPapers(data.papers);
+							setIsPapersLoading(false);
+						}
 					}
 				} catch (err) {
 					log.error("claim_paper", "ゲスト論文のクレームに失敗しました", {
@@ -385,6 +389,7 @@ function App() {
 			const headers: HeadersInit = {};
 			if (token) headers.Authorization = `Bearer ${token}`;
 
+			setIsPapersLoading(true);
 			fetch(`${API_URL}/api/papers`, { headers })
 				.then((res) => res.json())
 				.then((data) => {
@@ -398,6 +403,9 @@ function App() {
 					log.error("refresh_papers", "Failed to refresh papers", {
 						error: err,
 					});
+				})
+				.finally(() => {
+					setIsPapersLoading(false);
 				});
 		}
 	};

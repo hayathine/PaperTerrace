@@ -173,7 +173,7 @@ class ORMStorageAdapter(StorageInterface):
         ocr_engine: Optional[str] = None,
         scanned_page_count: int = 0,
     ) -> str:
-        return self._with_recovery(
+        result = self._with_recovery(
             lambda: self.papers.upsert(
                 paper_id=paper_id,
                 file_hash=file_hash,
@@ -188,6 +188,8 @@ class ORMStorageAdapter(StorageInterface):
                 scanned_page_count=scanned_page_count,
             )
         )
+        self._invalidate_paper_cache(paper_id)
+        return result
 
     def _invalidate_paper_cache(self, paper_id: str) -> None:
         """論文メタデータキャッシュを削除する。"""
