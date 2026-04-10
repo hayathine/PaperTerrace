@@ -59,7 +59,7 @@ vi.mock("@/lib/logger", () => ({
 
 // Mock components
 vi.mock("./PDFPage", () => ({
-	default: ({ page, onWordClick }: any) => (
+	default: ({ page, onWordClick, onVisible }: any) => (
 		<div data-testid={`pdf-page-${page.page_num}`}>
 			Page {page.page_num}
 			<button
@@ -70,6 +70,13 @@ vi.mock("./PDFPage", () => ({
 				data-testid={`click-word-${page.page_num}`}
 			>
 				Click Word
+			</button>
+			<button
+				type="button"
+				onClick={() => onVisible?.(page.page_num)}
+				data-testid={`visible-${page.page_num}`}
+			>
+				Make Visible
 			</button>
 		</div>
 	),
@@ -135,6 +142,12 @@ describe("PDFViewer Component", () => {
 		// Mock scrollTo
 		window.HTMLElement.prototype.scrollTo = vi.fn();
 		window.HTMLElement.prototype.scrollIntoView = vi.fn();
+
+		// Mock requestAnimationFrame to call its callback immediately
+		vi.spyOn(window, "requestAnimationFrame").mockImplementation((cb) => {
+			cb(0);
+			return 0;
+		});
 	});
 
 	it("renders in idle state without props", () => {

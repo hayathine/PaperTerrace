@@ -1,5 +1,6 @@
 
 
+from app.domain.features.cache_utils import get_or_create_pdf_cache
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.providers import get_ai_provider, get_storage_provider
 from common.config import settings
@@ -110,34 +111,21 @@ class SummaryService:
                 # コンテキストキャッシュを取得または作成（chatと共有）
                 pdf_cache_name = None
                 if paper_id:
-                    pdf_cache_key = f"paper_cache_pdf:{paper_id}"
-                    pdf_cache_name = self.redis.get(pdf_cache_key)
-                    if not pdf_cache_name:
-                        try:
-                            pdf_cache_name = await self.ai_provider.create_context_cache(
-                                model=self.model,
-                                contents=pdf_bytes,
-                                ttl_minutes=CACHE_TTL_MINUTES,
-                            )
-                            self.redis.set(
-                                pdf_cache_key,
-                                pdf_cache_name,
-                                expire=CACHE_TTL_MINUTES * 60,
-                            )
-                            log.info(
-                                "summarize_full",
-                                "PDFコンテキストキャッシュを作成しました",
-                                paper_id=paper_id,
-                                cache_name=pdf_cache_name,
-                            )
-                        except Exception as e:
-                            log.warning(
-                                "summarize_full",
-                                "コンテキストキャッシュの作成に失敗しました。キャッシュなしで続行します",
-                                error=str(e),
-                                paper_id=paper_id,
-                            )
-                            pdf_cache_name = None
+                    pdf_cache_name = await get_or_create_pdf_cache(
+                        paper_id=paper_id,
+                        pdf_contents=pdf_bytes,
+                        ai_provider=self.ai_provider,
+                        redis=self.redis,
+                        model=self.model,
+                        ttl_minutes=CACHE_TTL_MINUTES,
+                    )
+                    if pdf_cache_name:
+                        log.info(
+                            "summarize_full",
+                            "PDFコンテキストキャッシュを取得/作成しました",
+                            paper_id=paper_id,
+                            cache_name=pdf_cache_name,
+                        )
 
                 log.debug(
                     "summarize_full",

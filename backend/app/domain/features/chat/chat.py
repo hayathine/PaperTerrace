@@ -5,6 +5,7 @@ AIチャットアシスタント機能を提供するモジュール
 
 
 
+from app.domain.features.cache_utils import get_or_create_pdf_cache
 from app.providers import get_ai_provider
 from common.config import settings
 from common.dspy_utils.modules import ChatModule
@@ -87,19 +88,14 @@ class ChatService:
             if pdf_input or pdf_cache_name:
                 # 初回: キャッシュを作成
                 if not pdf_cache_name and pdf_input and paper_id:
-                    try:
-                        pdf_cache_name = await self.ai_provider.create_context_cache(
-                            model=self.model,
-                            contents=pdf_input,
-                            ttl_minutes=self.cache_ttl_minutes,
-                        )
-                        self.redis.set(
-                            f"paper_cache_pdf:{paper_id}",
-                            pdf_cache_name,
-                            expire=self.cache_ttl_minutes * 60,
-                        )
-                    except Exception as e:
-                        logger.warning(f"PDFキャッシュ作成失敗 ({paper_id}): {e}")
+                    pdf_cache_name = await get_or_create_pdf_cache(
+                        paper_id=paper_id,
+                        pdf_contents=pdf_input,
+                        ai_provider=self.ai_provider,
+                        redis=self.redis,
+                        model=self.model,
+                        ttl_minutes=self.cache_ttl_minutes,
+                    )
 
                 prompt = CHAT_GENERAL_FROM_PDF_PROMPT.format(
                     lang_name=lang_name,
@@ -281,19 +277,14 @@ class ChatService:
             if pdf_bytes or pdf_cache_name:
                 # Cache creation logic (same as in chat method)
                 if not pdf_cache_name and pdf_bytes and paper_id:
-                    try:
-                        pdf_cache_name = await self.ai_provider.create_context_cache(
-                            model=self.model,
-                            contents=pdf_bytes,
-                            ttl_minutes=self.cache_ttl_minutes,
-                        )
-                        self.redis.set(
-                            f"paper_cache_pdf:{paper_id}",
-                            pdf_cache_name,
-                            expire=self.cache_ttl_minutes * 60,
-                        )
-                    except Exception:
-                        pass
+                    pdf_cache_name = await get_or_create_pdf_cache(
+                        paper_id=paper_id,
+                        pdf_contents=pdf_bytes,
+                        ai_provider=self.ai_provider,
+                        redis=self.redis,
+                        model=self.model,
+                        ttl_minutes=self.cache_ttl_minutes,
+                    )
 
                 prompt = CHAT_GENERAL_FROM_PDF_PROMPT.format(
                     lang_name=lang_name,
