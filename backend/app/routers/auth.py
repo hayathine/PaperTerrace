@@ -173,6 +173,39 @@ async def get_current_user_stats(user: CurrentUser):
         return UserStats()
 
 
+@router.get("/me/translations")
+async def get_user_translations(
+    user: CurrentUser,
+    page: int = 1,
+    per_page: int = 20,
+):
+    """ユーザーの保存済み翻訳・解説履歴を返す。"""
+    storage = get_storage_provider()
+
+    try:
+        notes, total = storage.get_user_translations(user.uid, page, per_page)
+        return {
+            "translations": [
+                {
+                    "term": n.term,
+                    "note": n.note,
+                    "paper_id": n.paper_id,
+                    "page_number": n.page_number,
+                    "created_at": n.created_at,
+                }
+                for n in notes
+            ],
+            "total": total,
+            "page": page,
+            "per_page": per_page,
+        }
+    except Exception as e:
+        log.exception(
+            "translations", "翻訳履歴の取得に失敗しました", uid=user.uid, error=str(e)
+        )
+        return {"translations": [], "total": 0, "page": page, "per_page": per_page}
+
+
 @router.delete("/me", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_current_user(user: CurrentUser):
     """

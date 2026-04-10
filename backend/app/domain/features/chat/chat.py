@@ -8,7 +8,7 @@ AIチャットアシスタント機能を提供するモジュール
 from app.providers import get_ai_provider
 from common.config import settings
 from common.dspy_utils.modules import ChatModule
-from common.dspy_utils.trace import TraceContext, trace_dspy_call
+from common.dspy_utils.trace import TraceContext, save_trace, trace_dspy_call
 from common.logger import logger
 from common.dspy_seed_prompt import (
     CHAT_GENERAL_FROM_PDF_PROMPT,
@@ -111,6 +111,21 @@ class ChatService:
                     pdf_bytes=pdf_input if (not pdf_cache_name and isinstance(pdf_input, bytes)) else None,
                     cached_content_name=pdf_cache_name,
                     model=self.model,
+                )
+                # PDF経由チャットのトレース記録（DSPyを通さないため save_trace を直接呼ぶ）
+                _response_text = response_data.get("text", "") if isinstance(response_data, dict) else str(response_data or "")
+                trace_id = save_trace(
+                    module_name="ChatModule",
+                    signature="ChatGeneral",
+                    inputs={
+                        "document_context": "PDF経由",
+                        "history_text": history_text_for_prompt,
+                        "user_message": user_message,
+                        "user_persona": "Helpful Research Assistant",
+                        "lang_name": lang_name,
+                    },
+                    outputs={"answer": _response_text},
+                    context=TraceContext(user_id=user_id, session_id=session_id, paper_id=paper_id),
                 )
             elif image_bytes:
                 # 画像付きチャット

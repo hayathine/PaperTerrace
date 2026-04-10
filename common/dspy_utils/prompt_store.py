@@ -62,6 +62,9 @@ class _StandalonePgClient:
 
         if not self._url:
             raise RuntimeError("LOG_DATABASE_URL が設定されていません")
+        # SQLAlchemy 方言プレフィックスを除去（psycopg2 は純粋な postgresql:// を期待）
+        if "+" in self._url.split("://")[0]:
+            self._url = "postgresql" + self._url[self._url.index("://"):]
         # 接続確認
         conn = psycopg2.connect(self._url)
         conn.close()
@@ -151,7 +154,7 @@ def _deserialize_module(module: dspy.Module, state_json: str) -> dspy.Module:
 # ---------------------------------------------------------------------------
 
 
-def save_candidates_to_bigquery(
+def save_candidates(
     program_name: str,
     candidates: list[dspy.Module],
 ) -> str:
@@ -190,7 +193,7 @@ def save_candidates_to_bigquery(
     return optimization_id
 
 
-def load_candidates_from_bigquery(
+def load_candidates(
     module_factory: Callable[[], dspy.Module],
     program_name: str,
 ) -> list[dspy.Module]:

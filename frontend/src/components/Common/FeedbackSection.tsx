@@ -115,6 +115,12 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 				<textarea
 					value={comment}
 					onChange={(e) => setComment(e.target.value)}
+					onKeyDown={(e) => {
+						if (e.key === "Enter" && e.ctrlKey) {
+							e.preventDefault();
+							handleCommentSubmit();
+						}
+					}}
 					placeholder={t("common.feedback.placeholder")}
 					rows={1}
 					className={`w-full p-3 pr-[110px] text-xs bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-slate-200 transition-all resize-none ${compact ? "min-h-[38px] p-2 pr-[80px] text-[10px]" : "min-h-[46px]"}`}

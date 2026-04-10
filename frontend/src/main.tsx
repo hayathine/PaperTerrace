@@ -1,6 +1,7 @@
 import * as Sentry from "@sentry/react";
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { BrowserRouter } from "react-router-dom";
 import App from "./App.tsx";
 import ErrorBoundary from "./components/Error/ErrorBoundary";
 import { GLITCHTIP_DSN, SENTRY_TUNNEL } from "./config";
@@ -50,11 +51,13 @@ window.addEventListener("unhandledrejection", showStaticMaintenance);
 ReactDOM.createRoot(document.getElementById("root")!).render(
 	<React.StrictMode>
 		<ErrorBoundary>
-			<AuthProvider>
-				<LoadingProvider>
-					<App />
-				</LoadingProvider>
-			</AuthProvider>
+			<BrowserRouter>
+				<AuthProvider>
+					<LoadingProvider>
+						<App />
+					</LoadingProvider>
+				</AuthProvider>
+			</BrowserRouter>
 		</ErrorBoundary>
 	</React.StrictMode>,
 );

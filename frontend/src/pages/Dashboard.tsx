@@ -1,0 +1,488 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+	fetchUserPapers,
+	fetchUserStats,
+	fetchUserTranslations,
+	type PaperEntry,
+	type TranslationEntry,
+	type UserStats,
+} from "@/lib/dashboard";
+import { createLogger } from "@/lib/logger";
+
+const log = createLogger("Dashboard");
+
+const TRANSLATIONS_PER_PAGE = 20;
+
+function StatCard({
+	label,
+	value,
+	icon,
+}: {
+	label: string;
+	value: number;
+	icon: React.ReactNode;
+}) {
+	return (
+		<div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col items-center gap-2 min-w-[130px]">
+			<div className="w-10 h-10 rounded-xl bg-orange-50 flex items-center justify-center text-orange-600">
+				{icon}
+			</div>
+			<span className="text-2xl font-bold text-slate-800">{value}</span>
+			<span className="text-xs font-semibold text-slate-400 uppercase tracking-wider text-center">
+				{label}
+			</span>
+		</div>
+	);
+}
+
+export default function Dashboard() {
+	const { user, token } = useAuth();
+	const navigate = useNavigate();
+
+	const [stats, setStats] = useState<UserStats | null>(null);
+	const [papers, setPapers] = useState<PaperEntry[]>([]);
+	const [translations, setTranslations] = useState<TranslationEntry[]>([]);
+	const [totalTranslations, setTotalTranslations] = useState(0);
+	const [page, setPage] = useState(1);
+	const [loading, setLoading] = useState(true);
+	const [papersLoading, setPapersLoading] = useState(true);
+	const [translationsLoading, setTranslationsLoading] = useState(false);
+
+	useEffect(() => {
+		if (!token) return;
+		setLoading(true);
+		fetchUserStats(token)
+			.then(setStats)
+			.catch((e) => log.error("fetch_stats", "Failed to fetch stats", { e }))
+			.finally(() => setLoading(false));
+		setPapersLoading(true);
+		fetchUserPapers(token, 10)
+			.then((res) => setPapers(res.papers))
+			.catch((e) => log.error("fetch_papers", "Failed to fetch papers", { e }))
+			.finally(() => setPapersLoading(false));
+	}, [token]);
+
+	useEffect(() => {
+		if (!token) return;
+		setTranslationsLoading(true);
+		fetchUserTranslations(token, page, TRANSLATIONS_PER_PAGE)
+			.then((res) => {
+				setTranslations(res.translations);
+				setTotalTranslations(res.total);
+			})
+			.catch((e) =>
+				log.error("fetch_translations", "Failed to fetch translations", { e }),
+			)
+			.finally(() => setTranslationsLoading(false));
+	}, [token, page]);
+
+	const totalPages = Math.ceil(totalTranslations / TRANSLATIONS_PER_PAGE);
+
+	const avatarUrl = user?.image;
+	const displayName = user?.name ?? user?.email ?? "ユーザー";
+	const email = user?.email ?? "";
+	const createdAt = user?.createdAt
+		? new Date(user.createdAt).toLocaleDateString("ja-JP", {
+				year: "numeric",
+				month: "long",
+				day: "numeric",
+			})
+		: "";
+
+	return (
+		<div className="min-h-screen bg-slate-50">
+			{/* Header */}
+			<header className="bg-white border-b border-slate-100 sticky top-0 z-10">
+				<div className="max-w-3xl mx-auto px-4 py-3 flex items-center gap-3">
+					<button
+						type="button"
+						onClick={() => navigate("/")}
+						className="p-2 rounded-xl hover:bg-slate-100 text-slate-500 transition-colors"
+						aria-label="戻る"
+					>
+						<svg
+							className="w-5 h-5"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth="2"
+								d="M15 19l-7-7 7-7"
+							/>
+						</svg>
+					</button>
+					<div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center">
+						<svg
+							className="w-4 h-4 text-white"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth="2"
+								d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+							/>
+						</svg>
+					</div>
+					<span className="font-bold text-slate-700">マイダッシュボード</span>
+				</div>
+			</header>
+
+			<main className="max-w-3xl mx-auto px-4 py-8 space-y-8">
+				{/* Profile */}
+				<section className="bg-white rounded-2xl p-6 shadow-sm border border-slate-200 flex items-center gap-5">
+					{avatarUrl ? (
+						<img
+							src={avatarUrl}
+							alt={displayName}
+							className="w-16 h-16 rounded-2xl object-cover shadow-md"
+						/>
+					) : (
+						<div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-white text-2xl font-bold shadow-md shadow-orange-200">
+							{displayName.charAt(0).toUpperCase()}
+						</div>
+					)}
+					<div className="flex-1 min-w-0">
+						<p className="text-lg font-bold text-slate-800 truncate">
+							{displayName}
+						</p>
+						{email && (
+							<p className="text-sm text-slate-400 truncate">{email}</p>
+						)}
+						{createdAt && (
+							<p className="text-xs text-slate-300 mt-1">{createdAt} 登録</p>
+						)}
+					</div>
+				</section>
+
+				{/* Stats */}
+				<section>
+					<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+						学習サマリー
+					</h2>
+					{loading ? (
+						<div className="flex gap-3 overflow-x-auto pb-1">
+							{[...Array(4)].map((_, i) => (
+								<div
+									// biome-ignore lint/suspicious/noArrayIndexKey: skeleton
+									key={i}
+									className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col items-center gap-2 min-w-[130px] animate-pulse"
+								>
+									<div className="w-10 h-10 rounded-xl bg-slate-100" />
+									<div className="w-8 h-6 bg-slate-100 rounded" />
+									<div className="w-16 h-3 bg-slate-100 rounded" />
+								</div>
+							))}
+						</div>
+					) : (
+						<div className="flex gap-3 overflow-x-auto pb-1">
+							<StatCard
+								label="読んだ論文"
+								value={stats?.paper_count ?? 0}
+								icon={
+									<svg
+										className="w-5 h-5"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth="2"
+											d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+										/>
+									</svg>
+								}
+							/>
+							<StatCard
+								label="ノート"
+								value={stats?.note_count ?? 0}
+								icon={
+									<svg
+										className="w-5 h-5"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth="2"
+											d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+										/>
+									</svg>
+								}
+							/>
+							<StatCard
+								label="翻訳・解説"
+								value={stats?.translation_count ?? 0}
+								icon={
+									<svg
+										className="w-5 h-5"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth="2"
+											d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+										/>
+									</svg>
+								}
+							/>
+							<StatCard
+								label="チャット"
+								value={stats?.chat_count ?? 0}
+								icon={
+									<svg
+										className="w-5 h-5"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth="2"
+											d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+										/>
+									</svg>
+								}
+							/>
+						</div>
+					)}
+				</section>
+
+				{/* Papers History */}
+				<section>
+					<div className="flex items-center justify-between mb-3">
+						<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+							読んだ論文
+						</h2>
+						{papers.length > 0 && (
+							<span className="text-xs text-slate-400">{papers.length} 件</span>
+						)}
+					</div>
+					<div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+						{papersLoading ? (
+							<div className="divide-y divide-slate-100">
+								{[...Array(4)].map((_, i) => (
+									<div
+										// biome-ignore lint/suspicious/noArrayIndexKey: skeleton
+										key={i}
+										className="px-5 py-4 animate-pulse flex gap-3"
+									>
+										<div className="w-8 h-8 rounded-lg bg-slate-100 shrink-0" />
+										<div className="flex-1 space-y-2 py-1">
+											<div className="w-3/4 h-3.5 bg-slate-100 rounded" />
+											<div className="w-1/3 h-2.5 bg-slate-100 rounded" />
+										</div>
+									</div>
+								))}
+							</div>
+						) : papers.length === 0 ? (
+							<div className="flex flex-col items-center justify-center py-16 text-slate-300">
+								<svg
+									className="w-12 h-12 mb-3"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth="1.5"
+										d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+									/>
+								</svg>
+								<p className="text-sm font-semibold">論文はまだありません</p>
+								<p className="text-xs mt-1">
+									PDFをアップロードして読み始めましょう
+								</p>
+							</div>
+						) : (
+							<div className="divide-y divide-slate-100">
+								{papers.map((p) => (
+									<button
+										key={p.paper_id}
+										type="button"
+										onClick={() => navigate(`/paper/${p.paper_id}`)}
+										className="w-full px-5 py-4 hover:bg-orange-50 transition-colors flex items-center gap-3 text-left group"
+									>
+										<div className="w-8 h-8 rounded-lg bg-orange-50 group-hover:bg-orange-100 flex items-center justify-center text-orange-500 shrink-0 transition-colors">
+											<svg
+												className="w-4 h-4"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth="2"
+													d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+												/>
+											</svg>
+										</div>
+										<div className="flex-1 min-w-0">
+											<p className="text-sm font-semibold text-slate-700 truncate group-hover:text-orange-700 transition-colors">
+												{p.title ?? "タイトル未設定"}
+											</p>
+											<p className="text-xs text-slate-400 mt-0.5">
+												{new Date(p.created_at).toLocaleDateString("ja-JP", {
+													year: "numeric",
+													month: "short",
+													day: "numeric",
+												})}
+											</p>
+										</div>
+										<svg
+											className="w-4 h-4 text-slate-300 group-hover:text-orange-400 shrink-0 transition-colors"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth="2"
+												d="M9 5l7 7-7 7"
+											/>
+										</svg>
+									</button>
+								))}
+							</div>
+						)}
+					</div>
+				</section>
+
+				{/* Translation History */}
+				<section>
+					<div className="flex items-center justify-between mb-3">
+						<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+							翻訳・解説履歴
+						</h2>
+						{totalTranslations > 0 && (
+							<span className="text-xs text-slate-400">
+								全 {totalTranslations} 件
+							</span>
+						)}
+					</div>
+
+					<div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+						{translationsLoading ? (
+							<div className="divide-y divide-slate-100">
+								{[...Array(5)].map((_, i) => (
+									<div
+										// biome-ignore lint/suspicious/noArrayIndexKey: skeleton
+										key={i}
+										className="px-5 py-4 animate-pulse flex gap-3"
+									>
+										<div className="flex-1 space-y-2">
+											<div className="w-24 h-4 bg-slate-100 rounded" />
+											<div className="w-48 h-3 bg-slate-100 rounded" />
+										</div>
+										<div className="w-12 h-3 bg-slate-100 rounded mt-1" />
+									</div>
+								))}
+							</div>
+						) : translations.length === 0 ? (
+							<div className="flex flex-col items-center justify-center py-16 text-slate-300">
+								<svg
+									className="w-12 h-12 mb-3"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth="1.5"
+										d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+									/>
+								</svg>
+								<p className="text-sm font-semibold">
+									翻訳・解説履歴はありません
+								</p>
+								<p className="text-xs mt-1 text-center">
+									辞書タブで単語を保存すると履歴が表示されます
+								</p>
+							</div>
+						) : (
+							<div className="divide-y divide-slate-100">
+								{translations.map((t, i) => (
+									<div
+										// biome-ignore lint/suspicious/noArrayIndexKey: stable list
+										key={`${t.term}-${i}`}
+										className="px-5 py-4 hover:bg-slate-50 transition-colors"
+									>
+										<div className="flex items-start justify-between gap-3">
+											<div className="flex-1 min-w-0">
+												<p className="font-semibold text-slate-700 text-sm">
+													{t.term}
+												</p>
+												{t.note && (
+													<p className="text-xs text-slate-400 mt-0.5 line-clamp-2">
+														{t.note}
+													</p>
+												)}
+											</div>
+											<div className="text-right shrink-0">
+												{t.page_number != null && (
+													<span className="text-xs text-slate-300">
+														P.{t.page_number}
+													</span>
+												)}
+												<p className="text-[10px] text-slate-300 mt-0.5">
+													{new Date(t.created_at).toLocaleDateString("ja-JP", {
+														month: "short",
+														day: "numeric",
+													})}
+												</p>
+											</div>
+										</div>
+									</div>
+								))}
+							</div>
+						)}
+
+						{/* Pagination */}
+						{totalPages > 1 && (
+							<div className="border-t border-slate-200 px-5 py-3 flex items-center justify-between">
+								<button
+									type="button"
+									onClick={() => setPage((p) => Math.max(1, p - 1))}
+									disabled={page <= 1}
+									className="text-xs font-semibold text-orange-600 disabled:text-slate-300 hover:underline disabled:no-underline"
+								>
+									← 前へ
+								</button>
+								<span className="text-xs text-slate-400">
+									{page} / {totalPages}
+								</span>
+								<button
+									type="button"
+									onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+									disabled={page >= totalPages}
+									className="text-xs font-semibold text-orange-600 disabled:text-slate-300 hover:underline disabled:no-underline"
+								>
+									次へ →
+								</button>
+							</div>
+						)}
+					</div>
+				</section>
+			</main>
+		</div>
+	);
+}

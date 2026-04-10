@@ -471,7 +471,25 @@ class ORMStorageAdapter(StorageInterface):
         return self._with_recovery(lambda: self.users.delete(user_id))
 
     def get_user_stats(self, user_id: str) -> dict:
-        return self._with_recovery(lambda: self.papers.get_user_stats(user_id))
+        stats = self._with_recovery(lambda: self.papers.get_user_stats(user_id))
+        stats["note_count"] = self._with_recovery(
+            lambda: self.notes.get_count_by_user(user_id)
+        )
+        stats["translation_count"] = self._with_recovery(
+            lambda: self.notes.get_translation_count_by_user(user_id)
+        )
+        stats["chat_count"] = self._with_recovery(
+            lambda: self.chat.get_count_by_user(user_id)
+        )
+        return stats
+
+    def get_user_translations(
+        self, user_id: str, page: int = 1, per_page: int = 20
+    ) -> tuple[list, int]:
+        """ユーザーの保存済み翻訳・解説履歴を返す。"""
+        return self._with_recovery(
+            lambda: self.notes.get_user_translations(user_id, page, per_page)
+        )
 
     # ===== Social paper methods =====
 

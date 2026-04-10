@@ -9,7 +9,7 @@ from common.dspy_utils.modules import (
     PaperSummaryModule,
     SectionSummaryModule,
 )
-from common.dspy_utils.trace import TraceContext, trace_dspy_call
+from common.dspy_utils.trace import TraceContext, save_trace, trace_dspy_call
 from common.logger import ServiceLogger
 from common.dspy_seed_prompt import (
     PAPER_SUMMARY_FROM_PDF_PROMPT,
@@ -64,7 +64,8 @@ class SummaryService:
             paper_info = self.storage.get_paper(paper_id)
             if paper_info and paper_info.get("full_summary"):
                 log.info("summarize_full", "全文要約のキャッシュがヒットしました", paper_id=paper_id)
-                return paper_info["full_summary"], None
+                cached_trace_id = self.redis.get(f"paper_summary_trace:{paper_id}")
+                return paper_info["full_summary"], cached_trace_id
 
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
@@ -152,6 +153,15 @@ class SummaryService:
                         model=self.model,
                         max_tokens=self.summary_token_limit,
                     )
+                    # PDF経由はDSPyを通さないため save_trace で直接記録
+                    _text = formatted_text.get("text", "") if isinstance(formatted_text, dict) else str(formatted_text or "")
+                    trace_id = save_trace(
+                        module_name="PaperSummaryModule",
+                        signature="PaperSummary",
+                        inputs={"paper_text": "PDF経由", "lang_name": lang_name, "user_persona": "Professional Academic Advisor"},
+                        outputs={"summary": _text[:500]},
+                        context=TraceContext(user_id=user_id, session_id=session_id, paper_id=paper_id),
+                    )
                 except Exception:
                     log.exception("summarize_full", "PDF要約に失敗しました。テキストベースにフォールバックします")
                     if not text:
@@ -213,10 +223,14 @@ class SummaryService:
                 formatted_text = "\n".join(result_lines)
 
             # Save to cache
+            _final_trace_id = locals().get("trace_id")
             if paper_id:
                 self.storage.update_paper_full_summary(paper_id, formatted_text)
+                # trace_id を Redis にキャッシュ（1週間）。キャッシュヒット時に再利用する
+                if _final_trace_id:
+                    self.redis.set(f"paper_summary_trace:{paper_id}", _final_trace_id, expire=7 * 24 * 3600)
 
-            return formatted_text, locals().get("trace_id")
+            return formatted_text, _final_trace_id
         except Exception as e:
             log.exception("summarize_full", "全文要約の生成に失敗しました")
             return f"要約の生成に失敗しました: {str(e)}", None

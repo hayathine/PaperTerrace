@@ -89,6 +89,11 @@ vi.mock("@/hooks/useServiceHealth", () => ({
 vi.mock("react-i18next", () => ({
 	useTranslation: () => ({ t: (k: string) => k }),
 }));
+vi.mock("react-router-dom", () => ({
+	Routes: ({ children }: any) => <>{children}</>,
+	Route: ({ element }: any) => <>{element}</>,
+	useNavigate: () => vi.fn(),
+}));
 
 import App from "./App";
 

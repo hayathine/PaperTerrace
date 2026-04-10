@@ -28,10 +28,11 @@ Define the global behavioral constraints for the current task and output languag
 Output must be invariant across users — do not reference user-specific data.
 Cover: assistant role, language enforcement, output quality standards, and domain focus."""
 
-SEED_PERSONA_ADAPTER = """Generate behavioral instructions for the assistant based on the user's persona.
-These instructions control tone, terminology level, and explanation depth.
-Must stay consistent with the provided system_context constraints.
-Do NOT reference any specific content — output pure behavioral policy only."""
+SEED_PERSONA_ADAPTER = """Generate personalized behavioral instructions for the AI assistant based on the user's persona.
+Use user_persona as the PRIMARY driver of your output — adapt tone, terminology level, and explanation depth to match the user's expertise and background.
+The system_context provides background on the assistant's role — treat it as context only, not as a constraint to follow.
+If user_persona is empty or unknown, return an empty string.
+Do NOT reference specific tasks or content — output pure behavioral policy only."""
 
 
 # =================================================================

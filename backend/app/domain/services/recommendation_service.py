@@ -207,27 +207,26 @@ class RecommendationService:
         paper_title = trajectory.paper_title or "" if trajectory else ""
         paper_abstract = trajectory.paper_abstract or "" if trajectory else ""
 
-        # 履歴がないか空白の場合は、冷え切り状態 (Cold Start)
-        if not trajectory or not trajectory.conversation_history:
-            keywords = ", ".join(trajectory.paper_keywords or []) if trajectory else ""
-            user_profile = (
-                f"Interested in: {keywords}. Prefers fundamentals."
-                if keywords
-                else "Prefers fundamentals."
-            )
-        else:
-            # プロファイル推定
-            profile_mod = RecommendationService._get_profile_module()
-
-            clicks_str = json.dumps(trajectory.word_clicks or [], ensure_ascii=False)
+        # UserPersonaModule でプロファイル推定（コールドスタートでも呼んでトレースを記録する）
+        profile_mod = RecommendationService._get_profile_module()
+        clicks_str = json.dumps(
+            (trajectory.word_clicks or []) if trajectory else [], ensure_ascii=False
+        )
+        keywords = ", ".join(trajectory.paper_keywords or []) if trajectory else ""
+        fallback_profile = (
+            f"Interested in: {keywords}. Prefers fundamentals."
+            if keywords
+            else "Prefers fundamentals."
+        )
+        try:
             profile_res, trace_id = await trace_dspy_call(
                 "UserPersonaModule",
                 "BuildDecisionProfile",
                 profile_mod,
                 {
                     "behavior_logs": clicks_str,
-                    "current_logs": trajectory.conversation_history or "",
-                    "user_feedback": "",  # TODO: 将来的にはフィードバックも活用
+                    "current_logs": trajectory.conversation_history or "" if trajectory else "",
+                    "user_feedback": "",
                 },
                 context=TraceContext(
                     user_id=current_user_id,
@@ -235,11 +234,13 @@ class RecommendationService:
                     paper_id=trajectory.paper_id if trajectory else None,
                 ),
             )
-            user_profile = profile_res.user_persona
-
-            # 軌跡にもプロファイルを更新しておく（後方互換性と分析用）
-            trajectory.knowledge_level = "Extracted"  # 以前の構造化フィールドは固定値へ
-            repo.upsert(trajectory)
+            user_profile = profile_res.user_persona or fallback_profile
+            if trajectory:
+                trajectory.knowledge_level = "Extracted"
+                repo.upsert(trajectory)
+        except Exception:
+            logger.warning("UserPersonaModule の推定に失敗しました。フォールバックプロフィールを使用します。")
+            user_profile = fallback_profile
 
         # ユーザーの具体的なリクエストがあれば profile に追記
         if req.user_query:

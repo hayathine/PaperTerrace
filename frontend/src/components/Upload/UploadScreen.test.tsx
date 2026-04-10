@@ -2,6 +2,14 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import UploadScreen from "./UploadScreen";
 
+vi.mock("react-router-dom", () => ({
+	useNavigate: () => vi.fn(),
+}));
+
+vi.mock("@/contexts/AuthContext", () => ({
+	useAuth: () => ({ user: null, isGuest: true }),
+}));
+
 describe("UploadScreen Component", () => {
 	it("renders brand section and upload message", () => {
 		render(<UploadScreen onFileSelect={() => {}} />);

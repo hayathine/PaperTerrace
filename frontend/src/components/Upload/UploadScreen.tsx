@@ -1,6 +1,8 @@
 import type React from "react";
 import { useCallback, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { ERROR_KEYS } from "@/lib/errors";
 
 interface UploadScreenProps {
@@ -9,6 +11,8 @@ interface UploadScreenProps {
 
 const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 	const { t } = useTranslation();
+	const { user, isGuest } = useAuth();
+	const navigate = useNavigate();
 	const [isDragging, setIsDragging] = useState(false);
 	const [fileTypeError, setFileTypeError] = useState<string | null>(null);
 	const fileInputRef = useRef<HTMLInputElement>(null);
@@ -55,7 +59,32 @@ const UploadScreen: React.FC<UploadScreenProps> = ({ onFileSelect }) => {
 	};
 
 	return (
-		<div className="flex flex-col items-center justify-center w-full h-full p-6 select-none animate-fade-in-up">
+		<div className="flex flex-col items-center justify-center w-full h-full p-6 select-none animate-fade-in-up relative">
+			{/* Dashboard link (top-right, logged-in only) */}
+			{!isGuest && user && (
+				<button
+					type="button"
+					onClick={() => navigate("/dashboard")}
+					className="absolute top-4 right-4 flex items-center gap-2 px-3 py-2 rounded-xl hover:bg-orange-50 transition-colors group"
+					title="マイダッシュボード"
+				>
+					{user.image ? (
+						<img
+							src={user.image}
+							alt={user.name ?? ""}
+							className="w-7 h-7 rounded-lg object-cover"
+						/>
+					) : (
+						<div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-white text-xs font-bold">
+							{(user.name ?? user.email ?? "U").charAt(0).toUpperCase()}
+						</div>
+					)}
+					<span className="text-xs font-semibold text-slate-500 group-hover:text-orange-600 transition-colors hidden sm:block">
+						ダッシュボード
+					</span>
+				</button>
+			)}
+
 			{/* Brand Section */}
 			<div className="mb-6 text-center relative group">
 				<div className="absolute -inset-1 bg-gradient-to-r from-orange-500 via-amber-500 to-pink-500 rounded-lg blur opacity-15 group-hover:opacity-30 transition duration-1000 group-hover:duration-200"></div>

@@ -32,7 +32,7 @@ class PromptCandidatePool:
 
     使用例::
 
-        pool = PromptCandidatePool.from_bigquery(PaperSummaryModule, "paper_summary")
+        pool = PromptCandidatePool.from_pg(PaperSummaryModule, "paper_summary")
         module, idx = pool.select()
         context.candidate_index = idx
         result, trace_id = await trace_dspy_call(..., module_callable=module, context=context)
@@ -56,22 +56,22 @@ class PromptCandidatePool:
         return len(self.candidates)
 
     @classmethod
-    def from_bigquery(
+    def from_pg(
         cls,
         module_factory: Callable[[], dspy.Module],
         program_name: str,
     ) -> "PromptCandidatePool":
-        """BigQuery の prompt_candidates テーブルから最新の Pareto 候補をロードしてプールを生成する。
+        """logs.prompt_candidates テーブルから最新の Pareto 候補をロードしてプールを生成する。
 
         候補が存在しない場合は module_factory() による単一モジュールで初期化する。
 
         Args:
             module_factory: 新規モジュールインスタンスを生成する callable。
-            program_name: BigQuery 上の識別子（例: 'paper_summary'）。
+            program_name: PostgreSQL 上の識別子（例: 'paper_summary'）。
         """
-        from common.dspy_utils.prompt_store import load_candidates_from_bigquery
+        from common.dspy_utils.prompt_store import load_candidates
 
-        candidates = load_candidates_from_bigquery(module_factory, program_name)
+        candidates = load_candidates(module_factory, program_name)
         return cls(candidates)
 
 

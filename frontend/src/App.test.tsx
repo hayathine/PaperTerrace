@@ -106,6 +106,11 @@ vi.mock("@/lib/logger", () => ({
 vi.mock("@/lib/recommendation", () => ({
 	syncTrajectory: vi.fn(),
 }));
+vi.mock("react-router-dom", () => ({
+	Routes: ({ children }: any) => <>{children}</>,
+	Route: ({ element }: any) => <>{element}</>,
+	useNavigate: () => vi.fn(),
+}));
 
 // Mock Translations
 vi.mock("react-i18next", () => ({
