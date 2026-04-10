@@ -65,6 +65,7 @@ interface TextModePageProps {
 	) => void;
 	searchTerm?: string;
 	jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
+	onPageVisible?: (pageNum: number) => void;
 }
 
 /**
@@ -199,6 +200,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	onAskAI,
 	searchTerm,
 	jumpTarget,
+	onPageVisible,
 }) => {
 	const { t } = useTranslation();
 	const { addBookmark, getPageBookmarks } = useBookmarks();
@@ -227,6 +229,16 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	const isVisible = useVisibleOnce(containerRef, {
 		rootMargin: "400px",
 	});
+
+	// ページがビューポートに入ったら親に通知（モード切替時のページ同期用）
+	const isCurrentlyVisible = useIntersectionObserver(containerRef, {
+		threshold: 0.1,
+	});
+	useEffect(() => {
+		if (isCurrentlyVisible) {
+			onPageVisible?.(page.page_num);
+		}
+	}, [isCurrentlyVisible, page.page_num, onPageVisible]);
 
 	const [selectionMenu, setSelectionMenu] = React.useState<{
 		x: number;
@@ -694,14 +706,14 @@ const TextModePage: React.FC<TextModePageProps> = ({
 						onClick={handleBookmark}
 						disabled={bookmarkAdding}
 						title={isBookmarked ? "しおりを外す" : "このページをしおりに追加"}
-						className={`p-1 rounded transition-colors ${
+						className={`p-1.5 rounded transition-colors ${
 							isBookmarked
 								? "text-orange-500 hover:text-orange-700"
-								: "text-slate-300 hover:text-orange-400"
+								: "text-slate-400 hover:text-orange-400"
 						}`}
 					>
 						<svg
-							className="w-3.5 h-3.5"
+							className="w-5 h-5"
 							fill={isBookmarked ? "currentColor" : "none"}
 							stroke="currentColor"
 							viewBox="0 0 24 24"

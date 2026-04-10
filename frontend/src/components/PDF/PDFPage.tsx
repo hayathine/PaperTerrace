@@ -74,6 +74,7 @@ interface PDFPageProps {
 		height: number;
 	}>;
 	isLocal?: boolean;
+	onPageVisible?: (pageNum: number) => void;
 }
 
 const PDFPage: React.FC<PDFPageProps> = ({
@@ -93,6 +94,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 	currentSearchMatch,
 	evidenceHighlights = [],
 	isLocal = false,
+	onPageVisible,
 }) => {
 	const { t } = useTranslation();
 	const { width, height, words, figures, image_url, page_num } = page;
@@ -100,6 +102,13 @@ const PDFPage: React.FC<PDFPageProps> = ({
 	// Intersection Observer: only render overlays when page is near viewport
 	const pageRef = useRef<HTMLElement>(null);
 	const isVisible = useIntersectionObserver(pageRef);
+
+	// ページがビューポートに入ったら親に通知（モード切替時のページ同期用）
+	useEffect(() => {
+		if (isVisible) {
+			onPageVisible?.(page_num);
+		}
+	}, [isVisible, page_num, onPageVisible]);
 
 	// Check for cached image in IndexedDB
 	const cachedImage = useLiveQuery(async () => {

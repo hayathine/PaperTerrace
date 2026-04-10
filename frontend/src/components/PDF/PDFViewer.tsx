@@ -146,6 +146,12 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	// PDF ページグリッド（クリック/スタンプ/エリアモード用）の遅延マウント。
 	const [hasMountedPdfMode, setHasMountedPdfMode] = useState(false);
 
+	// モード切替時のページ同期: 現在表示中のページ番号を追跡する
+	const currentVisiblePageRef = useRef<number>(1);
+	const handlePageVisible = useCallback((pageNum: number) => {
+		currentVisiblePageRef.current = pageNum;
+	}, []);
+
 	// TODO (suspended): stamp state removed. Restore for stamp mode.
 
 	const pagesRef = useRef<PageData[]>([]);
@@ -242,6 +248,36 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			setHasMountedPdfMode(true);
 		}
 	}, [mode, hasMountedPdfMode]);
+
+	// モード切替時: 切替前に表示していたページ番号へ新モードをスクロール同期
+	const prevModeRef = useRef(mode);
+	useEffect(() => {
+		const prevMode = prevModeRef.current;
+		if (prevMode === mode) return;
+		prevModeRef.current = mode;
+
+		const targetPage = currentVisiblePageRef.current;
+		const newPrefix = mode === "plaintext" ? "text-page-" : "page-";
+
+		// CSS display 切り替えの反映を待ってからスクロール
+		const rafId = requestAnimationFrame(() => {
+			const targetEl = document.getElementById(`${newPrefix}${targetPage}`);
+			if (!targetEl) return;
+			const scroller = targetEl.closest(".overflow-y-auto");
+			if (scroller) {
+				const currentScrollTop = scroller.scrollTop;
+				const targetRect = targetEl.getBoundingClientRect();
+				const scrollerRect = scroller.getBoundingClientRect();
+				const pageTopInScroller =
+					currentScrollTop + (targetRect.top - scrollerRect.top);
+				scroller.scrollTo({ top: pageTopInScroller - 60, behavior: "instant" });
+			} else {
+				targetEl.scrollIntoView({ block: "start" });
+			}
+		});
+
+		return () => cancelAnimationFrame(rafId);
+	}, [mode]);
 
 	// 検索マッチング処理（計算は useMemo で、副作用のみ useEffect で）
 	const searchMatches = useMemo(() => {
@@ -1722,6 +1758,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							onAskAI={onAskAI}
 							searchTerm={searchTerm}
 							jumpTarget={mode === "plaintext" ? jumpTarget : null}
+							onPageVisible={handlePageVisible}
 						/>
 					</div>
 
@@ -1752,6 +1789,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 										currentSearchMatch={currentSearchMatch}
 										evidenceHighlights={evidenceHighlights[page.page_num]}
 										isLocal={isLocal}
+										onPageVisible={handlePageVisible}
 									/>
 								))}
 							</div>

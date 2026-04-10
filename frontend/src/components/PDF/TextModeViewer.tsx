@@ -24,6 +24,7 @@ interface TextModeViewerProps {
 	) => void;
 	searchTerm?: string;
 	jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
+	onPageVisible?: (pageNum: number) => void;
 }
 
 const TextModeViewer: React.FC<TextModeViewerProps> = ({
@@ -35,6 +36,7 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({
 	onAskAI,
 	searchTerm,
 	jumpTarget,
+	onPageVisible,
 }) => {
 	if (!pages || pages.length === 0) {
 		return (
@@ -58,6 +60,7 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({
 					onAskAI={onAskAI}
 					searchTerm={searchTerm}
 					jumpTarget={jumpTarget?.page === page.page_num ? jumpTarget : null}
+					onPageVisible={onPageVisible}
 				/>
 			))}
 		</div>

@@ -51,8 +51,8 @@ export default function Dashboard() {
 	const [translations, setTranslations] = useState<TranslationEntry[]>([]);
 	const [totalTranslations, setTotalTranslations] = useState(0);
 	const [page, setPage] = useState(1);
-	const [loading, setLoading] = useState(false);
-	const [papersLoading, setPapersLoading] = useState(false);
+	const [loading, setLoading] = useState(() => !!token);
+	const [papersLoading, setPapersLoading] = useState(() => !!token);
 	const [translationsLoading, setTranslationsLoading] = useState(false);
 
 	const filteredPapers = useMemo(() => {
@@ -68,11 +68,7 @@ export default function Dashboard() {
 	}, [papers, paperSearch]);
 
 	useEffect(() => {
-		if (!token) {
-			setLoading(false);
-			setPapersLoading(false);
-			return;
-		}
+		if (!token) return;
 		setLoading(true);
 		fetchUserStats(token)
 			.then(setStats)
