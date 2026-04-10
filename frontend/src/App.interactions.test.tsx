@@ -66,7 +66,7 @@ vi.mock("@/components/Upload/UploadScreen", () => ({
 // Mock Auth Context
 const mockLogout = vi.fn();
 let mockUser: any = {
-	uid: "test-user",
+	id: "test-user",
 	name: "Test User",
 	email: "test@example.com",
 };
@@ -217,7 +217,7 @@ describe("App Interactions", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockUser = {
-			uid: "test-user",
+			id: "test-user",
 			name: "Test User",
 			email: "test@example.com",
 		};
@@ -352,7 +352,7 @@ describe("App Interactions", () => {
 		});
 
 		// 4. Simulate login
-		mockUser = { uid: "new-user", name: "Logged User" };
+		mockUser = { id: "new-user", name: "Logged User" };
 		mockIsGuest = false;
 
 		rerender(<App />);

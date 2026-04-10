@@ -80,7 +80,6 @@ export default function Dashboard() {
 			.catch((e) => log.error("fetch_papers", "Failed to fetch papers", { e }))
 			.finally(() => setPapersLoading(false));
 		getBookmarks().then(setBookmarks);
-		// biome-ignore lint/correctness/useExhaustiveDependencies: getBookmarks is stable (useCallback with empty deps)
 	}, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	useEffect(() => {
@@ -190,7 +189,6 @@ export default function Dashboard() {
 						<div className="flex gap-3 overflow-x-auto pb-1">
 							{[...Array(4)].map((_, i) => (
 								<div
-									// biome-ignore lint/suspicious/noArrayIndexKey: skeleton
 									key={i}
 									className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col items-center gap-2 min-w-[130px] animate-pulse"
 								>
@@ -342,11 +340,7 @@ export default function Dashboard() {
 						{papersLoading ? (
 							<div className="divide-y divide-slate-100">
 								{[...Array(4)].map((_, i) => (
-									<div
-										// biome-ignore lint/suspicious/noArrayIndexKey: skeleton
-										key={i}
-										className="px-5 py-4 animate-pulse flex gap-3"
-									>
+									<div key={i} className="px-5 py-4 animate-pulse flex gap-3">
 										<div className="w-8 h-8 rounded-lg bg-slate-100 shrink-0" />
 										<div className="flex-1 space-y-2 py-1">
 											<div className="w-3/4 h-3.5 bg-slate-100 rounded" />
@@ -547,11 +541,7 @@ export default function Dashboard() {
 						{translationsLoading ? (
 							<div className="divide-y divide-slate-100">
 								{[...Array(5)].map((_, i) => (
-									<div
-										// biome-ignore lint/suspicious/noArrayIndexKey: skeleton
-										key={i}
-										className="px-5 py-4 animate-pulse flex gap-3"
-									>
+									<div key={i} className="px-5 py-4 animate-pulse flex gap-3">
 										<div className="flex-1 space-y-2">
 											<div className="w-24 h-4 bg-slate-100 rounded" />
 											<div className="w-48 h-3 bg-slate-100 rounded" />
@@ -586,7 +576,6 @@ export default function Dashboard() {
 							<div className="divide-y divide-slate-100">
 								{translations.map((t, i) => (
 									<div
-										// biome-ignore lint/suspicious/noArrayIndexKey: stable list
 										key={`${t.term}-${i}`}
 										className="px-5 py-4 hover:bg-slate-50 transition-colors"
 									>

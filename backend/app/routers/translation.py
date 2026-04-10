@@ -4,6 +4,7 @@ Handles word translation, explanation, and language settings.
 """
 
 import asyncio
+from dataclasses import dataclass
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
@@ -41,19 +42,34 @@ service = EnglishAnalysisService()
 redis_service = RedisService()
 
 
-def build_dict_card_html(
-    word: str,
-    lemma: str,
-    translation: str,
-    source: str,
-    lang: str = "ja",
-    paper_id: str | None = None,
-    paper_title: str | None = None,
-    show_deep_btn: bool = True,
-    element_id: str | None = None,
-    trace_id: str | None = None,
-) -> str:
+@dataclass
+class DictCardData:
+    """辞書カード描画に必要なデータを保持するデータクラス。"""
+
+    word: str
+    lemma: str
+    translation: str
+    source: str
+    lang: str = "ja"
+    paper_id: str | None = None
+    paper_title: str | None = None
+    show_deep_btn: bool = True
+    element_id: str | None = None
+    trace_id: str | None = None
+
+
+def build_dict_card_html(data: DictCardData) -> str:
     """辞書カードのHTMLレイアウトを構築します"""
+    word = data.word
+    lemma = data.lemma
+    translation = data.translation
+    source = data.source
+    lang = data.lang
+    paper_id = data.paper_id
+    paper_title = data.paper_title
+    show_deep_btn = data.show_deep_btn
+    element_id = data.element_id
+    trace_id = data.trace_id
     import html as _html
 
     paper_param = f"&paper_id={paper_id}" if paper_id else ""
@@ -281,16 +297,16 @@ async def explain(
             paper_id=paper_id,
         )
         return HTMLResponse(
-            build_dict_card_html(
-                original_word,
-                lemma,
-                cached["translation"],
-                source,
-                lang,
-                paper_id,
+            build_dict_card_html(DictCardData(
+                word=original_word,
+                lemma=lemma,
+                translation=cached["translation"],
+                source=source,
+                lang=lang,
+                paper_id=paper_id,
                 paper_title=paper_title,
                 element_id=element_id,
-            )
+            ))
         )
 
     # 2. Gemini Translation
@@ -394,17 +410,17 @@ async def explain(
         )
 
         return HTMLResponse(
-            build_dict_card_html(
-                original_word,
-                lemma,
-                translation,
-                "Gemini AI",
-                lang,
-                paper_id,
+            build_dict_card_html(DictCardData(
+                word=original_word,
+                lemma=lemma,
+                translation=translation,
+                source="Gemini AI",
+                lang=lang,
+                paper_id=paper_id,
                 paper_title=paper_title,
                 element_id=element_id,
                 trace_id=trace_id,
-            )
+            ))
         )
     except Exception as e:
         log.error(
@@ -429,15 +445,15 @@ async def explain(
                 status_code=500,
             )
         return HTMLResponse(
-            build_dict_card_html(
-                original_word,
-                lemma,
-                error_msg,
-                "Error",
-                lang,
-                paper_id,
+            build_dict_card_html(DictCardData(
+                word=original_word,
+                lemma=lemma,
+                translation=error_msg,
+                source="Error",
+                lang=lang,
+                paper_id=paper_id,
                 element_id=element_id,
-            )
+            ))
         )
 
 
@@ -551,17 +567,17 @@ async def explain_deep(
         )
 
         return HTMLResponse(
-            build_dict_card_html(
-                original_word,
-                lemma,
-                translation,
-                "Gemini AI",
-                lang,
-                paper_id,
+            build_dict_card_html(DictCardData(
+                word=original_word,
+                lemma=lemma,
+                translation=translation,
+                source="Gemini AI",
+                lang=lang,
+                paper_id=paper_id,
                 show_deep_btn=False,
                 element_id=element_id,
                 trace_id=trace_id,
-            )
+            ))
         )
     except Exception as e:
         log.error(
@@ -582,15 +598,15 @@ async def explain_deep(
                 status_code=500,
             )
         return HTMLResponse(
-            build_dict_card_html(
-                original_word,
-                lemma,
-                error_msg,
-                "Error",
-                lang,
-                paper_id,
+            build_dict_card_html(DictCardData(
+                word=original_word,
+                lemma=lemma,
+                translation=error_msg,
+                source="Error",
+                lang=lang,
+                paper_id=paper_id,
                 element_id=element_id,
-            )
+            ))
         )
 
 

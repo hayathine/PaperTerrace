@@ -4,10 +4,11 @@ Handles PDF upload, OCR processing, and streaming text analysis.
 """
 
 import asyncio
-import re
-import uuid
 import json
+import re
 import time
+import uuid
+from dataclasses import dataclass
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, Query, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
@@ -42,6 +43,59 @@ service = EnglishAnalysisService()
 summary_service = SummaryService()
 redis_service = RedisService()
 img_storage = get_image_storage()
+
+
+@dataclass
+class PdfReadResult:
+    """PDF 読み込み・検証の結果を保持するデータクラス。"""
+
+    content: bytes
+    file_hash: str
+    lang: str
+    user_id: str | None
+    is_registered: bool
+
+
+async def _read_and_validate_pdf(
+    file: UploadFile,
+    session_id: str | None,
+    user: OptionalUser,
+    max_pdf_bytes: int,
+) -> PdfReadResult | tuple[str, int]:
+    """PDF を読み込み、サイズ・言語を検証する。
+
+    Returns:
+        PdfReadResult: 検証成功時の結果。
+        tuple[str, int]: エラーメッセージとステータスコード（検証失敗時）。
+    """
+    if file.size and file.size > max_pdf_bytes:
+        return (f"File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB.", 413)
+
+    content = await file.read()
+    # file.size が None（Content-Length 未送信）の場合に備え、読み込み後にもサイズを検証する
+    if len(content) > max_pdf_bytes:
+        return (f"File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB.", 413)
+
+    file_hash = _get_file_hash(content)
+
+    detected_lang = await service.ocr_service.language_service.detect_language(content)
+    if detected_lang and detected_lang != "en":
+        return (
+            "Currently, only English papers are supported. / 現在、英語の論文のみサポートしています。",
+            400,
+        )
+    lang = detected_lang or "ja"
+
+    user_id = user.uid if user else (f"guest:{session_id}" if session_id else None)
+    is_registered = get_is_registered(user_id)
+
+    return PdfReadResult(
+        content=content,
+        file_hash=file_hash,
+        lang=lang,
+        user_id=user_id,
+        is_registered=is_registered,
+    )
 
 
 @router.post("/session-context")
@@ -83,50 +137,18 @@ async def analyze_pdf(
     lang: str = Form("ja"),
     user: OptionalUser = None,
 ):
-    """
-    Standard HTML version of analyze-pdf for HTMX.
-    Returns HTML with SSE connection.
-    """
-    # Reuse JSON logic but return HTML
-    # We can call analyze_pdf_json but we need to unpack the response or refactor
-    # To save space, let's just copy the logic and adapt default format.
-
+    """Standard HTML version of analyze-pdf for HTMX. Returns HTML with SSE connection."""
     if not file.filename or file.size == 0:
         return Response("Error: No file", status_code=400)
 
-    # PDF ファイルサイズ上限チェック (デフォルト 50MB)
     max_pdf_bytes = int(settings.get("MAX_PDF_SIZE_MB", "50")) * 1024 * 1024
-    if file.size and file.size > max_pdf_bytes:
-        return Response(
-            f"Error: File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB.",
-            status_code=413,
-        )
+    validated = await _read_and_validate_pdf(file, session_id, user, max_pdf_bytes)
+    if isinstance(validated, tuple):
+        error_msg, status_code = validated
+        return Response(f"Error: {error_msg}", status_code=status_code)
 
     storage = get_storage_provider()
-    user_id = user.uid if user else (f"guest:{session_id}" if session_id else None)
-
-    content = await file.read()
-    # file.size が None（Content-Length 未送信）の場合に備え、読み込み後にもサイズを検証する
-    if len(content) > max_pdf_bytes:
-        return Response(
-            f"Error: File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB.",
-            status_code=413,
-        )
-    file_hash = _get_file_hash(content)
-
-    # Language detection
-    detected_lang = await service.ocr_service.language_service.detect_language(content)
-    if detected_lang and detected_lang != "en":
-        log.warning("analyze", "未対応の言語が検出されました", lang=detected_lang)
-        return Response(
-            "Error: Currently, only English papers are supported. / 現在、英語の論文のみサポートしています。",
-            status_code=400,
-        )
-    if detected_lang:
-        lang = detected_lang
-
-    # Cache check
-    cached_paper = storage.get_paper_by_hash(file_hash)
+    cached_paper = storage.get_paper_by_hash(validated.file_hash)
     raw_text = None
     paper_id = "pending"
 
@@ -135,29 +157,25 @@ async def analyze_pdf(
         if cached_paper.get("ocr_text"):
             raw_text = cached_paper["ocr_text"]
 
-    # Check if user is registered (exists in our DB)
-    is_registered = get_is_registered(user_id)
-
     task_id = str(uuid.uuid4())
-
-    task_data = {
-        "format": "html",  # Default for HTMX
-        "lang": lang,
+    task_data: dict = {
+        "format": "html",
+        "lang": validated.lang,
         "session_id": session_id,
         "filename": file.filename,
-        "file_hash": file_hash,
-        "user_id": user_id,
-        "is_registered": is_registered,
+        "file_hash": validated.file_hash,
+        "user_id": validated.user_id,
+        "is_registered": validated.is_registered,
         "paper_id": paper_id,
     }
 
     if raw_text is None:
-        doc_path = img_storage.save_doc(file_hash, content)
+        doc_path = img_storage.save_doc(validated.file_hash, validated.content)
         task_data.update({"pending_ocr": True, "pdf_path": doc_path})
     else:
         task_data.update({"text": raw_text})
 
-    redis_service.set(f"task:{task_id}", task_data, expire=3600)  # 1-hour session
+    redis_service.set(f"task:{task_id}", task_data, expire=3600)
 
     return HTMLResponse(f"""
     <div hx-ext="sse" sse-connect="/stream/{task_id}" sse-swap="message">
@@ -179,80 +197,42 @@ async def analyze_pdf_json(
     lang: str = Form("ja"),
     user: OptionalUser = None,
 ):
-    """
-    JSON version of analyze-pdf for React frontend.
+    """JSON version of analyze-pdf for React frontend.
     Returns { "task_id": "...", "stream_url": "/stream/..." }
     """
     if not file.filename or file.size == 0:
         return JSONResponse({"error": "No file provided"}, status_code=400)
 
-    # PDF ファイルサイズ上限チェック (デフォルト 50MB)
     max_pdf_bytes = int(settings.get("MAX_PDF_SIZE_MB", "50")) * 1024 * 1024
-    if file.size and file.size > max_pdf_bytes:
-        return JSONResponse(
-            {
-                "error": f"File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB."
-            },
-            status_code=413,
-        )
-
-    import time
-
     storage = get_storage_provider()
     start_time = time.time()
     log.info("analyze_json", "開始", filename=file.filename, size=file.size)
 
-    # Capture user_id
-    user_id = user.uid if user else (f"guest:{session_id}" if session_id else None)
-    if user_id:
-        log.info("analyze_json", "認証済みユーザー", user_id=user_id)
+    validated = await _read_and_validate_pdf(file, session_id, user, max_pdf_bytes)
+    if isinstance(validated, tuple):
+        error_msg, status_code = validated
+        return JSONResponse({"error": error_msg}, status_code=status_code)
 
-    content = await file.read()
-    # file.size が None（Content-Length 未送信）の場合に備え、読み込み後にもサイズを検証する
-    if len(content) > max_pdf_bytes:
-        return JSONResponse(
-            {
-                "error": f"File too large. Maximum size is {max_pdf_bytes // (1024 * 1024)}MB."
-            },
-            status_code=413,
-        )
-    file_hash = _get_file_hash(content)
     log.info(
         "analyze_json",
         "入力を受け取リました",
         session_id=session_id,
-        file_hash=file_hash,
+        file_hash=validated.file_hash,
     )
+    if validated.user_id:
+        log.info("analyze_json", "認証済みユーザー", user_id=validated.user_id)
 
-    # Detect PDF language
     try:
-        detected_lang = await service.ocr_service.language_service.detect_language(
-            content
-        )
-        if detected_lang and detected_lang != "en":
-            log.warning(
-                "analyze_json", f"未対応の言語が検出されました: {detected_lang}"
-            )
-            return JSONResponse(
-                {
-                    "error": "Currently, only English papers are supported. / 現在、英語の論文のみサポートしています。"
-                },
-                status_code=400,
-            )
-        if detected_lang:
-            lang = detected_lang
-
-        # Cache check
-        cached_paper = storage.get_paper_by_hash(file_hash)
+        # Cache check（画像の存在も確認し、なければ再生成を促す）
+        cached_paper = storage.get_paper_by_hash(validated.file_hash)
         raw_text = None
 
         if cached_paper:
             paper_id = cached_paper["paper_id"]
-            # Safe image check + regeneration logic
             try:
                 from app.providers.image_storage import get_page_images
 
-                cached_images = get_page_images(file_hash)
+                cached_images = get_page_images(validated.file_hash)
             except ImportError as ie:
                 log.error(
                     "analyze_json", "Failed to import get_page_images", error=str(ie)
@@ -265,7 +245,6 @@ async def analyze_pdf_json(
                     "キャッシュはヒットしましたが画像が見つかりません。再生成します。",
                     paper_id=paper_id,
                 )
-                raw_text = None
             else:
                 storage_type = settings.get("STORAGE_TYPE", "local").upper()
                 log.info(
@@ -274,7 +253,6 @@ async def analyze_pdf_json(
                     storage_type=storage_type,
                     paper_id=paper_id,
                 )
-
                 if cached_paper.get("html_content"):
                     raw_text = "CACHED_HTML:" + cached_paper["html_content"]
                 else:
@@ -284,15 +262,11 @@ async def analyze_pdf_json(
 
             paper_id = str(uuid6.uuid7())
             log.info("analyze_json", "キャッシュミス", paper_id=paper_id)
-            raw_text = None
-
-        # Check if user is registered (exists in our DB)
-        is_registered = get_is_registered(user_id)
 
         task_id = str(uuid.uuid4())
 
         # Save session context immediately if using existing paper AND registered
-        if is_registered and session_id and paper_id and paper_id != "pending":
+        if validated.is_registered and session_id and paper_id and paper_id != "pending":
             try:
                 storage.save_session_context(session_id, paper_id)
                 log.info(
@@ -301,46 +275,36 @@ async def analyze_pdf_json(
                     session_id=session_id,
                     paper_id=paper_id,
                 )
-
             except Exception as e:
                 log.error(
                     "analyze_json", "Failed to pre-save session context", error=str(e)
                 )
 
-        task_data = {
-            "format": "json",  # Flag for JSON streaming
-            "lang": lang,
+        task_data: dict = {
+            "format": "json",
+            "lang": validated.lang,
             "session_id": session_id,
             "filename": file.filename,
-            "file_hash": file_hash,
-            "user_id": user_id,  # Store user_id for stream processing
-            "is_registered": is_registered,
+            "file_hash": validated.file_hash,
+            "user_id": validated.user_id,
+            "is_registered": validated.is_registered,
             "paper_id": paper_id,
         }
 
         if raw_text is None:
             # Save PDF to disk instead of Redis to prevent OOM
-            doc_path = img_storage.save_doc(file_hash, content)
+            doc_path = img_storage.save_doc(validated.file_hash, validated.content)
             log.info(
                 "analyze_json",
                 "PDFをストレージに保存しました",
-                file_hash=file_hash,
+                file_hash=validated.file_hash,
                 doc_path=doc_path,
-                content_size=len(content),
-                magic_hex=content[:8].hex() if content else "",
+                content_size=len(validated.content),
+                magic_hex=validated.content[:8].hex() if validated.content else "",
             )
-            task_data.update(
-                {
-                    "pending_ocr": True,
-                    "pdf_path": doc_path,
-                }
-            )
+            task_data.update({"pending_ocr": True, "pdf_path": doc_path})
         else:
-            task_data.update(
-                {
-                    "text": raw_text,
-                }
-            )
+            task_data.update({"text": raw_text})
 
         # Set 1-hour sliding expiration for paper sessions (3600s)
         redis_service.set(f"task:{task_id}", task_data, expire=3600)

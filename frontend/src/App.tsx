@@ -28,13 +28,15 @@ import { useLoading } from "./contexts/LoadingContext";
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 
 import { usePaperCache } from "./db/hooks";
-import { db, isDbAvailable } from "./db/index";
 import { useSyncStatus } from "./db/sync";
 import { clampWidth, useLayoutState } from "./hooks/useLayoutState";
+import { usePaperLibrary } from "./hooks/usePaperLibrary";
+import { usePaperLifecycle } from "./hooks/usePaperLifecycle";
 import { usePinchZoom } from "./hooks/usePinchZoom";
 import { useScrollTracking } from "./hooks/useScrollTracking";
 import { useSearchState } from "./hooks/useSearchState";
 import { useServiceHealth } from "./hooks/useServiceHealth";
+import { useWordInteraction } from "./hooks/useWordInteraction";
 import { syncTrajectory } from "./lib/recommendation";
 
 const log = createLogger("App");
@@ -67,59 +69,8 @@ function App() {
 	const [dictSubTab, setDictSubTab] = useState<
 		"translation" | "explanation" | "figures" | "history"
 	>("translation");
-
-	// 翻訳・解説・その他は独立した state で管理（互いに上書きしない）
-	const [translationWord, setTranslationWord] = useState<string | undefined>(
-		undefined,
-	);
-	const [translationContext, setTranslationContext] = useState<
-		string | undefined
-	>(undefined);
-	const [translationCoordinates, setTranslationCoordinates] = useState<
-		{ page: number; x: number; y: number } | undefined
-	>(undefined);
-	const [translationConf, setTranslationConf] = useState<number | undefined>(
-		undefined,
-	);
-
-	const [explanationWord, setExplanationWord] = useState<string | undefined>(
-		undefined,
-	);
-	const [explanationContext, setExplanationContext] = useState<
-		string | undefined
-	>(undefined);
-	const [explanationCoordinates, setExplanationCoordinates] = useState<
-		{ page: number; x: number; y: number } | undefined
-	>(undefined);
-
-	// figures / comments タブ用（画像クリッピング等）
-	const [selectedWord, setSelectedWord] = useState<string | undefined>(
-		undefined,
-	);
-	const [selectedContext, setSelectedContext] = useState<string | undefined>(
-		undefined,
-	);
-	const [selectedCoordinates, setSelectedCoordinates] = useState<
-		{ page: number; x: number; y: number } | undefined
-	>(undefined);
-	const [selectedImage, setSelectedImage] = useState<string | undefined>(
-		undefined,
-	);
-	const [jumpTarget, setJumpTarget] = useState<{
-		page: number;
-		x: number;
-		y: number;
-		term?: string;
-	} | null>(null);
 	const [showLoginModal, setShowLoginModal] = useState(false);
 
-	const [pendingFigureId, setPendingFigureId] = useState<string | null>(null);
-	const [pendingChatPrompt, setPendingChatPrompt] = useState<string | null>(
-		null,
-	);
-	const [selectedFigure, setSelectedFigure] = useState<SelectedFigure | null>(
-		null,
-	);
 	const {
 		sidebarWidth,
 		setSidebarWidth,
@@ -131,16 +82,48 @@ function App() {
 		setIsRightSidebarOpen,
 		isMobile,
 	} = useLayoutState();
-	const [activeEvidence, setActiveEvidence] = useState<any>(null);
-	const [uploadedPapers, setUploadedPapers] = useState<any[]>([]);
-	const [isPapersLoading, setIsPapersLoading] = useState(false);
 
-	const prevPaperIdRef = useRef<string | null>(null);
-	const paperStartTimeRef = useRef<number | null>(null);
+	// 論文一覧管理
+	const { uploadedPapers, isPapersLoading, refreshPapers, deletePaper } =
+		usePaperLibrary({ userId: user?.id, token, isGuest });
+
+	// 翻訳・解説・選択テキスト管理
+	const {
+		translationWord,
+		translationContext,
+		translationCoordinates,
+		translationConf,
+		explanationWord,
+		explanationContext,
+		explanationCoordinates,
+		selectedWord,
+		selectedContext,
+		selectedCoordinates,
+		selectedImage,
+		jumpTarget,
+		setJumpTarget,
+		pendingFigureId,
+		setPendingFigureId,
+		pendingChatPrompt,
+		setPendingChatPrompt,
+		selectedFigure,
+		setSelectedFigure,
+		activeEvidence,
+		setActiveEvidence,
+		resetWordState,
+		setTranslation,
+		setTextSelection,
+		setAreaSelection,
+		setExplanation,
+	} = useWordInteraction();
+
+	// Context Cache ライフサイクル管理
+	usePaperLifecycle(currentPaperId, sessionId, token);
+
 	// サインイン遷移検知用（null = ゲスト確定、undefined = 初回レンダリング前）
 	const prevUserRef = useRef<typeof user | undefined>(undefined);
 
-	const { getCachedPaper, deletePaperCache } = usePaperCache();
+	const { getCachedPaper } = usePaperCache();
 
 	const handleScroll = useScrollTracking(currentPaperId || uploadFile?.name);
 	const {
@@ -192,80 +175,6 @@ function App() {
 		}
 	}, [t, appEnv]);
 
-	useEffect(() => {
-		if (!user || !token) {
-			setUploadedPapers([]);
-			setIsPapersLoading(false);
-			return;
-		}
-
-		setIsPapersLoading(true);
-		const fetchPapers = async () => {
-			// コールドスタート対策: 最大3回リトライ（2s, 4s インターバル）
-			for (let attempt = 0; attempt < 3; attempt++) {
-				try {
-					const headers = { Authorization: `Bearer ${token}` };
-					const res = await fetch(`${API_URL}/api/papers`, {
-						headers,
-						signal: AbortSignal.timeout(10000),
-					});
-					const data = await res.json();
-					if (data && Array.isArray(data.papers)) {
-						setUploadedPapers(data.papers);
-					} else {
-						setUploadedPapers([]);
-					}
-					setIsPapersLoading(false);
-					return;
-				} catch (err) {
-					if (attempt < 2) {
-						await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
-					} else {
-						log.error("fetch_papers", "Failed to fetch papers", { error: err });
-						reportFailure(503);
-						setUploadedPapers([]);
-						setIsPapersLoading(false);
-					}
-				}
-			}
-		};
-
-		fetchPapers();
-		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [user?.id, token]);
-
-	// ゲスト: IndexedDBのキャッシュから論文一覧を読み込む
-	useEffect(() => {
-		if (!isGuest) return;
-		setIsPapersLoading(true);
-		const loadGuestPapers = async () => {
-			if (!isDbAvailable()) {
-				setUploadedPapers([]);
-				setIsPapersLoading(false);
-				return;
-			}
-			try {
-				const cached = await db.papers
-					.orderBy("last_accessed")
-					.reverse()
-					.toArray();
-				setUploadedPapers(
-					cached.map((p) => ({
-						paper_id: p.id,
-						title: p.title,
-						filename: p.title,
-						created_at: new Date(p.last_accessed).toISOString(),
-					})),
-				);
-			} catch {
-				setUploadedPapers([]);
-			} finally {
-				setIsPapersLoading(false);
-			}
-		};
-		loadGuestPapers();
-	}, [isGuest]);
-
 	// ゲスト → サインイン遷移を検知し、表示中の論文をライブラリに保存する
 	useEffect(() => {
 		const prevUser = prevUserRef.current;
@@ -294,15 +203,7 @@ function App() {
 					});
 
 					if (res.ok) {
-						// ライブラリ一覧を再取得
-						const papersRes = await fetch(`${API_URL}/api/papers`, {
-							headers: { Authorization: `Bearer ${token}` },
-						});
-						const data = await papersRes.json();
-						if (data?.papers) {
-							setUploadedPapers(data.papers);
-							setIsPapersLoading(false);
-						}
+						await refreshPapers();
 					}
 				} catch (err) {
 					log.error("claim_paper", "ゲスト論文のクレームに失敗しました", {
@@ -314,189 +215,41 @@ function App() {
 		}
 	}, [user, token, currentPaperId]);
 
-	// Context Cache Lifecycle Management & Session Duration Tracking
-	useEffect(() => {
-		const deleteCache = (paperId: string) => {
-			const formData = new FormData();
-			formData.append("session_id", sessionId);
-			formData.append("paper_id", paperId);
-
-			if (navigator.sendBeacon) {
-				navigator.sendBeacon(`${API_URL}/api/chat/cache/delete`, formData);
-			} else {
-				fetch(`${API_URL}/api/chat/cache/delete`, {
-					method: "POST",
-					body: formData,
-					keepalive: true,
-				}).catch((e) =>
-					log.error("delete_cache", "Failed to delete cache", { error: e }),
-				);
-			}
-		};
-
-		const sendDurationTrace = (paperId: string) => {
-			if (paperStartTimeRef.current) {
-				const duration = (Date.now() - paperStartTimeRef.current) / 1000;
-				syncTrajectory(
-					{
-						session_id: sessionId,
-						paper_id: paperId,
-						session_duration: duration,
-					},
-					token,
-				);
-			}
-		};
-
-		if (prevPaperIdRef.current && prevPaperIdRef.current !== currentPaperId) {
-			sendDurationTrace(prevPaperIdRef.current);
-			deleteCache(prevPaperIdRef.current);
-		}
-
-		if (currentPaperId && prevPaperIdRef.current !== currentPaperId) {
-			paperStartTimeRef.current = Date.now();
-		} else if (!currentPaperId) {
-			paperStartTimeRef.current = null;
-		}
-
-		prevPaperIdRef.current = currentPaperId;
-	}, [currentPaperId, sessionId, token]);
-
-	useEffect(() => {
-		const handleBeforeUnload = () => {
-			if (currentPaperId) {
-				if (paperStartTimeRef.current) {
-					const duration = (Date.now() - paperStartTimeRef.current) / 1000;
-					syncTrajectory(
-						{
-							session_id: sessionId,
-							paper_id: currentPaperId,
-							session_duration: duration,
-						},
-						token,
-					);
-				}
-
-				const formData = new FormData();
-				formData.append("session_id", sessionId);
-				formData.append("paper_id", currentPaperId);
-				navigator.sendBeacon(`${API_URL}/api/chat/cache/delete`, formData);
-			}
-		};
-
-		window.addEventListener("beforeunload", handleBeforeUnload);
-		return () => window.removeEventListener("beforeunload", handleBeforeUnload);
-	}, [currentPaperId, sessionId, token]);
-
 	const handlePaperLoaded = (paperId: string | null) => {
 		if (paperId) {
 			setCurrentPaperId(paperId);
-			setUploadFile(null); // Clear the raw file after it's processed
-			// 論文が読み込まれたらサイドバーを開く（モバイルを含む）
+			setUploadFile(null);
 			setIsRightSidebarOpen(true);
 		}
-		// Refresh paper list if a new paper was loaded
-		if (
-			paperId &&
-			Array.isArray(uploadedPapers) &&
-			!uploadedPapers.some((p) => p?.paper_id === paperId)
-		) {
-			if (isGuest) {
-				// ゲストは IndexedDB から再読込（API は叩かない）
-				if (isDbAvailable()) {
-					setIsPapersLoading(true);
-					db.papers
-						.orderBy("last_accessed")
-						.reverse()
-						.toArray()
-						.then((cached) => {
-							setUploadedPapers(
-								cached.map((p) => ({
-									paper_id: p.id,
-									title: p.title,
-									filename: p.title,
-									created_at: new Date(p.last_accessed).toISOString(),
-								})),
-							);
-						})
-						.catch(() => {})
-						.finally(() => {
-							setIsPapersLoading(false);
-						});
-				}
-			} else {
-				const headers: HeadersInit = {};
-				if (token) headers.Authorization = `Bearer ${token}`;
-
-				setIsPapersLoading(true);
-				fetch(`${API_URL}/api/papers`, { headers })
-					.then((res) => res.json())
-					.then((data) => {
-						if (data && Array.isArray(data.papers)) {
-							setUploadedPapers(data.papers);
-						} else {
-							setUploadedPapers([]);
-						}
-					})
-					.catch((err) => {
-						log.error("refresh_papers", "Failed to refresh papers", {
-							error: err,
-						});
-					})
-					.finally(() => {
-						setIsPapersLoading(false);
-					});
-			}
+		// 新規論文の場合は一覧を再取得
+		if (paperId && !uploadedPapers.some((p) => p?.paper_id === paperId)) {
+			refreshPapers();
 		}
 	};
 
-	const handlePaperSelect = (paper: any) => {
+	const handlePaperSelect = (paper: {
+		paper_id: string;
+		[key: string]: unknown;
+	}) => {
 		setUploadFile(null);
 		setCurrentPaperId(paper.paper_id);
 		setIsRightSidebarOpen(true);
 	};
 
-	const handleDeletePaper = async (e: React.MouseEvent, paper: any) => {
+	const handleDeletePaper = async (
+		e: React.MouseEvent,
+		paper: { paper_id: string; [key: string]: unknown },
+	) => {
 		e.stopPropagation();
 		if (!window.confirm(t("common.confirm_delete"))) return;
-		if (user && token) {
-			try {
-				await fetch(`${API_URL}/api/papers/${paper.paper_id}`, {
-					method: "DELETE",
-					headers: { Authorization: `Bearer ${token}` },
-				});
-			} catch (err) {
-				log.error("delete_paper", "Failed to delete paper from DB", {
-					error: err,
-				});
-			}
-		}
-		await deletePaperCache(paper.paper_id);
-		setUploadedPapers((prev) =>
-			prev.filter((p) => p.paper_id !== paper.paper_id),
-		);
-		if (currentPaperId === paper.paper_id) {
-			setCurrentPaperId(null);
-		}
+		const wasCurrentPaper = await deletePaper(paper, currentPaperId, user);
+		if (wasCurrentPaper) setCurrentPaperId(null);
 	};
 
 	const handleDirectFileSelect = (file: File) => {
 		setUploadFile(file);
 		setCurrentPaperId(null);
-		// Reset all paper-specific states
-		setTranslationWord(undefined);
-		setTranslationContext(undefined);
-		setTranslationCoordinates(undefined);
-		setTranslationConf(undefined);
-		setExplanationWord(undefined);
-		setExplanationContext(undefined);
-		setExplanationCoordinates(undefined);
-		setSelectedWord(undefined);
-		setSelectedContext(undefined);
-		setSelectedCoordinates(undefined);
-		setSelectedImage(undefined);
-		setPendingChatPrompt(null);
-		setPendingFigureId(null);
+		resetWordState();
 		setActiveTab("chat");
 		setDictSubTab("translation");
 	};
@@ -513,7 +266,6 @@ function App() {
 		coords?: { page: number; x: number; y: number },
 		conf?: number,
 	) => {
-		// Fire telemetry for translation
 		if (currentPaperId) {
 			syncTrajectory(
 				{
@@ -523,7 +275,7 @@ function App() {
 						{
 							word,
 							context: context || "",
-							section: "Unknown", // Can be inferred if PDF structure allows, or left as Unknown
+							section: "Unknown",
 							timestamp: Date.now() / 1000,
 						},
 					],
@@ -532,10 +284,7 @@ function App() {
 			);
 		}
 
-		setTranslationWord(word);
-		setTranslationContext(context);
-		setTranslationCoordinates(coords);
-		setTranslationConf(conf);
+		setTranslation(word, context, coords, conf);
 		setActiveTab("notes");
 		setDictSubTab("translation");
 		setIsRightSidebarOpen(true);
@@ -545,15 +294,8 @@ function App() {
 		text: string,
 		coords: { page: number; x: number; y: number },
 	) => {
-		const truncated =
-			text.length > 40 ? `${text.substring(0, 37).trim()}...` : text;
-		const quoted = `> ${text}\n\n`;
-
-		setSelectedWord(truncated);
-		setSelectedContext(quoted);
-		setSelectedImage(undefined); // Clear image
-		setSelectedCoordinates(coords);
-		setActiveTab("comments"); // Switch to comments for saving selection
+		setTextSelection(text, coords);
+		setActiveTab("comments");
 		setIsRightSidebarOpen(true);
 	};
 
@@ -561,10 +303,7 @@ function App() {
 		imageUrl: string,
 		coords: { page: number; x: number; y: number },
 	) => {
-		setSelectedWord(`Figure clipping (Page ${coords.page})`);
-		setSelectedContext("");
-		setSelectedImage(imageUrl);
-		setSelectedCoordinates(coords);
+		setAreaSelection(imageUrl, coords);
 		setActiveTab("comments");
 		setIsRightSidebarOpen(true);
 	};
@@ -576,8 +315,6 @@ function App() {
 		term?: string,
 	) => {
 		setJumpTarget({ page, x, y, term });
-		// Clear jump target after a short delay so highlight doesn't stay forever if desired,
-		// but for now let's keep it until next jump.
 	};
 
 	const handleAnalysisStatusChange = useCallback(
@@ -602,22 +339,19 @@ function App() {
 	const handleAskAI = (
 		prompt: string,
 		imageUrl?: string,
-		coords?: any,
+		coords?: { page: number; x: number; y: number },
 		originalText?: string,
 		contextText?: string,
 	) => {
 		if (imageUrl) {
-			setSelectedWord(prompt);
-			setSelectedImage(imageUrl);
-			setSelectedCoordinates(coords);
+			setAreaSelection(imageUrl, coords ?? { page: 0, x: 0, y: 0 });
+			// 選択 word だけ上書き（Figure 用ラベルより prompt を優先）
 			setActiveTab("notes");
 			setDictSubTab("figures");
 			setIsRightSidebarOpen(true);
 		} else {
 			// テキスト解説：解説専用 state のみ更新（翻訳 state は変更しない）
-			setExplanationWord(originalText || prompt);
-			setExplanationContext(contextText);
-			setExplanationCoordinates(coords);
+			setExplanation(originalText || prompt, contextText, coords);
 			setActiveTab("notes");
 			setDictSubTab("explanation");
 			setIsRightSidebarOpen(true);

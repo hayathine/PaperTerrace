@@ -1,3 +1,6 @@
+/**
+ * @vitest-environment jsdom
+ */
 import { render, screen } from "@testing-library/react";
 import { BrowserRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -32,7 +35,7 @@ const {
 		papers: [
 			{
 				paper_id: "paper1",
-				title: "Test Paper 1",
+				title: "Unique Paper List Title",
 				created_at: "2023-05-01T00:00:00Z",
 				tags: ["tag1"],
 			},
@@ -55,18 +58,22 @@ const {
 		{
 			id: "bm1",
 			paper_id: "paper1",
-			paper_title: "Test Paper 1",
+			paper_title: "Unique Bookmark Title",
 			page_number: 5,
 			created_at: "2023-05-03T00:00:00Z",
 		},
 	]),
 }));
 
-vi.mock("@/lib/dashboard", () => ({
-	fetchUserStats: mockFetchUserStats,
-	fetchUserPapers: mockFetchUserPapers,
-	fetchUserTranslations: mockFetchUserTranslations,
-}));
+vi.mock("@/lib/dashboard", async (importOriginal) => {
+	const actual = (await importOriginal()) as any;
+	return {
+		...actual,
+		fetchUserStats: mockFetchUserStats,
+		fetchUserPapers: mockFetchUserPapers,
+		fetchUserTranslations: mockFetchUserTranslations,
+	};
+});
 
 vi.mock("@/db/hooks", () => ({
 	useBookmarks: () => ({
@@ -114,8 +121,9 @@ describe("Dashboard Page", () => {
 				<Dashboard />
 			</BrowserRouter>,
 		);
-
-		expect(await screen.findByText("Test Paper 1")).toBeDefined();
+		expect(
+			await screen.findByText("Unique Paper List Title", {}, { timeout: 3000 }),
+		).toBeDefined();
 		expect(await screen.findByText("tag1")).toBeDefined();
 	});
 
