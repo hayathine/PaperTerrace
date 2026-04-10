@@ -9,7 +9,7 @@ import {
 	useTransition,
 } from "react";
 import { useTranslation } from "react-i18next";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useNavigate } from "react-router-dom";
 import { API_URL } from "@/config";
 import { createLogger } from "@/lib/logger";
 import Login from "./components/Auth/Login";
@@ -41,6 +41,7 @@ const log = createLogger("App");
 
 function App() {
 	const { user, isGuest, logout, token } = useAuth();
+	const navigate = useNavigate();
 	const { t } = useTranslation();
 	const { startLoading, stopLoading } = useLoading();
 	const {
@@ -1067,6 +1068,31 @@ function App() {
 										<span className="header-shrink-text font-bold text-slate-400 uppercase tracking-wider mr-2 sm:mr-4 truncate max-w-[120px] sm:max-w-xs">
 											{uploadFile.name}
 										</span>
+									)}
+									{!isGuest && user && (
+										<button
+											type="button"
+											onClick={() => navigate("/dashboard")}
+											className="mr-2 sm:mr-3 flex items-center gap-1.5 px-2 sm:px-3 py-2 rounded-xl hover:bg-orange-50 transition-colors group/dash border border-transparent hover:border-orange-200"
+											title="マイダッシュボード"
+										>
+											{user.image ? (
+												<img
+													src={user.image}
+													alt={user.name ?? ""}
+													className="w-6 h-6 rounded-lg object-cover"
+												/>
+											) : (
+												<div className="w-6 h-6 rounded-lg bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center text-white text-[10px] font-bold">
+													{(user.name ?? user.email ?? "U")
+														.charAt(0)
+														.toUpperCase()}
+												</div>
+											)}
+											<span className="header-shrink-text text-xs font-semibold text-slate-500 group-hover/dash:text-orange-600 transition-colors hidden sm:block">
+												Dashboard
+											</span>
+										</button>
 									)}
 									<button
 										type="button"

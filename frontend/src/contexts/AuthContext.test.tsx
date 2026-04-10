@@ -3,6 +3,8 @@ import { describe, expect, it, vi } from "vitest";
 import { authClient, getNeonJWT } from "@/lib/auth";
 import { AuthProvider, useAuth } from "./AuthContext";
 
+vi.unmock("@/contexts/AuthContext");
+
 // Mock the authClient
 vi.mock("@/lib/auth", () => ({
 	authClient: {

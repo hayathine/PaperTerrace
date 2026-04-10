@@ -93,6 +93,12 @@ vi.mock("@/db/hooks", () => ({
 		getCachedPaper: mockGetCachedPaper,
 		deletePaperCache: mockDeletePaperCache,
 	}),
+	useBookmarks: () => ({
+		addBookmark: vi.fn(),
+		getBookmarks: vi.fn(() => Promise.resolve([])),
+		getPageBookmarks: vi.fn(() => Promise.resolve(false)),
+		deleteBookmark: vi.fn(),
+	}),
 }));
 
 // Use vi.hoisted for mocks that need to be accessible within vi.mock

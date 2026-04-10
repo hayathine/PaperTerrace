@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { createLogger } from "@/lib/logger";
 import {
+	type Bookmark,
 	db,
 	evictIfOverQuota,
 	type ImageCache,
@@ -195,4 +196,69 @@ export function usePaperCache() {
 		cachePaperImages,
 		deleteCorruptedCache,
 	};
+}
+
+export function useBookmarks() {
+	const addBookmark = useCallback(
+		async (paperId: string, paperTitle: string, pageNumber: number) => {
+			if (!isDbAvailable()) return;
+			try {
+				// 同じページのしおりが既にあれば削除（トグル）
+				const existing = await db.bookmarks
+					.where({ paper_id: paperId, page_number: pageNumber })
+					.first();
+				if (existing?.id != null) {
+					await db.bookmarks.delete(existing.id);
+					return false; // 削除した
+				}
+				await db.bookmarks.add({
+					paper_id: paperId,
+					paper_title: paperTitle,
+					page_number: pageNumber,
+					created_at: Date.now(),
+				});
+				return true; // 追加した
+			} catch (e) {
+				log.error("add_bookmark", "Failed to add bookmark", { error: e });
+				return false;
+			}
+		},
+		[],
+	);
+
+	const getBookmarks = useCallback(async (): Promise<Bookmark[]> => {
+		if (!isDbAvailable()) return [];
+		try {
+			return await db.bookmarks.orderBy("created_at").reverse().toArray();
+		} catch (e) {
+			log.error("get_bookmarks", "Failed to get bookmarks", { error: e });
+			return [];
+		}
+	}, []);
+
+	const getPageBookmarks = useCallback(
+		async (paperId: string, pageNumber: number): Promise<boolean> => {
+			if (!isDbAvailable()) return false;
+			try {
+				const bm = await db.bookmarks
+					.where({ paper_id: paperId, page_number: pageNumber })
+					.first();
+				return bm != null;
+			} catch {
+				return false;
+			}
+		},
+		[],
+	);
+
+	const deleteBookmark = useCallback(async (id: number) => {
+		if (!isDbAvailable()) return;
+		try {
+			await db.bookmarks.delete(id);
+		} catch (e) {
+			log.error("delete_bookmark", "Failed to delete bookmark", { error: e });
+		}
+	}, []);
+
+	return { addBookmark, getBookmarks, getPageBookmarks, deleteBookmark };
 }

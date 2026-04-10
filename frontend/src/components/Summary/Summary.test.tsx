@@ -31,6 +31,12 @@ vi.mock("../../db/hooks", () => ({
 		getCachedPaper: mockGetCachedPaper,
 		savePaperToCache: mockSavePaperToCache,
 	}),
+	useBookmarks: () => ({
+		addBookmark: vi.fn(),
+		getBookmarks: vi.fn(() => Promise.resolve([])),
+		getPageBookmarks: vi.fn(() => Promise.resolve(false)),
+		deleteBookmark: vi.fn(),
+	}),
 }));
 
 vi.mock("@/lib/recommendation", () => ({

@@ -51,6 +51,7 @@ export interface PaperEntry {
 	paper_id: string;
 	title: string | null;
 	created_at: string;
+	tags?: string[];
 }
 
 export async function fetchUserPapers(

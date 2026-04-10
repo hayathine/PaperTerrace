@@ -325,6 +325,37 @@ const Summary: React.FC<SummaryProps> = ({
 									<CopyButton text={summaryData} traceId={summaryTraceId} />
 									<button
 										type="button"
+										onClick={() => {
+											const blob = new Blob([summaryData], {
+												type: "text/markdown;charset=utf-8",
+											});
+											const url = URL.createObjectURL(blob);
+											const a = document.createElement("a");
+											a.href = url;
+											a.download = `summary_${paperId ?? "paper"}.md`;
+											a.click();
+											URL.revokeObjectURL(url);
+										}}
+										className="px-3 py-1 text-xs text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-all flex items-center gap-1"
+										title="Markdownでダウンロード"
+									>
+										<svg
+											className="w-3 h-3"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth="2"
+												d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
+											/>
+										</svg>
+										MD
+									</button>
+									<button
+										type="button"
 										onClick={() => handleSummarize(true)}
 										className="px-3 py-1 text-xs text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-all flex items-center gap-1"
 										title={t("summary.regenerate", "再生成")}

@@ -36,10 +36,19 @@ export interface EditHistory {
 	created_at: number;
 }
 
+export interface Bookmark {
+	id?: number; // auto-increment
+	paper_id: string;
+	paper_title: string;
+	page_number: number;
+	created_at: number;
+}
+
 export class PaperTerraceDB extends Dexie {
 	papers!: Table<PaperCache>;
 	images!: Table<ImageCache>;
 	edit_history!: Table<EditHistory>;
+	bookmarks!: Table<Bookmark>;
 
 	constructor() {
 		super("PaperTerraceDB");
@@ -47,6 +56,12 @@ export class PaperTerraceDB extends Dexie {
 			papers: "id, last_accessed, file_hash",
 			images: "id, paper_id, label",
 			edit_history: "++id, paper_id, synced",
+		});
+		this.version(3).stores({
+			papers: "id, last_accessed, file_hash",
+			images: "id, paper_id, label",
+			edit_history: "++id, paper_id, synced",
+			bookmarks: "++id, paper_id, page_number, created_at",
 		});
 	}
 }

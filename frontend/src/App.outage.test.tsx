@@ -41,6 +41,12 @@ vi.mock("@/contexts/LoadingContext", () => ({
 }));
 vi.mock("@/db/hooks", () => ({
 	usePaperCache: () => ({ getCachedPaper: vi.fn() }),
+	useBookmarks: () => ({
+		addBookmark: vi.fn(),
+		getBookmarks: vi.fn(() => Promise.resolve([])),
+		getPageBookmarks: vi.fn(() => Promise.resolve(false)),
+		deleteBookmark: vi.fn(),
+	}),
 }));
 vi.mock("@/db/sync", () => ({ useSyncStatus: () => "synced" }));
 vi.mock("@/hooks/useLayoutState", () => ({

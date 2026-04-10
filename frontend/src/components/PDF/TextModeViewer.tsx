@@ -4,6 +4,8 @@ import type { PageWithLines } from "./types";
 
 interface TextModeViewerProps {
 	pages: PageWithLines[];
+	paperId?: string | null;
+	paperTitle?: string;
 	onWordClick?: (
 		word: string,
 		context?: string,
@@ -26,6 +28,8 @@ interface TextModeViewerProps {
 
 const TextModeViewer: React.FC<TextModeViewerProps> = ({
 	pages,
+	paperId,
+	paperTitle,
 	onWordClick,
 	onTextSelect,
 	onAskAI,
@@ -47,6 +51,8 @@ const TextModeViewer: React.FC<TextModeViewerProps> = ({
 				<TextModePage
 					key={page.page_num}
 					page={page}
+					paperId={paperId}
+					paperTitle={paperTitle}
 					onWordClick={onWordClick}
 					onTextSelect={onTextSelect}
 					onAskAI={onAskAI}

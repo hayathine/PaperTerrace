@@ -34,6 +34,12 @@ const mockPaperCache = {
 };
 vi.mock("../../db/hooks", () => ({
 	usePaperCache: () => mockPaperCache,
+	useBookmarks: () => ({
+		addBookmark: vi.fn(),
+		getBookmarks: vi.fn(() => Promise.resolve([])),
+		getPageBookmarks: vi.fn(() => Promise.resolve(false)),
+		deleteBookmark: vi.fn(),
+	}),
 }));
 
 // Mock DB

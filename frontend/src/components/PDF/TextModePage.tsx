@@ -1,8 +1,15 @@
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, {
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { useTranslation } from "react-i18next";
 import type { Components } from "react-markdown";
 import { API_URL } from "../../config";
+import { useBookmarks } from "../../db/hooks";
 import { useIntersectionObserver } from "../../hooks/useIntersectionObserver";
 import MarkdownContent from "../Common/MarkdownContent";
 import type { Figure, PageWithLines } from "./types";
@@ -38,6 +45,8 @@ const KNOWN_SECTIONS = [
 
 interface TextModePageProps {
 	page: PageWithLines;
+	paperId?: string | null;
+	paperTitle?: string;
 	onWordClick?: (
 		word: string,
 		context?: string,
@@ -183,6 +192,8 @@ function findFigureByBbox(
 
 const TextModePage: React.FC<TextModePageProps> = ({
 	page,
+	paperId,
+	paperTitle,
 	onWordClick,
 	onTextSelect,
 	onAskAI,
@@ -190,6 +201,26 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	jumpTarget,
 }) => {
 	const { t } = useTranslation();
+	const { addBookmark, getPageBookmarks } = useBookmarks();
+	const [isBookmarked, setIsBookmarked] = useState(false);
+	const [bookmarkAdding, setBookmarkAdding] = useState(false);
+
+	useEffect(() => {
+		if (!paperId) return;
+		getPageBookmarks(paperId, page.page_num).then(setIsBookmarked);
+	}, [paperId, page.page_num, getPageBookmarks]);
+
+	const handleBookmark = useCallback(async () => {
+		if (!paperId || bookmarkAdding) return;
+		setBookmarkAdding(true);
+		const added = await addBookmark(
+			paperId,
+			paperTitle || "Untitled",
+			page.page_num,
+		);
+		setIsBookmarked(added ?? false);
+		setBookmarkAdding(false);
+	}, [paperId, paperTitle, page.page_num, addBookmark, bookmarkAdding]);
 
 	// Intersection Observer: delay heavy Markdown rendering until page is near viewport
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -657,6 +688,33 @@ const TextModePage: React.FC<TextModePageProps> = ({
 				<span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">
 					Page {page.page_num}
 				</span>
+				{paperId && (
+					<button
+						type="button"
+						onClick={handleBookmark}
+						disabled={bookmarkAdding}
+						title={isBookmarked ? "しおりを外す" : "このページをしおりに追加"}
+						className={`p-1 rounded transition-colors ${
+							isBookmarked
+								? "text-orange-500 hover:text-orange-700"
+								: "text-slate-300 hover:text-orange-400"
+						}`}
+					>
+						<svg
+							className="w-3.5 h-3.5"
+							fill={isBookmarked ? "currentColor" : "none"}
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								strokeLinecap="round"
+								strokeLinejoin="round"
+								strokeWidth="2"
+								d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"
+							/>
+						</svg>
+					</button>
+				)}
 			</div>
 
 			{/* Jump target indicator: Y座標にパルスアニメーションで場所を示す */}

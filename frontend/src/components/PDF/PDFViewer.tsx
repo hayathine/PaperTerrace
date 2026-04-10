@@ -131,6 +131,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	const [uploadProgress, setUploadProgress] = useState<number>(0);
 	const eventSourceRef = useRef<EventSource | null>(null);
 	const [loadedPaperId, setLoadedPaperId] = useState<string | null>(null);
+	const [loadedPaperTitle, setLoadedPaperTitle] = useState<string | undefined>(
+		undefined,
+	);
 	const processingFileRef = useRef<File | null>(null);
 	const activeTaskIdRef = useRef<string | null>(null);
 
@@ -342,6 +345,13 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		// TODO (suspended): fetchStamps(loadedPaperId) removed - stamp mode suspended.
 		if (onPaperLoaded) {
 			onPaperLoaded(loadedPaperId);
+		}
+		if (loadedPaperId) {
+			getCachedPaper(loadedPaperId).then((cached) => {
+				if (cached?.title) setLoadedPaperTitle(cached.title);
+			});
+		} else {
+			setLoadedPaperTitle(undefined);
 		}
 	}, [loadedPaperId]);
 
@@ -1705,6 +1715,8 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 					<div className={mode === "plaintext" ? "block" : "hidden"}>
 						<TextModeViewer
 							pages={pagesWithLines}
+							paperId={loadedPaperId}
+							paperTitle={loadedPaperTitle}
 							onWordClick={handleWordClick}
 							onTextSelect={handleTextSelect}
 							onAskAI={onAskAI}
