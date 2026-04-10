@@ -11,15 +11,17 @@ from dataclasses import dataclass
 SUCCESS = "success"
 FAILED = "failed"
 SKIPPED = "skipped"
+PROCESSING = "processing"
 
 # これら以外は「未完了」とみなして再解析対象とする
-_TERMINAL_STATUSES: frozenset[str] = frozenset({SUCCESS, SKIPPED})
+# "processing" を含めることで、すでに処理中の論文に対して重複タスクが起動されるのを防ぐ
+_TERMINAL_STATUSES: frozenset[str] = frozenset({SUCCESS, SKIPPED, PROCESSING})
 
 
 def needs_reanalysis(status: str | None) -> bool:
     """ステータスが再解析を必要とするか判定する。
 
-    None / "failed" の場合は True、"success" / "skipped" の場合は False。
+    None / "failed" の場合は True、"success" / "skipped" / "processing" の場合は False。
     """
     return status not in _TERMINAL_STATUSES
 

@@ -5,6 +5,7 @@ export type DictionaryEntryWithCoords = DictionaryEntry & {
 	coords?: { page: number; x: number; y: number };
 	image_url?: string;
 	is_analyzing?: boolean;
+	source_translation?: string; // 解説タブで元の翻訳結果を保持する
 };
 
 import { useTranslation } from "react-i18next";
@@ -419,7 +420,16 @@ const Dictionary: React.FC<DictionaryProps> = ({
 					return [{ ...entry, ...updates }, ...prev];
 				});
 
-			updateEntry({ is_analyzing: true });
+			// 翻訳タブの結果を source_translation として保持する
+			const originalTranslation =
+				!entry.is_analyzing && entry.translation !== "..."
+					? entry.translation
+					: undefined;
+
+			updateEntry({
+				is_analyzing: true,
+				source_translation: originalTranslation,
+			});
 			setLoading(true);
 			setError(null);
 
@@ -450,6 +460,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 				if (res.ok) {
 					const data: DictionaryEntryWithCoords = await res.json();
 					data.coords = entry.coords;
+					data.source_translation = originalTranslation;
 					setter((prev) =>
 						prev.map((e) =>
 							e.word === entry.word ? { ...data, is_analyzing: false } : e,
@@ -683,6 +694,17 @@ const Dictionary: React.FC<DictionaryProps> = ({
 										alt="Figure"
 										className="w-full h-auto object-contain bg-slate-50"
 									/>
+								</div>
+							)}
+
+							{currentSubTab === "explanation" && entry.source_translation && (
+								<div className="mb-3 p-2.5 bg-blue-50 rounded-lg border border-blue-100">
+									<p className="text-[9px] font-bold uppercase tracking-wider text-blue-400 mb-1">
+										{t("viewer.dictionary.translation")}
+									</p>
+									<p className="text-xs text-blue-800 leading-relaxed font-medium">
+										{entry.source_translation}
+									</p>
 								</div>
 							)}
 

@@ -133,6 +133,8 @@ function App() {
 	const {
 		zoom,
 		resetZoom,
+		zoomIn,
+		zoomOut,
 		containerRef: zoomContainerRef,
 		onWheel: handleZoomWheel,
 	} = usePinchZoom();
@@ -386,27 +388,52 @@ function App() {
 			Array.isArray(uploadedPapers) &&
 			!uploadedPapers.some((p) => p?.paper_id === paperId)
 		) {
-			const headers: HeadersInit = {};
-			if (token) headers.Authorization = `Bearer ${token}`;
+			if (isGuest) {
+				// ゲストは IndexedDB から再読込（API は叩かない）
+				if (isDbAvailable()) {
+					setIsPapersLoading(true);
+					db.papers
+						.orderBy("last_accessed")
+						.reverse()
+						.toArray()
+						.then((cached) => {
+							setUploadedPapers(
+								cached.map((p) => ({
+									paper_id: p.id,
+									title: p.title,
+									filename: p.title,
+									created_at: new Date(p.last_accessed).toISOString(),
+								})),
+							);
+						})
+						.catch(() => {})
+						.finally(() => {
+							setIsPapersLoading(false);
+						});
+				}
+			} else {
+				const headers: HeadersInit = {};
+				if (token) headers.Authorization = `Bearer ${token}`;
 
-			setIsPapersLoading(true);
-			fetch(`${API_URL}/api/papers`, { headers })
-				.then((res) => res.json())
-				.then((data) => {
-					if (data && Array.isArray(data.papers)) {
-						setUploadedPapers(data.papers);
-					} else {
-						setUploadedPapers([]);
-					}
-				})
-				.catch((err) => {
-					log.error("refresh_papers", "Failed to refresh papers", {
-						error: err,
+				setIsPapersLoading(true);
+				fetch(`${API_URL}/api/papers`, { headers })
+					.then((res) => res.json())
+					.then((data) => {
+						if (data && Array.isArray(data.papers)) {
+							setUploadedPapers(data.papers);
+						} else {
+							setUploadedPapers([]);
+						}
+					})
+					.catch((err) => {
+						log.error("refresh_papers", "Failed to refresh papers", {
+							error: err,
+						});
+					})
+					.finally(() => {
+						setIsPapersLoading(false);
 					});
-				})
-				.finally(() => {
-					setIsPapersLoading(false);
-				});
+			}
 		}
 	};
 
@@ -1102,16 +1129,36 @@ function App() {
 											/>
 										</div>
 									</div>
-									{/* ズームインジケーター */}
-									{zoom > 1 && (
-										<button
-											type="button"
-											onClick={resetZoom}
-											className="sticky bottom-4 left-4 z-50 inline-flex items-center gap-1.5 bg-slate-800/80 text-white text-xs font-semibold px-3 py-1.5 rounded-full shadow-lg backdrop-blur-sm hover:bg-slate-700/90 transition-colors"
-										>
-											{Math.round(zoom * 100)}%
-											<span className="text-slate-300">×</span>
-										</button>
+									{/* ズームコントロール */}
+									{(uploadFile || currentPaperId) && (
+										<div className="sticky bottom-4 left-4 z-50 inline-flex items-center gap-0.5 bg-slate-800/80 text-white text-xs font-semibold rounded-full shadow-lg backdrop-blur-sm">
+											<button
+												type="button"
+												onClick={zoomOut}
+												disabled={zoom <= 1}
+												className="px-2.5 py-1.5 hover:bg-slate-700/90 rounded-l-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+												aria-label="ズームアウト"
+											>
+												−
+											</button>
+											<button
+												type="button"
+												onClick={resetZoom}
+												className="px-2 py-1.5 hover:bg-slate-700/90 transition-colors min-w-[3.5rem] text-center"
+												aria-label="ズームリセット"
+											>
+												{Math.round(zoom * 100)}%
+											</button>
+											<button
+												type="button"
+												onClick={zoomIn}
+												disabled={zoom >= 4}
+												className="px-2.5 py-1.5 hover:bg-slate-700/90 rounded-r-full transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+												aria-label="ズームイン"
+											>
+												＋
+											</button>
+										</div>
 									)}
 								</div>
 							) : (

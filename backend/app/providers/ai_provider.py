@@ -886,6 +886,12 @@ class VertexAIProvider(AIProviderInterface):
         self.location = settings.get("GCP_LOCATION", "us-central1")
         self.model = settings.get("VERTEX_MODEL", "gemini-2.5-flash-lite")
 
+        # globalロケーションのみ対応しているモデルの一覧
+        global_models_str = settings.get("GCP_GLOBAL_MODELS", "")
+        self.global_models: set[str] = {
+            m.strip() for m in global_models_str.split(",") if m.strip()
+        }
+
         if not self.project_id:
             log.warning(
                 "vertex_init",
@@ -925,6 +931,16 @@ class VertexAIProvider(AIProviderInterface):
                 location=self.location,
                 credentials=credentials,
             )
+            # globalロケーション専用クライアント（GCP_GLOBAL_MODELSが設定されている場合のみ）
+            if self.global_models and self.location != "global":
+                self._global_client = genai.Client(
+                    vertexai=True,
+                    project=self.project_id,
+                    location="global",
+                    credentials=credentials,
+                )
+            else:
+                self._global_client = self.client
         else:
             # デフォルト認証情報を使用（Application Default Credentials）
             log.info("vertex_init", "アプリケーション デフォルト資格情報 (ADC) を使用します")
@@ -933,6 +949,15 @@ class VertexAIProvider(AIProviderInterface):
                 project=self.project_id,
                 location=self.location,
             )
+            # globalロケーション専用クライアント（GCP_GLOBAL_MODELSが設定されている場合のみ）
+            if self.global_models and self.location != "global":
+                self._global_client = genai.Client(
+                    vertexai=True,
+                    project=self.project_id,
+                    location="global",
+                )
+            else:
+                self._global_client = self.client
 
         self.temperature = float(settings.get("AI_TEMPERATURE", "0.1"))
         self.max_tokens = int(settings.get("AI_MAX_OUTPUT_TOKENS", "1024"))
@@ -943,9 +968,16 @@ class VertexAIProvider(AIProviderInterface):
             project=self.project_id,
             location=self.location,
             model=self.model,
+            global_models=list(self.global_models),
             temperature=self.temperature,
             max_tokens=self.max_tokens,
         )
+
+    def _get_client(self, model: str):
+        """モデル名に応じて適切なクライアントを返す。"""
+        if model in self.global_models:
+            return self._global_client
+        return self.client
 
     async def generate(
         self,
@@ -999,7 +1031,7 @@ class VertexAIProvider(AIProviderInterface):
                 structured=response_model is not None,
             )
 
-            response = await self.client.aio.models.generate_content(
+            response = await self._get_client(target_model).aio.models.generate_content(
                 model=target_model,
                 contents=contents,
                 config=config,
@@ -1089,7 +1121,7 @@ class VertexAIProvider(AIProviderInterface):
 
             config = self._types.GenerateContentConfig(**config_params)
 
-            response = await self.client.aio.models.generate_content(
+            response = await self._get_client(target_model).aio.models.generate_content(
                 model=target_model,
                 contents=contents,
                 config=config,
@@ -1177,7 +1209,7 @@ class VertexAIProvider(AIProviderInterface):
 
             config = self._types.GenerateContentConfig(**config_params)
 
-            response = await self.client.aio.models.generate_content(
+            response = await self._get_client(target_model).aio.models.generate_content(
                 model=target_model,
                 contents=contents,
                 config=config,
@@ -1243,7 +1275,7 @@ class VertexAIProvider(AIProviderInterface):
 
             config = self._types.GenerateContentConfig(**config_params)
 
-            response = await self.client.aio.models.generate_content(
+            response = await self._get_client(target_model).aio.models.generate_content(
                 model=target_model,
                 contents=contents,
                 config=config,
@@ -1281,7 +1313,7 @@ class VertexAIProvider(AIProviderInterface):
             config = self._types.GenerateContentConfig(**config_params)
             contents = prompt if cached_content_name else full_prompt
 
-            response_stream = await self.client.aio.models.generate_content_stream(
+            response_stream = await self._get_client(target_model).aio.models.generate_content_stream(
                 model=target_model,
                 contents=contents,
                 config=config,
@@ -1330,7 +1362,7 @@ class VertexAIProvider(AIProviderInterface):
 
             contents = [image_part, prompt] if image_part else [prompt]
 
-            response_stream = await self.client.aio.models.generate_content_stream(
+            response_stream = await self._get_client(target_model).aio.models.generate_content_stream(
                 model=target_model,
                 contents=contents,
                 config=config,
@@ -1372,7 +1404,7 @@ class VertexAIProvider(AIProviderInterface):
                 ]
             )
 
-            response_stream = await self.client.aio.models.generate_content_stream(
+            response_stream = await self._get_client(target_model).aio.models.generate_content_stream(
                 model=target_model,
                 contents=contents,
                 config=config,
@@ -1388,7 +1420,7 @@ class VertexAIProvider(AIProviderInterface):
         """Count tokens using Vertex AI API."""
         target_model = model or self.model
         try:
-            resp = await self.client.aio.models.count_tokens(
+            resp = await self._get_client(target_model).aio.models.count_tokens(
                 model=target_model, contents=contents
             )
             return int(resp.total_tokens or 0)
@@ -1429,7 +1461,7 @@ class VertexAIProvider(AIProviderInterface):
             else:
                 parts = contents
 
-            cache = await self.client.aio.caches.create(
+            cache = await self._get_client(model).aio.caches.create(
                 model=model,
                 config=self._types.CreateCachedContentConfig(
                     contents=parts,

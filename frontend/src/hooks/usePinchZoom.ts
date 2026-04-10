@@ -9,6 +9,8 @@ interface UsePinchZoomOptions {
 interface UsePinchZoomReturn {
 	zoom: number;
 	resetZoom: () => void;
+	zoomIn: () => void;
+	zoomOut: () => void;
 	containerRef: React.RefObject<HTMLDivElement>;
 	onWheel: (e: React.WheelEvent) => void;
 }
@@ -20,7 +22,7 @@ interface UsePinchZoomReturn {
 export function usePinchZoom({
 	min = 1,
 	max = 4,
-	wheelStep = 0.15,
+	wheelStep = 0.05,
 }: UsePinchZoomOptions = {}): UsePinchZoomReturn {
 	const [zoom, setZoom] = useState(1);
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -32,6 +34,14 @@ export function usePinchZoom({
 	const clamp = (v: number) => Math.min(max, Math.max(min, v));
 
 	const resetZoom = useCallback(() => setZoom(1), []);
+	const zoomIn = useCallback(
+		() => setZoom((prev) => clamp(Math.round((prev + wheelStep) * 100) / 100)),
+		[wheelStep, min, max],
+	);
+	const zoomOut = useCallback(
+		() => setZoom((prev) => clamp(Math.round((prev - wheelStep) * 100) / 100)),
+		[wheelStep, min, max],
+	);
 
 	// ポインターイベントで pinch zoom を検出（passive: false で preventDefault 可能）
 	useEffect(() => {
@@ -96,5 +106,5 @@ export function usePinchZoom({
 		[wheelStep, min, max],
 	);
 
-	return { zoom, resetZoom, containerRef, onWheel };
+	return { zoom, resetZoom, zoomIn, zoomOut, containerRef, onWheel };
 }
