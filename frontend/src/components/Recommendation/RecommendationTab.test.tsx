@@ -66,6 +66,7 @@ describe("RecommendationTab Component", () => {
 		expect(recommendationLib.generateRecommendations).toHaveBeenCalledWith(
 			sessionId,
 			"test-token",
+			undefined,
 		);
 
 		// Check for loading state

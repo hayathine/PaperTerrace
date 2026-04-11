@@ -42,6 +42,130 @@ service = EnglishAnalysisService()
 redis_service = RedisService()
 
 
+# ---------------------------------------------------------------------------
+# 共通ヘルパー関数
+# ---------------------------------------------------------------------------
+
+def _clean_word(word: str) -> str:
+    """入力テキストから改行・前後の句読点を除去する。空になった場合は元の文字列を返す。"""
+    cleaned = word.replace("\n", " ").strip(r" .,;!?(){}[\]\"'")
+    return cleaned if cleaned else word.strip()
+
+
+def _get_pdf_cache_name(paper_id: str | None) -> str | None:
+    """論文の PDF コンテキストキャッシュ名を Redis から取得する。なければ None。"""
+    if not paper_id:
+        return None
+    return redis_service.get(f"paper_cache_pdf:{paper_id}")
+
+
+async def _generate_with_pdf_cache(
+    word: str,
+    context: str | None,
+    prompt_template: str,
+    lang_name: str,
+    pdf_cache_name: str,
+) -> str:
+    """PDF コンテキストキャッシュを使って AI による翻訳・解説テキストを生成する。
+
+    Args:
+        word: 対象の単語またはフレーズ。
+        context: 周辺テキスト（省略可）。
+        prompt_template: `target_word`・`context_line`・`lang_name` を含むプロンプトテンプレート。
+        lang_name: 翻訳先の言語名。
+        pdf_cache_name: Gemini のコンテキストキャッシュ名。
+
+    Returns:
+        生成された翻訳・解説テキスト。
+    """
+    context_line = f"\nSurrounding context: ...{context}...\n" if context else ""
+    prompt = prompt_template.format(
+        target_word=word,
+        context_line=context_line,
+        lang_name=lang_name,
+    )
+    ai_provider = get_ai_provider()
+    raw = await ai_provider.generate(
+        prompt=prompt,
+        model=settings.get("MODEL_TRANSLATE", "gemini-2.5-flash-lite"),
+        cached_content_name=pdf_cache_name,
+    )
+    return (str(raw) if raw else "").strip()
+
+
+def _resolve_user_id(request: Request, session_id: str | None) -> str | None:
+    """リクエストから user_id を解決する。ゲストの場合は session_id を利用。"""
+    return getattr(request.state, "user_id", None) or (
+        f"guest:{session_id}" if session_id else None
+    )
+
+
+def _build_paper_context(
+    paper_id: str | None,
+    context: str | None,
+    storage: "ORMStorageAdapter",
+) -> str:
+    """paper_id から論文サマリを取得し、周辺テキストと結合してコンテキスト文字列を構築する。"""
+    paper_context = ""
+    if paper_id:
+        paper = storage.get_paper(paper_id)
+        if paper:
+            summary = paper.get("abstract") or paper.get("summary")
+            if summary:
+                paper_context = f"\n[Paper Context / Summary]\n{summary}\n"
+    if context:
+        paper_context += f"\n[Surrounding Context]\n...{context}...\n"
+    return paper_context
+
+
+def _make_response(
+    word: str,
+    lemma: str,
+    translation: str,
+    source: str,
+    is_htmx: bool,
+    element_id: str | None = None,
+    trace_id: str | None = None,
+    lang: str = "ja",
+    paper_id: str | None = None,
+    paper_title: str | None = None,
+    show_deep_btn: bool = True,
+    status_code: int = 200,
+    html_source: str | None = None,
+):
+    """is_htmx に応じて JSONResponse または HTMLResponse を返す共通ヘルパー。
+    html_source を指定すると、HTML レスポンスのソース表示ラベルを上書きできる。
+    """
+    if not is_htmx:
+        return JSONResponse(
+            {
+                "word": word,
+                "lemma": lemma,
+                "translation": translation,
+                "source": source,
+                "trace_id": trace_id,
+                "element_id": element_id,
+            },
+            status_code=status_code,
+        )
+    return HTMLResponse(
+        build_dict_card_html(
+            DictCardData(
+                word=word,
+                lemma=lemma,
+                translation=translation,
+                source=html_source or source,
+                lang=lang,
+                paper_id=paper_id,
+                paper_title=paper_title,
+                show_deep_btn=show_deep_btn,
+                element_id=element_id,
+                trace_id=trace_id,
+            )
+        )
+    )
+
+
 @dataclass
 class DictCardData:
     """辞書カード描画に必要なデータを保持するデータクラス。"""
@@ -256,17 +380,10 @@ async def explain(
     is_htmx = req.headers.get("HX-Request") == "true"
 
     # 0. Clean input
-    clean_input = word.replace("\n", " ").strip(r" .,;!?(){}[\]\"'")
-    if not clean_input:
-        clean_input = word.strip()
-
     original_word = word
-    lemma = clean_input
+    lemma = _clean_word(word)
 
-    # Calculate user_id (handling guest case)
-    current_user_id = getattr(req.state, "user_id", None) or (
-        f"guest:{session_id}" if session_id else None
-    )
+    current_user_id = _resolve_user_id(req, session_id)
 
     # Fetch paper title for local LLM optimization (Skip if title is provided by frontend)
     if not paper_title and paper_id:
@@ -278,16 +395,6 @@ async def explain(
     cached = await service.get_translation(lemma, lang=lang, context=context, paper_title=paper_title)
     if cached:
         source = cached.get("source", "Cache")
-        if not is_htmx:
-            return JSONResponse(
-                {
-                    "word": original_word,
-                    "lemma": lemma,
-                    "translation": cached["translation"],
-                    "source": source,
-                    "element_id": element_id,
-                }
-            )
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(
             "explain",
@@ -296,17 +403,16 @@ async def explain(
             word=word,
             paper_id=paper_id,
         )
-        return HTMLResponse(
-            build_dict_card_html(DictCardData(
-                word=original_word,
-                lemma=lemma,
-                translation=cached["translation"],
-                source=source,
-                lang=lang,
-                paper_id=paper_id,
-                paper_title=paper_title,
-                element_id=element_id,
-            ))
+        return _make_response(
+            word=original_word,
+            lemma=lemma,
+            translation=cached["translation"],
+            source=source,
+            is_htmx=is_htmx,
+            element_id=element_id,
+            lang=lang,
+            paper_id=paper_id,
+            paper_title=paper_title,
         )
 
     # 2. Gemini Translation
@@ -317,38 +423,19 @@ async def explain(
         trace_id = None
 
         # PDF コンテキストキャッシュが存在すれば直接 API 呼び出しで論文全文を活用
-        pdf_cache_name = redis_service.get(f"paper_cache_pdf:{paper_id}") if paper_id else None
+        pdf_cache_name = _get_pdf_cache_name(paper_id)
 
         is_long_text = len(original_word) > 20 or " " in original_word.strip()
 
         if pdf_cache_name:
-            context_line = f"\nSurrounding context: ...{context}...\n" if context else ""
-            prompt_template = SENTENCE_TRANSLATE_FROM_PDF_PROMPT if is_long_text else TRANSLATE_FROM_PDF_PROMPT
-            prompt = prompt_template.format(
-                target_word=original_word,
-                context_line=context_line,
-                lang_name=lang_name,
+            tmpl = SENTENCE_TRANSLATE_FROM_PDF_PROMPT if is_long_text else TRANSLATE_FROM_PDF_PROMPT
+            translation = await _generate_with_pdf_cache(
+                original_word, context, tmpl, lang_name, pdf_cache_name
             )
-            ai_provider = get_ai_provider()
-            raw = await ai_provider.generate(
-                prompt=prompt,
-                model=settings.get("MODEL_TRANSLATE", "gemini-2.5-flash-lite"),
-                cached_content_name=pdf_cache_name,
-            )
-            translation = (str(raw) if raw else "").strip()
             log.info("explain", "Translated with PDF context cache", lemma=lemma)
         else:
             # キャッシュなし: abstract + 周辺テキストで DSPy 経由
-            paper_context = ""
-            if paper_id:
-                paper = storage.get_paper(paper_id)
-                if paper:
-                    summary = paper.get("abstract") or paper.get("summary")
-                    if summary:
-                        paper_context = f"\n[Paper Context / Summary]\n{summary}\n"
-
-            if context:
-                paper_context += f"\n[Surrounding Context]\n...{context}...\n"
+            paper_context = _build_paper_context(paper_id, context, storage)
 
             if is_long_text:
                 sent_mod = SentenceTranslationModule()
@@ -385,21 +472,6 @@ async def explain(
                 )
                 translation = res.translation.strip()
 
-        service.translation_cache[lemma] = translation
-        service.word_cache[lemma] = False
-
-        if not is_htmx:
-            return JSONResponse(
-                {
-                    "word": original_word,
-                    "lemma": lemma,
-                    "translation": translation,
-                    "source": "Gemini",
-                    "trace_id": trace_id,
-                    "element_id": element_id,
-                }
-            )
-
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(
             "explain",
@@ -408,52 +480,36 @@ async def explain(
             word=word,
             paper_id=paper_id,
         )
-
-        return HTMLResponse(
-            build_dict_card_html(DictCardData(
-                word=original_word,
-                lemma=lemma,
-                translation=translation,
-                source="Gemini AI",
-                lang=lang,
-                paper_id=paper_id,
-                paper_title=paper_title,
-                element_id=element_id,
-                trace_id=trace_id,
-            ))
+        return _make_response(
+            word=original_word,
+            lemma=lemma,
+            translation=translation,
+            source="Gemini",
+            html_source="Gemini AI",
+            is_htmx=is_htmx,
+            element_id=element_id,
+            trace_id=trace_id,
+            lang=lang,
+            paper_id=paper_id,
+            paper_title=paper_title,
         )
     except Exception as e:
         log.error(
             "explain", "Gemini fallback translation failed", error=str(e), lemma=lemma
         )
-
-        # 最終的にエラーの場合
         error_msg = (
-            f"Translation failed: {str(e)}"
-            if is_local()
-            else "Translation failed"
+            f"Translation failed: {str(e)}" if is_local() else "Translation failed"
         )
-        if not is_htmx:
-            return JSONResponse(
-                {
-                    "word": original_word,
-                    "lemma": lemma,
-                    "translation": error_msg,
-                    "source": "Error",
-                    "element_id": element_id,
-                },
-                status_code=500,
-            )
-        return HTMLResponse(
-            build_dict_card_html(DictCardData(
-                word=original_word,
-                lemma=lemma,
-                translation=error_msg,
-                source="Error",
-                lang=lang,
-                paper_id=paper_id,
-                element_id=element_id,
-            ))
+        return _make_response(
+            word=original_word,
+            lemma=lemma,
+            translation=error_msg,
+            source="Error",
+            is_htmx=is_htmx,
+            element_id=element_id,
+            lang=lang,
+            paper_id=paper_id,
+            status_code=500,
         )
 
 
@@ -475,17 +531,10 @@ async def explain_deep(
     is_htmx = req.headers.get("HX-Request") == "true"
     start_time = asyncio.get_event_loop().time()
     # 0. Clean input
-    clean_input = word.replace("\n", " ").strip(r" .,;!?(){}[\]\"'")
-    if not clean_input:
-        clean_input = word.strip()
-
     original_word = word
-    lemma = clean_input  # Initial assumption
+    lemma = _clean_word(word)
 
-    # Calculate user_id (handling guest case)
-    current_user_id = getattr(req.state, "user_id", None) or (
-        f"guest:{session_id}" if session_id else None
-    )
+    current_user_id = _resolve_user_id(req, session_id)
 
     # Stage 3: Gemini translation
     try:
@@ -495,35 +544,16 @@ async def explain_deep(
         log.info("explain_deep", "Gemini call", lemma=lemma)
 
         # PDF コンテキストキャッシュが存在すれば直接 API 呼び出しで論文全文を活用
-        pdf_cache_name = redis_service.get(f"paper_cache_pdf:{paper_id}") if paper_id else None
+        pdf_cache_name = _get_pdf_cache_name(paper_id)
 
         if pdf_cache_name:
-            context_line = f"\nSurrounding context: ...{context}...\n" if context else ""
-            prompt = TRANSLATE_FROM_PDF_PROMPT.format(
-                target_word=original_word,
-                context_line=context_line,
-                lang_name=lang_name,
+            translation = await _generate_with_pdf_cache(
+                original_word, context, TRANSLATE_FROM_PDF_PROMPT, lang_name, pdf_cache_name
             )
-            ai_provider = get_ai_provider()
-            raw = await ai_provider.generate(
-                prompt=prompt,
-                model=settings.get("MODEL_TRANSLATE", "gemini-2.5-flash-lite"),
-                cached_content_name=pdf_cache_name,
-            )
-            translation = (str(raw) if raw else "").strip()
             log.info("explain_deep", "Translated with PDF context cache", lemma=lemma)
         else:
             # キャッシュなし: abstract + 周辺テキストで DSPy 経由
-            paper_context = ""
-            if paper_id:
-                paper = storage.get_paper(paper_id)
-                if paper:
-                    summary = paper.get("abstract") or paper.get("summary")
-                    if summary:
-                        paper_context = f"\n[Paper Context / Summary]\n{summary}\n"
-
-            if context:
-                paper_context += f"\n[Surrounding Context]\n...{context}...\n"
+            paper_context = _build_paper_context(paper_id, context, storage)
 
             trans_mod = TranslationModule()
             res, trace_id = await trace_dspy_call(
@@ -542,21 +572,6 @@ async def explain_deep(
             )
             translation = res.translation_and_explanation.strip()
 
-        service.translation_cache[lemma] = translation
-        service.word_cache[lemma] = False
-
-        if not is_htmx:
-            return JSONResponse(
-                {
-                    "word": original_word,
-                    "lemma": lemma,
-                    "translation": translation,
-                    "source": "Gemini",
-                    "trace_id": trace_id,
-                    "element_id": element_id,
-                }
-            )
-
         elapsed = asyncio.get_event_loop().time() - start_time
         log.info(
             "explain_deep",
@@ -565,48 +580,34 @@ async def explain_deep(
             word=word,
             paper_id=paper_id,
         )
-
-        return HTMLResponse(
-            build_dict_card_html(DictCardData(
-                word=original_word,
-                lemma=lemma,
-                translation=translation,
-                source="Gemini AI",
-                lang=lang,
-                paper_id=paper_id,
-                show_deep_btn=False,
-                element_id=element_id,
-                trace_id=trace_id,
-            ))
+        return _make_response(
+            word=original_word,
+            lemma=lemma,
+            translation=translation,
+            source="Gemini",
+            html_source="Gemini AI",
+            is_htmx=is_htmx,
+            element_id=element_id,
+            trace_id=trace_id,
+            lang=lang,
+            paper_id=paper_id,
+            show_deep_btn=False,
         )
     except Exception as e:
         log.error(
             "explain_deep", "Gemini translation failed", error=str(e), lemma=lemma
         )
-        error_msg = (
-            str(e) if is_local() else "An error occurred during translation."
-        )
-        if not is_htmx:
-            return JSONResponse(
-                {
-                    "word": original_word,
-                    "lemma": lemma,
-                    "translation": error_msg,
-                    "source": "Error",
-                    "element_id": element_id,
-                },
-                status_code=500,
-            )
-        return HTMLResponse(
-            build_dict_card_html(DictCardData(
-                word=original_word,
-                lemma=lemma,
-                translation=error_msg,
-                source="Error",
-                lang=lang,
-                paper_id=paper_id,
-                element_id=element_id,
-            ))
+        error_msg = str(e) if is_local() else "An error occurred during translation."
+        return _make_response(
+            word=original_word,
+            lemma=lemma,
+            translation=error_msg,
+            source="Error",
+            is_htmx=is_htmx,
+            element_id=element_id,
+            lang=lang,
+            paper_id=paper_id,
+            status_code=500,
         )
 
 
@@ -645,39 +646,28 @@ async def explain_with_context(
             if paper and paper.get("abstract"):
                 summary_context = f"\n[Document Summary]\n{paper['abstract']}\n"
 
+    current_user_id = _resolve_user_id(request, req.session_id)
+
     try:
         trace_id = None
 
         # PDF コンテキストキャッシュが存在すれば直接 API 呼び出しで論文全文を活用
-        pdf_cache_name = redis_service.get(f"paper_cache_pdf:{paper_id}") if paper_id else None
+        pdf_cache_name = _get_pdf_cache_name(paper_id)
 
         is_long_text = len(req.word) > 20 or " " in req.word.strip()
 
         if pdf_cache_name:
-            context_line = f"\nSurrounding context: ...{req.context}...\n"
-            if is_long_text:
-                prompt = SENTENCE_TRANSLATE_FROM_PDF_PROMPT.format(
-                    target_word=req.word,
-                    context_line=context_line,
-                    lang_name=lang_name,
-                )
-            else:
-                prompt = EXPLAIN_FROM_PDF_PROMPT.format(
-                    target_word=req.word,
-                    context_line=context_line,
-                    lang_name=lang_name,
-                )
-            ai_provider = get_ai_provider()
-            raw = await ai_provider.generate(
-                prompt=prompt,
-                model=settings.get("MODEL_TRANSLATE", "gemini-2.5-flash-lite"),
-                cached_content_name=pdf_cache_name,
+            tmpl = SENTENCE_TRANSLATE_FROM_PDF_PROMPT if is_long_text else EXPLAIN_FROM_PDF_PROMPT
+            explanation = await _generate_with_pdf_cache(
+                req.word, req.context, tmpl, lang_name, pdf_cache_name
             )
-            explanation = (str(raw) if raw else "").strip()
             log.info("explain_context", "Explained with PDF context cache", word=req.word)
         else:
             # キャッシュなし: abstract + 周辺テキストで DSPy 経由
             paper_context = (summary_context + "\n" + req.context).strip()
+            trace_ctx = TraceContext(
+                user_id=current_user_id, session_id=req.session_id, paper_id=paper_id
+            )
             if is_long_text:
                 sent_mod = SentenceTranslationModule()
                 res, trace_id = await trace_dspy_call(
@@ -690,14 +680,7 @@ async def explain_with_context(
                         "user_persona": "Professional Academic Translator",
                         "lang_name": lang_name,
                     },
-                    context=TraceContext(
-                        user_id=(
-                            getattr(request.state, "user_id", None)
-                            or (f"guest:{req.session_id}" if req.session_id else None)
-                        ),
-                        session_id=req.session_id,
-                        paper_id=paper_id,
-                    ),
+                    context=trace_ctx,
                 )
                 explanation = res.translation.strip()
             else:
@@ -712,14 +695,7 @@ async def explain_with_context(
                         "user_persona": "Professional Academic Translator",
                         "lang_name": lang_name,
                     },
-                    context=TraceContext(
-                        user_id=(
-                            getattr(request.state, "user_id", None)
-                            or (f"guest:{req.session_id}" if req.session_id else None)
-                        ),
-                        session_id=req.session_id,
-                        paper_id=paper_id,
-                    ),
+                    context=trace_ctx,
                 )
                 explanation = res.translation_and_explanation.strip()
 

@@ -146,4 +146,77 @@ describe("Dashboard Page", () => {
 
 		expect(await screen.findByText("hello")).toBeDefined();
 	});
+
+	it("filters papers based on search input", async () => {
+		mockFetchUserPapers.mockResolvedValueOnce({
+			papers: [
+				{ paper_id: "p1", title: "React Guide", created_at: "2023-01-01" },
+				{ paper_id: "p2", title: "Vue Guide", created_at: "2023-01-02" },
+			],
+		});
+
+		render(
+			<BrowserRouter>
+				<Dashboard />
+			</BrowserRouter>,
+		);
+
+		// Initially both should be there (though our mock only returned one in the default mock,
+		// but here we override it)
+		expect(await screen.findByText("React Guide")).toBeDefined();
+		expect(await screen.findByText("Vue Guide")).toBeDefined();
+
+		const searchInput = screen.getByPlaceholderText(/検索/);
+		const { fireEvent } = await import("@testing-library/react");
+		fireEvent.change(searchInput, { target: { value: "React" } });
+
+		expect(screen.queryByText("React Guide")).not.toBeNull();
+		expect(screen.queryByText("Vue Guide")).toBeNull();
+	});
+
+	it("handles translation pagination", async () => {
+		mockFetchUserTranslations.mockResolvedValueOnce({
+			translations: [{ term: "page1", created_at: "2023-01-01" }],
+			total: 40, // 2 pages (20 per page)
+			page: 1,
+			per_page: 20,
+		});
+
+		render(
+			<BrowserRouter>
+				<Dashboard />
+			</BrowserRouter>,
+		);
+
+		expect(await screen.findByText("page1")).toBeDefined();
+		expect(screen.getByText("1 / 2")).toBeDefined();
+
+		const nextButton = screen.getByText("次へ →");
+		const { fireEvent } = await import("@testing-library/react");
+
+		// When "Next" is clicked, it should call fetchUserTranslations for page 2
+		mockFetchUserTranslations.mockResolvedValueOnce({
+			translations: [{ term: "page2", created_at: "2023-01-01" }],
+			total: 40,
+			page: 2,
+			per_page: 20,
+		});
+
+		fireEvent.click(nextButton);
+
+		expect(await screen.findByText("page2")).toBeDefined();
+		expect(screen.getByText("2 / 2")).toBeDefined();
+	});
+
+	it("shows empty state when no papers are found", async () => {
+		mockFetchUserPapers.mockResolvedValueOnce({ papers: [] });
+
+		render(
+			<BrowserRouter>
+				<Dashboard />
+			</BrowserRouter>,
+		);
+
+		expect(await screen.findByText("論文はまだありません")).toBeDefined();
+	});
 });

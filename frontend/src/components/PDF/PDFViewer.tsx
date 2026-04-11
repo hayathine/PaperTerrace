@@ -6,7 +6,8 @@ import { buildAuthHeaders } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 import { useAuth } from "../../contexts/AuthContext";
 import { usePaperCache } from "../../db/hooks";
-import { isDbAvailable } from "../../db/index";
+import { useEvidenceHighlighting } from "../../hooks/useEvidenceHighlighting";
+import { useLayoutPolling } from "../../hooks/useLayoutPolling";
 import type { Grounding } from "../Chat/types";
 import PDFPage from "./PDFPage";
 import TextModeViewer from "./TextModeViewer";
@@ -155,87 +156,22 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	// TODO (suspended): stamp state removed. Restore for stamp mode.
 
 	const pagesRef = useRef<PageData[]>([]);
-	const [evidenceHighlights, setEvidenceHighlights] = useState<
-		Record<
-			number,
-			Array<{ x: number; y: number; width: number; height: number }>
-		>
-	>({});
+
+	const { evidenceHighlights } = useEvidenceHighlighting(evidence, pages);
+
+	const { applyLayoutFigures, triggerLazyLayoutAnalysis } = useLayoutPolling({
+		token,
+		sessionId,
+		getCachedPaper,
+		savePaperToCache,
+		setPages,
+	});
 
 	useEffect(() => {
 		if (onStatusChange) {
 			onStatusChange(status);
 		}
 	}, [status, onStatusChange]);
-
-	useEffect(() => {
-		if (!evidence || !pages.length) {
-			setEvidenceHighlights({});
-			return;
-		}
-
-		const highlights: Record<
-			number,
-			Array<{ x: number; y: number; width: number; height: number }>
-		> = {};
-
-		if (evidence.supports) {
-			evidence.supports.forEach((support) => {
-				const text = support.segment_text;
-				if (!text || text.length < 5) return;
-
-				const tokens = text
-					.toLowerCase()
-					.split(/\s+/)
-					.filter((t: string) => t.length > 0);
-				if (tokens.length === 0) return;
-
-				pages.forEach((page) => {
-					for (let i = 0; i <= (page.words?.length || 0) - tokens.length; i++) {
-						let match = true;
-						for (let j = 0; j < tokens.length; j++) {
-							if (!page.words[i + j].word.toLowerCase().includes(tokens[j])) {
-								match = false;
-								break;
-							}
-						}
-						if (match) {
-							const matchedWords = page.words.slice(i, i + tokens.length);
-							const x1 = Math.min(...matchedWords.map((w) => w.bbox[0]));
-							const y1 = Math.min(...matchedWords.map((w) => w.bbox[1]));
-							const x2 = Math.max(...matchedWords.map((w) => w.bbox[2]));
-							const y2 = Math.max(...matchedWords.map((w) => w.bbox[3]));
-
-							if (!highlights[page.page_num]) highlights[page.page_num] = [];
-							highlights[page.page_num].push({
-								x: x1 / (page.width || 1),
-								y: y1 / (page.height || 1),
-								width: (x2 - x1) / (page.width || 1),
-								height: (y2 - y1) / (page.height || 1),
-							});
-							// To avoid too many highlights for the same segment, we can break after some matches
-							if (highlights[page.page_num].length > 5) break;
-						}
-					}
-				});
-			});
-		}
-
-		setEvidenceHighlights(highlights);
-
-		// Auto-scroll to first evidence
-		const firstPage = Object.keys(highlights).sort(
-			(a, b) => Number(a) - Number(b),
-		)[0];
-		if (firstPage) {
-			const p = Number(firstPage);
-			setTimeout(() => {
-				document
-					.getElementById(`page-${p}`)
-					?.scrollIntoView({ behavior: "smooth", block: "center" });
-			}, 100);
-		}
-	}, [evidence, pages]);
 
 	// Sync ref with state
 	useEffect(() => {
@@ -390,232 +326,6 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 			setLoadedPaperTitle(undefined);
 		}
 	}, [loadedPaperId]);
-
-	const applyLayoutFigures = (
-		figures: any[],
-		paperId: string,
-		fileHash: string | null,
-	) => {
-		if (!Array.isArray(figures) || figures.length === 0) return;
-
-		setPages((prevPages) => {
-			const nextPages = prevPages.map((page) => {
-				const pageFigures = figures.filter(
-					(f: any) => f.page_num === page.page_num,
-				);
-				if (pageFigures.length === 0) return page;
-
-				const processedFigures = pageFigures.map((f: any) => ({
-					...f,
-					image_url:
-						f.image_url &&
-						!f.image_url.startsWith("http") &&
-						!f.image_url.startsWith("blob:")
-							? `${API_URL}${f.image_url}`
-							: f.image_url,
-				}));
-
-				const existingUrls = new Set(
-					(page.figures || []).map((ef) => ef.image_url),
-				);
-				const newUniqueFigures = processedFigures.filter(
-					(nf: any) => !existingUrls.has(nf.image_url),
-				);
-
-				if (newUniqueFigures.length === 0) return page;
-
-				return {
-					...page,
-					figures: [...(page.figures || []), ...newUniqueFigures],
-				};
-			});
-
-			// Persist to IndexedDB cache (Crucial for Transient sessions)
-			if (paperId && isDbAvailable()) {
-				const layoutJson = JSON.stringify(
-					nextPages.map((p) => ({
-						width: p.width,
-						height: p.height,
-						words: p.words,
-						figures: p.figures,
-						links: p.links,
-					})),
-				);
-
-				getCachedPaper(paperId).then((cached) => {
-					savePaperToCache({
-						...(cached || {
-							id: paperId,
-							file_hash: fileHash || "",
-							title: "Untitled",
-							last_accessed: Date.now(),
-						}),
-						layout_json: layoutJson,
-						last_accessed: Date.now(),
-					});
-				});
-			}
-
-			return nextPages;
-		});
-	};
-
-	const pollLayoutJob = (
-		jobId: string,
-		paperId: string,
-		fileHash: string | null,
-		streamUrl: string,
-	): Promise<void> => {
-		return new Promise((resolve) => {
-			const fullStreamUrl = streamUrl.startsWith("http")
-				? streamUrl
-				: `${API_URL}${streamUrl}`;
-			const es = new EventSource(fullStreamUrl);
-
-			const timeout = setTimeout(() => {
-				log.error("poll_layout_job", "Job timed out", { job_id: jobId });
-				es.close();
-				resolve();
-			}, 130_000);
-
-			es.onmessage = (event) => {
-				try {
-					const data = JSON.parse(event.data);
-
-					if (data.status === "partial") {
-						applyLayoutFigures(data.figures, paperId, fileHash);
-					} else if (data.status === "completed") {
-						log.info("poll_layout_job", "Job completed", {
-							job_id: jobId,
-							figures: data.figures_detected,
-						});
-						applyLayoutFigures(data.figures, paperId, fileHash);
-						clearTimeout(timeout);
-						es.close();
-						resolve();
-					} else if (data.status === "failed") {
-						log.error("poll_layout_job", "Job failed", {
-							job_id: jobId,
-							error: data.error,
-						});
-						clearTimeout(timeout);
-						es.close();
-						resolve();
-					} else if (data.status === "not_found" || data.status === "timeout") {
-						log.warn("poll_layout_job", "Job ended unexpectedly", {
-							job_id: jobId,
-							status: data.status,
-						});
-						clearTimeout(timeout);
-						es.close();
-						resolve();
-					}
-					// queued / processing → 次のSSEメッセージを待つ
-				} catch {
-					// ignore parse errors
-				}
-			};
-
-			es.onerror = () => {
-				log.warn("poll_layout_job", "SSE connection error", {
-					job_id: jobId,
-				});
-				clearTimeout(timeout);
-				es.close();
-				resolve();
-			};
-		});
-	};
-
-	const enqueueBatch = async (
-		paperId: string,
-		batchPages: number[],
-		fileHash: string | null,
-		headers: HeadersInit,
-	): Promise<{ jobId: string; streamUrl: string } | null> => {
-		const formData = new URLSearchParams();
-		formData.append("paper_id", paperId);
-		formData.append("page_numbers", batchPages.join(","));
-		if (fileHash) formData.append("file_hash", fileHash);
-		if (sessionId) formData.append("session_id", sessionId);
-
-		const response = await fetch(`${API_URL}/api/analyze-layout-lazy`, {
-			method: "POST",
-			headers,
-			body: formData,
-		});
-
-		if (!response.ok) {
-			log.error("enqueue_batch", "Enqueue failed", {
-				pages: batchPages,
-				status: response.status,
-			});
-			return null;
-		}
-
-		const result = await response.json();
-
-		// Redis 未接続時のフォールバック: 即時結果が返る
-		if (result.figures) {
-			applyLayoutFigures(result.figures, paperId, fileHash);
-			return null;
-		}
-
-		if (!result.job_id) return null;
-		const streamUrl =
-			result.stream_url ?? `/api/layout-jobs/${result.job_id}/stream`;
-		return { jobId: result.job_id, streamUrl };
-	};
-
-	const triggerLazyLayoutAnalysis = async (
-		paperId: string,
-		initialPages?: PageData[],
-	) => {
-		try {
-			// Prefer explicitly passed pages so callers don't have to wait for
-			// pagesRef to sync (useEffect runs after render, so pagesRef.current
-			// may still be stale when called immediately after setPages()).
-			const finalPages = initialPages ?? pagesRef.current;
-			if (!finalPages || finalPages.length === 0) return;
-
-			// Important for transient sessions: provide file_hash explicitly
-			const firstImgUrl = finalPages[0]?.image_url || "";
-			const hashMatch = firstImgUrl.match(/\/static\/paper_images\/([^/]+)\//);
-			const fileHash = hashMatch ? hashMatch[1] : null;
-
-			const headers = buildAuthHeaders(token, {
-				"Content-Type": "application/x-www-form-urlencoded",
-			});
-
-			// 1つのジョブで全ページを投げる（バックエンド側の「最初の3枚、その後10枚ずつ」ロジックに任せる）
-			const pageNumbers = finalPages.map((p) => p.page_num);
-
-			log.info("trigger_lazy_layout_analysis", "Enqueuing analysis job", {
-				paper_id: paperId,
-				total_pages: finalPages.length,
-			});
-
-			const job = await enqueueBatch(paperId, pageNumbers, fileHash, headers);
-			const jobs = job ? [job] : [];
-
-			// Worker API へ直接 SSE 接続（Cloud Run を経由しない・イベント駆動）
-			await Promise.all(
-				jobs.map(({ jobId, streamUrl }) =>
-					pollLayoutJob(jobId, paperId, fileHash, streamUrl),
-				),
-			);
-
-			log.info(
-				"trigger_lazy_layout_analysis",
-				"Completed lazy layout analysis",
-			);
-		} catch (err) {
-			log.error("trigger_lazy_layout_analysis", "Lazy layout analysis error", {
-				error: err instanceof Error ? err.message : String(err),
-			});
-			// Don't re-throw - this is a background enhancement, not critical
-		}
-	};
 
 	/* TODO (suspended): fetchStamps removed - stamp mode suspended.
 	const fetchStamps = async (id: string) => {

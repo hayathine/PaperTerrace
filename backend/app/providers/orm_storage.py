@@ -144,6 +144,27 @@ class ORMStorageAdapter(StorageInterface):
             self._replace_session()
             return fn()
 
+    def _get_or_cache(self, cache_key: str, fetch_fn, ttl: int):
+        """Redis キャッシュを確認し、ミスした場合は fetch_fn() で取得してキャッシュする。
+
+        Args:
+            cache_key: Redis キー。
+            fetch_fn: キャッシュミス時に実行するコールバック（self._with_recovery 対応済みであること）。
+            ttl: Redis キャッシュの有効期間（秒）。
+
+        Returns:
+            キャッシュまたは fetch_fn の戻り値。
+        """
+        from redis_provider.provider import RedisService
+
+        redis = RedisService()
+        cached = redis.get(cache_key)
+        if cached is not None:
+            return cached
+        result = fetch_fn()
+        redis.set(cache_key, result, expire=ttl)
+        return result
+
     def close(self) -> None:
         """DBセッションをクローズしてプールに接続を返却する。"""
         try:
@@ -512,17 +533,16 @@ class ORMStorageAdapter(StorageInterface):
     def get_public_papers(
         self, page: int = 1, per_page: int = 20, sort: str = "recent"
     ) -> tuple[list[dict], int]:
-        from redis_provider.provider import RedisService
-
         cache_key = f"papers:public:{page}:{per_page}:{sort}"
-        redis = RedisService()
-        cached = redis.get(cache_key)
-        if cached is not None:
-            return cached["papers"], cached["total"]
-        rows, total = self._with_recovery(lambda: self.papers.list_public(page, per_page, sort))
-        result = [_paper_to_dict(p) for p in rows]
-        redis.set(cache_key, {"papers": result, "total": total}, expire=self._PUBLIC_PAPERS_TTL)
-        return result, total
+
+        def _fetch():
+            rows, total = self._with_recovery(
+                lambda: self.papers.list_public(page, per_page, sort)
+            )
+            return {"papers": [_paper_to_dict(p) for p in rows], "total": total}
+
+        cached = self._get_or_cache(cache_key, _fetch, self._PUBLIC_PAPERS_TTL)
+        return cached["papers"], cached["total"]
 
     def search_public_papers(
         self, query: str, page: int = 1, per_page: int = 20
@@ -533,16 +553,11 @@ class ORMStorageAdapter(StorageInterface):
         return [_paper_to_dict(p) for p in rows], total
 
     def get_popular_tags(self, limit: int = 20) -> list[dict]:
-        from redis_provider.provider import RedisService
-
-        cache_key = f"popular_tags:{limit}"
-        redis = RedisService()
-        cached = redis.get(cache_key)
-        if cached is not None:
-            return cached
-        result = self._with_recovery(lambda: self.papers.get_popular_tags(limit))
-        redis.set(cache_key, result, expire=self._POPULAR_TAGS_TTL)
-        return result
+        return self._get_or_cache(
+            f"popular_tags:{limit}",
+            lambda: self._with_recovery(lambda: self.papers.get_popular_tags(limit)),
+            self._POPULAR_TAGS_TTL,
+        )
 
     # ===== OCR cache methods =====
 

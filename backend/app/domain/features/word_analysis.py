@@ -19,9 +19,8 @@ class WordAnalysisService:
         self.redis = RedisService()
         self.translate_model = settings.get("MODEL_TRANSLATE", "gemini-2.5-flash-lite")
         self.executor = ThreadPoolExecutor(max_workers=4)
-
-        self.word_cache = {}  # lemma -> bool (exists in dictionary)
-        self.translation_cache = {}  # lemma -> translation
+        self.word_cache = {}
+        self.translation_cache = {}
 
     async def translate(
         self,
@@ -57,7 +56,6 @@ class WordAnalysisService:
                     paper_context=input_context
                 )
                 if translation:
-                    self.translation_cache[lemma] = translation
                     return {
                         "word": lemma,
                         "translation": translation,
@@ -133,7 +131,6 @@ class WordAnalysisService:
                 )
                 translation = res.translation.strip()
 
-            self.translation_cache[word] = translation
             self.redis.set(f"trans:{lang}:{word}", translation, expire=604800)
 
             log.debug(

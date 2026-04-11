@@ -201,6 +201,9 @@
 		"status_clicked": "チェック済み",
 		"action_explore": "内容を見る",
 		"user_query_placeholder": "どのような論文が読みたいですか？（例: 強化学習の最新動向、医療画像認識）",
+		"followup_placeholder": "さらに絞り込む... (例: transformerの効率化手法、医療応用)",
+		"followup_search": "深追い検索",
+		"followup_searching": "検索中...",
 		"feedback": {
 			"title": "改善にご協力ください",
 			"description": "これらの推薦を評価して、今後の提案の質を向上させましょう。",

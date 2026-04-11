@@ -179,6 +179,51 @@ class AIProviderInterface(ABC):
             pass
 
 
+def _parse_structured_response(
+    response: Any,
+    response_model: type[BaseModel],
+    operation: str,
+    raise_on_error: bool = True,
+    fallback_json: str = "{}",
+) -> Any:
+    """AIレスポンスから Pydantic モデルをパースする共通ヘルパー。
+
+    1. response.parsed を優先（google-genai SDK 1.0+ の構造化出力）
+    2. response.text のマークダウンフェンス除去後に model_validate_json でフォールバック
+
+    Args:
+        response: AIプロバイダーのレスポンスオブジェクト
+        response_model: パース先の Pydantic モデルクラス
+        operation: ログ識別用の操作名
+        raise_on_error: True の場合、パース失敗時に AIGenerationError を送出
+        fallback_json: raise_on_error=False 時のフォールバック JSON 文字列
+    """
+    try:
+        if hasattr(response, "parsed") and response.parsed is not None:
+            if isinstance(response.parsed, response_model):
+                return response.parsed
+            if isinstance(response.parsed, dict):
+                return response_model.model_validate(response.parsed)
+
+        text_to_parse = (response.text or "").strip()
+        if text_to_parse.startswith("```json"):
+            text_to_parse = text_to_parse[7:].strip("` \n")
+        elif text_to_parse.startswith("```"):
+            text_to_parse = text_to_parse[3:].strip("` \n")
+        return response_model.model_validate_json(text_to_parse)
+    except Exception as parse_err:
+        log.error(
+            operation,
+            "構造化出力のパースに失敗しました",
+            error=str(parse_err),
+        )
+        if raise_on_error:
+            raise AIGenerationError(
+                f"Failed to parse structured output: {parse_err}"
+            ) from parse_err
+        return response_model.model_validate_json(response.text or fallback_json)
+
+
 class GeminiProvider(AIProviderInterface):
     """Gemini API provider implementation."""
 
@@ -285,34 +330,9 @@ class GeminiProvider(AIProviderInterface):
                 )
 
             if response_model:
-                try:
-                    # google-genai SDK 1.0.0+ supports .parsed for structured output
-                    if (
-                        hasattr(response, "parsed")
-                        and response.parsed is not None
-                    ):
-                        if isinstance(response.parsed, response_model):
-                            return response.parsed
-                        # If it's a dict (common when using response_json_schema), validate it
-                        if isinstance(response.parsed, dict):
-                            return response_model.model_validate(response.parsed)
-
-                    # fallback to response.text if parsed is None or not available
-                    text_to_parse = (response.text or "").strip()
-                    if text_to_parse.startswith("```json"):
-                        text_to_parse = text_to_parse[7:].strip("` \n")
-                    elif text_to_parse.startswith("```"):
-                        text_to_parse = text_to_parse[3:].strip("` \n")
-                    return response_model.model_validate_json(text_to_parse)
-                except Exception as parse_err:
-                    log.error(
-                        "gemini_generate",
-                        "構造化出力のパースに失敗しました",
-                        error=str(parse_err),
-                    )
-                    raise AIGenerationError(
-                        f"Failed to parse structured output: {parse_err}"
-                    ) from parse_err
+                return _parse_structured_response(
+                    response, response_model, "gemini_generate"
+                )
 
             result_text = str(response.text or "").strip()
 
@@ -457,30 +477,9 @@ class GeminiProvider(AIProviderInterface):
             )
 
             if response_model:
-                try:
-                    # Method 1: Use .parsed if available (google-genai SDK 1.0+)
-                    if hasattr(response, "parsed") and response.parsed is not None:
-                        if isinstance(response.parsed, response_model):
-                            return response.parsed
-                        if isinstance(response.parsed, dict):
-                            return response_model.model_validate(response.parsed)
-
-                    # Method 2: Manual Parse (from .text)
-                    text_to_parse = (response.text or "").strip()
-                    if text_to_parse.startswith("```json"):
-                        text_to_parse = text_to_parse[7:].strip("` \n")
-                    elif text_to_parse.startswith("```"):
-                        text_to_parse = text_to_parse[3:].strip("` \n")
-                    return response_model.model_validate_json(text_to_parse)
-                except Exception as parse_err:
-                    log.error(
-                        "gemini_image",
-                        "構造化画像出力のパースに失敗しました",
-                        error=str(parse_err),
-                    )
-                    raise AIGenerationError(
-                        f"Failed to parse structured image output: {parse_err}"
-                    ) from parse_err
+                return _parse_structured_response(
+                    response, response_model, "gemini_image"
+                )
 
             result = (response.text or "").strip()
             log.debug(
@@ -559,28 +558,12 @@ class GeminiProvider(AIProviderInterface):
             )
 
             if response_model:
-                try:
-                    if hasattr(response, "parsed") and response.parsed is not None:
-                        if isinstance(response.parsed, response_model):
-                            return response.parsed
-                        if isinstance(response.parsed, dict):
-                            return response_model.model_validate(response.parsed)
-                        raise ValueError(
-                            f"Unexpected parsed type: {type(response.parsed)}"
-                        )
-                    text_to_parse = response.text or ""
-                    text_to_parse = text_to_parse.strip()
-                    if text_to_parse.startswith("```json"):
-                        text_to_parse = text_to_parse[7:].strip("` \n")
-                    return response_model.model_validate_json(text_to_parse)
-                except Exception as parse_err:
-                    log.error(
-                        "gemini_multi_image",
-                        "構造化複数画像出力のパースに失敗しました",
-                        error=str(parse_err),
-                    )
-
-                    return response_model.model_validate_json(response.text or "{}")
+                return _parse_structured_response(
+                    response,
+                    response_model,
+                    "gemini_multi_image",
+                    raise_on_error=False,
+                )
 
             return (response.text or "").strip()
         except Exception as e:
@@ -1041,30 +1024,12 @@ class VertexAIProvider(AIProviderInterface):
             )
 
             if response_model:
-                try:
-                    if hasattr(response, "parsed") and response.parsed is not None:
-                        if isinstance(response.parsed, response_model):
-                            return response.parsed
-                        if isinstance(response.parsed, dict):
-                            return response_model.model_validate(response.parsed)
-                        raise ValueError(
-                            f"Unexpected parsed type: {type(response.parsed)}"
-                        )
-                    text_to_parse = response.text or ""
-                    return response_model.model_validate_json(text_to_parse)
-                except Exception as parse_err:
-                    log.error(
-                        "vertex_generate",
-                        "Vertexからの構造化出力のパースに失敗しました",
-                        error=str(parse_err),
-                    )
-
-                    text_to_parse = response.text or ""
-
-                    text_to_parse = text_to_parse.strip()
-                    if text_to_parse.startswith("```json"):
-                        text_to_parse = text_to_parse[7:].strip("` \n")
-                    return response_model.model_validate_json(text_to_parse)
+                return _parse_structured_response(
+                    response,
+                    response_model,
+                    "vertex_generate",
+                    raise_on_error=False,
+                )
 
             result = str(response.text or "").strip()
             return result
@@ -1131,32 +1096,12 @@ class VertexAIProvider(AIProviderInterface):
             )
 
             if response_model:
-                try:
-                    if hasattr(response, "parsed") and response.parsed is not None:
-                        if isinstance(response.parsed, response_model):
-                            return response.parsed
-                        if isinstance(response.parsed, dict):
-                            return response_model.model_validate(response.parsed)
-                        raise ValueError(
-                            f"Unexpected parsed type: {type(response.parsed)}"
-                        )
-                    text_to_parse = response.text or ""
-                    return response_model.model_validate_json(text_to_parse)
-                except Exception as parse_err:
-                    log.error(
-                        "vertex_image",
-                        "Vertexからの構造化画像出力のパースに失敗しました",
-                        error=str(parse_err),
-                    )
-
-                    text_to_parse = response.text or ""
-
-                    text_to_parse = text_to_parse.strip()
-                    if text_to_parse.startswith("```json"):
-                        text_to_parse = text_to_parse[7:].strip("` \n")
-                    return response_model.model_validate_json(text_to_parse)
-
-            return (response.text or "").strip()
+                return _parse_structured_response(
+                    response,
+                    response_model,
+                    "vertex_image",
+                    raise_on_error=False,
+                )
 
             return (response.text or "").strip()
 
@@ -1219,27 +1164,12 @@ class VertexAIProvider(AIProviderInterface):
             )
 
             if response_model:
-                try:
-                    if hasattr(response, "parsed") and response.parsed is not None:
-                        if isinstance(response.parsed, response_model):
-                            return response.parsed
-                        if isinstance(response.parsed, dict):
-                            return response_model.model_validate(response.parsed)
-                        raise ValueError(
-                            f"Unexpected parsed type: {type(response.parsed)}"
-                        )
-                    text_to_parse = (response.text or "").strip()
-                    if text_to_parse.startswith("```json"):
-                        text_to_parse = text_to_parse[7:].strip("` \n")
-                    return response_model.model_validate_json(text_to_parse)
-                except Exception as parse_err:
-                    log.error(
-                        "vertex_multi_image",
-                        "Vertexからの構造化複数画像出力のパースに失敗しました",
-                        error=str(parse_err),
-                    )
-
-                    return response_model.model_validate_json(response.text or "{}")
+                return _parse_structured_response(
+                    response,
+                    response_model,
+                    "vertex_multi_image",
+                    raise_on_error=False,
+                )
 
             return (response.text or "").strip()
         except Exception as e:

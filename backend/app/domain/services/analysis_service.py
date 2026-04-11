@@ -25,10 +25,6 @@ class EnglishAnalysisService:
         self.model = settings.get("MODEL_OCR", "gemini-2.5-flash-lite")
         self.ocr_service = PDFOCRService(self.model)
 
-        # Maintain public properties if they were used outside
-        self.word_cache = self.word_analysis.word_cache
-        self.translation_cache = self.word_analysis.translation_cache
-
     async def tokenize_stream(self, text, paper_id=None, lang="ja", session_id=None):
         """Processes text paragraph by paragraph and yields interactive HTML."""
         async for chunk in self.tokenization.tokenize_stream(
@@ -49,9 +45,3 @@ class EnglishAnalysisService:
             lemma, lang=lang, context=context, session_id=session_id, paper_title=paper_title
         )
 
-    # Legacy accessors
-    def get_word_cache(self):
-        return self.word_analysis.word_cache
-
-    def get_translation_cache(self):
-        return self.word_analysis.translation_cache

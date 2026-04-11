@@ -11,8 +11,16 @@ import type { Components } from "react-markdown";
 import { API_URL } from "../../config";
 import { useBookmarks } from "../../db/hooks";
 import { useIntersectionObserver } from "../../hooks/useIntersectionObserver";
+import { useTextSelection } from "../../hooks/useTextSelection";
 import MarkdownContent from "../Common/MarkdownContent";
-import type { Figure, PageWithLines } from "./types";
+import {
+	extractHeadingText,
+	findFigureByBbox,
+	highlightText,
+	KNOWN_SECTIONS,
+	parseBboxFromSrc,
+} from "./textModeUtils";
+import type { PageWithLines } from "./types";
 
 /** 一度でも viewport に入ったら true のままにする（スクロール高さ変化によるジャンプ防止） */
 function useVisibleOnce(
@@ -24,24 +32,6 @@ function useVisibleOnce(
 	if (isIntersecting) hasBeenVisible.current = true;
 	return hasBeenVisible.current;
 }
-
-const KNOWN_SECTIONS = [
-	"abstract",
-	"introduction",
-	"conclusion",
-	"conclusions",
-	"related work",
-	"references",
-	"bibliography",
-	"acknowledgement",
-	"acknowledgements",
-	"methods",
-	"methodology",
-	"discussion",
-	"results",
-	"experiments",
-	"evaluation",
-];
 
 interface TextModePageProps {
 	page: PageWithLines;
@@ -66,129 +56,6 @@ interface TextModePageProps {
 	searchTerm?: string;
 	jumpTarget?: { page: number; x: number; y: number; term?: string } | null;
 	onPageVisible?: (pageNum: number) => void;
-}
-
-/**
- * searchTerm にマッチする部分を <mark> で囲んだ React ノードを返す。
- * children が文字列以外（React要素など）の場合は再帰的に処理する。
- *
- * パフォーマンス:
- * - lowerTerm は呼び出し元で一度だけ計算し、再帰に渡す。
- * - 文字列の走査は indexOf を lastIdx から進めるため O(n)。
- * - React 要素ツリーの走査は O(ノード数)。
- */
-function highlightText(
-	children: React.ReactNode,
-	searchTerm: string,
-	lowerTerm?: string,
-): React.ReactNode {
-	if (!searchTerm || searchTerm.length < 2) return children;
-
-	// lowerTerm は最初の呼び出しでのみ計算し、再帰時は引数で渡す
-	const term = lowerTerm ?? searchTerm.toLowerCase();
-
-	if (typeof children === "string") {
-		const lowerText = children.toLowerCase();
-		const firstIdx = lowerText.indexOf(term);
-		if (firstIdx === -1) return children;
-
-		const parts: React.ReactNode[] = [];
-		let lastIdx = 0;
-		let pos = firstIdx;
-		let key = 0;
-		while (pos !== -1) {
-			if (pos > lastIdx) {
-				parts.push(children.slice(lastIdx, pos));
-			}
-			parts.push(
-				<mark key={key++} className="bg-amber-300/70 rounded px-0.5">
-					{children.slice(pos, pos + searchTerm.length)}
-				</mark>,
-			);
-			lastIdx = pos + searchTerm.length;
-			pos = lowerText.indexOf(term, lastIdx);
-		}
-		if (lastIdx < children.length) {
-			parts.push(children.slice(lastIdx));
-		}
-		return <>{parts}</>;
-	}
-
-	if (Array.isArray(children)) {
-		return children.map((child, i) => (
-			<React.Fragment key={i}>
-				{highlightText(child, searchTerm, term)}
-			</React.Fragment>
-		));
-	}
-
-	if (React.isValidElement(children)) {
-		const element = children as React.ReactElement<{
-			className?: string;
-			children?: React.ReactNode;
-		}>;
-		// rehype-katex が生成する math/KaTeX 要素はスキップ（内部構造を破壊しないため）
-		const className = element.props.className ?? "";
-		if (
-			typeof className === "string" &&
-			(className.includes("math") || className.includes("katex"))
-		) {
-			return children;
-		}
-		if (element.props.children != null) {
-			return React.cloneElement(element, {
-				...element.props,
-				children: highlightText(element.props.children, searchTerm, term),
-			});
-		}
-	}
-
-	return children;
-}
-
-function extractHeadingText(node: React.ReactNode): string {
-	if (typeof node === "string") return node;
-	if (Array.isArray(node)) return node.map(extractHeadingText).join("");
-	if (React.isValidElement(node)) {
-		return extractHeadingText(
-			(node.props as { children?: React.ReactNode }).children,
-		);
-	}
-	return "";
-}
-
-/**
- * バックエンドが出力する `![Figure]([x1, y1, x2, y2])` 形式の alt/src から
- * bbox を抽出し、page.figures の実画像 URL にマッピングする。
- */
-function parseBboxFromSrc(src: string): number[] | null {
-	const match = src.match(
-		/\[?\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)\s*\]?/,
-	);
-	if (!match) return null;
-	return [
-		Number.parseFloat(match[1]),
-		Number.parseFloat(match[2]),
-		Number.parseFloat(match[3]),
-		Number.parseFloat(match[4]),
-	];
-}
-
-function findFigureByBbox(
-	figures: Figure[] | undefined,
-	bbox: number[],
-	tolerance = 20,
-): Figure | undefined {
-	if (!Array.isArray(figures) || figures.length === 0) return undefined;
-	return figures.find((fig) => {
-		const [fx1, fy1, fx2, fy2] = fig.bbox;
-		return (
-			Math.abs(fx1 - bbox[0]) < tolerance &&
-			Math.abs(fy1 - bbox[1]) < tolerance &&
-			Math.abs(fx2 - bbox[2]) < tolerance &&
-			Math.abs(fy2 - bbox[3]) < tolerance
-		);
-	});
 }
 
 const TextModePage: React.FC<TextModePageProps> = ({
@@ -240,116 +107,8 @@ const TextModePage: React.FC<TextModePageProps> = ({
 		}
 	}, [isCurrentlyVisible, page.page_num, onPageVisible]);
 
-	const [selectionMenu, setSelectionMenu] = React.useState<{
-		x: number;
-		y: number;
-		text: string;
-		context: string;
-		coords: any;
-	} | null>(null);
+	const { selectionMenu, clearSelectionMenu } = useTextSelection(page.page_num);
 	const [zoomedImage, setZoomedImage] = useState<string | null>(null);
-	// setTimeout のタイマー ID を ref で管理し、連続イベントで前のタイマーをキャンセルする
-	const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-	// --- テキスト選択メニュー ---
-	React.useEffect(() => {
-		const handleSelectionEnd = () => {
-			// 前のタイマーをキャンセルして競合状態を防ぐ
-			if (selectionTimerRef.current !== null) {
-				clearTimeout(selectionTimerRef.current);
-			}
-			selectionTimerRef.current = setTimeout(() => {
-				selectionTimerRef.current = null;
-				const selection = window.getSelection();
-				const selectionText = selection?.toString().trim();
-				const container = document.getElementById(`text-page-${page.page_num}`);
-
-				if (
-					selection &&
-					selection.rangeCount > 0 &&
-					selectionText &&
-					selectionText.length > 0 &&
-					container
-				) {
-					const range = selection.getRangeAt(0);
-
-					if (
-						!container.contains(range.startContainer) &&
-						range.startContainer !== container
-					) {
-						return;
-					}
-
-					const rect = container.getBoundingClientRect();
-					const rangeRect = range.getBoundingClientRect();
-
-					if (rangeRect.width === 0) return;
-
-					const pageWidth = rect.width || 1;
-					const pageHeight = rect.height || 1;
-
-					// Clamp menu X to avoid overflow near screen edges (10%–90% of page width)
-					const rawMenuX =
-						(((rangeRect.left + rangeRect.right) / 2 - rect.left) / pageWidth) *
-						100;
-					const menuX = Math.max(10, Math.min(90, rawMenuX));
-					const menuY = ((rangeRect.bottom - rect.top) / pageHeight) * 100;
-
-					const centerX =
-						((rangeRect.left + rangeRect.right) / 2 - rect.left) / pageWidth;
-					const centerY =
-						((rangeRect.top + rangeRect.bottom) / 2 - rect.top) / pageHeight;
-
-					// Extract context text (parent paragraph or surrounding text)
-					let contextText = selectionText;
-					let currentEl = range.startContainer.parentElement;
-					while (currentEl && currentEl !== container) {
-						if (
-							["P", "LI", "H1", "H2", "H3", "H4", "H5", "H6"].includes(
-								currentEl.tagName,
-							)
-						) {
-							contextText = currentEl.textContent || selectionText;
-							break;
-						}
-						currentEl = currentEl.parentElement;
-					}
-
-					setSelectionMenu({
-						x: menuX,
-						y: menuY,
-						text: selectionText,
-						context: contextText,
-						coords: { page: page.page_num, x: centerX, y: centerY },
-					});
-				} else {
-					setSelectionMenu(null);
-				}
-			}, 10);
-		};
-
-		// Support both mouse and touch text selection
-		document.addEventListener("mouseup", handleSelectionEnd);
-		document.addEventListener("touchend", handleSelectionEnd);
-		return () => {
-			document.removeEventListener("mouseup", handleSelectionEnd);
-			document.removeEventListener("touchend", handleSelectionEnd);
-			// アンマウント時に残存タイマーをキャンセル
-			if (selectionTimerRef.current !== null) {
-				clearTimeout(selectionTimerRef.current);
-			}
-		};
-	}, [page.page_num]);
-
-	React.useEffect(() => {
-		const handleClickOutside = (e: MouseEvent) => {
-			if ((e.target as HTMLElement).closest(".selection-menu")) return;
-			setSelectionMenu(null);
-		};
-		if (selectionMenu)
-			document.addEventListener("mousedown", handleClickOutside);
-		return () => document.removeEventListener("mousedown", handleClickOutside);
-	}, [selectionMenu]);
 
 	// --- 単語クリック: クリック位置のテキストノードから単語を抽出して翻訳トリガー ---
 	const handleWordClick = useCallback(
@@ -789,7 +548,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 									selectionMenu.context,
 									selectionMenu.coords,
 								);
-							setSelectionMenu(null);
+							clearSelectionMenu();
 						}}
 						className="px-4 py-2.5 sm:py-2 hover:bg-slate-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-100 min-h-[44px] sm:min-h-0"
 					>
@@ -809,7 +568,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 									selectionMenu.text,
 									selectionMenu.context,
 								);
-								setSelectionMenu(null);
+								clearSelectionMenu();
 							}}
 							className="px-4 py-2.5 sm:py-2 hover:bg-slate-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors border-r border-slate-100 min-h-[44px] sm:min-h-0"
 						>
@@ -823,7 +582,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 							e.stopPropagation();
 							if (onTextSelect)
 								onTextSelect(selectionMenu.text, selectionMenu.coords);
-							setSelectionMenu(null);
+							clearSelectionMenu();
 						}}
 						className="px-4 py-2.5 sm:py-2 hover:bg-slate-100 text-orange-600 text-[10px] font-bold uppercase tracking-wider flex items-center gap-2 transition-colors rounded-r-lg min-h-[44px] sm:min-h-0"
 					>

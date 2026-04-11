@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useBookmarks } from "@/db/hooks";
@@ -54,6 +54,8 @@ export default function Dashboard() {
 	const [loading, setLoading] = useState(() => !!token);
 	const [papersLoading, setPapersLoading] = useState(() => !!token);
 	const [translationsLoading, setTranslationsLoading] = useState(false);
+	// 初回ロード済みフラグ（token更新による再フェッチでスケルトンを再表示しない）
+	const initialLoadDone = useRef(false);
 
 	const filteredPapers = useMemo(() => {
 		if (!paperSearch.trim()) return papers;
@@ -69,12 +71,17 @@ export default function Dashboard() {
 
 	useEffect(() => {
 		if (!token) return;
-		setLoading(true);
+		// 初回のみスケルトン表示。token更新（JWT更新）はバックグラウンドで再フェッチ
+		const isFirst = !initialLoadDone.current;
+		if (isFirst) {
+			setLoading(true);
+			setPapersLoading(true);
+			initialLoadDone.current = true;
+		}
 		fetchUserStats(token)
 			.then(setStats)
 			.catch((e) => log.error("fetch_stats", "Failed to fetch stats", { e }))
 			.finally(() => setLoading(false));
-		setPapersLoading(true);
 		fetchUserPapers(token, 100)
 			.then((res) => setPapers(res.papers))
 			.catch((e) => log.error("fetch_papers", "Failed to fetch papers", { e }))

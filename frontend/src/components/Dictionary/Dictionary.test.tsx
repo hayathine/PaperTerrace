@@ -131,4 +131,60 @@ describe("Dictionary Component", () => {
 			expect(screen.getByText("Figure Insight")).toBeDefined();
 		});
 	});
+
+	it("triggers deep translate and switches tab when Ask AI is clicked", async () => {
+		const mockResponse = {
+			word: "hello",
+			translation: "こんにちは",
+			source: "Local-MT",
+		};
+
+		const mockDeepResponse = {
+			word: "hello",
+			translation: "Detailed explanation of hello",
+			source: "Gemini",
+		};
+
+		// Mock first fetch (initial translation)
+		(global.fetch as any).mockResolvedValueOnce({
+			ok: true,
+			headers: { get: () => "application/json" },
+			json: async () => mockResponse,
+		});
+
+		const onSubTabChange = vi.fn();
+		render(
+			<Dictionary
+				{...defaultProps}
+				term="hello"
+				onSubTabChange={onSubTabChange}
+			/>,
+		);
+
+		await screen.findByText("こんにちは");
+
+		// Mock second fetch (deep translation)
+		(global.fetch as any).mockResolvedValueOnce({
+			ok: true,
+			headers: { get: () => "application/json" },
+			json: async () => mockDeepResponse,
+		});
+
+		const askAiButton = await screen.findByText("viewer.dictionary.ask_ai");
+		fireEvent.click(askAiButton);
+
+		// Should have called onSubTabChange("explanation")
+		expect(onSubTabChange).toHaveBeenCalledWith("explanation");
+
+		// Wait for the deep translate fetch to be called
+		await waitFor(
+			() => {
+				expect(global.fetch).toHaveBeenCalledWith(
+					expect.stringContaining("/api/translate-deep/hello"),
+					expect.any(Object),
+				);
+			},
+			{ timeout: 2000 },
+		);
+	});
 });

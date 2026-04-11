@@ -1,5 +1,5 @@
 import type React from "react";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { useAuth } from "@/contexts/AuthContext";
 import { createLogger } from "@/lib/logger";
@@ -24,13 +24,15 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({ sessionId }) => {
 	const [response, setResponse] =
 		useState<RecommendationGenerateResponse | null>(null);
 	const [clickedPapers, setClickedPapers] = useState<Set<string>>(new Set());
+	const [followUpQuery, setFollowUpQuery] = useState("");
+	const followUpInputRef = useRef<HTMLTextAreaElement>(null);
 
-	const handleGenerate = async () => {
+	const handleGenerate = async (query?: string) => {
 		setIsLoading(true);
 		setError(null);
 		setClickedPapers(new Set());
 		try {
-			const res = await generateRecommendations(sessionId, token);
+			const res = await generateRecommendations(sessionId, token, query);
 			setResponse(res);
 			setIsOpen(true);
 		} catch (err) {
@@ -46,6 +48,22 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({ sessionId }) => {
 			);
 		} finally {
 			setIsLoading(false);
+		}
+	};
+
+	const handleFollowUp = async () => {
+		const query = followUpQuery.trim();
+		if (!query || isLoading) return;
+		setFollowUpQuery("");
+		await handleGenerate(query);
+	};
+
+	const handleFollowUpKeyDown = (
+		e: React.KeyboardEvent<HTMLTextAreaElement>,
+	) => {
+		if (e.key === "Enter" && !e.shiftKey) {
+			e.preventDefault();
+			handleFollowUp();
 		}
 	};
 
@@ -88,7 +106,7 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({ sessionId }) => {
 					</p>
 					<button
 						type="button"
-						onClick={handleGenerate}
+						onClick={() => handleGenerate()}
 						className="px-6 py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-lg shadow-orange-600/30 transition-transform active:scale-95 flex items-center gap-2"
 					>
 						<svg
@@ -194,12 +212,53 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({ sessionId }) => {
 								))}
 							</div>
 
+							{/* 深追い検索 */}
+							<div className="border-t border-slate-200 pt-4 pb-2">
+								<div className="relative flex items-end gap-2">
+									<textarea
+										ref={followUpInputRef}
+										value={followUpQuery}
+										onChange={(e) => setFollowUpQuery(e.target.value)}
+										onKeyDown={handleFollowUpKeyDown}
+										rows={2}
+										disabled={isLoading}
+										placeholder={t(
+											"recommendation.followup_placeholder",
+											"Refine further... (e.g. efficient transformer methods)",
+										)}
+										className="flex-1 resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 placeholder-slate-400 focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-300 disabled:opacity-50"
+									/>
+									<button
+										type="button"
+										onClick={handleFollowUp}
+										disabled={isLoading || !followUpQuery.trim()}
+										className="shrink-0 flex items-center gap-1.5 rounded-xl bg-orange-600 px-3 py-2 text-xs font-bold text-white shadow-sm hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-40 transition-colors"
+									>
+										<svg
+											className="w-3.5 h-3.5"
+											fill="none"
+											stroke="currentColor"
+											viewBox="0 0 24 24"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth="2.5"
+												d="M21 21l-4.35-4.35M17 11A6 6 0 115 11a6 6 0 0112 0z"
+											/>
+										</svg>
+										{t("recommendation.followup_search", "Deep Search")}
+									</button>
+								</div>
+							</div>
+
 							<div className="pb-8 flex justify-center">
 								<button
 									type="button"
 									onClick={() => {
 										setIsOpen(false);
 										setResponse(null);
+										setFollowUpQuery("");
 									}}
 									className="text-xs text-slate-400 hover:text-slate-600 font-medium underline"
 								>

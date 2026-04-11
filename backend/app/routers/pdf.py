@@ -98,6 +98,62 @@ async def _read_and_validate_pdf(
     )
 
 
+def _resolve_cached_paper(
+    file_hash: str,
+    storage: object,
+    log_prefix: str,
+    *,
+    new_id_on_missing_images: bool = False,
+) -> tuple[str, str | None]:
+    """DB キャッシュと画像キャッシュを確認し、paper_id と raw_text を返す。
+
+    Args:
+        file_hash: PDF ファイルのハッシュ値。
+        storage: StorageInterface 実装。
+        log_prefix: ログ識別子（例: "analyze_json", "analyze_hash"）。
+        new_id_on_missing_images: True の場合、画像キャッシュがないとき新しい UUID を生成する。
+            False（デフォルト）では既存の paper_id を保持して OCR を再トリガーする。
+
+    Returns:
+        (paper_id, raw_text): raw_text は None の場合 OCR が必要。
+    """
+    import uuid6
+
+    cached_paper = storage.get_paper_by_hash(file_hash)
+
+    if not cached_paper:
+        paper_id = str(uuid6.uuid7())
+        log.info(log_prefix, "キャッシュミス", paper_id=paper_id)
+        return paper_id, None
+
+    paper_id = cached_paper["paper_id"]
+
+    try:
+        from app.providers.image_storage import get_page_images
+
+        cached_images = get_page_images(file_hash)
+    except ImportError as ie:
+        log.error(log_prefix, "Failed to import get_page_images", error=str(ie))
+        cached_images = []
+
+    if not cached_images:
+        if new_id_on_missing_images:
+            paper_id = str(uuid6.uuid7())
+        log.info(
+            log_prefix,
+            "キャッシュはヒットしましたが画像が見つかりません。再生成します。",
+            paper_id=paper_id,
+        )
+        return paper_id, None
+
+    log.info(log_prefix, "キャッシュヒット", paper_id=paper_id)
+    if cached_paper.get("html_content"):
+        raw_text = "CACHED_HTML:" + cached_paper["html_content"]
+    else:
+        raw_text = cached_paper.get("ocr_text")
+    return paper_id, raw_text
+
+
 @router.post("/session-context")
 async def update_session_context(
     session_id: str = Form(...),
@@ -224,44 +280,9 @@ async def analyze_pdf_json(
 
     try:
         # Cache check（画像の存在も確認し、なければ再生成を促す）
-        cached_paper = storage.get_paper_by_hash(validated.file_hash)
-        raw_text = None
-
-        if cached_paper:
-            paper_id = cached_paper["paper_id"]
-            try:
-                from app.providers.image_storage import get_page_images
-
-                cached_images = get_page_images(validated.file_hash)
-            except ImportError as ie:
-                log.error(
-                    "analyze_json", "Failed to import get_page_images", error=str(ie)
-                )
-                cached_images = []
-
-            if not cached_images:
-                log.info(
-                    "analyze_json",
-                    "キャッシュはヒットしましたが画像が見つかりません。再生成します。",
-                    paper_id=paper_id,
-                )
-            else:
-                storage_type = settings.get("STORAGE_TYPE", "local").upper()
-                log.info(
-                    "analyze_json",
-                    "キャッシュヒット",
-                    storage_type=storage_type,
-                    paper_id=paper_id,
-                )
-                if cached_paper.get("html_content"):
-                    raw_text = "CACHED_HTML:" + cached_paper["html_content"]
-                else:
-                    raw_text = cached_paper.get("ocr_text")
-        else:
-            import uuid6
-
-            paper_id = str(uuid6.uuid7())
-            log.info("analyze_json", "キャッシュミス", paper_id=paper_id)
+        paper_id, raw_text = _resolve_cached_paper(
+            validated.file_hash, storage, "analyze_json"
+        )
 
         task_id = str(uuid.uuid4())
 
@@ -432,40 +453,9 @@ async def analyze_pdf_hash(
     is_registered = get_is_registered(user_id)
 
     # キャッシュ確認
-    cached_paper = storage.get_paper_by_hash(req.file_hash)
-    raw_text = None
-    paper_id: str
-
-    if cached_paper:
-        paper_id = cached_paper["paper_id"]
-        try:
-            from app.providers.image_storage import get_page_images
-
-            cached_images = get_page_images(req.file_hash)
-        except ImportError:
-            cached_images = []
-
-        if not cached_images:
-            import uuid6
-
-            paper_id = str(uuid6.uuid7())
-            log.info(
-                "analyze_hash",
-                "キャッシュはヒットしましたが画像が見つかりません。再生成します。",
-                paper_id=paper_id,
-            )
-            raw_text = None
-        else:
-            log.info("analyze_hash", "キャッシュヒット", paper_id=paper_id)
-            if cached_paper.get("html_content"):
-                raw_text = "CACHED_HTML:" + cached_paper["html_content"]
-            else:
-                raw_text = cached_paper.get("ocr_text")
-    else:
-        import uuid6
-
-        paper_id = str(uuid6.uuid7())
-        log.info("analyze_hash", "キャッシュミス", paper_id=paper_id)
+    paper_id, raw_text = _resolve_cached_paper(
+        req.file_hash, storage, "analyze_hash", new_id_on_missing_images=True
+    )
 
     task_id = str(uuid.uuid4())
 
