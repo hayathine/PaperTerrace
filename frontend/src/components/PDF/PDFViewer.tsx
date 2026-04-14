@@ -147,11 +147,54 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 	// PDF ページグリッド（クリック/スタンプ/エリアモード用）の遅延マウント。
 	const [hasMountedPdfMode, setHasMountedPdfMode] = useState(false);
 
-	// モード切替時のページ同期: 現在表示中のページ番号を追跡する
+	// モード切替時のページ同期: 現在表示中のページ番号 + ページ内進行率を追跡する
 	const currentVisiblePageRef = useRef<number>(1);
+	const scrollProgressRef = useRef<{ page: number; ratio: number }>({
+		page: 1,
+		ratio: 0,
+	});
 	const handlePageVisible = useCallback((pageNum: number) => {
 		currentVisiblePageRef.current = pageNum;
 	}, []);
+
+	// スクロール時にページ内進行率を常時記録（モード切替のスクロール同期精度向上）
+	const scrollerRef = useRef<Element | null>(null);
+	useEffect(() => {
+		// スクロールコンテナを取得（最初のページ要素の祖先から探す）
+		const findScroller = () => {
+			const prefix = mode === "plaintext" ? "text-page-" : "page-";
+			const el = document.getElementById(`${prefix}1`);
+			return el?.closest(".overflow-y-auto") ?? null;
+		};
+		const scroller = findScroller();
+		scrollerRef.current = scroller;
+		if (!scroller) return;
+
+		const handleScroll = () => {
+			const pageNum = currentVisiblePageRef.current;
+			const prefix = mode === "plaintext" ? "text-page-" : "page-";
+			const pageEl = document.getElementById(`${prefix}${pageNum}`);
+			if (!pageEl) return;
+
+			const scrollerRect = scroller.getBoundingClientRect();
+			const pageRect = pageEl.getBoundingClientRect();
+			const pageHeight = pageRect.height;
+			if (pageHeight <= 0) return;
+
+			// ビューポート上端がページのどこにあるか（0=ページ先頭、1=ページ末尾）
+			const ratio = Math.max(
+				0,
+				Math.min(1, (scrollerRect.top - pageRect.top) / pageHeight),
+			);
+			scrollProgressRef.current = { page: pageNum, ratio };
+		};
+
+		scroller.addEventListener("scroll", handleScroll, { passive: true });
+		return () => scroller.removeEventListener("scroll", handleScroll);
+	}, [mode, pages]);
+
+	// テキスト→クリックモード初回切替時のスクロール待機
+	const pendingScrollRef = useRef<{ page: number; ratio: number } | null>(null);
 
 	// TODO (suspended): stamp state removed. Restore for stamp mode.
 
@@ -185,35 +228,62 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 		}
 	}, [mode, hasMountedPdfMode]);
 
-	// モード切替時: 切替前に表示していたページ番号へ新モードをスクロール同期
+	// ページ番号+比率を使ってスクロール同期するヘルパー
+	const scrollToPageWithRatio = useCallback(
+		(prefix: string, page: number, ratio: number) => {
+			const rafId = requestAnimationFrame(() => {
+				const targetEl = document.getElementById(`${prefix}${page}`);
+				if (!targetEl) return;
+				const scroller = targetEl.closest(".overflow-y-auto");
+				if (scroller) {
+					const currentScrollTop = scroller.scrollTop;
+					const targetRect = targetEl.getBoundingClientRect();
+					const scrollerRect = scroller.getBoundingClientRect();
+					const pageTopInScroller =
+						currentScrollTop + (targetRect.top - scrollerRect.top);
+					const scrollOffset = ratio * targetEl.offsetHeight;
+					scroller.scrollTo({
+						top: pageTopInScroller + scrollOffset,
+						behavior: "instant",
+					});
+				} else {
+					targetEl.scrollIntoView({ block: "start" });
+				}
+			});
+			return rafId;
+		},
+		[],
+	);
+
+	// hasMountedPdfMode が true になった直後: 待機中のスクロールを実行
+	useEffect(() => {
+		if (!hasMountedPdfMode || pendingScrollRef.current === null) return;
+		const { page, ratio } = pendingScrollRef.current;
+		pendingScrollRef.current = null;
+
+		const rafId = scrollToPageWithRatio("page-", page, ratio);
+		return () => cancelAnimationFrame(rafId);
+	}, [hasMountedPdfMode, scrollToPageWithRatio]);
+
+	// モード切替時: 切替前に表示していたページ番号+比率で新モードをスクロール同期
 	const prevModeRef = useRef(mode);
 	useEffect(() => {
 		const prevMode = prevModeRef.current;
 		if (prevMode === mode) return;
 		prevModeRef.current = mode;
 
-		const targetPage = currentVisiblePageRef.current;
+		const { page: targetPage, ratio } = scrollProgressRef.current;
 		const newPrefix = mode === "plaintext" ? "text-page-" : "page-";
 
-		// CSS display 切り替えの反映を待ってからスクロール
-		const rafId = requestAnimationFrame(() => {
-			const targetEl = document.getElementById(`${newPrefix}${targetPage}`);
-			if (!targetEl) return;
-			const scroller = targetEl.closest(".overflow-y-auto");
-			if (scroller) {
-				const currentScrollTop = scroller.scrollTop;
-				const targetRect = targetEl.getBoundingClientRect();
-				const scrollerRect = scroller.getBoundingClientRect();
-				const pageTopInScroller =
-					currentScrollTop + (targetRect.top - scrollerRect.top);
-				scroller.scrollTo({ top: pageTopInScroller - 60, behavior: "instant" });
-			} else {
-				targetEl.scrollIntoView({ block: "start" });
-			}
-		});
+		// クリックモードへの初回切替: PDF グリッドがまだ未マウントのため待機
+		if (mode !== "plaintext" && !hasMountedPdfMode) {
+			pendingScrollRef.current = { page: targetPage, ratio };
+			return;
+		}
 
+		const rafId = scrollToPageWithRatio(newPrefix, targetPage, ratio);
 		return () => cancelAnimationFrame(rafId);
-	}, [mode]);
+	}, [mode, hasMountedPdfMode, scrollToPageWithRatio]);
 
 	// 検索マッチング処理（計算は useMemo で、副作用のみ useEffect で）
 	const searchMatches = useMemo(() => {

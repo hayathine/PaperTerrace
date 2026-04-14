@@ -19,6 +19,16 @@ MODEL_TRANSLATE = "gemini-2.5-flash-lite"
 MODEL_OCR = "gemini-2.5-flash-lite"
 FIGURE_EXPLAIN_MODEL = "gemini-2.5-flash-lite"
 DSPY_MODEL = "vertex_ai/gemini-2.5-flash-lite"
+
+# Cloud Tasks OCR ワーカー設定
+# 本番/staging のみ設定。空の場合はインライン OCR にフォールバック。
+# 例: "projects/my-project/locations/asia-northeast1/queues/ocr-queue"
+CLOUD_TASKS_QUEUE_PATH = ""
+# Worker Cloud Run サービスの URL
+WORKER_SERVICE_URL = ""
+# Cloud Tasks が Worker を呼び出す際のサービスアカウント (OIDC 用)
+WORKER_SA_EMAIL = ""
+
 LAYOUT_PARSER_TYPE = "gemini"
 LAYOUT_EDGE_FILTER_MARGIN_X = 0.03   # 左右端マージン（ページ幅の3%）
 LAYOUT_EDGE_FILTER_MARGIN_Y = 0.01   # 上下端マージン（ページ高さの1%）
@@ -161,16 +171,19 @@ LOG_SCHEMA = "logs_staging"
 # LOG_DATABASE_URL_STAGING = "" (環境変数から取得)
 LLAMACPP_VERBOSE = true
 GROBID_URL = "https://inference-grobid.paperterrace.page"
+CLOUD_TASKS_QUEUE_PATH = "projects/gen-lang-client-0800253336/locations/asia-northeast1/queues/ocr-queue-staging"
+WORKER_SERVICE_URL = "https://paperterrace-backend-worker-staging-t2nx5gtwia-an.a.run.app"
+WORKER_SA_EMAIL = "cloud-tasks-invoker@gen-lang-client-0800253336.iam.gserviceaccount.com"
 
 # AI Models (Staging)
 GCP_LOCATION = "us-central1"
 GCP_GLOBAL_MODELS = "gemini-3.1-pro-preview"
 VERTEX_MODEL = "gemini-2.5-flash-lite"
-MODEL_CHAT = "gemini-3.1-pro-preview"
+MODEL_CHAT = "gemini-2.5-flash"
 MODEL_SUMMARY = "gemini-2.5-flash-lite"
 MODEL_TRANSLATE = "gemini-2.5-flash-lite"
 MODEL_OCR = "gemini-2.5-flash-lite"
-FIGURE_EXPLAIN_MODEL = "gemini-3.1-pro-preview"
+FIGURE_EXPLAIN_MODEL = "gemini-2.5-flash"
 DSPY_MODEL = "vertex_ai/gemini-2.5-flash-lite"
 
 [prod]
@@ -188,6 +201,9 @@ INFERENCE_OCR_URL = "https://inference-ocr.paperterrace.page"
 INFERENCE_LAYOUT_URL = "https://inference-layout.paperterrace.page"
 INFERENCE_LAYOUT_EXTRA_URLS = "https://inference-layout-g3.paperterrace.page"
 INFERENCE_TRANSLATE_URL = "https://inference-translate.paperterrace.page"
+CLOUD_TASKS_QUEUE_PATH = "projects/gen-lang-client-0800253336/locations/asia-northeast1/queues/ocr-queue-prod"
+WORKER_SERVICE_URL = "https://paperterrace-backend-worker-prod-t2nx5gtwia-an.a.run.app"
+WORKER_SA_EMAIL = "cloud-tasks-invoker@gen-lang-client-0800253336.iam.gserviceaccount.com"
 
 # AI Models (Production)
 VERTEX_MODEL = "gemini-2.5-flash-lite"

@@ -1,5 +1,4 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import React from "react";
 import { describe, expect, it, vi } from "vitest";
 import DictionaryHistoryTab from "./DictionaryHistoryTab";
 
@@ -52,7 +51,7 @@ describe("DictionaryHistoryTab Component", () => {
 		expect(screen.getByText("p.2")).toBeDefined();
 	});
 
-	it("triggers onSelectNote when a note is clicked", () => {
+	it("triggers onSelectNote with the correct note when a note is clicked", () => {
 		const onSelectNote = vi.fn();
 		render(
 			<DictionaryHistoryTab
@@ -67,6 +66,7 @@ describe("DictionaryHistoryTab Component", () => {
 		}
 
 		expect(onSelectNote).toHaveBeenCalledTimes(1);
+		expect(onSelectNote).toHaveBeenCalledWith(mockSavedNotes[0]);
 	});
 
 	it("renders note without page number correctly", () => {

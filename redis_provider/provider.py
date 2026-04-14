@@ -246,6 +246,32 @@ class RedisService:
             )
         return exists_in_mem
 
+    def rpush(self, key: str, *values: str, expire: int | None = None) -> int:
+        """Redis リストの末尾に値を追加する。フォールバックなし（Redis 必須）。"""
+        client = get_redis_client()
+        if not client:
+            log.warning("rpush", f"Redis unavailable, rpush skipped for key: {key}")
+            return 0
+        try:
+            result = client.rpush(key, *values)
+            if expire:
+                client.expire(key, expire)
+            return result
+        except Exception as e:
+            log.warning("rpush", f"Redis rpush error for {key}: {e}")
+            return 0
+
+    def lpop(self, key: str) -> str | None:
+        """Redis リストの先頭から値を取り出す。リストが空または Redis 不可の場合は None。"""
+        client = get_redis_client()
+        if not client:
+            return None
+        try:
+            return client.lpop(key)
+        except Exception as e:
+            log.warning("lpop", f"Redis lpop error for {key}: {e}")
+            return None
+
     def mget(self, *keys: str) -> list:
         """複数キーを1往復で取得する（Redis MGET）。失敗時は個別 get にフォールバック。"""
         client = get_redis_client()

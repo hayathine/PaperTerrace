@@ -324,6 +324,22 @@ async def analyze_pdf_json(
                 magic_hex=validated.content[:8].hex() if validated.content else "",
             )
             task_data.update({"pending_ocr": True, "pdf_path": doc_path})
+
+            # Cloud Tasks が設定されている場合はワーカーにエンキュー（インライン処理回避）
+            from app.providers.cloud_tasks import enqueue_ocr_task  # noqa: PLC0415
+
+            worker_payload = {
+                "pdf_path": doc_path,
+                "file_hash": validated.file_hash,
+                "filename": file.filename or "unknown.pdf",
+                "lang": validated.lang,
+                "user_id": validated.user_id,
+                "is_registered": validated.is_registered,
+                "session_id": session_id,
+                "paper_id": paper_id,
+            }
+            enqueued = await enqueue_ocr_task(task_id, worker_payload)
+            task_data["status"] = "queued" if enqueued else "inline"
         else:
             task_data.update({"text": raw_text})
 
@@ -454,7 +470,7 @@ async def analyze_pdf_hash(
 
     # キャッシュ確認
     paper_id, raw_text = _resolve_cached_paper(
-        req.file_hash, storage, "analyze_hash", new_id_on_missing_images=True
+        req.file_hash, storage, "analyze_hash"
     )
 
     task_id = str(uuid.uuid4())
@@ -480,13 +496,24 @@ async def analyze_pdf_hash(
     }
 
     if raw_text is None:
-        # GCS の blob 名を pdf_path として記録（stream ハンドラが get_doc_bytes で読み込む）
-        task_data.update(
-            {
-                "pending_ocr": True,
-                "pdf_path": img_storage.get_doc_path(req.file_hash),
-            }
-        )
+        doc_path = img_storage.get_doc_path(req.file_hash)
+        task_data.update({"pending_ocr": True, "pdf_path": doc_path})
+
+        # Cloud Tasks が設定されている場合はワーカーにエンキュー
+        from app.providers.cloud_tasks import enqueue_ocr_task  # noqa: PLC0415
+
+        worker_payload = {
+            "pdf_path": doc_path,
+            "file_hash": req.file_hash,
+            "filename": req.filename,
+            "lang": req.lang,
+            "user_id": user_id,
+            "is_registered": is_registered,
+            "session_id": req.session_id,
+            "paper_id": paper_id,
+        }
+        enqueued = await enqueue_ocr_task(task_id, worker_payload)
+        task_data["status"] = "queued" if enqueued else "inline"
     else:
         task_data.update({"text": raw_text})
 
@@ -570,6 +597,39 @@ async def analyze_paper(
         return JSONResponse({"error": error_msg}, status_code=500)
 
 
+async def _poll_worker_progress(task_id: str):
+    """Cloud Tasks ワーカーが Redis リストに書き込む進捗イベントをポーリングして yield する。"""
+    progress_key = f"task:progress:{task_id}"
+    POLL_TIMEOUT = 300.0  # 5 分でタイムアウト
+    start = time.time()
+
+    while time.time() - start < POLL_TIMEOUT:
+        item = redis_service.lpop(progress_key)
+        if item:
+            try:
+                payload = json.loads(item) if isinstance(item, str) else item
+            except Exception:
+                payload = {"type": "error", "message": "invalid progress event"}
+
+            yield f"event: message\ndata: {json.dumps(payload)}\n\n"
+
+            ptype = payload.get("type")
+            if ptype in ("done", "error"):
+                return
+        else:
+            # ワーカーがまだ書き込んでいない場合はタスクステータスを確認
+            fresh = redis_service.get(f"task:{task_id}")
+            if not fresh:
+                yield f"event: message\ndata: {json.dumps({'type': 'error', 'message': 'task expired'})}\n\n"
+                return
+            if fresh.get("status") == "error":
+                yield f"event: message\ndata: {json.dumps({'type': 'error', 'message': 'worker failed'})}\n\n"
+                return
+            await asyncio.sleep(0.2)
+
+    yield f"event: message\ndata: {json.dumps({'type': 'error', 'message': 'OCR worker timeout'})}\n\n"
+
+
 @router.get("/stream/{task_id}")
 async def stream(task_id: str):
     stream_start = time.time()
@@ -623,6 +683,17 @@ async def stream(task_id: str):
             storage = get_storage_provider()
             try:
                 if data.get("pending_ocr"):
+                    # Cloud Tasks ワーカーが処理中 → Redis リストをポーリング
+                    if data.get("status") in ("queued", "processing"):
+                        async for event_str in _poll_worker_progress(task_id):
+                            now = time.time()
+                            if now - last_heartbeat > HEARTBEAT_INTERVAL:
+                                yield ": heartbeat\n\n"
+                                last_heartbeat = now
+                            yield event_str
+                        return
+
+                    # ローカル / フォールバック: OCR インライン処理
                     pdf_path = data.get("pdf_path")
                     pdf_b64 = data.get("pdf_b64", "")
 

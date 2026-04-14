@@ -19,6 +19,7 @@ from app.routers.stamps import router as stamps_router
 from app.routers.translation import router as translation_router
 from app.routers.upload import router as upload_router
 from app.routers.users import router as users_router
+from app.routers.worker import router as worker_router
 
 __all__ = [
     "auth_router",
@@ -37,4 +38,5 @@ __all__ = [
     "contact_router",
     "recommendation_router",
     "client_errors_router",
+    "worker_router",
 ]

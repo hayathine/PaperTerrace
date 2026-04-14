@@ -4,7 +4,7 @@ import type { SavedNote } from "../../hooks/useDictionaryHistory";
 
 interface DictionaryHistoryTabProps {
 	savedNotes: SavedNote[];
-	onSelectNote: () => void;
+	onSelectNote: (note: SavedNote) => void;
 }
 
 const DictionaryHistoryTab: React.FC<DictionaryHistoryTabProps> = ({
@@ -47,7 +47,7 @@ const DictionaryHistoryTab: React.FC<DictionaryHistoryTabProps> = ({
 				<button
 					key={note.note_id}
 					type="button"
-					onClick={onSelectNote}
+					onClick={() => onSelectNote(note)}
 					className="w-full text-left bg-white border border-slate-100 rounded-xl p-3 hover:shadow-md hover:border-orange-200 transition-all group"
 				>
 					<div className="flex items-start justify-between gap-2">

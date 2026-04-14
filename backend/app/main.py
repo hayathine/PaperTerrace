@@ -40,6 +40,7 @@ from app.routers import (
     translation_router,
     upload_router,
     users_router,
+    worker_router,
 )
 from common.config import settings
 from common.logger import ServiceLogger
@@ -255,6 +256,7 @@ app.include_router(dspy_router, prefix="/api")
 app.include_router(contact_router, prefix="/api")
 app.include_router(recommendation_router, prefix="/api")
 app.include_router(client_errors_router, prefix="/api")
+app.include_router(worker_router, prefix="/api")
 
 
 # ============================================================================
