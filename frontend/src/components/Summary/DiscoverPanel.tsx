@@ -163,7 +163,7 @@ const DiscoverPanel: React.FC<DiscoverPanelProps> = ({ sessionId }) => {
 							className="bg-white border border-slate-100 rounded-xl p-4 shadow-sm"
 						>
 							<div className="flex justify-end mb-2">
-								<CopyButton text={`${paper.title}\n${paper.abstract}`} />
+								<CopyButton text={paper.title} />
 							</div>
 							<h5 className="font-bold text-slate-800 text-sm mb-1 leading-tight">
 								{paper.title}

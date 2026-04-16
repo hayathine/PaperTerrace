@@ -5,7 +5,7 @@ AIチャットアシスタント機能を提供するモジュール
 
 
 
-from app.domain.features.cache_utils import get_or_create_pdf_cache
+from app.domain.features.cache_utils import PDF_CACHE_MODEL, get_or_create_pdf_cache, get_pdf_cache_key
 from app.providers import get_ai_provider
 from common.config import settings
 from common.dspy_utils.modules import ChatModule
@@ -80,10 +80,10 @@ class ChatService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         try:
-            # PDFキャッシュの確認
+            # PDFキャッシュの確認（共有モデルのキーで取得）
             pdf_cache_name = None
             if paper_id:
-                pdf_cache_name = self.redis.get(f"paper_cache_pdf:{paper_id}")
+                pdf_cache_name = self.redis.get(get_pdf_cache_key(paper_id))
 
             if pdf_input or pdf_cache_name:
                 # 初回: キャッシュを作成
@@ -93,7 +93,6 @@ class ChatService:
                         pdf_contents=pdf_input,
                         ai_provider=self.ai_provider,
                         redis=self.redis,
-                        model=self.model,
                         ttl_minutes=self.cache_ttl_minutes,
                     )
 
@@ -106,7 +105,7 @@ class ChatService:
                     prompt,
                     pdf_bytes=pdf_input if (not pdf_cache_name and isinstance(pdf_input, bytes)) else None,
                     cached_content_name=pdf_cache_name,
-                    model=self.model,
+                    model=PDF_CACHE_MODEL if pdf_cache_name else self.model,
                 )
                 # PDF経由チャットのトレース記録（DSPyを通さないため save_trace を直接呼ぶ）
                 _response_text = response_data.get("text", "") if isinstance(response_data, dict) else str(response_data or "")
@@ -269,10 +268,10 @@ class ChatService:
         lang_name = SUPPORTED_LANGUAGES.get(target_lang, target_lang)
 
         try:
-            # Handle PDF Cache
+            # Handle PDF Cache（共有モデルのキーで取得）
             pdf_cache_name = None
             if paper_id:
-                pdf_cache_name = self.redis.get(f"paper_cache_pdf:{paper_id}")
+                pdf_cache_name = self.redis.get(get_pdf_cache_key(paper_id))
 
             if pdf_bytes or pdf_cache_name:
                 # Cache creation logic (same as in chat method)
@@ -282,7 +281,6 @@ class ChatService:
                         pdf_contents=pdf_bytes,
                         ai_provider=self.ai_provider,
                         redis=self.redis,
-                        model=self.model,
                         ttl_minutes=self.cache_ttl_minutes,
                     )
 
@@ -295,7 +293,7 @@ class ChatService:
                     prompt,
                     pdf_bytes=pdf_bytes if not pdf_cache_name else None,
                     cached_content_name=pdf_cache_name,
-                    model=self.model,
+                    model=PDF_CACHE_MODEL if pdf_cache_name else self.model,
                 ):
                     yield token
 

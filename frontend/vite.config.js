@@ -19,6 +19,11 @@ export default defineConfig({
 		host: true,
 		port: 5173,
 		proxy: {
+			"/api/guidance": {
+				target: "http://127.0.0.1:8090",
+				changeOrigin: true,
+				rewrite: (path) => path.replace(/^\/api\/guidance/, ""),
+			},
 			"/api": {
 				target: "http://127.0.0.1:8080",
 				changeOrigin: true,

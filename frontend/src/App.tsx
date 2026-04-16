@@ -15,6 +15,7 @@ import { createLogger } from "@/lib/logger";
 import Login from "./components/Auth/Login";
 import RequestForm from "./components/Contact/RequestForm";
 import ErrorBoundary from "./components/Error/ErrorBoundary";
+import HelpAssistant from "./components/Help/HelpAssistant";
 import PDFViewer from "./components/PDF/PDFViewer";
 import type { SelectedFigure } from "./components/PDF/types";
 import SearchBar from "./components/Search/SearchBar";
@@ -1132,6 +1133,7 @@ function App() {
 								onNextMatch={handleNextMatch}
 								onPrevMatch={handlePrevMatch}
 							/>
+							{!isGuest && <HelpAssistant />}
 							<GlobalLoading />
 							{!isHealthy && (
 								<ServiceOutage

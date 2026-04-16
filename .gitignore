@@ -13,6 +13,7 @@ infrastructure/k8s/
 optimize_agents/
 prompt_optimization/
 resources.yaml
+guidance/
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

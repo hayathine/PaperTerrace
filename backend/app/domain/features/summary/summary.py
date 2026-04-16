@@ -1,6 +1,6 @@
 
 
-from app.domain.features.cache_utils import get_or_create_pdf_cache
+from app.domain.features.cache_utils import PDF_CACHE_MODEL, get_or_create_pdf_cache
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.providers import get_ai_provider, get_storage_provider
 from common.config import settings
@@ -116,7 +116,6 @@ class SummaryService:
                         pdf_contents=pdf_bytes,
                         ai_provider=self.ai_provider,
                         redis=self.redis,
-                        model=self.model,
                         ttl_minutes=CACHE_TTL_MINUTES,
                     )
                     if pdf_cache_name:
@@ -138,7 +137,7 @@ class SummaryService:
                         prompt,
                         pdf_bytes=pdf_bytes if not pdf_cache_name else None,
                         cached_content_name=pdf_cache_name,
-                        model=self.model,
+                        model=PDF_CACHE_MODEL if pdf_cache_name else self.model,
                         max_tokens=self.summary_token_limit,
                     )
                     # PDF経由はDSPyを通さないため save_trace で直接記録

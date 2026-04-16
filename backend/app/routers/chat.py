@@ -14,6 +14,7 @@ from common import settings
 
 from app.auth import OptionalUser
 from app.domain.features import ChatService
+from app.domain.features.cache_utils import get_pdf_cache_key
 from app.providers import (
     RedisService,
     get_image_bytes,
@@ -135,7 +136,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
     pdf_input: bytes | str | None = None
     t_pdf_download_start = time.perf_counter()
     if paper_id:
-        pdf_cache_key = f"paper_cache_pdf:{paper_id}"
+        pdf_cache_key = get_pdf_cache_key(paper_id)
         # If cache exists in Redis, we skip download as ChatService will use the cache
         if redis_service.get(pdf_cache_key):
             log.debug("chat", "PDFキャッシュ存在のためダウンロードスキップ", paper_id=paper_id)

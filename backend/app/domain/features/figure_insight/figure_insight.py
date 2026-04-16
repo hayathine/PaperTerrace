@@ -1,3 +1,4 @@
+from app.domain.features.cache_utils import PDF_CACHE_MODEL, get_pdf_cache_key
 from app.providers import get_ai_provider
 from app.schemas.gemini_schema import (
     FigureAnalysisResponse,
@@ -52,10 +53,10 @@ class FigureInsightService:
             lang_name=lang_name, caption_hint=caption_hint
         )
 
-        # paper_id に紐づく PDF コンテキストキャッシュを Redis から取得
+        # paper_id に紐づく PDF コンテキストキャッシュを Redis から取得（共有モデルのキー）
         pdf_cache_name: str | None = None
         if paper_id:
-            pdf_cache_name = self.redis.get(f"paper_cache_pdf:{paper_id}")
+            pdf_cache_name = self.redis.get(get_pdf_cache_key(paper_id))
 
         import time
 
@@ -82,7 +83,7 @@ class FigureInsightService:
                         prompt,
                         image_bytes=image_bytes,
                         mime_type=mime_type,
-                        model=self.model,
+                        model=PDF_CACHE_MODEL if pdf_cache_name else self.model,
                         response_model=FigureAnalysisResponse,
                         image_uri=image_uri,
                         max_tokens=4096,

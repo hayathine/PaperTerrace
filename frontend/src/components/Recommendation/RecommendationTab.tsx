@@ -159,10 +159,12 @@ const RecommendationTab: React.FC<RecommendationTabProps> = ({ sessionId }) => {
 										<h5 className="font-bold text-slate-800 text-sm mb-1 leading-tight">
 											{paper.title}
 										</h5>
-										{paper.authors && (
+										{(paper.authors || paper.year) && (
 											<p className="text-xs text-slate-400 mb-2 font-medium truncate">
-												{paper.authors.map((a) => a.name).join(", ")}{" "}
-												{paper.year ? `(${paper.year})` : ""}
+												{paper.authors
+													? paper.authors.map((a) => a.name).join(", ")
+													: ""}
+												{paper.year ? ` (${paper.year})` : ""}
 											</p>
 										)}
 										<p className="text-xs text-slate-600 line-clamp-3 mb-3">

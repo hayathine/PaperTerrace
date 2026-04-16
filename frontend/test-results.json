@@ -1,0 +1,3394 @@
+{
+	"numTotalTestSuites": 144,
+	"numPassedTestSuites": 140,
+	"numFailedTestSuites": 4,
+	"numPendingTestSuites": 0,
+	"numTotalTests": 303,
+	"numPassedTests": 296,
+	"numFailedTests": 7,
+	"numPendingTests": 0,
+	"numTodoTests": 0,
+	"snapshot": {
+		"added": 0,
+		"failure": false,
+		"filesAdded": 0,
+		"filesRemoved": 0,
+		"filesRemovedList": [],
+		"filesUnmatched": 0,
+		"filesUpdated": 0,
+		"matched": 0,
+		"total": 0,
+		"unchecked": 0,
+		"uncheckedKeysByFile": [],
+		"unmatched": 0,
+		"updated": 0,
+		"didUpdate": false
+	},
+	"startTime": 1776310612418,
+	"success": false,
+	"testResults": [
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["App Interactions"],
+					"fullName": "App Interactions renders the paper library and allows selecting a paper",
+					"status": "failed",
+					"title": "renders the paper library and allows selecting a paper",
+					"duration": 79.683808,
+					"failureMessages": [
+						"Error: [vitest] No \"useLocation\" export is defined on the \"react-router-dom\" mock. Did you forget to return it from \"vi.mock\"?\nIf you need to partially mock a module, you can use \"importOriginal\" helper inside:\n\n    at VitestMocker.createError (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:284:17)\n    at Object.get (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:330:16)\n    at HelpAssistant (/home/gwsgs/work_space/paperterrace/frontend/src/components/Help/HelpAssistant.tsx:22:19)\n    at renderWithHooks (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:15486:18)\n    at mountIndeterminateComponent (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:20103:13)\n    at beginWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:21626:16)\n    at beginWork$1 (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:27465:14)\n    at performUnitOfWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26599:12)\n    at workLoopSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26505:5)\n    at renderRootSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26473:7)"
+					],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["App Interactions"],
+					"fullName": "App Interactions handles paper deletion",
+					"status": "failed",
+					"title": "handles paper deletion",
+					"duration": 25.176365000000033,
+					"failureMessages": [
+						"Error: [vitest] No \"useLocation\" export is defined on the \"react-router-dom\" mock. Did you forget to return it from \"vi.mock\"?\nIf you need to partially mock a module, you can use \"importOriginal\" helper inside:\n\n    at VitestMocker.createError (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:284:17)\n    at Object.get (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:330:16)\n    at HelpAssistant (/home/gwsgs/work_space/paperterrace/frontend/src/components/Help/HelpAssistant.tsx:22:19)\n    at renderWithHooks (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:15486:18)\n    at mountIndeterminateComponent (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:20103:13)\n    at beginWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:21626:16)\n    at beginWork$1 (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:27465:14)\n    at performUnitOfWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26599:12)\n    at workLoopSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26505:5)\n    at renderRootSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26473:7)"
+					],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["App Interactions"],
+					"fullName": "App Interactions handles guest to logged-in transition and claiming papers",
+					"status": "failed",
+					"title": "handles guest to logged-in transition and claiming papers",
+					"duration": 132.98231399999986,
+					"failureMessages": [
+						"Error: [vitest] No \"useLocation\" export is defined on the \"react-router-dom\" mock. Did you forget to return it from \"vi.mock\"?\nIf you need to partially mock a module, you can use \"importOriginal\" helper inside:\n\n    at VitestMocker.createError (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:284:17)\n    at Object.get (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:330:16)\n    at HelpAssistant (/home/gwsgs/work_space/paperterrace/frontend/src/components/Help/HelpAssistant.tsx:22:19)\n    at renderWithHooks (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:15486:18)\n    at mountIndeterminateComponent (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:20103:13)\n    at beginWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:21626:16)\n    at beginWork$1 (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:27465:14)\n    at performUnitOfWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26599:12)\n    at workLoopSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26505:5)\n    at renderRootSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26473:7)"
+					],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["App Interactions"],
+					"fullName": "App Interactions handles word clicks and triggers trajectory sync",
+					"status": "failed",
+					"title": "handles word clicks and triggers trajectory sync",
+					"duration": 33.93313799999987,
+					"failureMessages": [
+						"Error: [vitest] No \"useLocation\" export is defined on the \"react-router-dom\" mock. Did you forget to return it from \"vi.mock\"?\nIf you need to partially mock a module, you can use \"importOriginal\" helper inside:\n\n    at VitestMocker.createError (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:284:17)\n    at Object.get (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:330:16)\n    at HelpAssistant (/home/gwsgs/work_space/paperterrace/frontend/src/components/Help/HelpAssistant.tsx:22:19)\n    at renderWithHooks (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:15486:18)\n    at mountIndeterminateComponent (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:20103:13)\n    at beginWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:21626:16)\n    at beginWork$1 (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:27465:14)\n    at performUnitOfWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26599:12)\n    at workLoopSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26505:5)\n    at renderRootSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26473:7)"
+					],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["App Interactions"],
+					"fullName": "App Interactions handles AskAI and switches to notes tab",
+					"status": "failed",
+					"title": "handles AskAI and switches to notes tab",
+					"duration": 36.44212599999992,
+					"failureMessages": [
+						"Error: [vitest] No \"useLocation\" export is defined on the \"react-router-dom\" mock. Did you forget to return it from \"vi.mock\"?\nIf you need to partially mock a module, you can use \"importOriginal\" helper inside:\n\n    at VitestMocker.createError (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:284:17)\n    at Object.get (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:330:16)\n    at HelpAssistant (/home/gwsgs/work_space/paperterrace/frontend/src/components/Help/HelpAssistant.tsx:22:19)\n    at renderWithHooks (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:15486:18)\n    at mountIndeterminateComponent (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:20103:13)\n    at beginWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:21626:16)\n    at beginWork$1 (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:27465:14)\n    at performUnitOfWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26599:12)\n    at workLoopSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26505:5)\n    at renderRootSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26473:7)"
+					],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["App Interactions"],
+					"fullName": "App Interactions handles text selection and switches to comments tab",
+					"status": "failed",
+					"title": "handles text selection and switches to comments tab",
+					"duration": 19.646213999999873,
+					"failureMessages": [
+						"Error: [vitest] No \"useLocation\" export is defined on the \"react-router-dom\" mock. Did you forget to return it from \"vi.mock\"?\nIf you need to partially mock a module, you can use \"importOriginal\" helper inside:\n\n    at VitestMocker.createError (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:284:17)\n    at Object.get (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:330:16)\n    at HelpAssistant (/home/gwsgs/work_space/paperterrace/frontend/src/components/Help/HelpAssistant.tsx:22:19)\n    at renderWithHooks (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:15486:18)\n    at mountIndeterminateComponent (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:20103:13)\n    at beginWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:21626:16)\n    at beginWork$1 (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:27465:14)\n    at performUnitOfWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26599:12)\n    at workLoopSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26505:5)\n    at renderRootSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26473:7)"
+					],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310614336,
+			"endTime": 1776310614664.6462,
+			"status": "failed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/App.interactions.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["App Service Outage Handling"],
+					"fullName": "App Service Outage Handling should show ServiceOutage when isHealthy is false",
+					"status": "passed",
+					"title": "should show ServiceOutage when isHealthy is false",
+					"duration": 73.18954599999984,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["App Service Outage Handling"],
+					"fullName": "App Service Outage Handling should show ServiceOutage with maintenance type when isMaintenance is true",
+					"status": "passed",
+					"title": "should show ServiceOutage with maintenance type when isMaintenance is true",
+					"duration": 56.08657799999992,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310620769,
+			"endTime": 1776310620900.0867,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/App.outage.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["App Component"],
+					"fullName": "App Component should render error boundary and main layout successfully",
+					"status": "failed",
+					"title": "should render error boundary and main layout successfully",
+					"duration": 99.99858299999983,
+					"failureMessages": [
+						"Error: [vitest] No \"useLocation\" export is defined on the \"react-router-dom\" mock. Did you forget to return it from \"vi.mock\"?\nIf you need to partially mock a module, you can use \"importOriginal\" helper inside:\n\n    at VitestMocker.createError (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:284:17)\n    at Object.get (file:///home/gwsgs/work_space/paperterrace/node_modules/vitest/dist/chunks/execute.B7h3T_Hc.js:330:16)\n    at HelpAssistant (/home/gwsgs/work_space/paperterrace/frontend/src/components/Help/HelpAssistant.tsx:22:19)\n    at renderWithHooks (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:15486:18)\n    at mountIndeterminateComponent (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:20103:13)\n    at beginWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:21626:16)\n    at beginWork$1 (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:27465:14)\n    at performUnitOfWork (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26599:12)\n    at workLoopSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26505:5)\n    at renderRootSync (/home/gwsgs/work_space/paperterrace/node_modules/react-dom/cjs/react-dom.development.js:26473:7)"
+					],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310614345,
+			"endTime": 1776310614444.9985,
+			"status": "failed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/App.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["Config Resolution"],
+					"fullName": "Config Resolution returns empty string in development mode (standard behavior)",
+					"status": "passed",
+					"title": "returns empty string in development mode (standard behavior)",
+					"duration": 3.780595999999946,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Config Resolution"],
+					"fullName": "Config Resolution returns production worker URL by default in PROD",
+					"status": "passed",
+					"title": "returns production worker URL by default in PROD",
+					"duration": 3.3134229999999434,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Config Resolution"],
+					"fullName": "Config Resolution returns dev worker URL for non-production pages.dev hostname",
+					"status": "passed",
+					"title": "returns dev worker URL for non-production pages.dev hostname",
+					"duration": 2.274436000000037,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Config Resolution"],
+					"fullName": "Config Resolution returns dev worker URL for dev prefix",
+					"status": "passed",
+					"title": "returns dev worker URL for dev prefix",
+					"duration": 1.5177589999999554,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Config Resolution"],
+					"fullName": "Config Resolution respects VITE_API_URL if provided in PROD",
+					"status": "passed",
+					"title": "respects VITE_API_URL if provided in PROD",
+					"duration": 1.0418910000000778,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310627500,
+			"endTime": 1776310627512.042,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/config.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["AuthContext"],
+					"fullName": "AuthContext does not render children while loading",
+					"status": "passed",
+					"title": "does not render children while loading",
+					"duration": 42.445835999999986,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["AuthContext"],
+					"fullName": "AuthContext provides guest state when no session exists",
+					"status": "passed",
+					"title": "provides guest state when no session exists",
+					"duration": 14.415713000000096,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["AuthContext"],
+					"fullName": "AuthContext provides user and token when session exists",
+					"status": "passed",
+					"title": "provides user and token when session exists",
+					"duration": 24.986805999999888,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["AuthContext"],
+					"fullName": "AuthContext clears state on logout",
+					"status": "passed",
+					"title": "clears state on logout",
+					"duration": 25.976501999999982,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310623206,
+			"endTime": 1776310623313.9766,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/contexts/AuthContext.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["LoadingContext"],
+					"fullName": "LoadingContext should provide default values",
+					"status": "passed",
+					"title": "should provide default values",
+					"duration": 19.729471999999987,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["LoadingContext"],
+					"fullName": "LoadingContext should start and stop loading",
+					"status": "passed",
+					"title": "should start and stop loading",
+					"duration": 6.662926000000084,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["LoadingContext"],
+					"fullName": "LoadingContext should throw error if used outside provider",
+					"status": "passed",
+					"title": "should throw error if used outside provider",
+					"duration": 23.156300999999985,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310625302,
+			"endTime": 1776310625351.1562,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/contexts/LoadingContext.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["usePaperCache"],
+					"fullName": "usePaperCache should return undefined if DB is not available",
+					"status": "passed",
+					"title": "should return undefined if DB is not available",
+					"duration": 33.62744500000008,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["usePaperCache"],
+					"fullName": "usePaperCache should get a cached paper",
+					"status": "passed",
+					"title": "should get a cached paper",
+					"duration": 4.528978999999936,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["usePaperCache"],
+					"fullName": "usePaperCache should save a paper to cache",
+					"status": "passed",
+					"title": "should save a paper to cache",
+					"duration": 2.07726700000012,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["usePaperCache"],
+					"fullName": "usePaperCache should delete paper cache",
+					"status": "passed",
+					"title": "should delete paper cache",
+					"duration": 1.5499889999998686,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["usePaperCache"],
+					"fullName": "usePaperCache should fetch and cache images",
+					"status": "passed",
+					"title": "should fetch and cache images",
+					"duration": 3.603693000000021,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310625645,
+			"endTime": 1776310625690.6038,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/db/hooks.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["DB Index"],
+					"fullName": "DB Index should initialize the database successfully",
+					"status": "passed",
+					"title": "should initialize the database successfully",
+					"duration": 1.6704110000000583,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DB Index"],
+					"fullName": "DB Index should handle initialization failure",
+					"status": "passed",
+					"title": "should handle initialization failure",
+					"duration": 5.606665000000021,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DB Index"],
+					"fullName": "DB Index should evict papers if over quota",
+					"status": "passed",
+					"title": "should evict papers if over quota",
+					"duration": 1.9616649999999254,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DB Index"],
+					"fullName": "DB Index should not evict if under quota",
+					"status": "passed",
+					"title": "should not evict if under quota",
+					"duration": 0.4653240000000096,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310628182,
+			"endTime": 1776310628192.4653,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/db/index.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["DB Sync"],
+					"fullName": "DB Sync should show offline status when navigator is offline",
+					"status": "passed",
+					"title": "should show offline status when navigator is offline",
+					"duration": 28.567264000000023,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DB Sync"],
+					"fullName": "DB Sync should check sync status periodically",
+					"status": "passed",
+					"title": "should check sync status periodically",
+					"duration": 5.533006,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DB Sync"],
+					"fullName": "DB Sync should record an edit success",
+					"status": "passed",
+					"title": "should record an edit success",
+					"duration": 4.917562999999973,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DB Sync"],
+					"fullName": "DB Sync should not record edit if DB is unavailable",
+					"status": "passed",
+					"title": "should not record edit if DB is unavailable",
+					"duration": 1.0795490000000427,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310626350,
+			"endTime": 1776310626390.0796,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/db/sync.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["useDictionaryHistory Hook"],
+					"fullName": "useDictionaryHistory Hook fetches saved notes on mount",
+					"status": "passed",
+					"title": "fetches saved notes on mount",
+					"duration": 71.96888999999999,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useDictionaryHistory Hook"],
+					"fullName": "useDictionaryHistory Hook refetches notes when APP_EVENTS.NOTES_UPDATED is dispatched",
+					"status": "passed",
+					"title": "refetches notes when APP_EVENTS.NOTES_UPDATED is dispatched",
+					"duration": 10.231304000000023,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useDictionaryHistory Hook"],
+					"fullName": "useDictionaryHistory Hook saves a new note and dispatches event",
+					"status": "passed",
+					"title": "saves a new note and dispatches event",
+					"duration": 13.336148000000094,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310621976,
+			"endTime": 1776310622071.3362,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/hooks/useDictionaryHistory.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["useIntersectionObserver"],
+					"fullName": "useIntersectionObserver returns false initially",
+					"status": "passed",
+					"title": "returns false initially",
+					"duration": 15.641986999999972,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useIntersectionObserver"],
+					"fullName": "useIntersectionObserver updates to true when entry is intersecting",
+					"status": "passed",
+					"title": "updates to true when entry is intersecting",
+					"duration": 4.4542339999999285,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useIntersectionObserver"],
+					"fullName": "useIntersectionObserver disconnects on unmount",
+					"status": "passed",
+					"title": "disconnects on unmount",
+					"duration": 3.354712000000063,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310627354,
+			"endTime": 1776310627377.3547,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/hooks/useIntersectionObserver.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["useLayoutState hook"],
+					"fullName": "useLayoutState hook initializes with desktop defaults",
+					"status": "passed",
+					"title": "initializes with desktop defaults",
+					"duration": 13.203949999999963,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useLayoutState hook"],
+					"fullName": "useLayoutState hook initializes with mobile defaults",
+					"status": "passed",
+					"title": "initializes with mobile defaults",
+					"duration": 3.099115999999981,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useLayoutState hook"],
+					"fullName": "useLayoutState hook updates mobile status on resize",
+					"status": "passed",
+					"title": "updates mobile status on resize",
+					"duration": 5.29712799999993,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useLayoutState hook"],
+					"fullName": "useLayoutState hook handles sidebar resizing via mouse movements",
+					"status": "passed",
+					"title": "handles sidebar resizing via mouse movements",
+					"duration": 8.106981000000019,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useLayoutState hook"],
+					"fullName": "useLayoutState hook constrains sidebar width within limits",
+					"status": "passed",
+					"title": "constrains sidebar width within limits",
+					"duration": 6.395175999999992,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["clampWidth"],
+					"fullName": "clampWidth clamps to MIN_SIDEBAR_WIDTH when width is too small",
+					"status": "passed",
+					"title": "clamps to MIN_SIDEBAR_WIDTH when width is too small",
+					"duration": 0.32521299999996245,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["clampWidth"],
+					"fullName": "clampWidth clamps to maxAllowed when width is too large",
+					"status": "passed",
+					"title": "clamps to maxAllowed when width is too large",
+					"duration": 0.21996300000000701,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["clampWidth"],
+					"fullName": "clampWidth accounts for left sidebar when open",
+					"status": "passed",
+					"title": "accounts for left sidebar when open",
+					"duration": 0.22095100000001366,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["clampWidth"],
+					"fullName": "clampWidth returns width unchanged when within valid range",
+					"status": "passed",
+					"title": "returns width unchanged when within valid range",
+					"duration": 0.2802639999999883,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": [
+						"useLayoutState - left sidebar toggle recalculates sidebar width"
+					],
+					"fullName": "useLayoutState - left sidebar toggle recalculates sidebar width clamps right sidebar width when left sidebar opens on desktop",
+					"status": "passed",
+					"title": "clamps right sidebar width when left sidebar opens on desktop",
+					"duration": 3.4497890000000098,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": [
+						"useLayoutState - left sidebar toggle recalculates sidebar width"
+					],
+					"fullName": "useLayoutState - left sidebar toggle recalculates sidebar width does not recalculate sidebar width on mobile when left sidebar toggles",
+					"status": "passed",
+					"title": "does not recalculate sidebar width on mobile when left sidebar toggles",
+					"duration": 2.7125819999999976,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310624321,
+			"endTime": 1776310624364.7126,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/hooks/useLayoutState.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["usePaperLibrary"],
+					"fullName": "usePaperLibrary should fetch papers for authenticated users on mount",
+					"status": "passed",
+					"title": "should fetch papers for authenticated users on mount",
+					"duration": 19.41856999999993,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["usePaperLibrary"],
+					"fullName": "usePaperLibrary should load papers from IndexedDB for guest users",
+					"status": "passed",
+					"title": "should load papers from IndexedDB for guest users",
+					"duration": 5.323989000000097,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["usePaperLibrary"],
+					"fullName": "usePaperLibrary should retry fetch on failure",
+					"status": "passed",
+					"title": "should retry fetch on failure",
+					"duration": 5.627060999999912,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["usePaperLibrary"],
+					"fullName": "usePaperLibrary should delete paper and update state",
+					"status": "passed",
+					"title": "should delete paper and update state",
+					"duration": 7.6958250000000135,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310625391,
+			"endTime": 1776310625429.6958,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/hooks/usePaperLibrary.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["usePaperLifecycle"],
+					"fullName": "usePaperLifecycle should track session duration and delete cache when switching papers",
+					"status": "passed",
+					"title": "should track session duration and delete cache when switching papers",
+					"duration": 24.99175600000001,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["usePaperLifecycle"],
+					"fullName": "usePaperLifecycle should delete cache and sync duration on beforeunload",
+					"status": "passed",
+					"title": "should delete cache and sync duration on beforeunload",
+					"duration": 2.634302000000048,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310627284,
+			"endTime": 1776310627311.6343,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/hooks/usePaperLifecycle.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["usePinchZoom"],
+					"fullName": "usePinchZoom should initialize with zoom 1",
+					"status": "passed",
+					"title": "should initialize with zoom 1",
+					"duration": 17.878170999999952,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["usePinchZoom"],
+					"fullName": "usePinchZoom should reset zoom",
+					"status": "passed",
+					"title": "should reset zoom",
+					"duration": 2.279957999999965,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["usePinchZoom"],
+					"fullName": "usePinchZoom should change zoom on ctrl+wheel",
+					"status": "passed",
+					"title": "should change zoom on ctrl+wheel",
+					"duration": 3.402186000000029,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["usePinchZoom"],
+					"fullName": "usePinchZoom should not change zoom on wheel without ctrl",
+					"status": "passed",
+					"title": "should not change zoom on wheel without ctrl",
+					"duration": 2.828781999999933,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["usePinchZoom"],
+					"fullName": "usePinchZoom should respect min and max limits",
+					"status": "passed",
+					"title": "should respect min and max limits",
+					"duration": 2.662294999999972,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310626350,
+			"endTime": 1776310626378.6624,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/hooks/usePinchZoom.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["useScrollDepth"],
+					"fullName": "useScrollDepth should trigger gtag event when scrolling past thresholds",
+					"status": "passed",
+					"title": "should trigger gtag event when scrolling past thresholds",
+					"duration": 21.638671000000045,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useScrollDepth"],
+					"fullName": "useScrollDepth should not trigger the same threshold twice",
+					"status": "passed",
+					"title": "should not trigger the same threshold twice",
+					"duration": 2.680213999999978,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useScrollDepth"],
+					"fullName": "useScrollDepth should reset thresholds when paperIdentifier changes",
+					"status": "passed",
+					"title": "should reset thresholds when paperIdentifier changes",
+					"duration": 3.1159410000000207,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310626669,
+			"endTime": 1776310626697.116,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/hooks/useScrollDepth.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["useScrollTracking"],
+					"fullName": "useScrollTracking should render and handle scroll without error",
+					"status": "passed",
+					"title": "should render and handle scroll without error",
+					"duration": 13.43580499999996,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useScrollTracking"],
+					"fullName": "useScrollTracking should handle missing paperId without error",
+					"status": "passed",
+					"title": "should handle missing paperId without error",
+					"duration": 2.7216659999999138,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310627402,
+			"endTime": 1776310627417.7217,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/hooks/useScrollTracking.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["useSearchState hook"],
+					"fullName": "useSearchState hook initializes with default values",
+					"status": "passed",
+					"title": "initializes with default values",
+					"duration": 13.514925999999946,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useSearchState hook"],
+					"fullName": "useSearchState hook toggles search modal",
+					"status": "passed",
+					"title": "toggles search modal",
+					"duration": 3.280010999999945,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useSearchState hook"],
+					"fullName": "useSearchState hook navigates through search matches correctly",
+					"status": "passed",
+					"title": "navigates through search matches correctly",
+					"duration": 3.1787239999999883,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useSearchState hook"],
+					"fullName": "useSearchState hook resets state when search is closed",
+					"status": "passed",
+					"title": "resets state when search is closed",
+					"duration": 3.046057000000019,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useSearchState hook"],
+					"fullName": "useSearchState hook opens search on Ctrl+F / Cmd+F if document exists",
+					"status": "passed",
+					"title": "opens search on Ctrl+F / Cmd+F if document exists",
+					"duration": 3.3575819999999794,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useSearchState hook"],
+					"fullName": "useSearchState hook ignores Ctrl+F if no document exists",
+					"status": "passed",
+					"title": "ignores Ctrl+F if no document exists",
+					"duration": 1.6308769999999413,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useSearchState hook"],
+					"fullName": "useSearchState hook closes search on Escape",
+					"status": "passed",
+					"title": "closes search on Escape",
+					"duration": 2.266988999999967,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310624563,
+			"endTime": 1776310624593.267,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/hooks/useSearchState.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["useServiceHealth"],
+					"fullName": "useServiceHealth should start with healthy status",
+					"status": "passed",
+					"title": "should start with healthy status",
+					"duration": 19.075229000000036,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useServiceHealth"],
+					"fullName": "useServiceHealth should fetch health status on mount if enabled",
+					"status": "passed",
+					"title": "should fetch health status on mount if enabled",
+					"duration": 10.460133000000042,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useServiceHealth"],
+					"fullName": "useServiceHealth should become unhealthy if fetch fails",
+					"status": "passed",
+					"title": "should become unhealthy if fetch fails",
+					"duration": 187.06106699999998,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useServiceHealth"],
+					"fullName": "useServiceHealth should handle maintenance status (503)",
+					"status": "passed",
+					"title": "should handle maintenance status (503)",
+					"duration": 55.02948300000003,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useServiceHealth"],
+					"fullName": "useServiceHealth should trigger immediate health check on reportFailure(503)",
+					"status": "passed",
+					"title": "should trigger immediate health check on reportFailure(503)",
+					"duration": 5.0982890000000225,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useServiceHealth"],
+					"fullName": "useServiceHealth should poll when unhealthy",
+					"status": "passed",
+					"title": "should poll when unhealthy",
+					"duration": 5.2883250000002135,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310617013,
+			"endTime": 1776310617295.2883,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/hooks/useServiceHealth.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["useWordInteraction"],
+					"fullName": "useWordInteraction should initialize with undefined states",
+					"status": "passed",
+					"title": "should initialize with undefined states",
+					"duration": 14.151065000000017,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useWordInteraction"],
+					"fullName": "useWordInteraction should update translation states via setTranslation",
+					"status": "passed",
+					"title": "should update translation states via setTranslation",
+					"duration": 3.3035830000000033,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useWordInteraction"],
+					"fullName": "useWordInteraction should update and truncate text selection",
+					"status": "passed",
+					"title": "should update and truncate text selection",
+					"duration": 1.7358980000000201,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useWordInteraction"],
+					"fullName": "useWordInteraction should update area selection for figures",
+					"status": "passed",
+					"title": "should update area selection for figures",
+					"duration": 4.607355999999982,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useWordInteraction"],
+					"fullName": "useWordInteraction should update explanation states",
+					"status": "passed",
+					"title": "should update explanation states",
+					"duration": 3.769166000000041,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["useWordInteraction"],
+					"fullName": "useWordInteraction should reset all states via resetWordState",
+					"status": "passed",
+					"title": "should reset all states via resetWordState",
+					"duration": 1.9058929999999918,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310625319,
+			"endTime": 1776310625348.906,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/hooks/useWordInteraction.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["auth lib"],
+					"fullName": "auth lib returns JWT from neon auth internal",
+					"status": "passed",
+					"title": "returns JWT from neon auth internal",
+					"duration": 1.0919880000000148,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["auth lib"],
+					"fullName": "auth lib exports authClient",
+					"status": "passed",
+					"title": "exports authClient",
+					"duration": 0.23868499999991855,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310629223,
+			"endTime": 1776310629224.2388,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/lib/auth.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["dashboard lib", "fetchUserStats"],
+					"fullName": "dashboard lib fetchUserStats should fetch user stats with auth headers",
+					"status": "passed",
+					"title": "should fetch user stats with auth headers",
+					"duration": 3.6590349999999034,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["dashboard lib", "fetchUserStats"],
+					"fullName": "dashboard lib fetchUserStats should throw error if fetch fails",
+					"status": "passed",
+					"title": "should throw error if fetch fails",
+					"duration": 1.5732250000000931,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["dashboard lib", "fetchUserTranslations"],
+					"fullName": "dashboard lib fetchUserTranslations should fetch user translations with pagination",
+					"status": "passed",
+					"title": "should fetch user translations with pagination",
+					"duration": 0.865545000000111,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["dashboard lib", "fetchUserTranslations"],
+					"fullName": "dashboard lib fetchUserTranslations should throw error if fetch fails",
+					"status": "passed",
+					"title": "should throw error if fetch fails",
+					"duration": 0.7107780000001185,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["dashboard lib", "fetchUserPapers"],
+					"fullName": "dashboard lib fetchUserPapers should fetch user papers with limit",
+					"status": "passed",
+					"title": "should fetch user papers with limit",
+					"duration": 1.9233500000000276,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["dashboard lib", "fetchUserPapers"],
+					"fullName": "dashboard lib fetchUserPapers should throw error if fetch fails",
+					"status": "passed",
+					"title": "should throw error if fetch fails",
+					"duration": 0.528479999999945,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310628586,
+			"endTime": 1776310628595.5286,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/lib/dashboard.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["ERROR_KEYS"],
+					"fullName": "ERROR_KEYS should have common error keys",
+					"status": "passed",
+					"title": "should have common error keys",
+					"duration": 0.9760879999998906,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["ERROR_KEYS"],
+					"fullName": "ERROR_KEYS should have figure error keys",
+					"status": "passed",
+					"title": "should have figure error keys",
+					"duration": 0.16935499999999593,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310629809,
+			"endTime": 1776310629810.1694,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/lib/errors.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["APP_EVENTS"],
+					"fullName": "APP_EVENTS should have NOTES_UPDATED event name",
+					"status": "passed",
+					"title": "should have NOTES_UPDATED event name",
+					"duration": 1.1003869999999552,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["APP_EVENTS"],
+					"fullName": "APP_EVENTS should have correct structure",
+					"status": "passed",
+					"title": "should have correct structure",
+					"duration": 0.26210599999990336,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310629480,
+			"endTime": 1776310629481.2622,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/lib/events.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["feedback lib"],
+					"fullName": "feedback lib submits feedback successfully",
+					"status": "passed",
+					"title": "submits feedback successfully",
+					"duration": 4.0272280000000364,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["feedback lib"],
+					"fullName": "feedback lib throws error if feedback submission fails",
+					"status": "passed",
+					"title": "throws error if feedback submission fails",
+					"duration": 5.713343999999893,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["feedback lib"],
+					"fullName": "feedback lib throws error if fetch fails",
+					"status": "passed",
+					"title": "throws error if fetch fails",
+					"duration": 3.255033000000026,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310628154,
+			"endTime": 1776310628166.2551,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/lib/feedback.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["i18n configuration"],
+					"fullName": "i18n configuration should initialize i18next correctly",
+					"status": "passed",
+					"title": "should initialize i18next correctly",
+					"duration": 1.8658550000000105,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["i18n configuration"],
+					"fullName": "i18n configuration should have resources for 'ja' and 'en'",
+					"status": "passed",
+					"title": "should have resources for 'ja' and 'en'",
+					"duration": 0.7694020000000137,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["i18n configuration"],
+					"fullName": "i18n configuration should have a valid language set",
+					"status": "passed",
+					"title": "should have a valid language set",
+					"duration": 0.26707699999997203,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["i18n configuration"],
+					"fullName": "i18n configuration should translate common keys in Japanese",
+					"status": "passed",
+					"title": "should translate common keys in Japanese",
+					"duration": 2.4745149999999967,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["i18n configuration"],
+					"fullName": "i18n configuration should translate common keys in English",
+					"status": "passed",
+					"title": "should translate common keys in English",
+					"duration": 0.9046639999999115,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310629203,
+			"endTime": 1776310629209.9048,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/lib/i18n.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["Logger Utility"],
+					"fullName": "Logger Utility should log debug messages in development",
+					"status": "passed",
+					"title": "should log debug messages in development",
+					"duration": 3.029229999999984,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Logger Utility"],
+					"fullName": "Logger Utility should include context in console logs",
+					"status": "passed",
+					"title": "should include context in console logs",
+					"duration": 0.915587999999957,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Logger Utility"],
+					"fullName": "Logger Utility should report errors to server and Sentry",
+					"status": "passed",
+					"title": "should report errors to server and Sentry",
+					"duration": 16.073789999999917,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Logger Utility"],
+					"fullName": "Logger Utility should use captureMessage when no Error object is provided to error logger",
+					"status": "passed",
+					"title": "should use captureMessage when no Error object is provided to error logger",
+					"duration": 11.25600099999997,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310627192,
+			"endTime": 1776310627223.256,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/lib/logger.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["mathPreprocess"],
+					"fullName": "mathPreprocess replaces Unicode math symbols inside inline math",
+					"status": "passed",
+					"title": "replaces Unicode math symbols inside inline math",
+					"duration": 1.335815000000025,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["mathPreprocess"],
+					"fullName": "mathPreprocess replaces Unicode math symbols inside block math",
+					"status": "passed",
+					"title": "replaces Unicode math symbols inside block math",
+					"duration": 0.348261999999977,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["mathPreprocess"],
+					"fullName": "mathPreprocess does not replace symbols outside of math delimiters",
+					"status": "passed",
+					"title": "does not replace symbols outside of math delimiters",
+					"duration": 0.13846000000000913,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["mathPreprocess"],
+					"fullName": "mathPreprocess does not replace symbols inside code blocks",
+					"status": "passed",
+					"title": "does not replace symbols inside code blocks",
+					"duration": 0.20194600000002083,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["mathPreprocess"],
+					"fullName": "mathPreprocess handles mixed content correctly",
+					"status": "passed",
+					"title": "handles mixed content correctly",
+					"duration": 0.13009099999999307,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["mathPreprocess"],
+					"fullName": "mathPreprocess replaces multiple symbols in one math block",
+					"status": "passed",
+					"title": "replaces multiple symbols in one math block",
+					"duration": 0.137136000000055,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["mathPreprocess"],
+					"fullName": "mathPreprocess handles complex LaTeX commands correctly",
+					"status": "passed",
+					"title": "handles complex LaTeX commands correctly",
+					"duration": 0.11241300000006049,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310629287,
+			"endTime": 1776310629289.202,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/lib/mathPreprocess.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["PerformanceMonitor"],
+					"fullName": "PerformanceMonitor should initialize and register web-vitals handlers when enabled",
+					"status": "passed",
+					"title": "should initialize and register web-vitals handlers when enabled",
+					"duration": 2.1561819999999443,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["PerformanceMonitor"],
+					"fullName": "PerformanceMonitor should not register handlers when disabled",
+					"status": "passed",
+					"title": "should not register handlers when disabled",
+					"duration": 0.32031900000004043,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["PerformanceMonitor"],
+					"fullName": "PerformanceMonitor should store metrics correctly when handlers are called",
+					"status": "passed",
+					"title": "should store metrics correctly when handlers are called",
+					"duration": 2.4539369999999963,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310628395,
+			"endTime": 1776310628400.4539,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/lib/performance.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["recommendation lib", "syncTrajectory"],
+					"fullName": "recommendation lib syncTrajectory should call fetch with correct headers and payload",
+					"status": "passed",
+					"title": "should call fetch with correct headers and payload",
+					"duration": 5.526495999999952,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["recommendation lib", "syncTrajectory"],
+					"fullName": "recommendation lib syncTrajectory should not include Authorization header if token is null",
+					"status": "passed",
+					"title": "should not include Authorization header if token is null",
+					"duration": 0.6718600000000379,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": [
+						"recommendation lib",
+						"submitRecommendationRollout"
+					],
+					"fullName": "recommendation lib submitRecommendationRollout should throw error if response is not ok",
+					"status": "passed",
+					"title": "should throw error if response is not ok",
+					"duration": 1.6080279999999902,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": [
+						"recommendation lib",
+						"submitRecommendationRollout"
+					],
+					"fullName": "recommendation lib submitRecommendationRollout should return json on success",
+					"status": "passed",
+					"title": "should return json on success",
+					"duration": 0.7037649999999758,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["recommendation lib", "generateRecommendations"],
+					"fullName": "recommendation lib generateRecommendations should call energy/generate endpoint",
+					"status": "passed",
+					"title": "should call energy/generate endpoint",
+					"duration": 0.5829190000000608,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310628323,
+			"endTime": 1776310628332.583,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/lib/recommendation.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["Dashboard Page"],
+					"fullName": "Dashboard Page renders profile information correctly",
+					"status": "passed",
+					"title": "renders profile information correctly",
+					"duration": 65.79052899999988,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Dashboard Page"],
+					"fullName": "Dashboard Page renders stats sections correctly after loading",
+					"status": "passed",
+					"title": "renders stats sections correctly after loading",
+					"duration": 60.18606100000011,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Dashboard Page"],
+					"fullName": "Dashboard Page renders papers list correctly",
+					"status": "passed",
+					"title": "renders papers list correctly",
+					"duration": 61.08688899999993,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Dashboard Page"],
+					"fullName": "Dashboard Page renders bookmarks correctly",
+					"status": "passed",
+					"title": "renders bookmarks correctly",
+					"duration": 30.361188000000084,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Dashboard Page"],
+					"fullName": "Dashboard Page renders translation history correctly",
+					"status": "passed",
+					"title": "renders translation history correctly",
+					"duration": 33.781209999999874,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Dashboard Page"],
+					"fullName": "Dashboard Page filters papers based on search input",
+					"status": "passed",
+					"title": "filters papers based on search input",
+					"duration": 41.941667999999936,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Dashboard Page"],
+					"fullName": "Dashboard Page handles translation pagination",
+					"status": "passed",
+					"title": "handles translation pagination",
+					"duration": 72.48204100000021,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Dashboard Page"],
+					"fullName": "Dashboard Page shows empty state when no papers are found",
+					"status": "passed",
+					"title": "shows empty state when no papers are found",
+					"duration": 42.26663700000017,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310614278,
+			"endTime": 1776310614686.2666,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/pages/Dashboard.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["Login Component"],
+					"fullName": "Login Component renders PaperTerrace title",
+					"status": "passed",
+					"title": "renders PaperTerrace title",
+					"duration": 46.04826800000001,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Login Component"],
+					"fullName": "Login Component renders login buttons",
+					"status": "passed",
+					"title": "renders login buttons",
+					"duration": 9.986763999999994,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310624324,
+			"endTime": 1776310624379.9868,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Auth/Login.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["ChatWindow Component"],
+					"fullName": "ChatWindow Component fetches chat history on mount with authorization header",
+					"status": "passed",
+					"title": "fetches chat history on mount with authorization header",
+					"duration": 34.88658799999985,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["ChatWindow Component"],
+					"fullName": "ChatWindow Component sends a message and adds both user and assistant responses",
+					"status": "passed",
+					"title": "sends a message and adds both user and assistant responses",
+					"duration": 16.441669000000047,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["ChatWindow Component"],
+					"fullName": "ChatWindow Component handles fetch errors gracefully",
+					"status": "passed",
+					"title": "handles fetch errors gracefully",
+					"duration": 218.30500600000005,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310617043,
+			"endTime": 1776310617312.305,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Chat/ChatWindow.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["InputArea Component"],
+					"fullName": "InputArea Component renders correctly",
+					"status": "passed",
+					"title": "renders correctly",
+					"duration": 42.82276300000001,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["InputArea Component"],
+					"fullName": "InputArea Component calls onSendMessage when clicking submit button",
+					"status": "passed",
+					"title": "calls onSendMessage when clicking submit button",
+					"duration": 90.59261000000004,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["InputArea Component"],
+					"fullName": "InputArea Component calls onSendMessage when pressing Enter without Shift",
+					"status": "passed",
+					"title": "calls onSendMessage when pressing Enter without Shift",
+					"duration": 7.781543000000056,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["InputArea Component"],
+					"fullName": "InputArea Component does not call onSendMessage when pressing Enter with Shift",
+					"status": "passed",
+					"title": "does not call onSendMessage when pressing Enter with Shift",
+					"duration": 6.870415999999977,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["InputArea Component"],
+					"fullName": "InputArea Component disables input and button when isLoading is true",
+					"status": "passed",
+					"title": "disables input and button when isLoading is true",
+					"duration": 17.11803400000008,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["InputArea Component"],
+					"fullName": "InputArea Component disables button when input is empty or whitespace",
+					"status": "passed",
+					"title": "disables button when input is empty or whitespace",
+					"duration": 10.887098000000151,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310618628,
+			"endTime": 1776310618803.8872,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Chat/InputArea.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["MessageBubble Component"],
+					"fullName": "MessageBubble Component renders user message correctly",
+					"status": "passed",
+					"title": "renders user message correctly",
+					"duration": 66.22560099999987,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["MessageBubble Component"],
+					"fullName": "MessageBubble Component renders assistant message correctly",
+					"status": "passed",
+					"title": "renders assistant message correctly",
+					"duration": 21.954964999999902,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["MessageBubble Component"],
+					"fullName": "MessageBubble Component renders timestamp",
+					"status": "passed",
+					"title": "renders timestamp",
+					"duration": 7.480107999999973,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["MessageBubble Component"],
+					"fullName": "MessageBubble Component shows evidence button when grounding is present",
+					"status": "passed",
+					"title": "shows evidence button when grounding is present",
+					"duration": 16.746495000000095,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["MessageBubble Component"],
+					"fullName": "MessageBubble Component does not show evidence button when grounding is missing",
+					"status": "passed",
+					"title": "does not show evidence button when grounding is missing",
+					"duration": 11.26034199999981,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310622412,
+			"endTime": 1776310622536.2603,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Chat/MessageBubble.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["MessageList Component"],
+					"fullName": "MessageList Component renders all messages",
+					"status": "passed",
+					"title": "renders all messages",
+					"duration": 33.54574600000001,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["MessageList Component"],
+					"fullName": "MessageList Component shows empty state message when no messages",
+					"status": "passed",
+					"title": "shows empty state message when no messages",
+					"duration": 4.520764999999983,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["MessageList Component"],
+					"fullName": "MessageList Component shows loading indicator when isLoading is true",
+					"status": "passed",
+					"title": "shows loading indicator when isLoading is true",
+					"duration": 7.3849199999999655,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["MessageList Component"],
+					"fullName": "MessageList Component scrolls to bottom when messages change",
+					"status": "passed",
+					"title": "scrolls to bottom when messages change",
+					"duration": 4.735065999999961,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310624261,
+			"endTime": 1776310624311.735,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Chat/MessageList.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["CopyButton Component"],
+					"fullName": "CopyButton Component renders correctly",
+					"status": "passed",
+					"title": "renders correctly",
+					"duration": 72.71045000000004,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["CopyButton Component"],
+					"fullName": "CopyButton Component copies text when clicked",
+					"status": "passed",
+					"title": "copies text when clicked",
+					"duration": 23.226237000000083,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["CopyButton Component"],
+					"fullName": "CopyButton Component returns to initial state after 2 seconds",
+					"status": "passed",
+					"title": "returns to initial state after 2 seconds",
+					"duration": 117.48142499999994,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310618161,
+			"endTime": 1776310618374.4814,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Common/CopyButton.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["FeedbackSection Component"],
+					"fullName": "FeedbackSection Component renders feedback buttons",
+					"status": "passed",
+					"title": "renders feedback buttons",
+					"duration": 40.869223000000034,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["FeedbackSection Component"],
+					"fullName": "FeedbackSection Component submits score when clicked",
+					"status": "passed",
+					"title": "submits score when clicked",
+					"duration": 26.295762999999965,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["FeedbackSection Component"],
+					"fullName": "FeedbackSection Component submits comment when send button clicked",
+					"status": "passed",
+					"title": "submits comment when send button clicked",
+					"duration": 15.011064999999917,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["FeedbackSection Component"],
+					"fullName": "FeedbackSection Component handles error during submission",
+					"status": "passed",
+					"title": "handles error during submission",
+					"duration": 23.89349600000014,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310615699,
+			"endTime": 1776310615805.8936,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Common/FeedbackSection.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["MarkdownContent Component"],
+					"fullName": "MarkdownContent Component renders children correctly",
+					"status": "passed",
+					"title": "renders children correctly",
+					"duration": 24.232612000000017,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["MarkdownContent Component"],
+					"fullName": "MarkdownContent Component handles non-string children gracefully",
+					"status": "passed",
+					"title": "handles non-string children gracefully",
+					"duration": 4.894362000000001,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["MarkdownContent Component"],
+					"fullName": "MarkdownContent Component applies className",
+					"status": "passed",
+					"title": "applies className",
+					"duration": 6.597953000000189,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310626489,
+			"endTime": 1776310626524.598,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Common/MarkdownContent.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["RequestForm"],
+					"fullName": "RequestForm renders the form initially",
+					"status": "passed",
+					"title": "renders the form initially",
+					"duration": 88.46063900000001,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["RequestForm"],
+					"fullName": "RequestForm submits the form successfully",
+					"status": "passed",
+					"title": "submits the form successfully",
+					"duration": 29.318401999999992,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["RequestForm"],
+					"fullName": "RequestForm handles server error",
+					"status": "passed",
+					"title": "handles server error",
+					"duration": 25.33100800000011,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["RequestForm"],
+					"fullName": "RequestForm disables submit button when message is empty",
+					"status": "passed",
+					"title": "disables submit button when message is empty",
+					"duration": 14.964566999999988,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310618273,
+			"endTime": 1776310618431.9646,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Contact/RequestForm.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["Dictionary Component"],
+					"fullName": "Dictionary Component renders empty state initially",
+					"status": "passed",
+					"title": "renders empty state initially",
+					"duration": 36.00416199999995,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Dictionary Component"],
+					"fullName": "Dictionary Component renders external link UI when a URL is passed",
+					"status": "passed",
+					"title": "renders external link UI when a URL is passed",
+					"duration": 15.983195999999907,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Dictionary Component"],
+					"fullName": "Dictionary Component fetches definition when term is provided",
+					"status": "passed",
+					"title": "fetches definition when term is provided",
+					"duration": 50.68189400000006,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Dictionary Component"],
+					"fullName": "Dictionary Component handles fetch error gracefully",
+					"status": "passed",
+					"title": "handles fetch error gracefully",
+					"duration": 26.6097850000001,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Dictionary Component"],
+					"fullName": "Dictionary Component shows figure insight when figures tab is selected",
+					"status": "passed",
+					"title": "shows figure insight when figures tab is selected",
+					"duration": 20.818899999999985,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Dictionary Component"],
+					"fullName": "Dictionary Component triggers deep translate and switches tab when Ask AI is clicked",
+					"status": "passed",
+					"title": "triggers deep translate and switches tab when Ask AI is clicked",
+					"duration": 44.022604999999885,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310618854,
+			"endTime": 1776310619049.0227,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Dictionary/Dictionary.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["DictionaryEntryCard"],
+					"fullName": "DictionaryEntryCard renders basic entry information",
+					"status": "passed",
+					"title": "renders basic entry information",
+					"duration": 41.9629349999999,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DictionaryEntryCard"],
+					"fullName": "DictionaryEntryCard renders analyzing state when is_analyzing is true",
+					"status": "passed",
+					"title": "renders analyzing state when is_analyzing is true",
+					"duration": 6.987430000000018,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DictionaryEntryCard"],
+					"fullName": "DictionaryEntryCard renders image when image_url is provided",
+					"status": "passed",
+					"title": "renders image when image_url is provided",
+					"duration": 9.18833200000006,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DictionaryEntryCard"],
+					"fullName": "DictionaryEntryCard renders source translation in explanation tab",
+					"status": "passed",
+					"title": "renders source translation in explanation tab",
+					"duration": 6.749272000000019,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DictionaryEntryCard"],
+					"fullName": "DictionaryEntryCard calls onSave when save button is clicked",
+					"status": "passed",
+					"title": "calls onSave when save button is clicked",
+					"duration": 14.92620999999997,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DictionaryEntryCard"],
+					"fullName": "DictionaryEntryCard shows saved state when word is in savedItems",
+					"status": "passed",
+					"title": "shows saved state when word is in savedItems",
+					"duration": 95.58856700000013,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DictionaryEntryCard"],
+					"fullName": "DictionaryEntryCard calls onDeepTranslate when Ask AI is clicked",
+					"status": "passed",
+					"title": "calls onDeepTranslate when Ask AI is clicked",
+					"duration": 6.308154000000059,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DictionaryEntryCard"],
+					"fullName": "DictionaryEntryCard calls onAskInChat when image is present and button is clicked",
+					"status": "passed",
+					"title": "calls onAskInChat when image is present and button is clicked",
+					"duration": 6.978497999999945,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DictionaryEntryCard"],
+					"fullName": "DictionaryEntryCard calls onJump when jump button is clicked and coordinates are available",
+					"status": "passed",
+					"title": "calls onJump when jump button is clicked and coordinates are available",
+					"duration": 8.24435799999992,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310617992,
+			"endTime": 1776310618189.2444,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Dictionary/DictionaryEntryCard.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["DictionaryHistoryTab Component"],
+					"fullName": "DictionaryHistoryTab Component renders empty state when no notes are provided",
+					"status": "passed",
+					"title": "renders empty state when no notes are provided",
+					"duration": 29.38346999999999,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DictionaryHistoryTab Component"],
+					"fullName": "DictionaryHistoryTab Component renders a list of saved notes",
+					"status": "passed",
+					"title": "renders a list of saved notes",
+					"duration": 8.131571000000008,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DictionaryHistoryTab Component"],
+					"fullName": "DictionaryHistoryTab Component triggers onSelectNote with the correct note when a note is clicked",
+					"status": "passed",
+					"title": "triggers onSelectNote with the correct note when a note is clicked",
+					"duration": 12.927938999999924,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DictionaryHistoryTab Component"],
+					"fullName": "DictionaryHistoryTab Component renders note without page number correctly",
+					"status": "passed",
+					"title": "renders note without page number correctly",
+					"duration": 3.789344999999912,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310623294,
+			"endTime": 1776310623348.7893,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Dictionary/DictionaryHistoryTab.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["ErrorBoundary"],
+					"fullName": "ErrorBoundary renders children when no error occurs",
+					"status": "passed",
+					"title": "renders children when no error occurs",
+					"duration": 28.908247999999958,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["ErrorBoundary"],
+					"fullName": "ErrorBoundary renders fallback UI when an error occurs in children",
+					"status": "passed",
+					"title": "renders fallback UI when an error occurs in children",
+					"duration": 39.71843599999988,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["ErrorBoundary"],
+					"fullName": "ErrorBoundary reloads the page when the reload button is clicked",
+					"status": "passed",
+					"title": "reloads the page when the reload button is clicked",
+					"duration": 23.533457999999882,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310619893,
+			"endTime": 1776310619985.5334,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Error/ErrorBoundary.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["FigureInsight Component"],
+					"fullName": "FigureInsight Component renders empty state when no figure is selected and stack is empty",
+					"status": "passed",
+					"title": "renders empty state when no figure is selected and stack is empty",
+					"duration": 25.34643099999994,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["FigureInsight Component"],
+					"fullName": "FigureInsight Component starts analysis when a new figure is selected",
+					"status": "passed",
+					"title": "starts analysis when a new figure is selected",
+					"duration": 62.222496999999976,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["FigureInsight Component"],
+					"fullName": "FigureInsight Component shows error message when initial fetch fails",
+					"status": "passed",
+					"title": "shows error message when initial fetch fails",
+					"duration": 153.550526,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["FigureInsight Component"],
+					"fullName": "FigureInsight Component clears stack when clear button is clicked",
+					"status": "passed",
+					"title": "clears stack when clear button is clicked",
+					"duration": 57.61103900000012,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310616730,
+			"endTime": 1776310617029.611,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/FigureInsight/FigureInsight.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["HelpAssistant"],
+					"fullName": "HelpAssistant renders only floating button initially",
+					"status": "passed",
+					"title": "renders only floating button initially",
+					"duration": 35.80053299999997,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["HelpAssistant"],
+					"fullName": "HelpAssistant opens panel when floating button is clicked",
+					"status": "passed",
+					"title": "opens panel when floating button is clicked",
+					"duration": 32.405799000000115,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["HelpAssistant"],
+					"fullName": "HelpAssistant sends message when send button is clicked",
+					"status": "passed",
+					"title": "sends message when send button is clicked",
+					"duration": 18.619916999999987,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["HelpAssistant"],
+					"fullName": "HelpAssistant sends message on Enter key without Shift",
+					"status": "passed",
+					"title": "sends message on Enter key without Shift",
+					"duration": 15.616784000000052,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["HelpAssistant"],
+					"fullName": "HelpAssistant does not send message on Shift+Enter",
+					"status": "passed",
+					"title": "does not send message on Shift+Enter",
+					"duration": 16.562875000000076,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["HelpAssistant"],
+					"fullName": "HelpAssistant clears messages when clear button is clicked",
+					"status": "passed",
+					"title": "clears messages when clear button is clicked",
+					"duration": 9.689242999999806,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["HelpAssistant"],
+					"fullName": "HelpAssistant closes panel when close button is clicked",
+					"status": "passed",
+					"title": "closes panel when close button is clicked",
+					"duration": 6.080406000000039,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["HelpAssistant"],
+					"fullName": "HelpAssistant shows thinking dots while loading",
+					"status": "passed",
+					"title": "shows thinking dots while loading",
+					"duration": 11.941949999999906,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310619445,
+			"endTime": 1776310619591.942,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Help/HelpAssistant.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["AddNoteForm Component"],
+					"fullName": "AddNoteForm Component renders efficiently in add mode",
+					"status": "passed",
+					"title": "renders efficiently in add mode",
+					"duration": 35.05206999999996,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["AddNoteForm Component"],
+					"fullName": "AddNoteForm Component submits the form with term and note",
+					"status": "passed",
+					"title": "submits the form with term and note",
+					"duration": 22.69589700000006,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["AddNoteForm Component"],
+					"fullName": "AddNoteForm Component renders in edit mode when editingNote is provided",
+					"status": "passed",
+					"title": "renders in edit mode when editingNote is provided",
+					"duration": 4.648722999999791,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["AddNoteForm Component"],
+					"fullName": "AddNoteForm Component calls onUpdate when submitting in edit mode",
+					"status": "passed",
+					"title": "calls onUpdate when submitting in edit mode",
+					"duration": 12.475693000000092,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["AddNoteForm Component"],
+					"fullName": "AddNoteForm Component calls onCancelEdit when cancel button is clicked",
+					"status": "passed",
+					"title": "calls onCancelEdit when cancel button is clicked",
+					"duration": 6.586972999999944,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["AddNoteForm Component"],
+					"fullName": "AddNoteForm Component disables submit button when term is empty",
+					"status": "passed",
+					"title": "disables submit button when term is empty",
+					"duration": 8.446312000000034,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310621076,
+			"endTime": 1776310621166.4463,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Notes/AddNoteForm.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["NoteItem Component"],
+					"fullName": "NoteItem Component renders note content correctly",
+					"status": "passed",
+					"title": "renders note content correctly",
+					"duration": 48.91585399999997,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["NoteItem Component"],
+					"fullName": "NoteItem Component calls onDelete when delete button is clicked",
+					"status": "passed",
+					"title": "calls onDelete when delete button is clicked",
+					"duration": 15.079273999999941,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["NoteItem Component"],
+					"fullName": "NoteItem Component shows image when image_url is provided",
+					"status": "passed",
+					"title": "shows image when image_url is provided",
+					"duration": 8.088954000000058,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["NoteItem Component"],
+					"fullName": "NoteItem Component shows jump button when page_number is provided",
+					"status": "passed",
+					"title": "shows jump button when page_number is provided",
+					"duration": 6.8344220000001314,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["NoteItem Component"],
+					"fullName": "NoteItem Component does not show jump button when page_number is missing",
+					"status": "passed",
+					"title": "does not show jump button when page_number is missing",
+					"duration": 3.2659410000001117,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310623550,
+			"endTime": 1776310623632.2659,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Notes/NoteItem.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["NoteList Component"],
+					"fullName": "NoteList Component fetches and displays notes on mount",
+					"status": "passed",
+					"title": "fetches and displays notes on mount",
+					"duration": 54.99484000000007,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["NoteList Component"],
+					"fullName": "NoteList Component displays no notes message when empty",
+					"status": "passed",
+					"title": "displays no notes message when empty",
+					"duration": 10.380613999999923,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["NoteList Component"],
+					"fullName": "NoteList Component calls POST when adding a note",
+					"status": "passed",
+					"title": "calls POST when adding a note",
+					"duration": 11.340633999999909,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["NoteList Component"],
+					"fullName": "NoteList Component calls DELETE when deleting a note",
+					"status": "passed",
+					"title": "calls DELETE when deleting a note",
+					"duration": 16.36937899999998,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310619829,
+			"endTime": 1776310619922.3694,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Notes/NoteList.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["BoxOverlay Component"],
+					"fullName": "BoxOverlay Component renders nothing when isActive is false",
+					"status": "passed",
+					"title": "renders nothing when isActive is false",
+					"duration": 18.06998999999996,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["BoxOverlay Component"],
+					"fullName": "BoxOverlay Component renders overlay when isActive is true",
+					"status": "passed",
+					"title": "renders overlay when isActive is true",
+					"duration": 18.101807000000008,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["BoxOverlay Component"],
+					"fullName": "BoxOverlay Component triggers onSelect with correct coordinates after mouse drag",
+					"status": "passed",
+					"title": "triggers onSelect with correct coordinates after mouse drag",
+					"duration": 27.252639000000045,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["BoxOverlay Component"],
+					"fullName": "BoxOverlay Component triggers onSelect with absolute values regardless of drag direction",
+					"status": "passed",
+					"title": "triggers onSelect with absolute values regardless of drag direction",
+					"duration": 13.837406999999985,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["BoxOverlay Component"],
+					"fullName": "BoxOverlay Component does not trigger onSelect if selection is too small",
+					"status": "passed",
+					"title": "does not trigger onSelect if selection is too small",
+					"duration": 8.92671299999995,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["BoxOverlay Component"],
+					"fullName": "BoxOverlay Component handles touch events correctly",
+					"status": "passed",
+					"title": "handles touch events correctly",
+					"duration": 15.533767000000012,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310623125,
+			"endTime": 1776310623227.5337,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/PDF/BoxOverlay.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["PDFPage Component"],
+					"fullName": "PDFPage Component renders page image",
+					"status": "passed",
+					"title": "renders page image",
+					"duration": 55.070806999999945,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["PDFPage Component"],
+					"fullName": "PDFPage Component triggers onWordClick when a word is clicked",
+					"status": "passed",
+					"title": "triggers onWordClick when a word is clicked",
+					"duration": 31.38411399999984,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["PDFPage Component"],
+					"fullName": "PDFPage Component highlights search terms",
+					"status": "passed",
+					"title": "highlights search terms",
+					"duration": 18.3610349999999,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310621981,
+			"endTime": 1776310622086.361,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/PDF/PDFPage.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["PDFViewer Grounds/Highlights Logic"],
+					"fullName": "PDFViewer Grounds/Highlights Logic correctly computes and passes highlights for evidence supports",
+					"status": "passed",
+					"title": "correctly computes and passes highlights for evidence supports",
+					"duration": 57.49397399999998,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310622165,
+			"endTime": 1776310622222.494,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/PDF/PDFViewer.highlights.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["PDFViewer Component"],
+					"fullName": "PDFViewer Component renders in idle state without props",
+					"status": "passed",
+					"title": "renders in idle state without props",
+					"duration": 26.944155000000137,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["PDFViewer Component"],
+					"fullName": "PDFViewer Component loads and displays existing paper from paperId",
+					"status": "passed",
+					"title": "loads and displays existing paper from paperId",
+					"duration": 24.047702000000072,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["PDFViewer Component"],
+					"fullName": "PDFViewer Component starts analysis when uploadFile is provided",
+					"status": "passed",
+					"title": "starts analysis when uploadFile is provided",
+					"duration": 23.02112299999999,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["PDFViewer Component"],
+					"fullName": "PDFViewer Component handles word clicks and forwards them to onWordClick prop",
+					"status": "passed",
+					"title": "handles word clicks and forwards them to onWordClick prop",
+					"duration": 13.724849999999833,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["PDFViewer Component"],
+					"fullName": "PDFViewer Component switches between PDF grid and plaintext mode",
+					"status": "passed",
+					"title": "switches between PDF grid and plaintext mode",
+					"duration": 8.798201999999947,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["PDFViewer Component"],
+					"fullName": "PDFViewer Component handles SSE errors gracefully",
+					"status": "passed",
+					"title": "handles SSE errors gracefully",
+					"duration": 7.110513000000083,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310620870,
+			"endTime": 1776310620974.1106,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/PDF/PDFViewer.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["TextModePage Component"],
+					"fullName": "TextModePage Component renders the page number and content",
+					"status": "passed",
+					"title": "renders the page number and content",
+					"duration": 32.35780199999999,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["TextModePage Component"],
+					"fullName": "TextModePage Component shows fallback text when content is empty",
+					"status": "passed",
+					"title": "shows fallback text when content is empty",
+					"duration": 5.473212999999987,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["TextModePage Component"],
+					"fullName": "TextModePage Component handles search term highlighting (internally via highlightText logic)",
+					"status": "passed",
+					"title": "handles search term highlighting (internally via highlightText logic)",
+					"duration": 0.3927539999999681,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["TextModePage Component"],
+					"fullName": "TextModePage Component displays the selection menu when text is selected",
+					"status": "passed",
+					"title": "displays the selection menu when text is selected",
+					"duration": 48.145443000000114,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["TextModePage Component"],
+					"fullName": "TextModePage Component calls onWordClick when Translate is clicked",
+					"status": "passed",
+					"title": "calls onWordClick when Translate is clicked",
+					"duration": 12.991661999999906,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310620283,
+			"endTime": 1776310620381.9917,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/PDF/TextModePage.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["TextModeViewer"],
+					"fullName": "TextModeViewer should render loading state when no pages are provided",
+					"status": "passed",
+					"title": "should render loading state when no pages are provided",
+					"duration": 30.977726000000075,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["TextModeViewer"],
+					"fullName": "TextModeViewer should render pages when provided",
+					"status": "passed",
+					"title": "should render pages when provided",
+					"duration": 7.176851000000056,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310625299,
+			"endTime": 1776310625337.1768,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/PDF/TextModeViewer.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["groupWordsIntoLines"],
+					"fullName": "groupWordsIntoLines should group words into lines for a single page",
+					"status": "passed",
+					"title": "should group words into lines for a single page",
+					"duration": 2.4112480000000005,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["groupWordsIntoLines"],
+					"fullName": "groupWordsIntoLines should return empty lines if no words are provided",
+					"status": "passed",
+					"title": "should return empty lines if no words are provided",
+					"duration": 0.2258679999999913,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310629099,
+			"endTime": 1776310629101.4111,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/PDF/utils.test.ts"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["RecommendationTab Component"],
+					"fullName": "RecommendationTab Component renders initial state correctly",
+					"status": "passed",
+					"title": "renders initial state correctly",
+					"duration": 30.86144000000013,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["RecommendationTab Component"],
+					"fullName": "RecommendationTab Component calls generateRecommendations when button is clicked",
+					"status": "passed",
+					"title": "calls generateRecommendations when button is clicked",
+					"duration": 33.83245500000021,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["RecommendationTab Component"],
+					"fullName": "RecommendationTab Component handles failure of generateRecommendations",
+					"status": "passed",
+					"title": "handles failure of generateRecommendations",
+					"duration": 218.469065,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["RecommendationTab Component"],
+					"fullName": "RecommendationTab Component handles paper click and opens window",
+					"status": "passed",
+					"title": "handles paper click and opens window",
+					"duration": 29.284101999999848,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["RecommendationTab Component"],
+					"fullName": "RecommendationTab Component falls back to Google Scholar if no URL is provided",
+					"status": "passed",
+					"title": "falls back to Google Scholar if no URL is provided",
+					"duration": 19.72814900000003,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["RecommendationTab Component"],
+					"fullName": "RecommendationTab Component resets state when Start Over is clicked",
+					"status": "passed",
+					"title": "resets state when Start Over is clicked",
+					"duration": 9.879112000000077,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310613727,
+			"endTime": 1776310614069.8792,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Recommendation/RecommendationTab.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["SearchBar Component"],
+					"fullName": "SearchBar Component renders when open",
+					"status": "passed",
+					"title": "renders when open",
+					"duration": 36.89408900000001,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SearchBar Component"],
+					"fullName": "SearchBar Component does not render when closed",
+					"status": "passed",
+					"title": "does not render when closed",
+					"duration": 2.3551630000000614,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SearchBar Component"],
+					"fullName": "SearchBar Component calls onSearchTermChange when typing",
+					"status": "passed",
+					"title": "calls onSearchTermChange when typing",
+					"duration": 16.546368999999913,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SearchBar Component"],
+					"fullName": "SearchBar Component calls onNextMatch when Enter is pressed",
+					"status": "passed",
+					"title": "calls onNextMatch when Enter is pressed",
+					"duration": 10.237360999999964,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SearchBar Component"],
+					"fullName": "SearchBar Component calls onPrevMatch when Shift+Enter is pressed",
+					"status": "passed",
+					"title": "calls onPrevMatch when Shift+Enter is pressed",
+					"duration": 9.013952000000018,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SearchBar Component"],
+					"fullName": "SearchBar Component calls onClose when Escape is pressed",
+					"status": "passed",
+					"title": "calls onClose when Escape is pressed",
+					"duration": 8.029573000000028,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SearchBar Component"],
+					"fullName": "SearchBar Component displays match counts correctly",
+					"status": "passed",
+					"title": "displays match counts correctly",
+					"duration": 14.327062000000069,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310620951,
+			"endTime": 1776310621049.3271,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Search/SearchBar.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["Sidebar Component"],
+					"fullName": "Sidebar Component renders all tabs",
+					"status": "passed",
+					"title": "renders all tabs",
+					"duration": 66.712401,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Sidebar Component"],
+					"fullName": "Sidebar Component shows the active tab content",
+					"status": "passed",
+					"title": "shows the active tab content",
+					"duration": 26.147452000000044,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Sidebar Component"],
+					"fullName": "Sidebar Component calls onTabChange when a tab is clicked",
+					"status": "passed",
+					"title": "calls onTabChange when a tab is clicked",
+					"duration": 33.81001500000002,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Sidebar Component"],
+					"fullName": "Sidebar Component calls onClose when close button is clicked",
+					"status": "passed",
+					"title": "calls onClose when close button is clicked",
+					"duration": 25.286297000000104,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310623098,
+			"endTime": 1776310623250.2864,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Sidebar/Sidebar.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["StampOverlay Component"],
+					"fullName": "StampOverlay Component renders stamps correctly",
+					"status": "passed",
+					"title": "renders stamps correctly",
+					"duration": 84.059123,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["StampOverlay Component"],
+					"fullName": "StampOverlay Component calls onAddStamp with correct coordinates when clicked in stamp mode",
+					"status": "passed",
+					"title": "calls onAddStamp with correct coordinates when clicked in stamp mode",
+					"duration": 12.848003000000062,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["StampOverlay Component"],
+					"fullName": "StampOverlay Component does not call onAddStamp when clicked and NOT in stamp mode",
+					"status": "passed",
+					"title": "does not call onAddStamp when clicked and NOT in stamp mode",
+					"duration": 4.623745000000099,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["StampOverlay Component"],
+					"fullName": "StampOverlay Component calls onDeleteStamp when a stamp is right-clicked",
+					"status": "passed",
+					"title": "calls onDeleteStamp when a stamp is right-clicked",
+					"duration": 8.76283699999999,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310619170,
+			"endTime": 1776310619279.763,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Stamps/StampOverlay.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["StampPalette Component"],
+					"fullName": "StampPalette Component renders the toggle button and mode text",
+					"status": "passed",
+					"title": "renders the toggle button and mode text",
+					"duration": 49.644615000000044,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["StampPalette Component"],
+					"fullName": "StampPalette Component calls onToggleMode when the main button is clicked",
+					"status": "passed",
+					"title": "calls onToggleMode when the main button is clicked",
+					"duration": 20.445680999999922,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["StampPalette Component"],
+					"fullName": "StampPalette Component shows the palette when isStampMode is true",
+					"status": "passed",
+					"title": "shows the palette when isStampMode is true",
+					"duration": 11.781025999999997,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["StampPalette Component"],
+					"fullName": "StampPalette Component calls onSelectStamp when a stamp icon is clicked",
+					"status": "passed",
+					"title": "calls onSelectStamp when a stamp icon is clicked",
+					"duration": 10.607653000000028,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["StampPalette Component"],
+					"fullName": "StampPalette Component loads custom stamps from localStorage",
+					"status": "passed",
+					"title": "loads custom stamps from localStorage",
+					"duration": 73.63880199999994,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["StampPalette Component"],
+					"fullName": "StampPalette Component handles custom stamp upload",
+					"status": "passed",
+					"title": "handles custom stamp upload",
+					"duration": 23.6839379999999,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310617436,
+			"endTime": 1776310617626.6838,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Stamps/StampPalette.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["CritiquePanel"],
+					"fullName": "CritiquePanel renders initial state with a start button",
+					"status": "passed",
+					"title": "renders initial state with a start button",
+					"duration": 20.40083800000002,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["CritiquePanel"],
+					"fullName": "CritiquePanel calls API and renders result on button click",
+					"status": "passed",
+					"title": "calls API and renders result on button click",
+					"duration": 38.33263000000011,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["CritiquePanel"],
+					"fullName": "CritiquePanel handles missing elective fields gracefully",
+					"status": "passed",
+					"title": "handles missing elective fields gracefully",
+					"duration": 23.21234000000004,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["CritiquePanel"],
+					"fullName": "CritiquePanel handles API error",
+					"status": "passed",
+					"title": "handles API error",
+					"duration": 19.134000000000015,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310616111,
+			"endTime": 1776310616212.134,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Summary/CritiquePanel.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["DiscoverPanel"],
+					"fullName": "DiscoverPanel renders search input and generate button initially",
+					"status": "passed",
+					"title": "renders search input and generate button initially",
+					"duration": 28.022220999999945,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DiscoverPanel"],
+					"fullName": "DiscoverPanel fetches and displays recommendations",
+					"status": "passed",
+					"title": "fetches and displays recommendations",
+					"duration": 33.31127300000003,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DiscoverPanel"],
+					"fullName": "DiscoverPanel handles reset/start over",
+					"status": "passed",
+					"title": "handles reset/start over",
+					"duration": 20.59484599999996,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["DiscoverPanel"],
+					"fullName": "DiscoverPanel handles error during generation",
+					"status": "passed",
+					"title": "handles error during generation",
+					"duration": 217.1735880000001,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310615309,
+			"endTime": 1776310615608.1736,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Summary/DiscoverPanel.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["Summary Component"],
+					"fullName": "Summary Component fetches summary from API on mount if not in cache",
+					"status": "passed",
+					"title": "fetches summary from API on mount if not in cache",
+					"duration": 65.90103099999988,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Summary Component"],
+					"fullName": "Summary Component loads summary from cache if available",
+					"status": "passed",
+					"title": "loads summary from cache if available",
+					"duration": 158.85304700000006,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Summary Component"],
+					"fullName": "Summary Component triggers summary fetch when analysis finishes",
+					"status": "passed",
+					"title": "triggers summary fetch when analysis finishes",
+					"duration": 13.337854000000107,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Summary Component"],
+					"fullName": "Summary Component fetches critique with correct headers",
+					"status": "passed",
+					"title": "fetches critique with correct headers",
+					"duration": 37.27993700000002,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["Summary Component"],
+					"fullName": "Summary Component triggers recommendation generation in discover mode",
+					"status": "passed",
+					"title": "triggers recommendation generation in discover mode",
+					"duration": 28.581853000000137,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310616907,
+			"endTime": 1776310617211.5818,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Summary/Summary.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["SummaryPanel"],
+					"fullName": "SummaryPanel renders loading/generating state initially when paperId is present",
+					"status": "passed",
+					"title": "renders loading/generating state initially when paperId is present",
+					"duration": 20.598903999999948,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SummaryPanel"],
+					"fullName": "SummaryPanel renders empty state with generate button when paperId is missing",
+					"status": "passed",
+					"title": "renders empty state with generate button when paperId is missing",
+					"duration": 4.261350999999877,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SummaryPanel"],
+					"fullName": "SummaryPanel renders loading state when isAnalyzing is true",
+					"status": "passed",
+					"title": "renders loading state when isAnalyzing is true",
+					"duration": 4.741978000000017,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SummaryPanel"],
+					"fullName": "SummaryPanel loads summary from cache on mount",
+					"status": "passed",
+					"title": "loads summary from cache on mount",
+					"duration": 16.04491699999994,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SummaryPanel"],
+					"fullName": "SummaryPanel fetches summary when generate button is clicked",
+					"status": "passed",
+					"title": "fetches summary when generate button is clicked",
+					"duration": 23.136904999999842,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SummaryPanel"],
+					"fullName": "SummaryPanel handles auto-fetch when isAnalyzing transitions from true to false",
+					"status": "passed",
+					"title": "handles auto-fetch when isAnalyzing transitions from true to false",
+					"duration": 26.299041999999872,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SummaryPanel"],
+					"fullName": "SummaryPanel handles auto-fetch when isActive becomes true and no summary exists",
+					"status": "passed",
+					"title": "handles auto-fetch when isActive becomes true and no summary exists",
+					"duration": 12.16931499999987,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SummaryPanel"],
+					"fullName": "SummaryPanel shows error message on fetch failure",
+					"status": "passed",
+					"title": "shows error message on fetch failure",
+					"duration": 43.74529699999994,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SummaryPanel"],
+					"fullName": "SummaryPanel regenerates when regenerate button is clicked with force=true",
+					"status": "passed",
+					"title": "regenerates when regenerate button is clicked with force=true",
+					"duration": 185.82933000000003,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["SummaryPanel"],
+					"fullName": "SummaryPanel handles MD download button click",
+					"status": "passed",
+					"title": "handles MD download button click",
+					"duration": 12.35637799999995,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310614285,
+			"endTime": 1776310614634.3564,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Summary/SummaryPanel.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["GlobalLoading Component"],
+					"fullName": "GlobalLoading Component renders null when not loading",
+					"status": "passed",
+					"title": "renders null when not loading",
+					"duration": 12.598504000000048,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["GlobalLoading Component"],
+					"fullName": "GlobalLoading Component renders loading message when provided",
+					"status": "passed",
+					"title": "renders loading message when provided",
+					"duration": 21.47505799999999,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["GlobalLoading Component"],
+					"fullName": "GlobalLoading Component renders default translation message when no custom message provided",
+					"status": "passed",
+					"title": "renders default translation message when no custom message provided",
+					"duration": 6.5734879999999976,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310626466,
+			"endTime": 1776310626506.5735,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/UI/GlobalLoading.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["ServiceOutage Component"],
+					"fullName": "ServiceOutage Component renders standard outage message by default (isMaintenance=false)",
+					"status": "passed",
+					"title": "renders standard outage message by default (isMaintenance=false)",
+					"duration": 43.63702699999999,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["ServiceOutage Component"],
+					"fullName": "ServiceOutage Component renders maintenance message when isMaintenance is true",
+					"status": "passed",
+					"title": "renders maintenance message when isMaintenance is true",
+					"duration": 8.559387000000015,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["ServiceOutage Component"],
+					"fullName": "ServiceOutage Component renders custom message if provided",
+					"status": "passed",
+					"title": "renders custom message if provided",
+					"duration": 7.530758999999989,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["ServiceOutage Component"],
+					"fullName": "ServiceOutage Component calls window.location.reload when retry button is clicked",
+					"status": "passed",
+					"title": "calls window.location.reload when retry button is clicked",
+					"duration": 10.992448999999965,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310624282,
+			"endTime": 1776310624352.9924,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/UI/ServiceOutage.test.tsx"
+		},
+		{
+			"assertionResults": [
+				{
+					"ancestorTitles": ["UploadScreen Component"],
+					"fullName": "UploadScreen Component renders brand section and upload message",
+					"status": "passed",
+					"title": "renders brand section and upload message",
+					"duration": 43.101631,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["UploadScreen Component"],
+					"fullName": "UploadScreen Component triggers onFileSelect when a file is selected via input",
+					"status": "passed",
+					"title": "triggers onFileSelect when a file is selected via input",
+					"duration": 11.889301000000046,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["UploadScreen Component"],
+					"fullName": "UploadScreen Component changes style when dragging over",
+					"status": "passed",
+					"title": "changes style when dragging over",
+					"duration": 18.26874600000008,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["UploadScreen Component"],
+					"fullName": "UploadScreen Component handles drop event",
+					"status": "passed",
+					"title": "handles drop event",
+					"duration": 20.14330099999995,
+					"failureMessages": [],
+					"meta": {}
+				},
+				{
+					"ancestorTitles": ["UploadScreen Component"],
+					"fullName": "UploadScreen Component shows alert for non-pdf files on drop",
+					"status": "passed",
+					"title": "shows alert for non-pdf files on drop",
+					"duration": 24.18062199999997,
+					"failureMessages": [],
+					"meta": {}
+				}
+			],
+			"startTime": 1776310621969,
+			"endTime": 1776310622086.1807,
+			"status": "passed",
+			"message": "",
+			"name": "/home/gwsgs/work_space/paperterrace/frontend/src/components/Upload/UploadScreen.test.tsx"
+		}
+	]
+}

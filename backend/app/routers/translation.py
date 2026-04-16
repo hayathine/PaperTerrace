@@ -31,6 +31,7 @@ from common.dspy_seed_prompt import (
     TRANSLATE_FROM_PDF_PROMPT,
 )
 from redis_provider.provider import RedisService
+from app.domain.features.cache_utils import get_pdf_cache_key
 
 log = ServiceLogger("Translation")
 
@@ -56,7 +57,7 @@ def _get_pdf_cache_name(paper_id: str | None) -> str | None:
     """論文の PDF コンテキストキャッシュ名を Redis から取得する。なければ None。"""
     if not paper_id:
         return None
-    return redis_service.get(f"paper_cache_pdf:{paper_id}")
+    return redis_service.get(get_pdf_cache_key(paper_id))
 
 
 async def _generate_with_pdf_cache(

@@ -203,6 +203,12 @@ vi.mock("react-router-dom", () => ({
 	Routes: ({ children }: any) => <>{children}</>,
 	Route: ({ element }: any) => <>{element}</>,
 	useNavigate: () => vi.fn(),
+	useLocation: () => ({
+		pathname: "/",
+		search: "",
+		hash: "",
+		state: null,
+	}),
 }));
 
 // We need to import App after mocking its dependencies

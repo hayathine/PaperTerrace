@@ -22,6 +22,17 @@ log = ServiceLogger("Papers")
 
 router = APIRouter(tags=["Papers"])
 
+# 一覧取得時に除外する重いフィールド（OCRテキスト・レイアウト・要約本文）
+# 個別取得 GET /papers/{paper_id} では全フィールドを返す
+_LIST_EXCLUDE_FIELDS = frozenset({
+    "ocr_text",
+    "html_content",
+    "layout_json",
+    "full_summary",
+    "section_summary_json",
+    "grobid_text",
+})
+
 
 class ClaimPaperRequest(BaseModel):
     """ゲストとしてアップロードした論文をサインイン後にDBに保存するためのリクエスト。"""
@@ -79,7 +90,8 @@ async def list_papers(user: OptionalUser = None, limit: int = Query(default=50, 
 
     storage = get_storage_provider()
     papers, _ = storage.get_user_papers(user.uid, page=1, per_page=limit)
-    return JSONResponse({"papers": jsonable_encoder(papers)})
+    slim = [{k: v for k, v in p.items() if k not in _LIST_EXCLUDE_FIELDS} for p in papers]
+    return JSONResponse({"papers": jsonable_encoder(slim)})
 
 
 @router.get("/papers/{paper_id}")

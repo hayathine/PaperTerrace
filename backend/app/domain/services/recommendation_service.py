@@ -266,24 +266,52 @@ class RecommendationService:
             ),
         )
 
-        # Semantic Scholar API を使って検索を実行
+        # 論文検索: 上位3クエリを使い、各ソース（6 API）ごとに最大5件取得
+        # → 1クエリあたり最大30件、3クエリ合計で最大90件を候補として収集
+        DISPLAY_COUNT = 5
         search_queries = rec_res.search_queries
         paper_acq = PaperAcquisitionService()
 
-        fetched_papers = []
+        fetched_papers: list[dict] = []
+        seen_titles: set[str] = set()
         for q in search_queries[:3]:
-            items = paper_acq.search_papers(query=q, limit=3)
+            items = paper_acq.search_papers(query=q, limit=5)
             for it in items:
-                if it.get("title") not in [p.get("title") for p in fetched_papers]:
+                key = (it.get("title") or "").lower().strip()
+                if key and key not in seen_titles:
+                    seen_titles.add(key)
                     fetched_papers.append(it)
 
-        if not fetched_papers:
-            fetched_papers = [
-                {"title": r, "abstract": "Detail unavailable", "url": None}
-                for r in rec_res.recommendations
-            ]
+        # AIの推薦リスト順でランキング
+        # recommendations の各エントリにタイトルが含まれているかで優先度を決定
+        ai_recs = rec_res.recommendations or []
+        ai_recs_lower = [r.lower() for r in ai_recs]
 
-        final_recs = fetched_papers[:5]
+        def _rec_rank(paper: dict) -> int:
+            title = (paper.get("title") or "").lower().strip()
+            if not title:
+                return len(ai_recs_lower)
+            for i, rec in enumerate(ai_recs_lower):
+                if title in rec or rec in title:
+                    return i
+            return len(ai_recs_lower)
+
+        fetched_papers.sort(key=_rec_rank)
+
+        # APIで取得できた件数が DISPLAY_COUNT に満たない場合、
+        # AI推薦タイトルをフォールバックとして補完する（フロント側でGoogle Scholar検索にフォールバック）
+        used_titles = {(p.get("title") or "").lower().strip() for p in fetched_papers}
+        for rec_title in ai_recs:
+            if len(fetched_papers) >= DISPLAY_COUNT:
+                break
+            key = rec_title.lower().strip()
+            if key not in used_titles:
+                used_titles.add(key)
+                fetched_papers.append(
+                    {"title": rec_title, "abstract": "Detail unavailable", "url": None}
+                )
+
+        final_recs = fetched_papers[:DISPLAY_COUNT]
 
         # Log recommended_papers to trajectory
         if trajectory:
