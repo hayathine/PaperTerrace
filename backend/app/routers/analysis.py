@@ -139,6 +139,14 @@ async def summarize(
         session_id=session_id,
         key_word=key_word,
     )
+
+    # 要約成功時に summary_status を更新（NULL のままだと GET アクセスのたびに auto-heal が発火する）
+    if paper_id and summary and not summary.startswith("要約の生成に失敗"):
+        try:
+            storage.update_processing_status(paper_id, "summary_status", "success")
+        except Exception as e:
+            log.warning("summarize", "summary_status 更新に失敗", paper_id=paper_id, error=str(e))
+
     return JSONResponse({"summary": summary, "trace_id": trace_id})
 
 

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import HelpAssistant from "./HelpAssistant";
 
@@ -65,7 +65,7 @@ describe("HelpAssistant", () => {
 			"How to translate?",
 			expect.any(Object),
 		);
-		expect(input.value).toBe("");
+		expect((input as HTMLInputElement).value).toBe("");
 	});
 
 	it("sends message on Enter key without Shift", async () => {
@@ -123,8 +123,7 @@ describe("HelpAssistant", () => {
 		fireEvent.click(screen.getByLabelText("使い方ガイドを開く"));
 
 		// Thinking dots are 3 spans
-		const dots = screen.queryAllByRole("presentation", { hidden: true });
-		// Note: they don't have roles, I'll just check if the loading div container is there
+		// Note: thinking dots don't have ARIA roles, check the loading state via disabled input
 		expect(
 			screen.getByPlaceholderText("機能について質問してください..."),
 		).toBeDisabled();

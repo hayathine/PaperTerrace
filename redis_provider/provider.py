@@ -310,9 +310,24 @@ def get_is_registered(user_id: str | None) -> bool:
         return bool(cached)
     # DB fallback
     storage = None
+    owned = False  # True の場合のみ close を呼ぶ（リクエストスコープのものは閉じない）
     try:
-        from app.providers import get_storage_provider
-        storage = get_storage_provider()
+        from app.providers.storage_provider import storage_context
+
+        ctx_storage = storage_context.get()
+        if ctx_storage is not None:
+            # リクエストスコープの storage を再利用（StorageMiddleware が close を管理）
+            storage = ctx_storage
+            owned = False
+        else:
+            # バックグラウンドタスク等、スコープ外の場合は新規作成して自前で close
+            from app.database import SessionLocal
+            from app.providers.orm_storage import ORMStorageAdapter
+
+            db = SessionLocal()
+            storage = ORMStorageAdapter(db)
+            owned = True
+
         is_reg = bool(storage.get_user(user_id))
         if is_reg:
             redis.set(cache_key, is_reg, expire=300)  # 5分キャッシュ（登録済みのみ）
@@ -323,7 +338,7 @@ def get_is_registered(user_id: str | None) -> bool:
         log.warning("get_is_registered", f"DB check failed for {user_id}: {e}", exc_info=True)
         return False
     finally:
-        if storage is not None:
+        if storage is not None and owned:
             try:
                 storage.close()
             except Exception:

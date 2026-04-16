@@ -899,6 +899,10 @@ async def stream(task_id: str):
                                     error=str(_meta_err),
                                 )
 
+                            # タスク起動前に "processing" を設定して GET アクセスによる重複起動を防ぐ
+                            storage.update_processing_status(new_paper_id, "summary_status", "processing")
+                            storage.update_processing_status(new_paper_id, "grobid_status", "processing")
+
                             # Trigger background tasks (require DB records)
                             asyncio.create_task(
                                 process_paper_summary_task(new_paper_id, lang=lang)
@@ -1318,6 +1322,9 @@ async def stream(task_id: str):
                     )
                     # layout_json はインライン処理で保存済みのため layout_status を更新
                     storage.update_processing_status(paper_id, "layout_status", "success")
+                    # タスク起動前に "processing" を設定して GET アクセスによる重複起動を防ぐ
+                    storage.update_processing_status(paper_id, "summary_status", "processing")
+                    storage.update_processing_status(paper_id, "grobid_status", "processing")
                     log.info("ocr_generate", "Paper record saved", paper_id=paper_id)
 
                     # Save Collected Figures and Explain

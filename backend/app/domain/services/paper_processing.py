@@ -186,6 +186,12 @@ async def process_grobid_enrichment_task(paper_id: str, file_hash: str) -> None:
             log.warning("grobid_task", "Paper が見つからない", paper_id=paper_id)
             return
 
+        # 既に GROBID テキストが存在する場合はスキップしてステータスを修復するだけ
+        if paper.get("grobid_text"):
+            log.info("grobid_task", "GROBID テキスト既存のためスキップ", paper_id=paper_id)
+            storage.update_processing_status(paper_id, "grobid_status", "success")
+            return
+
         from app.providers.image_storage import get_image_storage  # noqa: PLC0415
 
         img_storage = get_image_storage()

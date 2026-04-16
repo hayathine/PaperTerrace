@@ -15,7 +15,9 @@ PROCESSING = "processing"
 
 # これら以外は「未完了」とみなして再解析対象とする
 # "processing" を含めることで、すでに処理中の論文に対して重複タスクが起動されるのを防ぐ
-_TERMINAL_STATUSES: frozenset[str] = frozenset({SUCCESS, SKIPPED, PROCESSING})
+# "failed" を含めることで、失敗した処理が GET アクセスのたびに自動再実行されるのを防ぐ
+# 失敗した処理の再実行は POST /papers/{id}/reanalyze（手動）でのみ行う
+_TERMINAL_STATUSES: frozenset[str] = frozenset({SUCCESS, SKIPPED, PROCESSING, FAILED})
 
 
 def needs_reanalysis(status: str | None) -> bool:

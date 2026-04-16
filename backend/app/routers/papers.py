@@ -173,9 +173,9 @@ async def reanalyze_paper(paper_id: str, user: CurrentUser):
     if paper.get("owner_id") != user.uid:
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # "processing" 状態の項目は手動再実行では強制リセットして再トリガーできるようにする
+    # "processing" / "failed" 状態の項目は手動再実行では強制リセットして再トリガーできるようにする
     for field in ("layout_status", "summary_status", "grobid_status"):
-        if paper.get(field) == "processing":
+        if paper.get(field) in ("processing", "failed"):
             try:
                 storage.update_processing_status(paper_id, field, None)
             except Exception as e:
