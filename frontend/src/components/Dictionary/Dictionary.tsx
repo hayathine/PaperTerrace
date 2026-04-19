@@ -27,7 +27,8 @@ interface DictionaryProps {
 	conf?: number;
 	onJump?: (page: number, x: number, y: number, term?: string) => void;
 	imageUrl?: string;
-	onAskInChat?: () => void;
+	onAskInChat?: (prompt?: string) => void;
+	onAskFigureInChat?: (figureId?: string | null) => void;
 	selectedFigure?: SelectedFigure | null;
 	subTab?: "translation" | "explanation" | "figures" | "history";
 	onSubTabChange?: (
@@ -45,6 +46,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 	onJump,
 	imageUrl,
 	onAskInChat,
+	onAskFigureInChat,
 	selectedFigure,
 	subTab = "translation",
 	onSubTabChange,
@@ -294,6 +296,7 @@ const Dictionary: React.FC<DictionaryProps> = ({
 						<FigureInsight
 							selectedFigure={selectedFigure}
 							sessionId={sessionId}
+							onAskInChat={onAskFigureInChat}
 						/>
 					</div>
 				)}

@@ -28,7 +28,7 @@ def _extract_caption_pdfplumber(
     Args:
         pdf_bytes: PDF バイト列。
         page_num: 1-indexed ページ番号。
-        title_bbox_px: image pixel 座標系 (DPI=200) の bbox dict。
+        title_bbox_px: image pixel 座標系 (DPI=PDF_DPI) の bbox dict。
     """
     import pdfplumber  # noqa: PLC0415
 
@@ -433,9 +433,40 @@ class LayoutAnalysisService:
                         log.warning("analyze_layout_lazy", f"Failed to parse existing layout_json: {e}")
 
                 if not layout_list and all_figures:
-                    # layout_json が空の場合は、all_figures の page_num の最大値までスケルトンを作成
+                    # layout_json が空の場合: 実際の画像サイズをGCSから取得してスケルトンを作成
                     max_page = max(f["page_num"] for f in all_figures)
-                    layout_list = [{"width": 0, "height": 0, "words": [], "figures": []} for _ in range(max_page)]
+                    skeleton: list[dict] = []
+                    for page_idx_s in range(max_page):
+                        w, h = 0.0, 0.0
+                        if page_idx_s < len(cached_images):
+                            try:
+                                from PIL import Image as _PILImage  # noqa: PLC0415
+                                img_bytes_s = await anyio.to_thread.run_sync(
+                                    get_image_bytes, cached_images[page_idx_s]
+                                )
+                                _img = _PILImage.open(io.BytesIO(img_bytes_s))
+                                w, h = float(_img.width), float(_img.height)
+                            except Exception as _e:
+                                log.warning(
+                                    "analyze_layout_lazy",
+                                    f"Failed to get image size for page {page_idx_s + 1}: {_e}",
+                                )
+                        skeleton.append({"width": w, "height": h, "words": [], "figures": []})
+                    layout_list = skeleton
+
+                # width=0/height=0 のエントリを画像サイズで修復（スケルトンが以前に保存済みの場合）
+                for page_idx_r, entry in enumerate(layout_list):
+                    if (entry.get("width") == 0 or entry.get("height") == 0) and page_idx_r < len(cached_images):
+                        try:
+                            from PIL import Image as _PILImage  # noqa: PLC0415
+                            img_bytes_r = await anyio.to_thread.run_sync(
+                                get_image_bytes, cached_images[page_idx_r]
+                            )
+                            _img = _PILImage.open(io.BytesIO(img_bytes_r))
+                            entry["width"] = float(_img.width)
+                            entry["height"] = float(_img.height)
+                        except Exception:
+                            pass
 
                 if layout_list:
                     page_figures: dict[int, list] = {}

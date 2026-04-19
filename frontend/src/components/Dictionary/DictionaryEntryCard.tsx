@@ -13,7 +13,7 @@ interface DictionaryEntryCardProps {
 	coordinates?: { page: number; x: number; y: number };
 	onSave: (entry: DictionaryEntryWithCoords) => void;
 	onDeepTranslate: (entry: DictionaryEntryWithCoords) => void;
-	onAskInChat?: () => void;
+	onAskInChat?: (prompt?: string) => void;
 	onJump?: (page: number, x: number, y: number, term?: string) => void;
 }
 
@@ -139,7 +139,11 @@ const DictionaryEntryCard: React.FC<DictionaryEntryCardProps> = ({
 				{entry.image_url ? (
 					<button
 						type="button"
-						onClick={() => onAskInChat?.()}
+						onClick={() =>
+							onAskInChat?.(
+								`「${entry.word}」の図について詳しく教えてください。`,
+							)
+						}
 						className="flex-1 py-2.5 sm:py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
 					>
 						<svg
@@ -158,26 +162,54 @@ const DictionaryEntryCard: React.FC<DictionaryEntryCardProps> = ({
 						<span>{t("viewer.dictionary.ask_in_chat")}</span>
 					</button>
 				) : (
-					<button
-						type="button"
-						onClick={() => onDeepTranslate(entry)}
-						className="flex-1 py-2.5 sm:py-2 bg-slate-50 hover:bg-slate-100 text-orange-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
-					>
-						<svg
-							className="w-3.5 h-3.5"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
+					<>
+						<button
+							type="button"
+							onClick={() => onDeepTranslate(entry)}
+							className="flex-1 py-2.5 sm:py-2 bg-slate-50 hover:bg-slate-100 text-orange-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-2"
 						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth={2}
-								d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-							/>
-						</svg>
-						<span>{t("viewer.dictionary.ask_ai")}</span>
-					</button>
+							<svg
+								className="w-3.5 h-3.5"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+							>
+								<path
+									strokeLinecap="round"
+									strokeLinejoin="round"
+									strokeWidth={2}
+									d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+								/>
+							</svg>
+							<span>{t("viewer.dictionary.ask_ai")}</span>
+						</button>
+						{onAskInChat && (
+							<button
+								type="button"
+								onClick={() =>
+									onAskInChat(
+										`「${entry.word}」（${entry.translation}）についてチャットで詳しく教えてください。`,
+									)
+								}
+								className="px-3 py-2.5 sm:py-2 bg-blue-50 hover:bg-blue-100 text-blue-600 rounded-lg text-xs font-bold transition-all flex items-center justify-center"
+								title={t("viewer.dictionary.ask_in_chat")}
+							>
+								<svg
+									className="w-3.5 h-3.5"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth={2}
+										d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+									/>
+								</svg>
+							</button>
+						)}
+					</>
 				)}
 
 				{(onJump && entry.coords) || (onJump && coordinates) ? (

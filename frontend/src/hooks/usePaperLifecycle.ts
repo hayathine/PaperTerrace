@@ -43,6 +43,7 @@ export function usePaperLifecycle(
 					session_id: sessionId,
 					paper_id: paperId,
 					session_duration: duration,
+					is_final: true,
 				},
 				token,
 			);
@@ -77,6 +78,7 @@ export function usePaperLifecycle(
 						session_id: sessionId,
 						paper_id: currentPaperId,
 						session_duration: duration,
+						is_final: true,
 					},
 					token,
 				);

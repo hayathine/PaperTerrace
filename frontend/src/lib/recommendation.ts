@@ -20,6 +20,7 @@ export interface RecommendationSyncPayload {
 	conversation_history?: string;
 	word_clicks?: WordClickEvent[];
 	session_duration?: number;
+	is_final?: boolean;
 }
 
 export interface RecommendationRolloutPayload {

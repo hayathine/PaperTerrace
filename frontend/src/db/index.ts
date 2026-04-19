@@ -15,6 +15,7 @@ export interface PaperCache {
 	section_summary_json?: string;
 	html_content?: string;
 	last_accessed: number;
+	server_updated_at?: number;
 }
 
 export interface ImageCache {

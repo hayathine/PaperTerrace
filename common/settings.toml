@@ -138,8 +138,8 @@ RATE_LIMIT_LAYOUT = "60/minute"
 RATE_LIMIT_TRANSLATE = "300/minute"
 
 # GA4 Data API
-GA4_PROPERTY_ID = ""         # GA4 プロパティ数値 ID（例: "123456789"）
-GA4_USER_ID_DIMENSION = ""   # firebase_uid 用カスタムディメンション名（例: "customUser:user_id"）
+GA4_PROPERTY_ID = "521765405"     # GA4 プロパティ数値 ID
+GA4_USER_ID_DIMENSION = "userId"  # GA4 User-ID 機能、または "customUser:<name>"
 
 # 学術論文検索 API
 CORE_API_KEY = ""            # CORE API キー (https://core.ac.uk/services/api) — 未設定時は CORE 検索をスキップ

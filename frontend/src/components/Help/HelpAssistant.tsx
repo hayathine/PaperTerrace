@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import {
 	type GuidanceMessage,
@@ -13,6 +13,33 @@ const WELCOME_MESSAGE: GuidanceMessage = {
 		"PaperTerrace の使い方についてお気軽にご質問ください！\n\n例えば「翻訳はどうやるの？」「AI に質問するには？」などお聞きいただけます。",
 };
 
+const PANEL_W = 360;
+const PANEL_H = 480;
+const BTN = 48;
+const GAP = 12;
+const DRAG_THRESHOLD = 5;
+const POS_KEY = "guidance-widget-pos";
+
+function defaultPos(): { x: number; y: number } {
+	return { x: window.innerWidth - BTN - 24, y: window.innerHeight - BTN - 24 };
+}
+
+function clamp(x: number, y: number) {
+	return {
+		x: Math.max(8, Math.min(x, window.innerWidth - BTN - 8)),
+		y: Math.max(8, Math.min(y, window.innerHeight - BTN - 8)),
+	};
+}
+
+function loadPos(): { x: number; y: number } | null {
+	try {
+		const raw = localStorage.getItem(POS_KEY);
+		return raw ? (JSON.parse(raw) as { x: number; y: number }) : null;
+	} catch {
+		return null;
+	}
+}
+
 export default function HelpAssistant() {
 	const [isOpen, setIsOpen] = useState(false);
 	const [inputText, setInputText] = useState("");
@@ -21,17 +48,75 @@ export default function HelpAssistant() {
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const location = useLocation();
 
-	// メッセージ追加時に自動スクロール
+	const [pos, setPos] = useState<{ x: number; y: number }>(
+		() => loadPos() ?? defaultPos(),
+	);
+	const posRef = useRef(pos);
+	const isDragging = useRef(false);
+	const hasMoved = useRef(false);
+	const pointerStart = useRef({ x: 0, y: 0 });
+	const dragOffset = useRef({ dx: 0, dy: 0 });
+
+	useEffect(() => {
+		posRef.current = pos;
+	}, [pos]);
+
+	useEffect(() => {
+		localStorage.setItem(POS_KEY, JSON.stringify(pos));
+	}, [pos]);
+
+	// ウィンドウリサイズ時にボタンが画面外に出ないようクランプ
+	useEffect(() => {
+		const onResize = () => setPos((p) => clamp(p.x, p.y));
+		window.addEventListener("resize", onResize);
+		return () => window.removeEventListener("resize", onResize);
+	}, []);
+
 	useEffect(() => {
 		messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
 	}, [messages]);
 
-	// パネルを開いたらテキストエリアにフォーカス
 	useEffect(() => {
-		if (isOpen) {
-			setTimeout(() => inputRef.current?.focus(), 100);
-		}
+		if (isOpen) setTimeout(() => inputRef.current?.focus(), 100);
 	}, [isOpen]);
+
+	const handlePointerDown = useCallback(
+		(e: React.PointerEvent<HTMLButtonElement>) => {
+			if (e.button !== 0) return;
+			isDragging.current = true;
+			hasMoved.current = false;
+			pointerStart.current = { x: e.clientX, y: e.clientY };
+			dragOffset.current = {
+				dx: e.clientX - posRef.current.x,
+				dy: e.clientY - posRef.current.y,
+			};
+			(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+			e.preventDefault();
+		},
+		[],
+	);
+
+	const handlePointerMove = useCallback(
+		(e: React.PointerEvent<HTMLButtonElement>) => {
+			if (!isDragging.current) return;
+			const dx = Math.abs(e.clientX - pointerStart.current.x);
+			const dy = Math.abs(e.clientY - pointerStart.current.y);
+			if (dx > DRAG_THRESHOLD || dy > DRAG_THRESHOLD) hasMoved.current = true;
+			if (!hasMoved.current) return;
+			setPos(
+				clamp(
+					e.clientX - dragOffset.current.dx,
+					e.clientY - dragOffset.current.dy,
+				),
+			);
+		},
+		[],
+	);
+
+	const handlePointerUp = useCallback(() => {
+		if (!isDragging.current) return;
+		isDragging.current = false;
+	}, []);
 
 	const handleSend = async () => {
 		const text = inputText.trim();
@@ -50,23 +135,30 @@ export default function HelpAssistant() {
 		}
 	};
 
-	const handleClose = () => {
-		setIsOpen(false);
-	};
+	// パネルの開く方向をボタン位置から決定
+	const openUpward = pos.y + BTN + GAP + PANEL_H > window.innerHeight;
+	const openLeftward = pos.x + PANEL_W > window.innerWidth - 8;
 
-	const handleClear = () => {
-		clearMessages();
+	const panelStyle: React.CSSProperties = {
+		width: PANEL_W,
+		height: PANEL_H,
+		position: "absolute",
+		...(openUpward ? { bottom: BTN + GAP } : { top: BTN + GAP }),
+		...(openLeftward ? { right: 0 } : { left: 0 }),
 	};
 
 	const allMessages = messages.length === 0 ? [WELCOME_MESSAGE] : messages;
 
 	return (
-		<div className="fixed bottom-6 right-6 z-40 flex flex-col items-end gap-3">
+		<div
+			className="fixed z-40"
+			style={{ left: pos.x, top: pos.y, width: BTN, height: BTN }}
+		>
 			{/* チャットパネル */}
 			{isOpen && (
 				<div
 					className="flex flex-col bg-white rounded-2xl shadow-2xl border border-gray-100 overflow-hidden"
-					style={{ width: "360px", height: "480px" }}
+					style={panelStyle}
 				>
 					{/* ヘッダー */}
 					<div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-orange-500 to-amber-500 text-white flex-shrink-0">
@@ -91,7 +183,7 @@ export default function HelpAssistant() {
 							{messages.length > 0 && (
 								<button
 									type="button"
-									onClick={handleClear}
+									onClick={() => clearMessages()}
 									className="p-1.5 rounded-lg hover:bg-white/20 transition-colors text-white/80 hover:text-white"
 									title="会話をリセット"
 								>
@@ -113,7 +205,7 @@ export default function HelpAssistant() {
 							)}
 							<button
 								type="button"
-								onClick={handleClose}
+								onClick={() => setIsOpen(false)}
 								className="p-1.5 rounded-lg hover:bg-white/20 transition-colors text-white/80 hover:text-white"
 								aria-label="閉じる"
 							>
@@ -194,11 +286,20 @@ export default function HelpAssistant() {
 				</div>
 			)}
 
-			{/* フローティングボタン */}
+			{/* フローティングボタン（ドラッグハンドル兼クリックトリガー） */}
 			<button
 				type="button"
-				onClick={() => setIsOpen((prev) => !prev)}
-				className="flex items-center justify-center w-12 h-12 rounded-full shadow-lg bg-gradient-to-br from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 transition-all duration-200 hover:scale-105 active:scale-95"
+				onPointerDown={handlePointerDown}
+				onPointerMove={handlePointerMove}
+				onPointerUp={handlePointerUp}
+				onClick={(e) => {
+					if (hasMoved.current) {
+						e.preventDefault();
+						return;
+					}
+					setIsOpen((prev) => !prev);
+				}}
+				className="flex items-center justify-center w-12 h-12 rounded-full shadow-lg bg-gradient-to-br from-orange-500 to-amber-500 text-white hover:from-orange-600 hover:to-amber-600 transition-all duration-200 hover:scale-105 active:scale-95 cursor-grab active:cursor-grabbing select-none"
 				aria-label={isOpen ? "ガイドを閉じる" : "使い方ガイドを開く"}
 			>
 				{isOpen ? (

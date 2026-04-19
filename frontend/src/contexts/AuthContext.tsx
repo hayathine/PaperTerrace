@@ -7,6 +7,7 @@ import {
 	useState,
 } from "react";
 import { API_URL } from "@/config";
+import { setGA4UserId } from "@/lib/analytics";
 import { authClient, getNeonJWT } from "@/lib/auth";
 import { createLogger } from "@/lib/logger";
 
@@ -97,6 +98,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 			if (session) {
 				setUser(session.user);
 				setIsGuest(false);
+				setGA4UserId(session.user.id);
 				// session.session.token は opaque token のため、JWT を別途取得する
 				getNeonJWT()
 					.then((jwt) => {
@@ -139,6 +141,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 				setIsGuest(true);
 				setToken(null);
 				setLoading(false);
+				setGA4UserId(null);
 			}
 		}
 	}, [session, isPending]);
@@ -175,6 +178,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
 			setUser(null);
 			setToken(null);
 			setIsGuest(true);
+			setGA4UserId(null);
 		} catch (error) {
 			log.error("logout", "Error signing out", { error });
 			throw error;

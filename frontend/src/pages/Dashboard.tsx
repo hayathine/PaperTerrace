@@ -87,7 +87,7 @@ export default function Dashboard() {
 			.catch((e) => log.error("fetch_papers", "Failed to fetch papers", { e }))
 			.finally(() => setPapersLoading(false));
 		getBookmarks().then(setBookmarks);
-	}, [token]); // eslint-disable-line react-hooks/exhaustive-deps
+	}, [token, getBookmarks]);
 
 	useEffect(() => {
 		if (!token) return;

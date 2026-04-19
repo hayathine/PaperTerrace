@@ -79,7 +79,8 @@ export function useDictionaryFetch({
 			return (
 				/^(https?:\/\/|\/\/|www\.)/i.test(clean) ||
 				clean.includes("doi.org/") ||
-				/\.[a-z]{2,}\//i.test(clean)
+				/\.[a-z]{2,}\//i.test(clean) ||
+				(clean.match(/\//g) ?? []).length >= 2
 			);
 		};
 

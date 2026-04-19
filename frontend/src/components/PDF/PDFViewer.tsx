@@ -703,7 +703,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								links: p.links,
 							}));
 
-							// Extract file_hash from image_url (e.g. /static/paper_images/{hash}/page_1.jpg)
+							// Extract file_hash from image_url (e.g. /static/paper_images/{hash}/page_1.webp)
 							let fileHash = "";
 							if (imageUrls.length > 0) {
 								const match = imageUrls[0].match(
@@ -718,6 +718,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 								title: processingFileRef.current?.name || "Untitled",
 								ocr_text: ocrText,
 								layout_json: JSON.stringify(layoutData),
+								server_updated_at: Date.now(),
 								last_accessed: Date.now(),
 							});
 							// We don't block on image caching
@@ -1121,7 +1122,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						const cachedPages: PageData[] = layoutList.map(
 							(layout: any, i: number) => ({
 								page_num: i + 1,
-								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.jpg`,
+								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.webp`,
 								width: layout?.width || 0,
 								height: layout?.height || 0,
 								words: layout?.words || [],
@@ -1212,6 +1213,71 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 									),
 								);
 							}
+							// stale-while-revalidate: バックグラウンドでサーバーの最新データを確認
+							(async () => {
+								try {
+									const bgRes = await fetch(`${API_URL}/api/papers/${id}`, {
+										headers: buildAuthHeaders(token),
+									});
+									if (!bgRes.ok) return;
+									const bgData = await bgRes.json();
+									const serverTs = bgData.updated_at
+										? new Date(bgData.updated_at).getTime()
+										: 0;
+									const cachedTs = cached.server_updated_at ?? 0;
+									if (serverTs <= cachedTs) return;
+
+									if (bgData.layout_json && bgData.file_hash) {
+										const bgLayoutList = JSON.parse(bgData.layout_json);
+										let bgOcrParts: string[];
+										try {
+											const bgParsed = JSON.parse(bgData.ocr_text || "[]");
+											bgOcrParts = Array.isArray(bgParsed)
+												? bgParsed
+												: (bgData.ocr_text || "").split("\n\n---\n\n");
+										} catch {
+											bgOcrParts = (bgData.ocr_text || "").split("\n\n---\n\n");
+										}
+										const bgPages: PageData[] = bgLayoutList.map(
+											(layout: any, i: number) => ({
+												page_num: i + 1,
+												image_url: `${API_URL}/static/paper_images/${bgData.file_hash}/page_${i + 1}.webp`,
+												width: layout?.width || 0,
+												height: layout?.height || 0,
+												words: layout?.words || [],
+												figures: (layout?.figures || []).map((f: any) => ({
+													...f,
+													image_url:
+														f.image_url &&
+														!f.image_url.startsWith("http") &&
+														!f.image_url.startsWith("blob:")
+															? `${API_URL}${f.image_url}`
+															: f.image_url,
+												})),
+												links: layout?.links || [],
+												content: bgOcrParts[i] || "",
+											}),
+										);
+										if (bgPages.length > 0) {
+											setPages(bgPages);
+											if (!isGuest) {
+												await savePaperToCache({
+													...cached,
+													layout_json: bgData.layout_json,
+													ocr_text: bgData.ocr_text,
+													server_updated_at: serverTs,
+													last_accessed: Date.now(),
+												});
+											}
+										}
+									}
+								} catch (bgErr) {
+									log.warn("load_existing_paper", "Background refresh failed", {
+										error: bgErr,
+									});
+								}
+							})();
+
 							return;
 						}
 					} catch (e) {
@@ -1262,6 +1328,9 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						})(),
 						full_summary: paperData.full_summary,
 						section_summary_json: paperData.section_summary_json,
+						server_updated_at: paperData.updated_at
+							? new Date(paperData.updated_at).getTime()
+							: Date.now(),
 						last_accessed: Date.now(),
 					});
 				}
@@ -1269,7 +1338,15 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 				if (paperData.layout_json && paperData.file_hash) {
 					try {
 						const layoutList = JSON.parse(paperData.layout_json);
-						const ocrParts = (paperData.ocr_text || "").split("\n\n---\n\n");
+						let ocrParts: string[];
+						try {
+							const ocrParsed = JSON.parse(paperData.ocr_text || "[]");
+							ocrParts = Array.isArray(ocrParsed)
+								? ocrParsed
+								: (paperData.ocr_text || "").split("\n\n---\n\n");
+						} catch {
+							ocrParts = (paperData.ocr_text || "").split("\n\n---\n\n");
+						}
 						const fileHash = paperData.file_hash;
 
 						// grobid_text があればテキストモード用に設定する
@@ -1280,7 +1357,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 						const fullPages: PageData[] = layoutList.map(
 							(layout: any, i: number) => ({
 								page_num: i + 1,
-								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.jpg`,
+								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.webp`,
 								width: layout?.width || 0,
 								height: layout?.height || 0,
 								words: layout?.words || [],

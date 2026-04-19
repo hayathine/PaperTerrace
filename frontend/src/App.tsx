@@ -1072,6 +1072,10 @@ function App() {
 												// Optionally switch to PDF view if in plaintext mode?
 												// For now just set evidence.
 											}}
+											onAskInChatWithContext={(prompt, figureId) => {
+												if (prompt) setPendingChatPrompt(prompt);
+												if (figureId) setPendingFigureId(figureId);
+											}}
 										/>
 									</div>
 								</div>

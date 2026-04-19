@@ -36,6 +36,7 @@ interface SidebarProps {
 	pendingChatPrompt?: string | null;
 	onPendingChatConsumed?: () => void;
 	onEvidenceClick?: (grounding: Grounding) => void;
+	onAskInChatWithContext?: (prompt?: string, figureId?: string | null) => void;
 	onClose?: () => void;
 }
 
@@ -59,6 +60,7 @@ const Sidebar: React.FC<SidebarProps> = ({
 	pendingChatPrompt,
 	onPendingChatConsumed,
 	onEvidenceClick,
+	onAskInChatWithContext,
 	onClose,
 }) => {
 	const { t } = useTranslation();
@@ -217,7 +219,14 @@ const Sidebar: React.FC<SidebarProps> = ({
 							conf={conf}
 							onJump={onJump}
 							imageUrl={selectedImage}
-							onAskInChat={() => onTabChange("chat")}
+							onAskInChat={(prompt) => {
+								onTabChange("chat");
+								onAskInChatWithContext?.(prompt, undefined);
+							}}
+							onAskFigureInChat={(figureId) => {
+								onTabChange("chat");
+								onAskInChatWithContext?.(undefined, figureId);
+							}}
 							selectedFigure={selectedFigure}
 						/>
 					</Suspense>

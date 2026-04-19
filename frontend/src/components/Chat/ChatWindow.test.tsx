@@ -82,8 +82,10 @@ describe("ChatWindow Component", () => {
 			);
 		});
 
-		expect(screen.getByTestId("messages").textContent).toContain("Hi");
-		expect(screen.getByTestId("messages").textContent).toContain("Hello");
+		await waitFor(() => {
+			expect(screen.getByTestId("messages").textContent).toContain("Hi");
+			expect(screen.getByTestId("messages").textContent).toContain("Hello");
+		});
 	});
 
 	it("sends a message and adds both user and assistant responses", async () => {

@@ -16,6 +16,7 @@ const log = createLogger("FigureInsight");
 interface FigureInsightProps {
 	selectedFigure?: SelectedFigure | null;
 	sessionId: string;
+	onAskInChat?: (figureId?: string | null) => void;
 }
 
 interface FigureResult {
@@ -41,6 +42,7 @@ function initSessionCache(sessionId: string) {
 const FigureInsight: React.FC<FigureInsightProps> = ({
 	selectedFigure,
 	sessionId,
+	onAskInChat,
 }) => {
 	initSessionCache(sessionId);
 
@@ -241,6 +243,7 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 					isLatest={idx === 0}
 					sessionId={sessionId}
 					onZoom={(url) => setZoomedImage(url)}
+					onAskInChat={onAskInChat}
 				/>
 			))}
 
@@ -306,6 +309,7 @@ interface FigureCardProps {
 	isLatest: boolean;
 	sessionId: string;
 	onZoom: (url: string) => void;
+	onAskInChat?: (figureId?: string | null) => void;
 }
 
 const FigureCard: React.FC<FigureCardProps> = ({
@@ -313,6 +317,7 @@ const FigureCard: React.FC<FigureCardProps> = ({
 	isLatest,
 	sessionId,
 	onZoom,
+	onAskInChat,
 }) => {
 	const { figure, explanation, isLoading, error, traceId } = result;
 	const [collapsed, setCollapsed] = useState(!isLatest);
@@ -451,7 +456,29 @@ const FigureCard: React.FC<FigureCardProps> = ({
 						</p>
 					) : explanation ? (
 						<>
-							<div className="flex justify-end mb-1">
+							<div className="flex justify-end gap-2 mb-1">
+								{onAskInChat && (
+									<button
+										type="button"
+										onClick={() => onAskInChat(figure.id ?? null)}
+										className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition-colors"
+									>
+										<svg
+											className="w-3 h-3"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth={2}
+												d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+											/>
+										</svg>
+										チャット
+									</button>
+								)}
 								<CopyButton text={explanation} size={12} traceId={traceId} />
 							</div>
 							<MarkdownContent className="prose prose-xs max-w-none text-xs text-slate-600 leading-relaxed">

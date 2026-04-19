@@ -35,8 +35,8 @@ log = structlog.get_logger("GA4Sync")
 GCP_PROJECT_ID = settings.get("GCP_PROJECT_ID", "gen-lang-client-0800253336")
 GA4_PROPERTY_ID = settings.get("GA4_PROPERTY_ID", "")
 
-# firebase_uid のカスタムディメンション名（GA4管理画面 → カスタム定義で登録した名前）
-# 例: "customUser:user_id"  未設定の場合は firebase_uid を記録しない
+# GA4 User-ID 機能または カスタムディメンションの API 名。
+# User-ID 機能を使う場合は "userId"、カスタムディメンションの場合は "customUser:user_id" 等。
 GA4_USER_ID_DIMENSION = settings.get("GA4_USER_ID_DIMENSION", "")
 
 # 1リクエストで取得する最大行数（GA4 Data API の上限は 250,000）
@@ -102,9 +102,9 @@ def sync_engagement(
     iso_date = _to_iso(target_date)
     log.info("engagement_query", msg="Fetching engagement data", date=target_date)
 
-    dimensions = [Dimension(name="userPseudoId")]
-    if GA4_USER_ID_DIMENSION:
-        dimensions.append(Dimension(name=GA4_USER_ID_DIMENSION))
+    # GA4 Data API は userPseudoId/sessionId を runReport で受け付けない。
+    # User-ID 機能 ("userId") または カスタムディメンションで識別する。
+    dimensions = [Dimension(name=GA4_USER_ID_DIMENSION)]
 
     request = RunReportRequest(
         property=f"properties/{property_id}",
@@ -130,11 +130,13 @@ def sync_engagement(
 
     records = []
     for row in rows:
-        user_pseudo_id = row.dimension_values[0].value
-        firebase_uid = None
-        if GA4_USER_ID_DIMENSION and len(row.dimension_values) > 1:
-            val = row.dimension_values[1].value
-            firebase_uid = val if val not in ("(not set)", "") else None
+        firebase_uid_raw = row.dimension_values[0].value
+        firebase_uid = (
+            firebase_uid_raw if firebase_uid_raw not in ("(not set)", "") else None
+        )
+        # 未ログインユーザーは scoring 対象外のためスキップ
+        if firebase_uid is None:
+            continue
 
         session_count = int(row.metric_values[0].value or 0)
         page_views = int(row.metric_values[1].value or 0)
@@ -145,7 +147,7 @@ def sync_engagement(
 
         records.append(
             UserEngagementData(
-                user_pseudo_id=user_pseudo_id,
+                user_pseudo_id=firebase_uid,
                 firebase_uid=firebase_uid,
                 event_date=iso_date,
                 total_engagement_seconds=engagement_seconds,
@@ -191,15 +193,14 @@ def sync_page_views(
     iso_date = _to_iso(target_date)
     log.info("page_views_query", msg="Fetching page view data", date=target_date)
 
+    # GA4 Data API は userPseudoId/sessionId を runReport で受け付けないため、
+    # ユーザー識別子 + ページ単位の集計とする（セッション単位は諦める）。
     dimensions = [
-        Dimension(name="userPseudoId"),
-        Dimension(name="sessionId"),
+        Dimension(name=GA4_USER_ID_DIMENSION),
         Dimension(name="pagePathPlusQueryString"),
         Dimension(name="pageTitle"),
         Dimension(name="pageReferrer"),
     ]
-    if GA4_USER_ID_DIMENSION:
-        dimensions.insert(1, Dimension(name=GA4_USER_ID_DIMENSION))
 
     request = RunReportRequest(
         property=f"properties/{property_id}",
@@ -230,20 +231,18 @@ def sync_page_views(
     ).isoformat()
 
     records = []
-    uid_offset = 1 if GA4_USER_ID_DIMENSION else 0
-
     for row in rows:
-        user_pseudo_id = row.dimension_values[0].value
+        firebase_uid_raw = row.dimension_values[0].value
+        firebase_uid = (
+            firebase_uid_raw if firebase_uid_raw not in ("(not set)", "") else None
+        )
+        # 未ログインユーザーは scoring 対象外のためスキップ
+        if firebase_uid is None:
+            continue
 
-        firebase_uid = None
-        if GA4_USER_ID_DIMENSION:
-            val = row.dimension_values[1].value
-            firebase_uid = val if val not in ("(not set)", "") else None
-
-        session_id = row.dimension_values[1 + uid_offset].value
-        page_location = row.dimension_values[2 + uid_offset].value or None
-        page_title = row.dimension_values[3 + uid_offset].value or None
-        page_referrer = row.dimension_values[4 + uid_offset].value or None
+        page_location = row.dimension_values[1].value or None
+        page_title = row.dimension_values[2].value or None
+        page_referrer = row.dimension_values[3].value or None
         if page_referrer in ("(not set)", ""):
             page_referrer = None
 
@@ -252,9 +251,9 @@ def sync_page_views(
 
         records.append(
             PageViewLogData(
-                user_pseudo_id=user_pseudo_id,
+                user_pseudo_id=firebase_uid,
                 firebase_uid=firebase_uid,
-                ga_session_id=session_id,
+                ga_session_id=None,  # Data API では取得不可
                 event_timestamp=approx_ts,
                 page_location=page_location,
                 page_title=page_title,
@@ -304,6 +303,13 @@ def main():
         log.error(
             "config",
             msg="GA4_PROPERTY_ID not set. Set it to your GA4 property numeric ID (e.g., '123456789').",
+        )
+        sys.exit(1)
+
+    if not GA4_USER_ID_DIMENSION:
+        log.error(
+            "config",
+            msg="GA4_USER_ID_DIMENSION not set. Use 'userId' for GA4 User-ID feature or 'customUser:<name>' for custom dimensions.",
         )
         sys.exit(1)
 

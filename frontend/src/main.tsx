@@ -10,6 +10,7 @@ import { LoadingProvider } from "./contexts/LoadingContext";
 import { initDB } from "./db/index";
 import "./index.css";
 import "./lib/i18n";
+import { initGA4 } from "./lib/analytics";
 import { performanceMonitor } from "./lib/performance";
 
 if (GLITCHTIP_DSN) {
@@ -27,6 +28,8 @@ initDB();
 
 // Initialize Web Vitals performance monitoring
 performanceMonitor.init();
+
+initGA4();
 
 // グローバルエラーハンドラ: React マウント前のクラッシュ（例: 認証SDK初期化失敗）を捕捉して
 // メンテナンス画面を表示する。React マウント後は ErrorBoundary が担当する。
