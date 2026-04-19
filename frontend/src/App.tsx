@@ -1,80 +1,43 @@
-import type React from "react";
-import {
-	lazy,
-	Suspense,
-	useCallback,
-	useEffect,
-	useRef,
-	useState,
-	useTransition,
-} from "react";
-import { useTranslation } from "react-i18next";
-import { Route, Routes, useNavigate } from "react-router-dom";
-import { API_URL } from "@/config";
-import { createLogger } from "@/lib/logger";
+import { lazy, Suspense } from "react";
+import { Route, Routes } from "react-router-dom";
 import Login from "./components/Auth/Login";
 import RequestForm from "./components/Contact/RequestForm";
 import ErrorBoundary from "./components/Error/ErrorBoundary";
 import HelpAssistant from "./components/Help/HelpAssistant";
 import PDFViewer from "./components/PDF/PDFViewer";
-import type { SelectedFigure } from "./components/PDF/types";
 import SearchBar from "./components/Search/SearchBar";
 import Sidebar from "./components/Sidebar/Sidebar";
 import GlobalLoading from "./components/UI/GlobalLoading";
 import ServiceOutage from "./components/UI/ServiceOutage";
 import UploadScreen from "./components/Upload/UploadScreen";
-import { useAuth } from "./contexts/AuthContext";
-import { useLoading } from "./contexts/LoadingContext";
+
+import { useAppState } from "./hooks/useAppState";
 
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 
-import { usePaperCache } from "./db/hooks";
-import { useSyncStatus } from "./db/sync";
-import { clampWidth, useLayoutState } from "./hooks/useLayoutState";
-import { usePaperLibrary } from "./hooks/usePaperLibrary";
-import { usePaperLifecycle } from "./hooks/usePaperLifecycle";
-import { usePinchZoom } from "./hooks/usePinchZoom";
-import { useScrollTracking } from "./hooks/useScrollTracking";
-import { useSearchState } from "./hooks/useSearchState";
-import { useServiceHealth } from "./hooks/useServiceHealth";
-import { useWordInteraction } from "./hooks/useWordInteraction";
-import { syncTrajectory } from "./lib/recommendation";
-
-const log = createLogger("App");
-
 function App() {
-	const { user, isGuest, logout, token } = useAuth();
-	const navigate = useNavigate();
-	const { t } = useTranslation();
-	const { startLoading, stopLoading } = useLoading();
 	const {
+		user,
+		isGuest,
+		logout,
+		navigate,
+		t,
 		isHealthy,
 		isMaintenance,
-		message: healthMessage,
-		reportFailure,
-	} = useServiceHealth(!isGuest && !!API_URL);
-	const [uploadFile, setUploadFile] = useState<File | null>(null);
-
-	const [currentPaperId, setCurrentPaperId] = useState<string | null>(null);
-	const [isAnalyzing, setIsAnalyzing] = useState(false);
-
-	// Sidebar State
-	const [sessionId] = useState(() => {
-		const saved = localStorage.getItem("paper_terrace_session");
-		if (saved) return saved;
-		const newId = `session-${Math.random().toString(36).substring(2, 11)}`;
-		localStorage.setItem("paper_terrace_session", newId);
-		return newId;
-	});
-	const [activeTab, setActiveTab] = useState("chat");
-	const [dictSubTab, setDictSubTab] = useState<
-		"translation" | "explanation" | "figures" | "history"
-	>("translation");
-	const [showLoginModal, setShowLoginModal] = useState(false);
-
-	const {
+		healthMessage,
+		uploadFile,
+		currentPaperId,
+		isAnalyzing,
+		uploadedPapers,
+		isPapersLoading,
+		sessionId,
+		activeTab,
+		setActiveTab,
+		dictSubTab,
+		setDictSubTab,
+		showLoginModal,
+		setShowLoginModal,
 		sidebarWidth,
-		setSidebarWidth,
 		isResizing,
 		setIsResizing,
 		isLeftSidebarOpen,
@@ -82,14 +45,6 @@ function App() {
 		isRightSidebarOpen,
 		setIsRightSidebarOpen,
 		isMobile,
-	} = useLayoutState();
-
-	// 論文一覧管理
-	const { uploadedPapers, isPapersLoading, refreshPapers, deletePaper } =
-		usePaperLibrary({ userId: user?.id, token, isGuest });
-
-	// 翻訳・解説・選択テキスト管理
-	const {
 		translationWord,
 		translationContext,
 		translationCoordinates,
@@ -102,272 +57,27 @@ function App() {
 		selectedCoordinates,
 		selectedImage,
 		jumpTarget,
-		setJumpTarget,
 		pendingFigureId,
 		setPendingFigureId,
 		pendingChatPrompt,
 		setPendingChatPrompt,
 		selectedFigure,
-		setSelectedFigure,
 		activeEvidence,
 		setActiveEvidence,
-		resetWordState,
-		setTranslation,
-		setTextSelection,
-		setAreaSelection,
-		setExplanation,
-	} = useWordInteraction();
-
-	// Context Cache ライフサイクル管理
-	usePaperLifecycle(currentPaperId, sessionId, token);
-
-	// サインイン遷移検知用（null = ゲスト確定、undefined = 初回レンダリング前）
-	const prevUserRef = useRef<typeof user | undefined>(undefined);
-
-	const { getCachedPaper } = usePaperCache();
-
-	const handleScroll = useScrollTracking(currentPaperId || uploadFile?.name);
-	const {
 		zoom,
 		resetZoom,
 		zoomIn,
 		zoomOut,
-		containerRef: zoomContainerRef,
-		onWheel: handleZoomWheel,
-	} = usePinchZoom();
-	const [appEnv, setAppEnv] = useState<string>("prod");
-	const [maxPdfSize, setMaxPdfSize] = useState<number>(50);
-	const [pdfMode, setPdfMode] = useState<
-		"text" | "stamp" | "area" | "plaintext"
-	>("plaintext");
-	const [isModeTransitionPending, startModeTransition] = useTransition();
-	const syncStatus = useSyncStatus();
-
-	useEffect(() => {
-		// コールドスタート対策: 最大3回リトライ（2s, 4s インターバル）
-		const fetchConfig = async () => {
-			for (let attempt = 0; attempt < 3; attempt++) {
-				try {
-					const res = await fetch(`${API_URL}/api/config`, {
-						signal: AbortSignal.timeout(10000),
-					});
-					const data = await res.json();
-					if (data?.app_env) setAppEnv(data.app_env);
-					if (data?.max_pdf_size_mb) setMaxPdfSize(data.max_pdf_size_mb);
-					return;
-				} catch (err) {
-					if (attempt < 2) {
-						await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
-					} else {
-						log.error("fetch_config", "Failed to fetch config", { error: err });
-						reportFailure(503);
-					}
-				}
-			}
-		};
-		fetchConfig();
-	}, []);
-
-	useEffect(() => {
-		if (appEnv === "local") {
-			document.title = `PaperTerrace (Local) - ${t("tagline", "Read papers casually, like sitting on a terrace")}`;
-		} else {
-			document.title = `PaperTerrace - ${t("tagline", "Read papers casually, like sitting on a terrace")}`;
-		}
-	}, [t, appEnv]);
-
-	// ゲスト → サインイン遷移を検知し、表示中の論文をライブラリに保存する
-	useEffect(() => {
-		const prevUser = prevUserRef.current;
-		prevUserRef.current = user;
-
-		// prevUser === null: ゲスト確定状態からサインインした場合のみ実行
-		if (prevUser === null && user && token && currentPaperId) {
-			const claimGuestPaper = async () => {
-				const cached = await getCachedPaper(currentPaperId);
-				if (!cached) return;
-
-				try {
-					const res = await fetch(`${API_URL}/api/papers/claim`, {
-						method: "POST",
-						headers: {
-							"Content-Type": "application/json",
-							Authorization: `Bearer ${token}`,
-						},
-						body: JSON.stringify({
-							paper_id: cached.id,
-							file_hash: cached.file_hash,
-							filename: cached.title,
-							ocr_text: cached.ocr_text ?? "",
-							layout_json: cached.layout_json ?? null,
-						}),
-					});
-
-					if (res.ok) {
-						await refreshPapers();
-					}
-				} catch (err) {
-					log.error("claim_paper", "ゲスト論文のクレームに失敗しました", {
-						error: err,
-					});
-				}
-			};
-			claimGuestPaper();
-		}
-	}, [user, token, currentPaperId]);
-
-	const handlePaperLoaded = (paperId: string | null) => {
-		if (paperId) {
-			setCurrentPaperId(paperId);
-			setUploadFile(null);
-			setIsRightSidebarOpen(true);
-		}
-		// 新規論文の場合は一覧を再取得
-		if (paperId && !uploadedPapers.some((p) => p?.paper_id === paperId)) {
-			refreshPapers();
-		}
-	};
-
-	const handlePaperSelect = (paper: {
-		paper_id: string;
-		[key: string]: unknown;
-	}) => {
-		setUploadFile(null);
-		setCurrentPaperId(paper.paper_id);
-		setIsRightSidebarOpen(true);
-	};
-
-	const handleDeletePaper = async (
-		e: React.MouseEvent,
-		paper: { paper_id: string; [key: string]: unknown },
-	) => {
-		e.stopPropagation();
-		if (!window.confirm(t("common.confirm_delete"))) return;
-		const wasCurrentPaper = await deletePaper(paper, currentPaperId, user);
-		if (wasCurrentPaper) setCurrentPaperId(null);
-	};
-
-	const handleDirectFileSelect = (file: File) => {
-		setUploadFile(file);
-		setCurrentPaperId(null);
-		resetWordState();
-		setActiveTab("chat");
-		setDictSubTab("translation");
-	};
-
-	const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		if (e.target.files?.[0]) {
-			handleDirectFileSelect(e.target.files[0]);
-		}
-	};
-
-	const handleWordClick = (
-		word: string,
-		context?: string,
-		coords?: { page: number; x: number; y: number },
-		conf?: number,
-	) => {
-		if (currentPaperId) {
-			syncTrajectory(
-				{
-					session_id: sessionId,
-					paper_id: currentPaperId,
-					word_clicks: [
-						{
-							word,
-							context: context || "",
-							section: "Unknown",
-							timestamp: Date.now() / 1000,
-						},
-					],
-				},
-				token,
-			);
-		}
-
-		setTranslation(word, context, coords, conf);
-		setActiveTab("notes");
-		setDictSubTab("translation");
-		setIsRightSidebarOpen(true);
-	};
-
-	const handleTextSelect = (
-		text: string,
-		coords: { page: number; x: number; y: number },
-	) => {
-		setTextSelection(text, coords);
-		setActiveTab("comments");
-		setIsRightSidebarOpen(true);
-	};
-
-	const handleAreaSelect = (
-		imageUrl: string,
-		coords: { page: number; x: number; y: number },
-	) => {
-		setAreaSelection(imageUrl, coords);
-		setActiveTab("comments");
-		setIsRightSidebarOpen(true);
-	};
-
-	const handleJumpToLocation = (
-		page: number,
-		x: number,
-		y: number,
-		term?: string,
-	) => {
-		setJumpTarget({ page, x, y, term });
-	};
-
-	const handleAnalysisStatusChange = useCallback(
-		(status: string) => {
-			if (status === "uploading") {
-				setIsAnalyzing(true);
-				startLoading(t("viewer.uploading_pdf"));
-			} else if (status === "processing") {
-				setIsAnalyzing(true);
-				startLoading(t("viewer.processing_pdf"));
-			} else if (status === "layout_analysis") {
-				setIsAnalyzing(true);
-				startLoading(t("viewer.analyzing_layout"));
-			} else {
-				setIsAnalyzing(false);
-				stopLoading();
-			}
-		},
-		[startLoading, stopLoading, t],
-	);
-
-	const handleAskAI = (
-		prompt: string,
-		imageUrl?: string,
-		coords?: { page: number; x: number; y: number },
-		originalText?: string,
-		contextText?: string,
-	) => {
-		if (imageUrl) {
-			setAreaSelection(imageUrl, coords ?? { page: 0, x: 0, y: 0 });
-			// 選択 word だけ上書き（Figure 用ラベルより prompt を優先）
-			setActiveTab("notes");
-			setDictSubTab("figures");
-			setIsRightSidebarOpen(true);
-		} else {
-			// テキスト解説：解説専用 state のみ更新（翻訳 state は変更しない）
-			setExplanation(originalText || prompt, contextText, coords);
-			setActiveTab("notes");
-			setDictSubTab("explanation");
-			setIsRightSidebarOpen(true);
-		}
-	};
-
-	const handleFigureSelect = (figure: SelectedFigure) => {
-		setSelectedFigure(figure);
-		setActiveTab("notes");
-		setDictSubTab("figures");
-		setIsRightSidebarOpen(true);
-	};
-
-	// 検索状態
-	const {
+		zoomContainerRef,
+		handleZoomWheel,
+		handleScroll,
+		appEnv,
+		maxPdfSize,
+		pdfMode,
+		setPdfMode,
+		isModeTransitionPending,
+		startModeTransition,
+		syncStatus,
 		isSearchOpen,
 		searchTerm,
 		setSearchTerm,
@@ -378,7 +88,20 @@ function App() {
 		handlePrevMatch,
 		handleCloseSearch,
 		handleSearchMatchesUpdate,
-	} = useSearchState(!!(uploadFile || currentPaperId));
+		handlePaperLoaded,
+		handlePaperSelect,
+		handleDeletePaper,
+		handleDirectFileSelect,
+		handleFileChange,
+		handleWordClick,
+		handleTextSelect,
+		handleAreaSelect,
+		handleJumpToLocation,
+		handleAnalysisStatusChange,
+		handleAskAI,
+		handleFigureSelect,
+		handleResizeKeyDown,
+	} = useAppState();
 
 	return (
 		<Routes>
@@ -411,9 +134,7 @@ function App() {
 								/>
 							)}
 
-							{/* Left Sidebar
-			    モバイルでは fixed 配置にしてドキュメント幅に影響させない。
-			    absolute だと overflow:hidden でクリップされずに横スクロールが発生するため。 */}
+							{/* Left Sidebar */}
 							<div
 								className={`bg-white text-slate-900 border-r border-slate-200 transition-all duration-300 ease-in-out flex flex-col shrink-0 fixed top-0 left-0 md:relative md:top-auto md:left-auto z-50 h-screen h-dvh md:h-full ${
 									isLeftSidebarOpen
@@ -652,7 +373,7 @@ function App() {
 
 									<div className="mt-8 px-2">
 										<div className="relative group">
-											<div className="absolute -inset-0.5 bg-gradient-to-r from-orange-400 to-amber-400 rounded-2xl blur opacity-10 group-hover:opacity-20 transition duration-300"></div>
+											<div className="absolute -inset-0.5 bg-gradient-to-r from-orange-400 to-amber-400 rounded-2xl blur opacity-10 group-hover:opacity-20 transition duration-300" />
 											<div className="relative bg-white border border-slate-200 rounded-2xl p-4 shadow-sm hover:shadow-md transition-all duration-300">
 												<label
 													htmlFor="pdf-upload-input"
@@ -833,11 +554,11 @@ function App() {
 										type="button"
 										onClick={() => setIsRightSidebarOpen((prev) => !prev)}
 										className={`ml-2 sm:ml-4 px-2 sm:px-4 py-2 rounded-xl transition-all duration-300 flex items-center justify-center gap-1 sm:gap-2 border shadow-sm group/assist
-								${
-									isRightSidebarOpen
-										? "bg-slate-900 text-white border-slate-800 hover:bg-orange-500 hover:border-orange-400"
-										: "bg-orange-50/50 text-orange-600 border-orange-200 hover:bg-orange-500 hover:text-white hover:shadow-orange-200"
-								}`}
+${
+	isRightSidebarOpen
+		? "bg-slate-900 text-white border-slate-800 hover:bg-orange-500 hover:border-orange-400"
+		: "bg-orange-50/50 text-orange-600 border-orange-200 hover:bg-orange-500 hover:text-white hover:shadow-orange-200"
+}`}
 										title={
 											isRightSidebarOpen
 												? t("nav.close_right_panel", "Close panel")
@@ -886,14 +607,12 @@ function App() {
 														zoom > 1 ? "pan-x pan-y" : "pan-y pinch-zoom",
 												}}
 											>
-												{/* スペーサー: transform後の視覚サイズに合わせてスクロール領域を確保 */}
 												<div
 													style={{
 														width: zoom > 1 ? `${zoom * 100}%` : "100%",
 														minHeight: "100%",
 													}}
 												>
-													{/* ズームtransformラッパー */}
 													<div
 														className="p-2 sm:p-4 md:p-8"
 														style={
@@ -928,7 +647,7 @@ function App() {
 														/>
 													</div>
 												</div>
-												{/* ズームコントロール */}
+												{/* Zoom controls */}
 												{(uploadFile || currentPaperId) && (
 													<div className="sticky bottom-4 left-4 z-50 inline-flex items-center gap-0.5 bg-slate-800/80 text-white text-xs font-semibold rounded-full shadow-lg backdrop-blur-sm">
 														<button
@@ -979,25 +698,7 @@ function App() {
 											e.preventDefault();
 											setIsResizing(true);
 										}}
-										onKeyDown={(e) => {
-											if (e.key === "ArrowLeft") {
-												setSidebarWidth((w: number) =>
-													clampWidth(
-														w - 10,
-														window.innerWidth,
-														isLeftSidebarOpen,
-													),
-												);
-											} else if (e.key === "ArrowRight") {
-												setSidebarWidth((w: number) =>
-													clampWidth(
-														w + 10,
-														window.innerWidth,
-														isLeftSidebarOpen,
-													),
-												);
-											}
-										}}
+										onKeyDown={handleResizeKeyDown}
 									/>
 
 									{/* Mobile Backdrop for Right Sidebar */}
@@ -1069,8 +770,6 @@ function App() {
 											onPendingChatConsumed={() => setPendingChatPrompt(null)}
 											onEvidenceClick={(g: any) => {
 												setActiveEvidence(g);
-												// Optionally switch to PDF view if in plaintext mode?
-												// For now just set evidence.
 											}}
 											onAskInChatWithContext={(prompt, figureId) => {
 												if (prompt) setPendingChatPrompt(prompt);
@@ -1079,72 +778,72 @@ function App() {
 										/>
 									</div>
 								</div>
-							</div>
 
-							{/* Login Modal */}
-							{showLoginModal && (
-								<button
-									type="button"
-									className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity duration-300 w-full h-full border-none p-0 cursor-default"
-									onClick={() => setShowLoginModal(false)}
-									onKeyDown={(e) => {
-										if (e.key === "Enter" || e.key === " ") {
-											setShowLoginModal(false);
-										}
-									}}
-									aria-label="Close login modal"
-								>
-									<div
-										className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-in zoom-in-95 duration-200"
-										onClick={(e) => e.stopPropagation()}
-										onKeyDown={(e) => e.stopPropagation()}
-										role="dialog"
-										aria-modal="true"
+								{/* Login Modal */}
+								{showLoginModal && (
+									<button
+										type="button"
+										className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 transition-opacity duration-300 w-full h-full border-none p-0 cursor-default"
+										onClick={() => setShowLoginModal(false)}
+										onKeyDown={(e) => {
+											if (e.key === "Enter" || e.key === " ") {
+												setShowLoginModal(false);
+											}
+										}}
+										aria-label="Close login modal"
 									>
-										<Login />
-										<button
-											type="button"
-											onClick={() => setShowLoginModal(false)}
-											className="absolute top-4 right-4 p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-full transition-all duration-200 z-[60]"
-											aria-label="Close"
+										<div
+											className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md mx-4 overflow-hidden animate-in zoom-in-95 duration-200"
+											onClick={(e) => e.stopPropagation()}
+											onKeyDown={(e) => e.stopPropagation()}
+											role="dialog"
+											aria-modal="true"
 										>
-											<svg
-												className="w-5 h-5"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
+											<Login />
+											<button
+												type="button"
+												onClick={() => setShowLoginModal(false)}
+												className="absolute top-4 right-4 p-2 text-gray-400 hover:text-orange-600 hover:bg-orange-50 rounded-full transition-all duration-200 z-[60]"
+												aria-label="Close"
 											>
-												<path
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													strokeWidth="2.5"
-													d="M6 18L18 6M6 6l12 12"
-												/>
-											</svg>
-										</button>
-									</div>
-								</button>
-							)}
+												<svg
+													className="w-5 h-5"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth="2.5"
+														d="M6 18L18 6M6 6l12 12"
+													/>
+												</svg>
+											</button>
+										</div>
+									</button>
+								)}
 
-							{/* Search Bar */}
-							<SearchBar
-								isOpen={isSearchOpen}
-								onClose={handleCloseSearch}
-								searchTerm={searchTerm}
-								onSearchTermChange={setSearchTerm}
-								matches={searchMatches}
-								currentMatchIndex={currentMatchIndex}
-								onNextMatch={handleNextMatch}
-								onPrevMatch={handlePrevMatch}
-							/>
-							{!isGuest && <HelpAssistant />}
-							<GlobalLoading />
-							{!isHealthy && (
-								<ServiceOutage
-									isMaintenance={isMaintenance}
-									message={healthMessage}
+								{/* Search Bar */}
+								<SearchBar
+									isOpen={isSearchOpen}
+									onClose={handleCloseSearch}
+									searchTerm={searchTerm}
+									onSearchTermChange={setSearchTerm}
+									matches={searchMatches}
+									currentMatchIndex={currentMatchIndex}
+									onNextMatch={handleNextMatch}
+									onPrevMatch={handlePrevMatch}
 								/>
-							)}
+								{!isGuest && <HelpAssistant />}
+								<GlobalLoading />
+								{!isHealthy && (
+									<ServiceOutage
+										isMaintenance={isMaintenance}
+										message={healthMessage}
+									/>
+								)}
+							</div>
 						</div>
 					</ErrorBoundary>
 				}

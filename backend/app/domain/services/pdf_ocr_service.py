@@ -23,10 +23,10 @@ from common.utils.bbox import scale_bbox
 from common.utils.text import fix_indentation_artifacts, is_garbled_text
 
 from .language_service import LanguageService
+from .ocr_engine import ocr_fallback, run_batch_ocr_for_chunk
+from .pdf_text_extractor import extract_links, extract_markdown_sequential
 
 log = ServiceLogger("OCR")
-
-
 
 
 class PDFOCRService:
@@ -152,9 +152,7 @@ class PDFOCRService:
                     chunk_page_data = []
                     for task in phase12_tasks:
                         t_p12_start = time.perf_counter()
-                        page_data = (
-                            await task
-                        )  # 並列実行済みのタスクをページ順に受け取る
+                        page_data = await task
                         t_p12_end = time.perf_counter()
                         duration = round(t_p12_end - t_p12_start, 3)
                         pn = page_data["page_num"]
@@ -203,7 +201,7 @@ class PDFOCRService:
                     )
                     if ocr_candidate_pages:
                         batch_ocr_results, _ocrmypdf_task, _ocrmypdf_result = (
-                            await self._run_batch_ocr_for_chunk(
+                            await run_batch_ocr_for_chunk(
                                 ocr_candidate_pages,
                                 file_bytes,
                                 _ocrmypdf_task,
@@ -338,7 +336,6 @@ class PDFOCRService:
                     file_hash=file_hash,
                 )
 
-        # Basic split by separator
         pages_text = ocr_text.split("\n\n---\n\n")
         cached_images = get_page_images(file_hash)
         if not cached_images:
@@ -358,14 +355,13 @@ class PDFOCRService:
                     i + 1,
                     len(cached_images),
                     text,
-                    False,  # is_last - this is not known from cache, but not critical for display
+                    False,
                     file_hash,
                     img_url,
                     layout,
                 )
             )
 
-        # Add COORDINATES_READY event for cached data
         pages.append(
             (
                 0,
@@ -416,7 +412,7 @@ class PDFOCRService:
             native_words = []
             page_text = ""
 
-        links = self._extract_links(page, zoom)
+        links = extract_links(page, zoom)
 
         layout_data = {
             "width": float(page.width) * zoom,
@@ -493,6 +489,15 @@ class PDFOCRService:
             for w in native_words
         ]
 
+        # Phase 3 準備: レイアウト解析を並列タスクとして起動（awaitしない）
+        # Phase 1/2 のyieldをブロックしないよう、結果は Phase 3 で await する。
+        from .paddle_layout_service import get_layout_service  # noqa: PLC0415
+
+        layout_svc = get_layout_service()
+        layout_task = asyncio.create_task(
+            layout_svc.detect_layout_from_image_async(img_bytes)
+        )
+
         return {
             "page_num": page_num,
             "page": page,
@@ -501,6 +506,7 @@ class PDFOCRService:
             "img_bytes": img_bytes,
             "image_url": image_url,
             "layout_data": layout_data,
+            "layout_task": layout_task,
             "phase1_result": phase1_result,
         }
 
@@ -525,6 +531,26 @@ class PDFOCRService:
         is_last = page_idx == total_pages - 1
 
         log.debug("_finalize_page_phase_3", "Phase 3 start", page_num=page_num)
+
+        # Phase 1/2 で起動したレイアウト解析タスクを await（並列実行済み）
+        layout_task = page_data.get("layout_task")
+        if layout_task is not None:
+            try:
+                layout_blocks = await layout_task
+                log.info(
+                    "_finalize_page_phase_3",
+                    "Layout blocks awaited",
+                    page_num=page_num,
+                    block_count=len(layout_blocks),
+                )
+            except Exception as e:
+                log.warning(
+                    "_finalize_page_phase_3",
+                    "Layout analysis failed, figures will be skipped",
+                    page_num=page_num,
+                    error=str(e),
+                )
+                layout_blocks = []
 
         try:
             if pdf_path:
@@ -558,15 +584,13 @@ class PDFOCRService:
 
                 # 2. Markdown extraction (独立した fitz doc でスレッド実行)
                 raw_md = await asyncio.to_thread(
-                    self._extract_markdown_sequential,
+                    extract_markdown_sequential,
                     file_bytes,
                     page_idx,
                     figure_table_bboxes_pt,
                 )
 
                 page_text = re.sub(r"!\[.*?\]\(.*?\)", "", raw_md).strip()
-
-                # 2段組みレイアウトによるインデントアーティファクトを修正
                 page_text = fix_indentation_artifacts(page_text)
 
                 log.info(
@@ -585,9 +609,7 @@ class PDFOCRService:
                 phase1_text = (
                     page_data.get("phase1_result") or ("", "", "", "", "", "", "")
                 )[2] or ""
-                is_garbled = is_garbled_text(page_text) or is_garbled_text(
-                    phase1_text
-                )
+                is_garbled = is_garbled_text(page_text) or is_garbled_text(phase1_text)
                 _min_page_text_len = int(
                     settings.get("INFERENCE_OCR_MIN_PAGE_TEXT_LEN", 100)
                 )
@@ -659,7 +681,6 @@ class PDFOCRService:
                                 ]
                             else:
                                 layout_data["words"] = ocr_words
-                        # OCRmyPDFを使用したページ
                         layout_data["_ocr_engine"] = "ocrmypdf"
                     else:
                         log.warning(
@@ -670,7 +691,7 @@ class PDFOCRService:
                             text_len=len(page_text.strip()),
                             cid_count=page_text.count("(cid:"),
                         )
-                        fallback_text, fallback_words = await self._ocr_fallback(
+                        fallback_text, fallback_words = await ocr_fallback(
                             page_data["img_bytes"],
                             page_num,
                             layout_blocks=layout_blocks,
@@ -688,7 +709,6 @@ class PDFOCRService:
                             page_text = fallback_text
                         if fallback_words:
                             layout_data["words"] = fallback_words
-                        # Tesseractフォールバックを使用したページ
                         layout_data["_ocr_engine"] = "tesseract"
 
                 # 3. Post-process layout blocks (equations, figures)
@@ -729,7 +749,6 @@ class PDFOCRService:
                     )
                     bbox_list = [bx1, by1, bx2, by2]
 
-                    # Figure/Table/Formula cropping and metadata
                     if (
                         class_name
                         in [
@@ -746,15 +765,11 @@ class PDFOCRService:
                         # ページ境界・縦線の誤検知フィルタ（極端なアスペクト比を除外）
                         width = bx2 - bx1
                         height = by2 - by1
-                        if height > 0:
-                            aspect = width / height
-                        else:
-                            aspect = 999
+                        aspect = (width / height) if height > 0 else 999
                         # 幅が10px未満 or アスペクト比が0.05未満（ほぼ垂直線）は除外
                         if width < 10 or aspect < 0.05:
                             continue
 
-                        # URLにangle bracketsを付けてスペース・特殊文字を含むURLを安全に表現
                         bbox_md = f"{bx1},{by1},{bx2},{by2}"
                         figure_ref = f"![{class_name}](<{bbox_md}>)"
                         figures_with_y.append((by1, figure_ref))
@@ -832,407 +847,8 @@ class PDFOCRService:
             layout_data,
         )
 
-    async def _ocr_fallback(
-        self,
-        img_bytes: bytes,
-        page_num: int,
-        layout_blocks: list | None = None,
-        img_width: int = 0,
-        img_height: int = 0,
-    ) -> tuple[str, list[dict]]:
-        """
-        テキスト抽出が失敗した場合に推論サービス経由で Tesseract フォールバック OCR を実行する。
-        """
-        from app.providers.inference_client import get_ocr_client
-
-        try:
-            client = await get_ocr_client()
-            log.info(
-                "_ocr_fallback",
-                "Tesseract OCR fallback via Inference Service",
-                page_num=page_num,
-                ocr_url=client.ocr_url,
-                is_disabled=client.is_disabled,
-                circuit_open=client._cb.get("circuit_open", False),
-                failure_count=client._cb.get("failure_count", 0),
-            )
-            t_start = time.perf_counter()
-
-            text, words_list = await client.ocr_page(img_bytes)
-
-            log.info(
-                "_ocr_fallback",
-                "Tesseract OCR fallback completed",
-                page_num=page_num,
-                duration=round(time.perf_counter() - t_start, 3),
-                word_count=len(words_list),
-                text_len=len(text.strip()),
-            )
-            return text.strip(), words_list
-
-        except Exception as e:
-            log.warning(
-                "_ocr_fallback",
-                "Tesseract OCR fallback failed",
-                page_num=page_num,
-                error=str(e),
-            )
-            return "", []
-
-    async def _ocr_fallback_batch(
-        self,
-        pages: list[tuple[int, bytes]],
-    ) -> dict[int, tuple[str, list[dict]]]:
-        """
-        複数ページ画像を並列で Tesseract OCR し結果を返す。
-
-        Args:
-            pages: [(page_num, img_bytes), ...] のリスト
-
-        Returns:
-            {page_num: (ocr_text, words)} の辞書。失敗ページは含まない。
-        """
-        if not pages:
-            return {}
-
-        log.info(
-            "_ocr_fallback_batch",
-            "Tesseract parallel OCR",
-            page_nums=[p[0] for p in pages],
-        )
-
-        results_list = await asyncio.gather(
-            *[self._ocr_fallback(img_bytes, page_num) for page_num, img_bytes in pages],
-            return_exceptions=True,
-        )
-
-        results: dict[int, tuple[str, list[dict]]] = {}
-        for (page_num, _), result in zip(pages, results_list):
-            if isinstance(result, Exception):
-                log.warning(
-                    "_ocr_fallback_batch",
-                    "Page OCR failed",
-                    page_num=page_num,
-                    error=str(result),
-                )
-                continue
-            text, words = result
-            if text:
-                results[page_num] = (text, words)
-
-        log.info(
-            "_ocr_fallback_batch",
-            "Batch OCR completed",
-            requested=[p[0] for p in pages],
-            parsed=list(results.keys()),
-        )
-        return results
-
-    async def _run_batch_ocr_for_chunk(
-        self,
-        ocr_candidate_pages: list[tuple[int, bytes]],
-        file_bytes: bytes,
-        ocrmypdf_task: "asyncio.Task | None",
-        ocrmypdf_result: "dict[int, tuple[str, list[dict]]] | None",
-    ) -> "tuple[dict[int, tuple[str, list[dict]]], asyncio.Task | None, dict[int, tuple[str, list[dict]]] | None]":
-        """OCR 候補ページのバッチ OCR を実行する。
-
-        OCRmyPDF タスクの起動・待機・Tesseract フォールバックを内包し、
-        タスクと結果キャッシュを次チャンクへ引き継げるよう返す。
-
-        Args:
-            ocr_candidate_pages: (page_num, img_bytes) のリスト
-            file_bytes: 元 PDF バイト列（OCRmyPDF 入力用）
-            ocrmypdf_task: 既存の OCRmyPDF タスク（None なら初回）
-            ocrmypdf_result: 前チャンクで取得済みの結果（None なら未取得）
-
-        Returns:
-            (batch_ocr_results, updated_task, updated_result) のタプル
-        """
-        candidate_page_nums = [pn for pn, _ in ocr_candidate_pages]
-        log.info(
-            "batch_ocr",
-            "OCR候補ページ検出",
-            candidate_count=len(ocr_candidate_pages),
-            candidate_pages=candidate_page_nums,
-        )
-
-        batch_ocr_results: dict[int, tuple[str, list[dict]]] = {}
-
-        # OCRmyPDF タスクを初回起動
-        if ocrmypdf_task is None:
-            ocrmypdf_task = asyncio.create_task(self._run_ocrmypdf(file_bytes))
-            log.info(
-                "batch_ocr",
-                "OCRmyPDFタスク起動",
-                pdf_size=len(file_bytes),
-                trigger_page=candidate_page_nums[0],
-            )
-
-        # OCRmyPDF 結果が未取得の場合は待機
-        if ocrmypdf_result is None:
-            log.info("batch_ocr", "OCRmyPDF結果を待機中...")
-            try:
-                ocrmypdf_result = await ocrmypdf_task
-                log.info(
-                    "batch_ocr",
-                    "OCRmyPDF結果取得完了",
-                    page_count=len(ocrmypdf_result),
-                    pages_with_text=sorted(ocrmypdf_result.keys()),
-                )
-            except Exception as e:
-                log.warning("batch_ocr", "OCRmyPDF失敗 → Tesseractへフォールバック", error=str(e))
-                ocrmypdf_result = {}
-
-        # OCRmyPDF 結果をバッチ結果にセット
-        if ocrmypdf_result:
-            for pn, _img in ocr_candidate_pages:
-                if pn in ocrmypdf_result:
-                    ocr_text, ocr_words = ocrmypdf_result[pn]
-                    batch_ocr_results[pn] = (ocr_text, ocr_words)
-                    log.info(
-                        "batch_ocr",
-                        "OCRmyPDF結果適用",
-                        page_num=pn,
-                        text_len=len(ocr_text),
-                        word_count=len(ocr_words),
-                    )
-
-        # OCRmyPDF で取得できなかったページは Tesseract でフォールバック
-        remaining = [
-            (pn, img) for pn, img in ocr_candidate_pages if pn not in batch_ocr_results
-        ]
-        if remaining:
-            log.info(
-                "batch_ocr",
-                "Tesseractフォールバック対象",
-                page_nums=[pn for pn, _ in remaining],
-            )
-            try:
-                fallback_results = await self._ocr_fallback_batch(remaining)
-                batch_ocr_results.update(fallback_results)
-                log.info(
-                    "batch_ocr",
-                    "Tesseractフォールバック完了",
-                    success_pages=list(fallback_results.keys()),
-                )
-            except Exception as e:
-                log.error("batch_ocr", "Target batch OCR failed completely", error=str(e))
-
-        log.info(
-            "batch_ocr",
-            "Batch OCR completed",
-            candidate_count=len(ocr_candidate_pages),
-            result_count=len(batch_ocr_results),
-            missing_pages=[pn for pn, _ in ocr_candidate_pages if pn not in batch_ocr_results],
-        )
-        return batch_ocr_results, ocrmypdf_task, ocrmypdf_result
-
-    async def _run_ocrmypdf(self, file_bytes: bytes) -> dict[int, str]:
-        """OCRmyPDFでサーチャブルPDFを生成し、ページごとのテキスト辞書を返す。
-
-        Returns:
-            {page_num(1始まり): text} の辞書。OCR失敗ページは含まない。
-        """
-        from app.providers.inference_client import get_ocr_client  # noqa: PLC0415
-
-        client = await get_ocr_client()
-        log.info(
-            "_run_ocrmypdf",
-            "OCRmyPDFリクエスト送信",
-            pdf_size=len(file_bytes),
-            ocr_url=client.ocr_url,
-            is_disabled=client.is_disabled,
-        )
-        t_start = time.perf_counter()
-
-        searchable_pdf = await client.ocr_pdf(file_bytes)
-
-        if not searchable_pdf:
-            log.warning(
-                "_run_ocrmypdf",
-                "OCRmyPDF失敗: Noneが返却されました（inference-ocrサービス未応答または無効）",
-                ocr_url=client.ocr_url,
-            )
-            return {}
-
-        duration = round(time.perf_counter() - t_start, 3)
-        log.info(
-            "_run_ocrmypdf",
-            "OCRmyPDFサーチャブルPDF取得完了",
-            duration=duration,
-            input_size=len(file_bytes),
-            output_size=len(searchable_pdf),
-        )
-
-        result: dict[int, tuple[str, list[dict]]] = {}
-        import fitz          # noqa: PLC0415
-        import pdfplumber    # noqa: PLC0415
-        import pymupdf4llm  # noqa: PLC0415
-
-        fitz_doc = fitz.open(stream=searchable_pdf, filetype="pdf")
-        total = fitz_doc.page_count
-        try:
-            with pdfplumber.open(io.BytesIO(searchable_pdf)) as pdf_p:
-                for i in range(total):
-                    # 単語のbboxをPDF座標系で抽出（_finalize_page_phase_3でimage座標にスケール）
-                    plumber_page = pdf_p.pages[i] if i < len(pdf_p.pages) else None
-                    words: list[dict] = []
-                    if plumber_page is not None:
-                        raw_words = plumber_page.extract_words(
-                            use_text_flow=True, x_tolerance=1, y_tolerance=3
-                        )
-                        words = [
-                            {
-                                "word": w["text"],
-                                "bbox": [w["x0"], w["top"], w["x1"], w["bottom"]],
-                                "conf": 1.0,
-                            }
-                            for w in raw_words
-                            if w["text"].strip()
-                        ]
-
-                    try:
-                        md = pymupdf4llm.to_markdown(
-                            fitz_doc,
-                            pages=[i],
-                            show_progress=False,
-                            write_images=False,
-                            force_text=True,  # OCRmyPDFの隠しテキスト層も確実に抽出
-                        )
-                        # 画像参照（スキャン画像のFigure等）を除去しインデントを修正
-                        md_text = re.sub(r"!\[.*?\]\(.*?\)", "", md).strip()
-                        md_text = fix_indentation_artifacts(md_text)
-                        log.info(
-                            "_run_ocrmypdf",
-                            "ページMarkdown変換完了",
-                            page_num=i + 1,
-                            total_pages=total,
-                            md_len=len(md_text),
-                            has_text=bool(md_text),
-                            word_count=len(words),
-                        )
-                        if md_text:
-                            result[i + 1] = (md_text, words)
-                        elif words:
-                            # Markdown抽出は空だがwordsがある場合はテキストを再構成
-                            fallback_text = " ".join(w["word"] for w in words)
-                            result[i + 1] = (fallback_text, words)
-                    except Exception as page_err:
-                        # ページ単位の失敗 → pdfplumberのテキストでフォールバック
-                        log.warning(
-                            "_run_ocrmypdf",
-                            "pymupdf4llm変換失敗、pdfplumberにフォールバック",
-                            page_num=i + 1,
-                            error=str(page_err),
-                        )
-                        if plumber_page is not None:
-                            text = (plumber_page.extract_text() or "").strip()
-                            if text:
-                                result[i + 1] = (text, words)
-        finally:
-            fitz_doc.close()
-
-        log.info(
-            "_run_ocrmypdf",
-            "全ページMarkdown変換完了",
-            total_pages=total,
-            extracted_pages=len(result),
-            empty_pages=total - len(result),
-        )
-        return result
-
-    def _extract_markdown_sequential(
-        self, file_bytes: bytes, idx: int, exclude_bboxes_pt: list
-    ) -> str:
-        """各スレッドで独立した fitz doc を開いて PyMuPDF4LLM で Markdown 抽出する。"""
-        import fitz  # noqa: PLC0415 (遅延インポート: 起動時メモリ削減)
-
-        doc = fitz.open(stream=file_bytes, filetype="pdf")
-        try:
-            return self._extract_markdown_inner(doc, idx, exclude_bboxes_pt)
-        finally:
-            doc.close()
-
-    def _extract_markdown_inner(
-        self, doc: Any, idx: int, exclude_bboxes_pt: list
-    ) -> str:
-        import fitz  # noqa: PLC0415
-        import pymupdf4llm  # noqa: PLC0415
-
-        page_obj = doc[idx]
-
-        # 明示的に指定された figure/table bbox のみを除外する。
-        # 以前は page_obj.get_drawings() から自動検出していたが、
-        # テキスト列の枠線・罫線も誤って除外してしまい本文が消える問題があったため廃止。
-        if exclude_bboxes_pt:
-            for bbox_pt in exclude_bboxes_pt:
-                page_obj.add_redact_annot(fitz.Rect(*bbox_pt))
-            page_obj.apply_redactions()
-
-        return pymupdf4llm.to_markdown(
-            doc,
-            pages=[idx],
-            show_progress=False,
-            write_images=False,
-        )
-
-    def _extract_links(self, page, zoom):  # TODO: `linkify-it-py`を検討
-        """Extract hyperlinks from the PDF page metadata using pdfplumber."""
-        log.debug(
-            "_extract_links", "Extracting links", page_num=page.page_number, zoom=zoom
-        )
-
-        links = []
-        try:
-            # pdfplumber >= 0.11.0 has .hyperlinks
-            # It already contains the URI and the bounding box
-            if hasattr(page, "hyperlinks"):
-                for link in page.hyperlinks:
-                    if link.get("uri"):
-                        links.append(
-                            {
-                                "url": link["uri"],
-                                "bbox": [
-                                    link["x0"] * zoom,
-                                    link["top"] * zoom,
-                                    link["x1"] * zoom,
-                                    link["bottom"] * zoom,
-                                ],
-                            }
-                        )
-            # Fallback to annots if hyperlinks is not populated or available
-            if not links and hasattr(page, "annots"):
-                for annot in page.annots:
-                    # Check for URI specifically in the annotation dictionary
-                    uri = annot.get("uri") or (
-                        annot.get("A", {}).get("URI") if "A" in annot else None
-                    )
-                    if uri:
-                        links.append(
-                            {
-                                "url": uri,
-                                "bbox": [
-                                    annot["x0"] * zoom,
-                                    annot["top"] * zoom,
-                                    annot["x1"] * zoom,
-                                    annot["bottom"] * zoom,
-                                ],
-                            }
-                        )
-        except Exception as e:
-            log.warning(
-                "_extract_links",
-                "Link extraction failed",
-                page_num=page.page_number,
-                error=str(e),
-            )
-
-        return links
-
     def _finalize_ocr(self, file_hash, filename, all_text_parts, all_layout_parts=None):
         """Save final OCR output to database."""
-        # Sanitize all strings to remove NUL bytes for PostgreSQL
         sanitized_text_parts = [
             p.replace("\0", "") if p else "" for p in all_text_parts
         ]
@@ -1261,7 +877,6 @@ class PDFOCRService:
 
         sanitized_layout = None
         if all_layout_parts:
-            # We need to deeply sanitize the layout list/dict
             def sanitize_obj(obj):
                 if isinstance(obj, str):
                     return obj.replace("\0", "")

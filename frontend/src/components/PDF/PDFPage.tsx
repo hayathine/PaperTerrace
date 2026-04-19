@@ -356,11 +356,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
 								return (
 									<div
 										key={`fig-img-${idx}`}
-										className={`absolute group pointer-events-none ${
+										className={`absolute group pointer-events-none group-data-[click-mode]/viewer:rounded-sm ${
 											isInteractiveType
-												? "group-data-[click-mode]/viewer:pointer-events-auto group-data-[click-mode]/viewer:hover:ring-2 group-data-[click-mode]/viewer:hover:ring-orange-500/60 group-data-[click-mode]/viewer:hover:ring-inset"
+												? "group-data-[click-mode]/viewer:ring-1 group-data-[click-mode]/viewer:ring-orange-500/40 group-data-[click-mode]/viewer:ring-inset"
 												: ""
-										} group-data-[click-mode]/viewer:rounded-sm ${
+										} ${
 											isLocal
 												? "group-data-[click-mode]/viewer:border-2 group-data-[click-mode]/viewer:border-orange-300/60"
 												: ""
@@ -368,7 +368,11 @@ const PDFPage: React.FC<PDFPageProps> = ({
 										style={style}
 									>
 										{/* クリックモード時のみ表示するインタラクティブ要素。
-									    子要素はすべて absolute なのでラッパー div はレイアウトに影響しない。 */}
+									    子要素はすべて absolute なのでラッパー div はレイアウトに影響しない。
+									    親は常に pointer-events-none にし、Ask AI ボタンのみ pointer-events-auto にすることで
+									    単語クリックをブロックしない。
+									    図表エリア全体のホバー検出は pointer-events-none のため不可能なので、
+									    ring で図表位置を常時提示し、Ask AI ボタン自体のホバーでハイライトを強調する。 */}
 										<div className="hidden group-data-[click-mode]/viewer:block">
 											{/* ラベルバッジ (isLocal=true のみ) */}
 											{isLocal && fig.label && (
@@ -377,38 +381,12 @@ const PDFPage: React.FC<PDFPageProps> = ({
 												</div>
 											)}
 
-											{/* Ask AI button + overlay: interactive elements only (Req 6.5) */}
+											{/* Ask AI button: interactive elements only (Req 6.5) */}
 											{isInteractiveType && (
-												<>
-													<div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-[9999]">
-														<button
-															type="button"
-															className="bg-orange-600 text-white text-xs px-3 py-1.5 rounded-md shadow shadow-orange-500/30 hover:bg-orange-700 hover:shadow-orange-600/40 transition-all font-medium flex items-center gap-1.5 cursor-pointer transform hover:scale-105 active:scale-95"
-															onClick={(e) => {
-																e.stopPropagation();
-																if (onFigureSelect) {
-																	onFigureSelect({
-																		id: fig.id,
-																		image_url: fig.image_url,
-																		label: fig.label,
-																		caption: fig.caption,
-																		page_number: page_num,
-																		conf: fig.conf,
-																	});
-																}
-															}}
-															title={t("menu.ask_ai")}
-														>
-															<span className="text-xs">✨</span>
-															{t("menu.ask_ai")}
-														</button>
-													</div>
-
-													{/* Transparent overlay: bbox全体をクリック可能にする */}
+												<div className="absolute top-2 right-2 z-[9999] pointer-events-auto opacity-60 hover:opacity-100 transition-opacity">
 													<button
 														type="button"
-														aria-label="Selection overlay"
-														className="absolute inset-0 w-full h-full z-40 bg-transparent cursor-pointer"
+														className="bg-orange-600 text-white text-xs px-3 py-1.5 rounded-md shadow shadow-orange-500/30 hover:bg-orange-700 hover:shadow-orange-600/40 transition-all font-medium flex items-center gap-1.5 cursor-pointer transform hover:scale-105 active:scale-95"
 														onClick={(e) => {
 															e.stopPropagation();
 															if (onFigureSelect) {
@@ -422,8 +400,12 @@ const PDFPage: React.FC<PDFPageProps> = ({
 																});
 															}
 														}}
-													/>
-												</>
+														title={t("menu.ask_ai")}
+													>
+														<span className="text-xs">✨</span>
+														{t("menu.ask_ai")}
+													</button>
+												</div>
 											)}
 										</div>
 									</div>

@@ -112,7 +112,13 @@ export function useTextSelection(pageNum: number) {
 
 	useEffect(() => {
 		const handleClickOutside = (e: MouseEvent) => {
-			if ((e.target as HTMLElement).closest(".selection-menu")) return;
+			const target = e.target as HTMLElement;
+			if (
+				target &&
+				typeof target.closest === "function" &&
+				target.closest(".selection-menu")
+			)
+				return;
 			setSelectionMenu(null);
 		};
 		if (selectionMenu)

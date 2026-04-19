@@ -1,17 +1,18 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock child components to isolate App.tsx rendering logic
+// Child components
 vi.mock("@/components/Auth/Login", () => ({
 	default: () => <div data-testid="login-mock">Login</div>,
 }));
 vi.mock("@/components/Contact/RequestForm", () => ({
-	default: () => <div data-testid="request-form-mock">RequestForm</div>,
+	default: () => <div data-testid="request-form-mock" />,
 }));
 vi.mock("@/components/Error/ErrorBoundary", () => ({
-	default: ({ children }: any) => (
-		<div data-testid="error-boundary-mock">{children}</div>
-	),
+	default: ({ children }: any) => <div>{children}</div>,
+}));
+vi.mock("@/components/Help/HelpAssistant", () => ({
+	default: () => <div data-testid="help-assistant-mock" />,
 }));
 vi.mock("@/components/PDF/PDFViewer", () => ({
 	default: ({ paperId, onWordClick, onAskAI, onTextSelect }: any) => (
@@ -21,7 +22,7 @@ vi.mock("@/components/PDF/PDFViewer", () => ({
 				type="button"
 				data-testid="mock-word-click"
 				onClick={() =>
-					onWordClick?.("hello", "context", { page: 1, x: 10, y: 10 }, 0.95)
+					onWordClick?.("hello", "ctx", { page: 1, x: 10, y: 10 }, 0.95)
 				}
 			>
 				WordClick
@@ -30,7 +31,7 @@ vi.mock("@/components/PDF/PDFViewer", () => ({
 				type="button"
 				data-testid="mock-ask-ai"
 				onClick={() =>
-					onAskAI?.("explain this", "img.jpg", { page: 1, x: 20, y: 20 })
+					onAskAI?.("explain", "img.jpg", { page: 1, x: 20, y: 20 })
 				}
 			>
 				AskAI
@@ -48,122 +49,116 @@ vi.mock("@/components/PDF/PDFViewer", () => ({
 	),
 }));
 vi.mock("@/components/Search/SearchBar", () => ({
-	default: () => <div data-testid="search-bar-mock">SearchBar</div>,
+	default: () => <div data-testid="search-bar-mock" />,
 }));
 vi.mock("@/components/Sidebar/Sidebar", () => ({
-	default: () => <div data-testid="sidebar-mock">Sidebar</div>,
+	default: () => <div data-testid="sidebar-mock" />,
 }));
-vi.mock("@/components/UI/GlobalLoading", () => ({
-	default: () => <div data-testid="global-loading-mock">GlobalLoading</div>,
-}));
-vi.mock("@/components/UI/ServiceOutage", () => ({
-	default: () => <div data-testid="service-outage-mock">ServiceOutage</div>,
-}));
+vi.mock("@/components/UI/GlobalLoading", () => ({ default: () => null }));
+vi.mock("@/components/UI/ServiceOutage", () => ({ default: () => null }));
 vi.mock("@/components/Upload/UploadScreen", () => ({
-	default: () => <div data-testid="upload-screen-mock">UploadScreen</div>,
+	default: () => <div data-testid="upload-screen-mock" />,
 }));
 
-// Mock Auth Context
-const mockLogout = vi.fn();
-let mockUser: any = {
-	id: "test-user",
-	name: "Test User",
-	email: "test@example.com",
-};
-let mockIsGuest = false;
+// react-router-dom: /* ルートのみレンダリングして Dashboard の lazy import を回避
+vi.mock("react-router-dom", () => ({
+	Routes: ({ children }: any) => <>{children}</>,
+	Route: ({ path, element }: any) => (path === "/*" ? <>{element}</> : null),
+	useNavigate: () => vi.fn(),
+	useLocation: () => ({ pathname: "/", search: "", hash: "", state: null }),
+}));
 
-vi.mock("@/contexts/AuthContext", () => ({
-	useAuth: () => ({
-		user: mockUser,
-		isGuest: mockIsGuest,
-		logout: mockLogout,
+// ---- useAppState モック ----
+const mockHandlePaperSelect = vi.fn();
+const mockHandleDeletePaper = vi.fn();
+const mockHandleWordClick = vi.fn();
+const mockHandleAskAI = vi.fn();
+const mockHandleTextSelect = vi.fn();
+
+let mockAppState: any;
+
+vi.mock("@/hooks/useAppState", () => ({
+	useAppState: () => mockAppState,
+}));
+
+const mockPapers = [
+	{ paper_id: "p1", title: "Paper 1", created_at: new Date().toISOString() },
+	{ paper_id: "p2", title: "Paper 2", created_at: new Date().toISOString() },
+];
+
+function buildState(overrides: Record<string, unknown> = {}) {
+	return {
+		// Auth
+		user: { id: "test-user", name: "Test User", email: "test@example.com" },
+		isGuest: false,
+		logout: vi.fn(),
 		token: "mock-token",
-	}),
-}));
-
-vi.mock("@/contexts/LoadingContext", () => ({
-	useLoading: () => ({ startLoading: vi.fn(), stopLoading: vi.fn() }),
-}));
-
-// Mock Hooks
-const mockGetCachedPaper = vi.fn();
-const mockDeletePaperCache = vi.fn();
-vi.mock("@/db/hooks", () => ({
-	usePaperCache: () => ({
-		getCachedPaper: mockGetCachedPaper,
-		deletePaperCache: mockDeletePaperCache,
-	}),
-	useBookmarks: () => ({
-		addBookmark: vi.fn(),
-		getBookmarks: vi.fn(() => Promise.resolve([])),
-		getPageBookmarks: vi.fn(() => Promise.resolve(false)),
-		deleteBookmark: vi.fn(),
-	}),
-}));
-
-// Use vi.hoisted for mocks that need to be accessible within vi.mock
-const dexieMocks = vi.hoisted(() => ({
-	mockToArray: vi.fn<any>(() => Promise.resolve([])),
-	mockReverse: vi.fn<any>(() => ({
-		toArray: vi.fn<any>(() => Promise.resolve([])),
-	})),
-	mockOrderBy: vi.fn<any>(() => ({
-		reverse: vi.fn<any>(() => ({
-			toArray: vi.fn<any>(() => Promise.resolve([])),
-		})),
-	})),
-}));
-
-vi.mock("@/db/index", () => ({
-	db: {
-		papers: {
-			orderBy: dexieMocks.mockOrderBy,
-		},
-	},
-	isDbAvailable: () => true,
-}));
-
-// Set up default implementation linkage
-dexieMocks.mockOrderBy.mockReturnValue({
-	reverse: vi.fn(() => ({
-		toArray: dexieMocks.mockToArray,
-	})),
-});
-dexieMocks.mockToArray.mockResolvedValue([]);
-
-vi.mock("@/db/sync", () => ({
-	useSyncStatus: () => "synced",
-}));
-
-vi.mock("@/hooks/useLayoutState", () => ({
-	useLayoutState: () => ({
+		navigate: vi.fn(),
+		t: (key: string) => key,
+		// Health
+		isHealthy: true,
+		isMaintenance: false,
+		healthMessage: null,
+		// File/Paper
+		uploadFile: null,
+		currentPaperId: null,
+		isAnalyzing: false,
+		uploadedPapers: [],
+		isPapersLoading: false,
+		// Session/Tabs
+		sessionId: "session-test",
+		activeTab: "chat",
+		setActiveTab: vi.fn(),
+		dictSubTab: "translation",
+		setDictSubTab: vi.fn(),
+		showLoginModal: false,
+		setShowLoginModal: vi.fn(),
+		// Layout
 		sidebarWidth: 300,
 		setSidebarWidth: vi.fn(),
 		isResizing: false,
 		setIsResizing: vi.fn(),
-		isLeftSidebarOpen: true, // Keep it open for testing
+		isLeftSidebarOpen: true,
 		setIsLeftSidebarOpen: vi.fn(),
 		isRightSidebarOpen: false,
 		setIsRightSidebarOpen: vi.fn(),
 		isMobile: false,
-	}),
-}));
-
-vi.mock("@/hooks/usePinchZoom", () => ({
-	usePinchZoom: () => ({
+		// Word state
+		translationWord: undefined,
+		translationContext: undefined,
+		translationCoordinates: undefined,
+		translationConf: undefined,
+		explanationWord: undefined,
+		explanationContext: undefined,
+		explanationCoordinates: undefined,
+		selectedWord: undefined,
+		selectedContext: undefined,
+		selectedCoordinates: undefined,
+		selectedImage: undefined,
+		jumpTarget: null,
+		pendingFigureId: null,
+		setPendingFigureId: vi.fn(),
+		pendingChatPrompt: null,
+		setPendingChatPrompt: vi.fn(),
+		selectedFigure: null,
+		activeEvidence: undefined,
+		setActiveEvidence: vi.fn(),
+		// Zoom
 		zoom: 1,
 		resetZoom: vi.fn(),
-		containerRef: { current: null },
-		onWheel: vi.fn(),
-	}),
-}));
-
-vi.mock("@/hooks/useScrollTracking", () => ({
-	useScrollTracking: () => vi.fn(),
-}));
-
-vi.mock("@/hooks/useSearchState", () => ({
-	useSearchState: () => ({
+		zoomIn: vi.fn(),
+		zoomOut: vi.fn(),
+		zoomContainerRef: { current: null },
+		handleZoomWheel: vi.fn(),
+		// Scroll / Config / Mode / Search
+		handleScroll: vi.fn(),
+		appEnv: "test",
+		maxPdfSize: 50,
+		pdfMode: "plaintext",
+		setPdfMode: vi.fn(),
+		isModeTransitionPending: false,
+		startModeTransition: (fn: () => void) => fn(),
+		syncStatus: "synced",
 		isSearchOpen: false,
 		searchTerm: "",
 		setSearchTerm: vi.fn(),
@@ -174,267 +169,119 @@ vi.mock("@/hooks/useSearchState", () => ({
 		handlePrevMatch: vi.fn(),
 		handleCloseSearch: vi.fn(),
 		handleSearchMatchesUpdate: vi.fn(),
-	}),
-}));
+		// Handlers
+		handlePaperLoaded: vi.fn(),
+		handlePaperSelect: mockHandlePaperSelect,
+		handleDeletePaper: mockHandleDeletePaper,
+		handleDirectFileSelect: vi.fn(),
+		handleFileChange: vi.fn(),
+		handleWordClick: mockHandleWordClick,
+		handleTextSelect: mockHandleTextSelect,
+		handleAreaSelect: vi.fn(),
+		handleJumpToLocation: vi.fn(),
+		handleAnalysisStatusChange: vi.fn(),
+		handleAskAI: mockHandleAskAI,
+		handleFigureSelect: vi.fn(),
+		handleResizeKeyDown: vi.fn(),
+		...overrides,
+	};
+}
 
-vi.mock("@/hooks/useServiceHealth", () => ({
-	useServiceHealth: () => ({
-		isHealthy: true,
-		isMaintenance: false,
-		message: null,
-		reportFailure: vi.fn(),
-	}),
-}));
-
-vi.mock("@/lib/logger", () => ({
-	createLogger: () => ({ error: vi.fn(), info: vi.fn(), warn: vi.fn() }),
-}));
-
-vi.mock("@/lib/recommendation", () => ({
-	syncTrajectory: vi.fn(),
-}));
-
-vi.mock("react-i18next", () => ({
-	useTranslation: () => ({
-		t: (key: string, fallback?: string) => fallback || key,
-	}),
-}));
-vi.mock("react-router-dom", () => ({
-	Routes: ({ children }: any) => <>{children}</>,
-	Route: ({ element }: any) => <>{element}</>,
-	useNavigate: () => vi.fn(),
-	useLocation: () => ({
-		pathname: "/",
-		search: "",
-		hash: "",
-		state: null,
-	}),
-}));
-
-// We need to import App after mocking its dependencies
 import App from "./App";
 
-describe("App Interactions", () => {
-	const mockPapers = [
-		{ paper_id: "p1", title: "Paper 1", created_at: new Date().toISOString() },
-		{ paper_id: "p2", title: "Paper 2", created_at: new Date().toISOString() },
-	];
-
+describe("App - JSX wiring", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		mockUser = {
-			id: "test-user",
-			name: "Test User",
-			email: "test@example.com",
-		};
-		mockIsGuest = false;
-
-		global.fetch = vi.fn((url: string) => {
-			if (url.endsWith("/api/config")) {
-				return Promise.resolve({
-					json: () => Promise.resolve({ app_env: "test" }),
-					status: 200,
-				});
-			}
-			if (url.endsWith("/api/papers")) {
-				return Promise.resolve({
-					json: () => Promise.resolve({ papers: mockPapers }),
-					status: 200,
-				});
-			}
-			if (url.includes("/api/papers/p1") || url.includes("/api/papers/p2")) {
-				return Promise.resolve({
-					json: () => Promise.resolve({ ok: true, deleted: true }),
-					status: 200,
-				});
-			}
-			return Promise.resolve({
-				json: () => Promise.resolve({}),
-				status: 200,
-			});
-		}) as any;
-
-		// Mock window.confirm
-		global.window.confirm = vi.fn(() => true);
+		mockAppState = buildState();
 	});
 
-	it("renders the paper library and allows selecting a paper", async () => {
+	it("renders papers from uploadedPapers in the sidebar", () => {
+		mockAppState = buildState({ uploadedPapers: mockPapers });
 		render(<App />);
 
-		// Wait for papers to load
-		await waitFor(() => {
-			expect(screen.getByText("Paper 1")).toBeDefined();
-		});
+		expect(screen.getByText("Paper 1")).toBeDefined();
+		expect(screen.getByText("Paper 2")).toBeDefined();
+	});
 
-		// Click Paper 1
+	it("calls handlePaperSelect with the correct paper when clicked", () => {
+		mockAppState = buildState({ uploadedPapers: mockPapers });
+		render(<App />);
+
 		fireEvent.click(screen.getByText("Paper 1"));
 
-		// Check if currentPaperId would be set
-		await waitFor(() => {
-			expect(screen.getByTestId("pdf-viewer-mock")).toHaveTextContent(
-				"PDFViewer:p1",
-			);
-		});
+		expect(mockHandlePaperSelect).toHaveBeenCalledWith(
+			expect.objectContaining({ paper_id: "p1" }),
+		);
 	});
 
-	it("handles paper deletion", async () => {
+	it("shows delete buttons when appEnv is not prod and calls handleDeletePaper", () => {
+		mockAppState = buildState({ uploadedPapers: mockPapers, appEnv: "test" });
 		render(<App />);
 
-		await waitFor(() => {
-			expect(screen.getByText("Paper 1")).toBeDefined();
-		});
-
-		// The delete button is within the same container as the paper title
 		const deleteButtons = screen.getAllByTitle("削除");
+		expect(deleteButtons).toHaveLength(2);
+
 		fireEvent.click(deleteButtons[0]);
 
-		// Should call window.confirm
-		expect(global.window.confirm).toHaveBeenCalled();
-
-		// Should call fetch with DELETE
-		await waitFor(() => {
-			expect(global.fetch).toHaveBeenCalledWith(
-				expect.stringContaining("/api/papers/p1"),
-				expect.objectContaining({ method: "DELETE" }),
-			);
-		});
-
-		// Should call deletePaperCache from usePaperCache
-		expect(mockDeletePaperCache).toHaveBeenCalledWith("p1");
-
-		// Paper 1 should be gone from the list
-		await waitFor(() => {
-			expect(screen.queryByText("Paper 1")).toBeNull();
-		});
-	});
-
-	it("handles guest to logged-in transition and claiming papers", async () => {
-		// 1. Start as guest
-		mockUser = null;
-		mockIsGuest = true;
-
-		// IMPORTANT: Set up mock papers BEFORE the first render
-		dexieMocks.mockToArray.mockResolvedValue([
-			{ id: "guest-p1", title: "Guest Paper", last_accessed: Date.now() },
-		]);
-
-		// Mock getCachedPaper to return a guest paper
-		const mockPaper = {
-			id: "guest-p1",
-			title: "Guest Paper",
-			file_hash: "hash123",
-			ocr_text: "text",
-		};
-		mockGetCachedPaper.mockResolvedValue(mockPaper);
-
-		const { rerender } = render(<App />);
-
-		// Mock claiming API
-		const claimMock = vi.fn(() =>
-			Promise.resolve({
-				ok: true,
-				json: () => Promise.resolve({ claimed: true }),
-			}),
+		expect(mockHandleDeletePaper).toHaveBeenCalledWith(
+			expect.any(Object),
+			expect.objectContaining({ paper_id: "p1" }),
 		);
-		(global.fetch as any).mockImplementation((url: string) => {
-			if (url.endsWith("/api/papers/claim")) return claimMock();
-			if (url.endsWith("/api/papers"))
-				return Promise.resolve({ json: () => Promise.resolve({ papers: [] }) });
-			return Promise.resolve({ json: () => Promise.resolve({}), status: 200 });
-		});
+	});
 
-		// 2. Select a paper as guest
-		await waitFor(() => {
-			expect(screen.getByText("Guest Paper")).toBeDefined();
-		});
+	it("hides delete buttons when appEnv is prod", () => {
+		mockAppState = buildState({ uploadedPapers: mockPapers, appEnv: "prod" });
+		render(<App />);
 
-		fireEvent.click(screen.getByText("Guest Paper"));
+		expect(screen.queryAllByTitle("削除")).toHaveLength(0);
+	});
 
-		// 3. Wait for currentPaperId to be set before login
-		await waitFor(() => {
-			expect(screen.getByTestId("pdf-viewer-mock")).toHaveTextContent(
-				"PDFViewer:guest-p1",
-			);
-		});
+	it("passes currentPaperId to PDFViewer", () => {
+		mockAppState = buildState({ currentPaperId: "p1" });
+		render(<App />);
 
-		// 4. Simulate login
-		mockUser = { id: "new-user", name: "Logged User" };
-		mockIsGuest = false;
-
-		rerender(<App />);
-
-		// 5. Verify claim API was called
-		await waitFor(() => {
-			expect(claimMock).toHaveBeenCalled();
-		});
-
-		// Actually check fetch calls
-		const fetchCalls = (global.fetch as any).mock.calls;
-		const claimCall = fetchCalls.find((call: any) =>
-			call[0].endsWith("/api/papers/claim"),
+		expect(screen.getByTestId("pdf-viewer-mock")).toHaveTextContent(
+			"PDFViewer:p1",
 		);
-		expect(claimCall).toBeDefined();
-		expect(JSON.parse(claimCall[1].body)).toMatchObject({
-			paper_id: "guest-p1",
-			file_hash: "hash123",
+	});
+
+	it("wires onWordClick to handleWordClick", () => {
+		mockAppState = buildState({ currentPaperId: "p1" });
+		render(<App />);
+
+		fireEvent.click(screen.getByTestId("mock-word-click"));
+
+		expect(mockHandleWordClick).toHaveBeenCalledWith(
+			"hello",
+			"ctx",
+			{ page: 1, x: 10, y: 10 },
+			0.95,
+		);
+	});
+
+	it("wires onAskAI to handleAskAI", () => {
+		mockAppState = buildState({ currentPaperId: "p1" });
+		render(<App />);
+
+		fireEvent.click(screen.getByTestId("mock-ask-ai"));
+
+		expect(mockHandleAskAI).toHaveBeenCalledWith("explain", "img.jpg", {
+			page: 1,
+			x: 20,
+			y: 20,
 		});
 	});
 
-	it("handles word clicks and triggers trajectory sync", async () => {
-		const { syncTrajectory } = await import("@/lib/recommendation");
+	it("wires onTextSelect to handleTextSelect", () => {
+		mockAppState = buildState({ currentPaperId: "p1" });
 		render(<App />);
 
-		// Wait for paper list and select one
-		await waitFor(() => expect(screen.getByText("Paper 1")).toBeDefined());
-		fireEvent.click(screen.getByText("Paper 1"));
+		fireEvent.click(screen.getByTestId("mock-text-select"));
 
-		// Simulate word click from PDFViewer
-		const wordBtn = screen.getByTestId("mock-word-click");
-		fireEvent.click(wordBtn);
-
-		// 1. Check if sidebar opens and tab switches to notes/translation
-		// Note: Sidebar mock should ideally show active tabs, but we check if it renders.
-		expect(screen.getByTestId("sidebar-mock")).toBeDefined();
-
-		// 2. Check if syncTrajectory was called
-		await waitFor(() => {
-			expect(syncTrajectory).toHaveBeenCalledWith(
-				expect.objectContaining({
-					session_id: expect.stringContaining("session-"),
-					paper_id: "p1",
-					word_clicks: [
-						expect.objectContaining({
-							word: "hello",
-							context: "context",
-						}),
-					],
-				}),
-				"mock-token",
-			);
+		expect(mockHandleTextSelect).toHaveBeenCalledWith("selected text", {
+			page: 1,
+			x: 30,
+			y: 30,
 		});
-	});
-
-	it("handles AskAI and switches to notes tab", async () => {
-		render(<App />);
-		await waitFor(() => expect(screen.getByText("Paper 1")).toBeDefined());
-		fireEvent.click(screen.getByText("Paper 1"));
-
-		const aiBtn = screen.getByTestId("mock-ask-ai");
-		fireEvent.click(aiBtn);
-
-		// Should switch to notes tab
-		expect(screen.getByTestId("sidebar-mock")).toBeDefined();
-	});
-
-	it("handles text selection and switches to comments tab", async () => {
-		render(<App />);
-		await waitFor(() => expect(screen.getByText("Paper 1")).toBeDefined());
-		fireEvent.click(screen.getByText("Paper 1"));
-
-		const textBtn = screen.getByTestId("mock-text-select");
-		fireEvent.click(textBtn);
-
-		// Should switch to comments tab
-		expect(screen.getByTestId("sidebar-mock")).toBeDefined();
 	});
 });
