@@ -32,7 +32,7 @@ export const computeFileHash = async (file: File): Promise<string> => {
 		return Array.from(new Uint8Array(hashBuffer))
 			.map((b) => b.toString(16).padStart(2, "0"))
 			.join("");
-	} catch (_e) {
+	} catch (e) {
 		log.warn("compute_file_hash", "Web Crypto Hashing failed, using fallback", {
 			error: e,
 		});
@@ -646,7 +646,7 @@ export function usePDFViewerLogic({
 			const { task_id, stream_url } = await analyzeRes.json();
 			activeTaskIdRef.current = task_id;
 			await startStreaming(stream_url, 0);
-		} catch (_err: any) {
+		} catch (err: any) {
 			setStatus("error");
 			if (err?.message === "__file_too_large__") {
 				setErrorMsg(
