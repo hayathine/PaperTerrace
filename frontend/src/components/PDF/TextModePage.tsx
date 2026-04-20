@@ -110,74 +110,9 @@ const TextModePage: React.FC<TextModePageProps> = ({
 	const { selectionMenu, clearSelectionMenu } = useTextSelection(page.page_num);
 	const [zoomedImage, setZoomedImage] = useState<string | null>(null);
 
-	// --- 単語クリック: クリック位置のテキストノードから単語を抽出して翻訳トリガー ---
-	const handleWordClick = useCallback(
-		(e: React.MouseEvent<HTMLDivElement>) => {
-			if (!onWordClick) return;
-			const target = e.target as HTMLElement;
-			// リンク・ボタン・画像はスキップ
-			if (target.closest("a, button, img")) return;
-
-			// テキスト選択中（範囲選択）は選択メニューに任せる
-			const sel = window.getSelection();
-			if ((sel?.toString() ?? "").trim().length > 0) return;
-
-			// クリック位置のキャレット位置を取得
-			let caretNode: Node | null = null;
-			let caretOffset = 0;
-			if (typeof document.caretRangeFromPoint === "function") {
-				const r = document.caretRangeFromPoint(e.clientX, e.clientY);
-				if (r) {
-					caretNode = r.startContainer;
-					caretOffset = r.startOffset;
-				}
-			} else if (
-				typeof (
-					document as unknown as {
-						caretPositionFromPoint?: (
-							x: number,
-							y: number,
-						) => { offsetNode: Node; offset: number } | null;
-					}
-				).caretPositionFromPoint === "function"
-			) {
-				const pos = (
-					document as unknown as {
-						caretPositionFromPoint: (
-							x: number,
-							y: number,
-						) => { offsetNode: Node; offset: number } | null;
-					}
-				).caretPositionFromPoint(e.clientX, e.clientY);
-				if (pos) {
-					caretNode = pos.offsetNode;
-					caretOffset = pos.offset;
-				}
-			}
-
-			if (!caretNode || caretNode.nodeType !== Node.TEXT_NODE) return;
-
-			// テキストノード内で単語境界を探索
-			const text = caretNode.textContent ?? "";
-			let start = caretOffset;
-			let end = caretOffset;
-			while (start > 0 && !/[\s\u00A0]/.test(text[start - 1])) start--;
-			while (end < text.length && !/[\s\u00A0]/.test(text[end])) end++;
-
-			// 前後の句読点を除去
-			const word = text
-				.slice(start, end)
-				.replace(/^[.,!?;:'"()[\]{}\-—]+|[.,!?;:'"()[\]{}\-—]+$/g, "");
-
-			if (!word || word.length < 2) return;
-
-			const rect = e.currentTarget.getBoundingClientRect();
-			const x = (e.clientX - rect.left) / (rect.width || 1);
-			const y = (e.clientY - rect.top) / (rect.height || 1);
-			onWordClick(word, undefined, { page: page.page_num, x, y });
-		},
-		[onWordClick, page.page_num],
-	);
+	// ⚠️ テキストモードでは「単語クリック→翻訳」は使わない。
+	// 翻訳は必ずテキスト選択後の選択メニュー（Translate ボタン）経由のみ。
+	// handleWordClick を article の onClick に戻さないこと。何度も同じ間違いが起きている。
 
 	// --- コンテンツ: content が空なら lines フォールバック ---
 	const processedMarkdown = useMemo(() => {
@@ -503,10 +438,7 @@ const TextModePage: React.FC<TextModePageProps> = ({
 
 			{/* Markdown Content - lazy render when off-screen to save React/browser work */}
 			{isVisible ? (
-				<article
-					className="px-3 py-4 sm:px-6 sm:py-5 md:px-10 md:py-8 selection:bg-orange-600/30 overflow-x-hidden"
-					onClick={handleWordClick}
-				>
+				<article className="px-3 py-4 sm:px-6 sm:py-5 md:px-10 md:py-8 selection:bg-orange-600/30 overflow-x-hidden">
 					{processedMarkdown ? (
 						<MarkdownContent
 							className="prose prose-slate max-w-none prose-p:my-3 prose-p:leading-7 prose-li:my-1 prose-li:leading-7 prose-img:mx-auto prose-img:max-w-full [&_.katex]:text-base [&_.katex]:font-normal [&_.katex-display]:my-4 [&_.math-display]:block [&_.katex-display]:overflow-x-auto [&_.katex-display]:max-w-full prose-pre:overflow-x-auto prose-pre:max-w-full break-words"

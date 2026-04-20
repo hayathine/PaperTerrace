@@ -178,7 +178,7 @@ WORKER_SA_EMAIL = "cloud-tasks-invoker@gen-lang-client-0800253336.iam.gserviceac
 
 # AI Models (Staging)
 GCP_LOCATION = "us-central1"
-GCP_GLOBAL_MODELS = "gemini-3.1-pro-preview"
+# GCP_GLOBAL_MODELS = "gemini-3.1-pro-preview"
 VERTEX_MODEL = "gemini-2.5-flash-lite"
 MODEL_CHAT = "gemini-2.5-flash"
 MODEL_SUMMARY = "gemini-2.5-flash-lite"

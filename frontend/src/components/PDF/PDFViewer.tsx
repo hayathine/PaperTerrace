@@ -229,7 +229,7 @@ const PDFViewer: React.FC<PDFViewerProps> = ({
 							>
 								{pages.map((page) => (
 									<PDFPage
-										key={page.page_num}
+										key={`${loadedPaperId ?? "upload"}-${page.page_num}`}
 										page={page}
 										onWordClick={handleWordClick}
 										onTextSelect={handleTextSelect}

@@ -129,6 +129,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 			};
 		} else {
 			setDisplayUrl(image_url);
+			setImageError(false);
 		}
 	}, [cachedImage, image_url]);
 
