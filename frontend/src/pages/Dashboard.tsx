@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { useBookmarks } from "@/db/hooks";
+import { getUICache, setUICache, useBookmarks } from "@/db/hooks";
 import type { Bookmark } from "@/db/index";
 import {
 	deletePaper,
@@ -52,13 +52,11 @@ export default function Dashboard() {
 	const [translations, setTranslations] = useState<TranslationEntry[]>([]);
 	const [totalTranslations, setTotalTranslations] = useState(0);
 	const [page, setPage] = useState(1);
-	const [loading, setLoading] = useState(() => !!token);
-	const [papersLoading, setPapersLoading] = useState(() => !!token);
+	const [loading, setLoading] = useState(false);
+	const [papersLoading, setPapersLoading] = useState(false);
 	const [translationsLoading, setTranslationsLoading] = useState(false);
 	const [deletingPaperId, setDeletingPaperId] = useState<string | null>(null);
 	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
-	// 初回ロード済みフラグ（token更新による再フェッチでスケルトンを再表示しない）
-	const initialLoadDone = useRef(false);
 
 	const filteredPapers = useMemo(() => {
 		if (!paperSearch.trim()) return papers;
@@ -73,24 +71,47 @@ export default function Dashboard() {
 	}, [papers, paperSearch]);
 
 	useEffect(() => {
-		if (!token) return;
-		// 初回のみスケルトン表示。token更新（JWT更新）はバックグラウンドで再フェッチ
-		const isFirst = !initialLoadDone.current;
-		if (isFirst) {
-			setLoading(true);
-			setPapersLoading(true);
-			initialLoadDone.current = true;
-		}
-		fetchUserStats(token)
-			.then(setStats)
-			.catch((e) => log.error("fetch_stats", "Failed to fetch stats", { e }))
-			.finally(() => setLoading(false));
-		fetchUserPapers(token, 100)
-			.then((res) => setPapers(res.papers))
-			.catch((e) => log.error("fetch_papers", "Failed to fetch papers", { e }))
-			.finally(() => setPapersLoading(false));
-		getBookmarks().then(setBookmarks);
-	}, [token, getBookmarks]);
+		if (!token || !user?.id) return;
+		const userId = user.id;
+
+		const load = async () => {
+			// キャッシュがあれば即座に表示（スケルトンなし）
+			const [cachedStats, cachedPapers] = await Promise.all([
+				getUICache<UserStats>(`dashboard_stats:${userId}`),
+				getUICache<PaperEntry[]>(`dashboard_papers:${userId}`),
+			]);
+			if (cachedStats) {
+				setStats(cachedStats);
+			} else {
+				setLoading(true);
+			}
+			if (cachedPapers) {
+				setPapers(cachedPapers);
+			} else {
+				setPapersLoading(true);
+			}
+
+			// バックグラウンドでAPI取得・キャッシュ更新
+			fetchUserStats(token)
+				.then((s) => {
+					setStats(s);
+					setUICache(`dashboard_stats:${userId}`, s);
+				})
+				.catch((e) => log.error("fetch_stats", "Failed to fetch stats", { e }))
+				.finally(() => setLoading(false));
+			fetchUserPapers(token, 100)
+				.then((res) => {
+					setPapers(res.papers);
+					setUICache(`dashboard_papers:${userId}`, res.papers);
+				})
+				.catch((e) =>
+					log.error("fetch_papers", "Failed to fetch papers", { e }),
+				)
+				.finally(() => setPapersLoading(false));
+			getBookmarks().then(setBookmarks);
+		};
+		load();
+	}, [token, user?.id, getBookmarks]);
 
 	useEffect(() => {
 		if (!token) return;
@@ -468,6 +489,15 @@ export default function Dashboard() {
 															setPapers((prev) =>
 																prev.filter((x) => x.paper_id !== p.paper_id),
 															);
+															if (user?.id) {
+																const key = `dashboard_papers:${user.id}`;
+																const c = await getUICache<PaperEntry[]>(key);
+																if (c)
+																	await setUICache(
+																		key,
+																		c.filter((x) => x.paper_id !== p.paper_id),
+																	);
+															}
 														} catch (e) {
 															log.error(
 																"delete_paper",

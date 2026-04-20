@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { API_URL } from "@/config";
 import { createLogger } from "@/lib/logger";
-import { usePaperCache } from "../db/hooks";
+import { getUICache, setUICache, usePaperCache } from "../db/hooks";
 import { db, isDbAvailable } from "../db/index";
 
 const log = createLogger("usePaperLibrary");
@@ -28,7 +28,7 @@ export function usePaperLibrary({
 	const [isPapersLoading, setIsPapersLoading] = useState(false);
 	const { deletePaperCache } = usePaperCache();
 
-	// 認証済みユーザーの論文一覧を取得
+	// 認証済みユーザーの論文一覧を取得 (stale-while-revalidate)
 	useEffect(() => {
 		if (!userId || !token) {
 			setUploadedPapers([]);
@@ -36,9 +36,18 @@ export function usePaperLibrary({
 			return;
 		}
 
-		setIsPapersLoading(true);
-		const fetchPapers = async () => {
-			// コールドスタート対策: 最大3回リトライ（2s, 4s インターバル）
+		const cacheKey = `paper_list:${userId}`;
+		const load = async () => {
+			// キャッシュがあれば即座に表示（スケルトンなし）
+			const cached = await getUICache<Paper[]>(cacheKey);
+			if (cached) {
+				setUploadedPapers(cached);
+				setIsPapersLoading(false);
+			} else {
+				setIsPapersLoading(true);
+			}
+
+			// バックグラウンドでAPI取得・キャッシュ更新
 			for (let attempt = 0; attempt < 3; attempt++) {
 				try {
 					const res = await fetch(`${API_URL}/api/papers`, {
@@ -46,11 +55,9 @@ export function usePaperLibrary({
 						signal: AbortSignal.timeout(30000),
 					});
 					const data = await res.json();
-					if (data && Array.isArray(data.papers)) {
-						setUploadedPapers(data.papers);
-					} else {
-						setUploadedPapers([]);
-					}
+					const papers = Array.isArray(data.papers) ? data.papers : [];
+					setUploadedPapers(papers);
+					await setUICache(cacheKey, papers);
 					setIsPapersLoading(false);
 					return;
 				} catch (err) {
@@ -58,13 +65,15 @@ export function usePaperLibrary({
 						await new Promise((r) => setTimeout(r, 2000 * (attempt + 1)));
 					} else {
 						log.error("fetch_papers", "Failed to fetch papers", { error: err });
-						setUploadedPapers([]);
-						setIsPapersLoading(false);
+						if (!cached) {
+							setUploadedPapers([]);
+							setIsPapersLoading(false);
+						}
 					}
 				}
 			}
 		};
-		fetchPapers();
+		load();
 	}, [userId, token]);
 
 	// ゲストユーザーの論文一覧を IndexedDB から取得
@@ -122,21 +131,21 @@ export function usePaperLibrary({
 				setIsPapersLoading(false);
 			}
 		} else {
-			if (!token) return;
-			setIsPapersLoading(true);
+			// スケルトンなし（アップロード後のサイレント更新）
+			if (!token || !userId) return;
 			try {
 				const res = await fetch(`${API_URL}/api/papers`, {
 					headers: { Authorization: `Bearer ${token}` },
 				});
 				const data = await res.json();
-				setUploadedPapers(Array.isArray(data?.papers) ? data.papers : []);
+				const papers = Array.isArray(data?.papers) ? data.papers : [];
+				setUploadedPapers(papers);
+				await setUICache(`paper_list:${userId}`, papers);
 			} catch (err) {
 				log.error("refresh_papers", "Failed to refresh papers", { error: err });
-			} finally {
-				setIsPapersLoading(false);
 			}
 		}
-	}, [isGuest, token]);
+	}, [isGuest, token, userId]);
 
 	/** 論文を削除する。削除した論文が currentPaperId と一致していた場合 true を返す */
 	const deletePaper = useCallback(
@@ -158,12 +167,22 @@ export function usePaperLibrary({
 				}
 			}
 			await deletePaperCache(paper.paper_id);
+			if (userId) {
+				const cacheKey = `paper_list:${userId}`;
+				const cached = await getUICache<Paper[]>(cacheKey);
+				if (cached) {
+					await setUICache(
+						cacheKey,
+						cached.filter((p) => p.paper_id !== paper.paper_id),
+					);
+				}
+			}
 			setUploadedPapers((prev) =>
 				prev.filter((p) => p.paper_id !== paper.paper_id),
 			);
 			return currentPaperId === paper.paper_id;
 		},
-		[token, deletePaperCache],
+		[token, userId, deletePaperCache],
 	);
 
 	return {

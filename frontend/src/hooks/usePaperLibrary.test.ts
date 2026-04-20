@@ -16,6 +16,8 @@ vi.mock("../db/hooks", () => ({
 	usePaperCache: () => ({
 		deletePaperCache: vi.fn().mockResolvedValue(undefined),
 	}),
+	getUICache: vi.fn().mockResolvedValue(null),
+	setUICache: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("../db/index", () => ({

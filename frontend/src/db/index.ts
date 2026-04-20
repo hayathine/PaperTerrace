@@ -45,11 +45,18 @@ export interface Bookmark {
 	created_at: number;
 }
 
+export interface UICache {
+	key: string;
+	data: string; // JSON serialized
+	cached_at: number;
+}
+
 export class PaperTerraceDB extends Dexie {
 	papers!: Table<PaperCache>;
 	images!: Table<ImageCache>;
 	edit_history!: Table<EditHistory>;
 	bookmarks!: Table<Bookmark>;
+	ui_cache!: Table<UICache>;
 
 	constructor() {
 		super("PaperTerraceDB");
@@ -63,6 +70,13 @@ export class PaperTerraceDB extends Dexie {
 			images: "id, paper_id, label",
 			edit_history: "++id, paper_id, synced",
 			bookmarks: "++id, paper_id, page_number, created_at",
+		});
+		this.version(4).stores({
+			papers: "id, last_accessed, file_hash",
+			images: "id, paper_id, label",
+			edit_history: "++id, paper_id, synced",
+			bookmarks: "++id, paper_id, page_number, created_at",
+			ui_cache: "key, cached_at",
 		});
 	}
 }

@@ -262,3 +262,37 @@ export function useBookmarks() {
 
 	return { addBookmark, getBookmarks, getPageBookmarks, deleteBookmark };
 }
+
+export async function getUICache<T>(key: string): Promise<T | null> {
+	if (!isDbAvailable()) return null;
+	try {
+		const entry = await db.ui_cache.get(key);
+		if (!entry) return null;
+		return JSON.parse(entry.data) as T;
+	} catch (e) {
+		log.warn("get_ui_cache", "Failed to read UI cache", { key, error: e });
+		return null;
+	}
+}
+
+export async function setUICache<T>(key: string, data: T): Promise<void> {
+	if (!isDbAvailable()) return;
+	try {
+		await db.ui_cache.put({
+			key,
+			data: JSON.stringify(data),
+			cached_at: Date.now(),
+		});
+	} catch (e) {
+		log.warn("set_ui_cache", "Failed to write UI cache", { key, error: e });
+	}
+}
+
+export async function removeUICache(key: string): Promise<void> {
+	if (!isDbAvailable()) return;
+	try {
+		await db.ui_cache.delete(key);
+	} catch (e) {
+		log.warn("remove_ui_cache", "Failed to remove UI cache", { key, error: e });
+	}
+}
