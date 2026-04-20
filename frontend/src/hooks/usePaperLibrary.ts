@@ -43,7 +43,7 @@ export function usePaperLibrary({
 				try {
 					const res = await fetch(`${API_URL}/api/papers`, {
 						headers: { Authorization: `Bearer ${token}` },
-						signal: AbortSignal.timeout(10000),
+						signal: AbortSignal.timeout(30000),
 					});
 					const data = await res.json();
 					if (data && Array.isArray(data.papers)) {

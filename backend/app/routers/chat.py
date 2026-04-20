@@ -21,6 +21,7 @@ from app.providers import (
     get_storage_provider,
 )  # RedisService now uses in-memory cache
 from common.logger import ServiceLogger
+from functools import cache
 from redis_provider.provider import get_is_registered
 
 log = ServiceLogger("Chat")
@@ -28,9 +29,15 @@ log = ServiceLogger("Chat")
 
 router = APIRouter(tags=["Chat"])
 
-# Services
-chat_service = ChatService()
-redis_service = RedisService()
+
+@cache
+def _get_chat_service() -> ChatService:
+    return ChatService()
+
+
+@cache
+def _get_redis_service() -> RedisService:
+    return RedisService()
 
 
 _SESSION_ID_RE = re.compile(r"^[a-zA-Z0-9_\-]{1,128}$")
@@ -100,14 +107,14 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
 
     # 4. Context & History from Redis
     session_key = f"session:ctx:{request.session_id}"
-    context_raw, history_raw = redis_service.mget(session_key, history_key)
+    context_raw, history_raw = _get_redis_service().mget(session_key, history_key)
     context = context_raw or ""
     history = history_raw or []
     t_redis_load = time.perf_counter()
 
     # Sliding window/Context refresh
     if context:
-        redis_service.expire(session_key, 3600)
+        _get_redis_service().expire(session_key, 3600)
 
     # 5. Chat turn limit
     user_msg_count = sum(1 for m in history if m.get("role") == "user")
@@ -138,7 +145,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
     if paper_id:
         pdf_cache_key = get_pdf_cache_key(paper_id)
         # If cache exists in Redis, we skip download as ChatService will use the cache
-        if redis_service.get(pdf_cache_key):
+        if _get_redis_service().get(pdf_cache_key):
             log.debug("chat", "PDFキャッシュ存在のためダウンロードスキップ", paper_id=paper_id)
         else:
             try:
@@ -165,7 +172,7 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
     # 8. AI Generation (The core processing)
     current_user_id = user_id if is_registered else f"guest:{request.session_id}"
     ai_start = time.perf_counter()
-    response_data = await chat_service.chat(
+    response_data = await _get_chat_service().chat(
         sanitized_message,
         history=history,
         document_context=context,
@@ -220,9 +227,9 @@ async def chat(request: ChatRequest, user: OptionalUser = None):
         history = history[-max_history:]
 
     # Save update
-    redis_service.set(history_key, json.dumps(history), expire=expire)
+    _get_redis_service().set(history_key, json.dumps(history), expire=expire)
     if context:
-        redis_service.expire(f"session:ctx:{request.session_id}", 3600)
+        _get_redis_service().expire(f"session:ctx:{request.session_id}", 3600)
 
     # Permament storage
     if is_registered and paper_id:
@@ -254,7 +261,7 @@ async def get_chat_history(
     else:
         history_key = f"chat:guest:{session_id}:{paper_id if paper_id else 'global'}"
 
-    history = redis_service.get(history_key) or []
+    history = _get_redis_service().get(history_key) or []
 
     # Redis にない場合、登録ユーザーは PostgreSQL からフォールバック
     if not history and is_registered and paper_id:
@@ -262,7 +269,7 @@ async def get_chat_history(
             history = storage.get_chat_history(user_id, paper_id)
             if history:
                 # Redis に復元（7日TTL）
-                redis_service.set(
+                _get_redis_service().set(
                     history_key, json.dumps(history), expire=7 * 24 * 3600
                 )
         except Exception as e:
@@ -287,7 +294,7 @@ async def clear_chat(
     else:
         history_key = f"chat:guest:{session_id}:{paper_id if paper_id else 'global'}"
 
-    redis_service.delete(history_key)
+    _get_redis_service().delete(history_key)
     return JSONResponse({"status": "ok"})
 
 

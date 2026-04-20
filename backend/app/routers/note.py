@@ -3,6 +3,8 @@ Note Router
 Handles sidebar note functionality.
 """
 
+from functools import cache
+
 from fastapi import APIRouter, Depends, Form
 from fastapi.encoders import jsonable_encoder
 from fastapi.responses import JSONResponse
@@ -16,7 +18,10 @@ from app.providers.orm_storage import ORMStorageAdapter
 
 router = APIRouter(tags=["Notes"])
 
-sidebar_note_service = SidebarNoteService()
+
+@cache
+def _get_sidebar_note_service() -> SidebarNoteService:
+    return SidebarNoteService()
 
 
 class NoteRequest(BaseModel):
@@ -43,7 +48,7 @@ async def get_notes(
     if not paper_id:
         paper_id = storage.get_session_paper_id(session_id)
 
-    notes = sidebar_note_service.get_notes(
+    notes = _get_sidebar_note_service().get_notes(
         session_id, paper_id=paper_id, user_id=user_id
     )
     return JSONResponse({"notes": jsonable_encoder(notes)})
@@ -62,7 +67,7 @@ async def add_note(
     if not paper_id:
         paper_id = storage.get_session_paper_id(request.session_id)
 
-    note = sidebar_note_service.add_note(
+    note = _get_sidebar_note_service().add_note(
         request.session_id,
         request.term,
         request.note,
@@ -82,9 +87,9 @@ async def update_note(note_id: str, request: NoteRequest, user: OptionalUser = N
     # We reuse the add_note logic or storage save logic which handles upsert
     # But usually we want a specific update method in service.
     # For now, let's assume upsert or create a new service method.
-    # checking sidebar_note_service... it just calls storage.save_note
+    # checking _get_sidebar_note_service()... it just calls storage.save_note
     try:
-        updated = sidebar_note_service.add_note(
+        updated = _get_sidebar_note_service().add_note(
             request.session_id,
             request.term,
             request.note,
@@ -114,7 +119,7 @@ async def delete_note(
     paper_id: str | None = None,
 ):
     user_id = get_user_identifier(user, session_id)
-    deleted = sidebar_note_service.delete_note(
+    deleted = _get_sidebar_note_service().delete_note(
         note_id, user_id=user_id, paper_id=paper_id
     )
     return JSONResponse({"deleted": deleted})
@@ -122,5 +127,5 @@ async def delete_note(
 
 @router.post("/note/export")
 async def export_notes(session_id: str = Form(...)):
-    export_text = sidebar_note_service.export_notes(session_id)
+    export_text = _get_sidebar_note_service().export_notes(session_id)
     return JSONResponse({"export": export_text})

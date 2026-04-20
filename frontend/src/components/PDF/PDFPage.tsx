@@ -383,10 +383,10 @@ const PDFPage: React.FC<PDFPageProps> = ({
 
 											{/* Ask AI button: interactive elements only (Req 6.5) */}
 											{isInteractiveType && (
-												<div className="absolute top-2 right-2 z-[9999] pointer-events-auto opacity-60 hover:opacity-100 transition-opacity">
+												<div className="absolute top-2 right-2 z-[9999] pointer-events-auto opacity-20 hover:opacity-100 transition-opacity duration-200">
 													<button
 														type="button"
-														className="bg-orange-600 text-white text-xs px-3 py-1.5 rounded-md shadow shadow-orange-500/30 hover:bg-orange-700 hover:shadow-orange-600/40 transition-all font-medium flex items-center gap-1.5 cursor-pointer transform hover:scale-105 active:scale-95"
+														className="bg-orange-600 text-white w-7 h-7 rounded-full shadow shadow-orange-500/30 hover:bg-orange-500 hover:shadow-orange-600/40 transition-all flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95"
 														onClick={(e) => {
 															e.stopPropagation();
 															if (onFigureSelect) {
@@ -402,8 +402,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 														}}
 														title={t("menu.ask_ai")}
 													>
-														<span className="text-xs">✨</span>
-														{t("menu.ask_ai")}
+														<span className="text-sm leading-none">✨</span>
 													</button>
 												</div>
 											)}

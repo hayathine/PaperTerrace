@@ -1,7 +1,3 @@
-import { createLogger } from "@/lib/logger";
-
-const log = createLogger("Config");
-
 function resolveApiUrl(): string {
 	if (!import.meta.env.PROD) {
 		return "";
@@ -22,8 +18,6 @@ function resolveApiUrl(): string {
 	} else if (import.meta.env.VITE_API_URL) {
 		url = import.meta.env.VITE_API_URL as string;
 	}
-
-	log.info("resolve_api_url", "API URL resolved", { url, hostname });
 
 	return url;
 }

@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
+from functools import cache
 
 from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel
@@ -26,10 +27,26 @@ log = ServiceLogger("Worker")
 
 router = APIRouter(tags=["Internal Worker"])
 
-_service = EnglishAnalysisService()
-_summary_service = SummaryService()
-_redis_service = RedisService()
-_img_storage = get_image_storage()
+
+@cache
+def _get_service() -> EnglishAnalysisService:
+    return EnglishAnalysisService()
+
+
+@cache
+def _get_summary_service() -> SummaryService:
+    return SummaryService()
+
+
+@cache
+def _get_redis_service() -> RedisService:
+    return RedisService()
+
+
+@cache
+def _get_img_storage():
+    return get_image_storage()
+
 
 # Cloud Tasks がリクエストに付与するヘッダー（存在確認で簡易認証）
 _CLOUD_TASKS_HEADER = "X-CloudTasks-QueueName"
@@ -55,7 +72,7 @@ def _progress_key(task_id: str) -> str:
 
 def _push_event(task_id: str, event: dict) -> None:
     """進捗イベントを Redis リストに追加する。"""
-    _redis_service.rpush(_progress_key(task_id), json.dumps(event))
+    _get_redis_service().rpush(_progress_key(task_id), json.dumps(event))
 
 
 @router.post("/internal/process-ocr")
@@ -85,16 +102,16 @@ async def process_ocr_task(request: Request, payload: OcrTaskPayload):
     )
 
     # タスクステータスを "processing" に更新
-    task_data = _redis_service.get(f"task:{task_id}") or {}
+    task_data = _get_redis_service().get(f"task:{task_id}") or {}
     task_data["status"] = "processing"
     task_data["worker_started_at"] = time.time()
-    _redis_service.set(f"task:{task_id}", task_data, expire=3600)
+    _get_redis_service().set(f"task:{task_id}", task_data, expire=3600)
 
     storage = get_storage_provider()
     try:
         # PDF バイトを GCS から取得
         try:
-            pdf_content = _img_storage.get_doc_bytes(payload.pdf_path)
+            pdf_content = _get_img_storage().get_doc_bytes(payload.pdf_path)
         except Exception as e:
             log.error(
                 "process_ocr",
@@ -103,9 +120,9 @@ async def process_ocr_task(request: Request, payload: OcrTaskPayload):
                 pdf_path=payload.pdf_path,
             )
             _push_event(task_id, {"type": "error", "message": "PDF source not found"})
-            _redis_service.expire(_progress_key(task_id), 3600)
+            _get_redis_service().expire(_progress_key(task_id), 3600)
             task_data["status"] = "error"
-            _redis_service.set(f"task:{task_id}", task_data, expire=3600)
+            _get_redis_service().set(f"task:{task_id}", task_data, expire=3600)
             return {"ok": False, "error": "pdf_not_found"}
 
         # ユーザープランの取得
@@ -121,7 +138,7 @@ async def process_ocr_task(request: Request, payload: OcrTaskPayload):
         page_count = 0
 
         # OCR ストリーミング処理
-        async for result_tuple in _service.ocr_service.extract_text_streaming(
+        async for result_tuple in _get_service().ocr_service.extract_text_streaming(
             pdf_content, payload.filename, user_plan=user_plan
         ):
             if len(result_tuple) != 7:
@@ -142,9 +159,9 @@ async def process_ocr_task(request: Request, payload: OcrTaskPayload):
             if page_text and page_text.startswith("ERROR_API_FAILED:"):
                 error_msg = page_text.replace("ERROR_API_FAILED: ", "")
                 _push_event(task_id, {"type": "error", "message": error_msg})
-                _redis_service.expire(_progress_key(task_id), 3600)
+                _get_redis_service().expire(_progress_key(task_id), 3600)
                 task_data["status"] = "error"
-                _redis_service.set(f"task:{task_id}", task_data, expire=3600)
+                _get_redis_service().set(f"task:{task_id}", task_data, expire=3600)
                 return {"ok": False, "error": error_msg}
 
             # Phase 1 速報値（image_url なし）はスキップ
@@ -194,7 +211,8 @@ async def process_ocr_task(request: Request, payload: OcrTaskPayload):
         _scanned_count = sum(
             1
             for ld in all_layout_data
-            if ld and isinstance(ld, dict)
+            if ld
+            and isinstance(ld, dict)
             and ld.get("_ocr_engine") in ("ocrmypdf", "tesseract")
         )
         if len(_page_engines) == 1:
@@ -224,7 +242,9 @@ async def process_ocr_task(request: Request, payload: OcrTaskPayload):
                 if payload.session_id:
                     storage.save_session_context(payload.session_id, new_paper_id)
 
-                storage.update_processing_status(new_paper_id, "layout_status", "success")
+                storage.update_processing_status(
+                    new_paper_id, "layout_status", "success"
+                )
 
                 # PDF メタデータ（タイトル・著者）を取得して保存
                 try:
@@ -239,11 +259,19 @@ async def process_ocr_task(request: Request, payload: OcrTaskPayload):
                     if _pdf_authors:
                         storage.update_paper_authors(new_paper_id, _pdf_authors)
                 except Exception as _meta_err:
-                    log.warning("process_ocr", "PDF メタデータ取得失敗（無視）", error=str(_meta_err))
+                    log.warning(
+                        "process_ocr",
+                        "PDF メタデータ取得失敗（無視）",
+                        error=str(_meta_err),
+                    )
 
                 # バックグラウンドタスク起動
-                asyncio.create_task(process_paper_summary_task(new_paper_id, lang=payload.lang))
-                asyncio.create_task(process_grobid_enrichment_task(new_paper_id, payload.file_hash))
+                asyncio.create_task(
+                    process_paper_summary_task(new_paper_id, lang=payload.lang)
+                )
+                asyncio.create_task(
+                    process_grobid_enrichment_task(new_paper_id, payload.file_hash)
+                )
 
                 if collected_figures:
                     for fig in collected_figures:
@@ -271,19 +299,19 @@ async def process_ocr_task(request: Request, payload: OcrTaskPayload):
 
         # セッションコンテキスト保存（全ユーザー）
         s_id = payload.session_id or new_paper_id
-        _redis_service.set(f"session:ctx:{s_id}", full_text[:20000], expire=3600)
+        _get_redis_service().set(f"session:ctx:{s_id}", full_text[:20000], expire=3600)
 
         # 完了イベント
         _push_event(
             task_id,
             {"type": "done", "paper_id": new_paper_id, "db_saved": _db_saved},
         )
-        _redis_service.expire(_progress_key(task_id), 3600)
+        _get_redis_service().expire(_progress_key(task_id), 3600)
 
         # タスクステータスを "completed" に更新
         task_data["status"] = "completed"
         task_data["paper_id"] = new_paper_id
-        _redis_service.set(f"task:{task_id}", task_data, expire=3600)
+        _get_redis_service().set(f"task:{task_id}", task_data, expire=3600)
 
         log.info(
             "process_ocr",
@@ -297,9 +325,9 @@ async def process_ocr_task(request: Request, payload: OcrTaskPayload):
     except Exception as e:
         log.error("process_ocr", f"ワーカー例外: {e}", task_id=task_id, exc_info=True)
         _push_event(task_id, {"type": "error", "message": str(e)})
-        _redis_service.expire(_progress_key(task_id), 3600)
+        _get_redis_service().expire(_progress_key(task_id), 3600)
         task_data["status"] = "error"
-        _redis_service.set(f"task:{task_id}", task_data, expire=3600)
+        _get_redis_service().set(f"task:{task_id}", task_data, expire=3600)
         return {"ok": False, "error": str(e)}
     finally:
         storage.close()

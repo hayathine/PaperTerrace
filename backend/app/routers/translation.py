@@ -5,24 +5,19 @@ Handles word translation, explanation, and language settings.
 
 import asyncio
 from dataclasses import dataclass
+from functools import cache
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
 
+from app.core.config import is_local
 from app.database import get_orm_storage
+from app.domain.features.cache_utils import get_pdf_cache_key
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.domain.services.analysis_service import EnglishAnalysisService
 from app.providers import get_ai_provider
 from app.providers.orm_storage import ORMStorageAdapter
-from common.dspy_utils.modules import (
-    SentenceTranslationModule,
-    SimpleTranslationModule,
-    TranslationModule,
-)
-from common.dspy_utils.trace import TraceContext, trace_dspy_call
-from common.logger import ServiceLogger
-from app.core.config import is_local
 from common import settings
 from common.dspy_seed_prompt import (
     CORE_SYSTEM_PROMPT,
@@ -30,22 +25,34 @@ from common.dspy_seed_prompt import (
     SENTENCE_TRANSLATE_FROM_PDF_PROMPT,
     TRANSLATE_FROM_PDF_PROMPT,
 )
+from common.dspy_utils.modules import (
+    SentenceTranslationModule,
+    SimpleTranslationModule,
+    TranslationModule,
+)
+from common.dspy_utils.trace import TraceContext, trace_dspy_call
+from common.logger import ServiceLogger
 from redis_provider.provider import RedisService
-from app.domain.features.cache_utils import get_pdf_cache_key
 
 log = ServiceLogger("Translation")
 
-
 router = APIRouter(tags=["Translation"])
 
-# Services
-service = EnglishAnalysisService()
-redis_service = RedisService()
+
+@cache
+def _get_service() -> EnglishAnalysisService:
+    return EnglishAnalysisService()
+
+
+@cache
+def _get_redis_service() -> RedisService:
+    return RedisService()
 
 
 # ---------------------------------------------------------------------------
 # 共通ヘルパー関数
 # ---------------------------------------------------------------------------
+
 
 def _clean_word(word: str) -> str:
     """入力テキストから改行・前後の句読点を除去する。空になった場合は元の文字列を返す。"""
@@ -57,7 +64,7 @@ def _get_pdf_cache_name(paper_id: str | None) -> str | None:
     """論文の PDF コンテキストキャッシュ名を Redis から取得する。なければ None。"""
     if not paper_id:
         return None
-    return redis_service.get(get_pdf_cache_key(paper_id))
+    return _get_redis_service().get(get_pdf_cache_key(paper_id))
 
 
 async def _generate_with_pdf_cache(
@@ -393,7 +400,9 @@ async def explain(
             paper_title = paper_obj.get("title")
 
     # 1. Cache Check / Translation Pod
-    cached = await service.get_translation(lemma, lang=lang, context=context, paper_title=paper_title)
+    cached = await _get_service().get_translation(
+        lemma, lang=lang, context=context, paper_title=paper_title
+    )
     if cached:
         source = cached.get("source", "Cache")
         elapsed = asyncio.get_event_loop().time() - start_time
@@ -429,7 +438,11 @@ async def explain(
         is_long_text = len(original_word) > 20 or " " in original_word.strip()
 
         if pdf_cache_name:
-            tmpl = SENTENCE_TRANSLATE_FROM_PDF_PROMPT if is_long_text else TRANSLATE_FROM_PDF_PROMPT
+            tmpl = (
+                SENTENCE_TRANSLATE_FROM_PDF_PROMPT
+                if is_long_text
+                else TRANSLATE_FROM_PDF_PROMPT
+            )
             translation = await _generate_with_pdf_cache(
                 original_word, context, tmpl, lang_name, pdf_cache_name
             )
@@ -451,7 +464,9 @@ async def explain(
                         "lang_name": lang_name,
                     },
                     context=TraceContext(
-                        user_id=current_user_id, session_id=session_id, paper_id=paper_id
+                        user_id=current_user_id,
+                        session_id=session_id,
+                        paper_id=paper_id,
                     ),
                 )
                 translation = res.translation.strip()
@@ -468,7 +483,9 @@ async def explain(
                         "lang_name": lang_name,
                     },
                     context=TraceContext(
-                        user_id=current_user_id, session_id=session_id, paper_id=paper_id
+                        user_id=current_user_id,
+                        session_id=session_id,
+                        paper_id=paper_id,
                     ),
                 )
                 translation = res.translation.strip()
@@ -549,7 +566,11 @@ async def explain_deep(
 
         if pdf_cache_name:
             translation = await _generate_with_pdf_cache(
-                original_word, context, TRANSLATE_FROM_PDF_PROMPT, lang_name, pdf_cache_name
+                original_word,
+                context,
+                TRANSLATE_FROM_PDF_PROMPT,
+                lang_name,
+                pdf_cache_name,
             )
             log.info("explain_deep", "Translated with PDF context cache", lemma=lemma)
         else:
@@ -658,11 +679,17 @@ async def explain_with_context(
         is_long_text = len(req.word) > 20 or " " in req.word.strip()
 
         if pdf_cache_name:
-            tmpl = SENTENCE_TRANSLATE_FROM_PDF_PROMPT if is_long_text else EXPLAIN_FROM_PDF_PROMPT
+            tmpl = (
+                SENTENCE_TRANSLATE_FROM_PDF_PROMPT
+                if is_long_text
+                else EXPLAIN_FROM_PDF_PROMPT
+            )
             explanation = await _generate_with_pdf_cache(
                 req.word, req.context, tmpl, lang_name, pdf_cache_name
             )
-            log.info("explain_context", "Explained with PDF context cache", word=req.word)
+            log.info(
+                "explain_context", "Explained with PDF context cache", word=req.word
+            )
         else:
             # キャッシュなし: abstract + 周辺テキストで DSPy 経由
             paper_context = (summary_context + "\n" + req.context).strip()

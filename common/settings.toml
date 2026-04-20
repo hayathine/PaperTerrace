@@ -19,6 +19,7 @@ MODEL_TRANSLATE = "gemini-2.5-flash-lite"
 MODEL_OCR = "gemini-2.5-flash-lite"
 FIGURE_EXPLAIN_MODEL = "gemini-2.5-flash-lite"
 DSPY_MODEL = "vertex_ai/gemini-2.5-flash-lite"
+GEPA_REFLECTION_MODEL = "gemini/gemini-2.5-flash"
 
 # Cloud Tasks OCR ワーカー設定
 # 本番/staging のみ設定。空の場合はインライン OCR にフォールバック。

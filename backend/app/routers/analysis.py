@@ -29,6 +29,7 @@ from app.providers.orm_storage import ORMStorageAdapter
 from app.domain.services.layout_analysis_service import LayoutAnalysisService
 from app.workers.layout_job import enqueue_layout_job, get_job_status
 from common.logger import ServiceLogger
+from functools import cache
 
 
 def _normalize_lang(lang: str) -> Literal["ja", "en"]:
@@ -43,11 +44,25 @@ log = ServiceLogger("Analysis")
 
 router = APIRouter(tags=["Analysis"])
 
-# Services
-summary_service = SummaryService()
-figure_insight_service = FigureInsightService()
-adversarial_service = AdversarialReviewService()
-redis_service = RedisService()
+
+@cache
+def _get_summary_service() -> SummaryService:
+    return SummaryService()
+
+
+@cache
+def _get_figure_insight_service() -> FigureInsightService:
+    return FigureInsightService()
+
+
+@cache
+def _get_adversarial_service() -> AdversarialReviewService:
+    return AdversarialReviewService()
+
+
+@cache
+def _get_redis_service() -> RedisService:
+    return RedisService()
 
 
 def _get_context(
@@ -55,12 +70,12 @@ def _get_context(
 ) -> tuple[str | None, str | None]:
     """(context, paper_id) のタプルを返す。paper_id は取得できた場合のみ。"""
     # 1. Redis キャッシュを優先
-    context = redis_service.get(f"session:ctx:{session_id}")
+    context = _get_redis_service().get(f"session:ctx:{session_id}")
     if context:
         log.debug("get_context", "Cache HIT", session_id=session_id)
-        redis_service.expire(f"session:ctx:{session_id}", 3600)
+        _get_redis_service().expire(f"session:ctx:{session_id}", 3600)
         # paper_id も別キーでキャッシュしている場合は返す
-        paper_id = redis_service.get(f"session_pid:{session_id}")
+        paper_id = _get_redis_service().get(f"session_pid:{session_id}")
         return context, paper_id
 
     # 2. DB から取得（キャッシュミス時）
@@ -72,7 +87,7 @@ def _get_context(
         log.debug("get_context", "Fetched FULL context from DB", paper_id=resolved_paper_id)
         # 次回のために paper_id をキャッシュ
         if paper_id:
-            redis_service.set(f"session_pid:{session_id}", paper_id, expire=3600)
+            _get_redis_service().set(f"session_pid:{session_id}", paper_id, expire=3600)
         return paper["ocr_text"], resolved_paper_id
 
     return None, None
@@ -131,7 +146,7 @@ async def summarize(
 
     current_user_id = get_user_identifier(user, session_id)
 
-    summary, trace_id = await summary_service.summarize_full(
+    summary, trace_id = await _get_summary_service().summarize_full(
         context,
         target_lang=lang,
         paper_id=paper_id,
@@ -170,7 +185,7 @@ async def analyze_figure(
         user.uid if user else (f"guest:{session_id}" if session_id else None)
     )
 
-    analysis = await figure_insight_service.analyze_figure(
+    analysis = await _get_figure_insight_service().analyze_figure(
         content,
         caption,
         mime_type,
@@ -199,7 +214,7 @@ async def critique(
         return JSONResponse({"error": "論文が読み込まれていません"}, status_code=400)
 
     current_user_id = get_user_identifier(user, session_id)
-    critique = await adversarial_service.critique(
+    critique = await _get_adversarial_service().critique(
         context, target_lang=lang, user_id=current_user_id, session_id=session_id
     )
     return JSONResponse(critique)

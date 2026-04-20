@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useBookmarks } from "@/db/hooks";
 import type { Bookmark } from "@/db/index";
 import {
+	deletePaper,
 	fetchUserPapers,
 	fetchUserStats,
 	fetchUserTranslations,
@@ -54,6 +55,8 @@ export default function Dashboard() {
 	const [loading, setLoading] = useState(() => !!token);
 	const [papersLoading, setPapersLoading] = useState(() => !!token);
 	const [translationsLoading, setTranslationsLoading] = useState(false);
+	const [deletingPaperId, setDeletingPaperId] = useState<string | null>(null);
+	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 	// 初回ロード済みフラグ（token更新による再フェッチでスケルトンを再表示しない）
 	const initialLoadDone = useRef(false);
 
@@ -385,15 +388,61 @@ export default function Dashboard() {
 						) : (
 							<div className="divide-y divide-slate-100">
 								{filteredPapers.map((p) => (
-									<button
+									<div
 										key={p.paper_id}
-										type="button"
-										onClick={() => navigate(`/paper/${p.paper_id}`)}
-										className="w-full px-5 py-4 hover:bg-orange-50 transition-colors flex items-center gap-3 text-left group"
+										className="w-full px-5 py-4 hover:bg-orange-50 transition-colors flex items-center gap-3 group"
 									>
-										<div className="w-8 h-8 rounded-lg bg-orange-50 group-hover:bg-orange-100 flex items-center justify-center text-orange-500 shrink-0 transition-colors">
+										<button
+											type="button"
+											onClick={() => navigate(`/paper/${p.paper_id}`)}
+											className="flex items-center gap-3 flex-1 min-w-0 text-left"
+										>
+											<div className="w-8 h-8 rounded-lg bg-orange-50 group-hover:bg-orange-100 flex items-center justify-center text-orange-500 shrink-0 transition-colors">
+												<svg
+													className="w-4 h-4"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth="2"
+														d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+													/>
+												</svg>
+											</div>
+											<div className="flex-1 min-w-0">
+												<p className="text-sm font-semibold text-slate-700 truncate group-hover:text-orange-700 transition-colors">
+													{p.title ?? "タイトル未設定"}
+												</p>
+												<div className="flex items-center gap-2 mt-0.5">
+													<p className="text-xs text-slate-400">
+														{new Date(p.created_at).toLocaleDateString(
+															"ja-JP",
+															{
+																year: "numeric",
+																month: "short",
+																day: "numeric",
+															},
+														)}
+													</p>
+													{Array.isArray(p.tags) && p.tags.length > 0 && (
+														<div className="flex gap-1 flex-wrap">
+															{(p.tags as string[]).slice(0, 3).map((tag) => (
+																<span
+																	key={tag}
+																	className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded-full"
+																>
+																	{tag}
+																</span>
+															))}
+														</div>
+													)}
+												</div>
+											</div>
 											<svg
-												className="w-4 h-4"
+												className="w-4 h-4 text-slate-300 group-hover:text-orange-400 shrink-0 transition-colors"
 												fill="none"
 												stroke="currentColor"
 												viewBox="0 0 24 24"
@@ -402,50 +451,91 @@ export default function Dashboard() {
 													strokeLinecap="round"
 													strokeLinejoin="round"
 													strokeWidth="2"
-													d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+													d="M9 5l7 7-7 7"
 												/>
 											</svg>
-										</div>
-										<div className="flex-1 min-w-0">
-											<p className="text-sm font-semibold text-slate-700 truncate group-hover:text-orange-700 transition-colors">
-												{p.title ?? "タイトル未設定"}
-											</p>
-											<div className="flex items-center gap-2 mt-0.5">
-												<p className="text-xs text-slate-400">
-													{new Date(p.created_at).toLocaleDateString("ja-JP", {
-														year: "numeric",
-														month: "short",
-														day: "numeric",
-													})}
-												</p>
-												{Array.isArray(p.tags) && p.tags.length > 0 && (
-													<div className="flex gap-1 flex-wrap">
-														{(p.tags as string[]).slice(0, 3).map((tag) => (
-															<span
-																key={tag}
-																className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded-full"
-															>
-																{tag}
-															</span>
-														))}
-													</div>
-												)}
+										</button>
+										{confirmDeleteId === p.paper_id ? (
+											<div className="flex items-center gap-1 shrink-0">
+												<button
+													type="button"
+													onClick={async () => {
+														if (!token) return;
+														setDeletingPaperId(p.paper_id);
+														setConfirmDeleteId(null);
+														try {
+															await deletePaper(token, p.paper_id);
+															setPapers((prev) =>
+																prev.filter((x) => x.paper_id !== p.paper_id),
+															);
+														} catch (e) {
+															log.error(
+																"delete_paper",
+																"Failed to delete paper",
+																{ e },
+															);
+														} finally {
+															setDeletingPaperId(null);
+														}
+													}}
+													className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
+												>
+													削除
+												</button>
+												<button
+													type="button"
+													onClick={() => setConfirmDeleteId(null)}
+													className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+												>
+													戻る
+												</button>
 											</div>
-										</div>
-										<svg
-											className="w-4 h-4 text-slate-300 group-hover:text-orange-400 shrink-0 transition-colors"
-											fill="none"
-											stroke="currentColor"
-											viewBox="0 0 24 24"
-										>
-											<path
-												strokeLinecap="round"
-												strokeLinejoin="round"
-												strokeWidth="2"
-												d="M9 5l7 7-7 7"
-											/>
-										</svg>
-									</button>
+										) : (
+											<button
+												type="button"
+												onClick={() => setConfirmDeleteId(p.paper_id)}
+												disabled={deletingPaperId === p.paper_id}
+												className="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors shrink-0 opacity-0 group-hover:opacity-100"
+												title="論文を削除"
+											>
+												{deletingPaperId === p.paper_id ? (
+													<svg
+														className="w-3.5 h-3.5 animate-spin"
+														fill="none"
+														viewBox="0 0 24 24"
+													>
+														<circle
+															className="opacity-25"
+															cx="12"
+															cy="12"
+															r="10"
+															stroke="currentColor"
+															strokeWidth="4"
+														/>
+														<path
+															className="opacity-75"
+															fill="currentColor"
+															d="M4 12a8 8 0 018-8v8H4z"
+														/>
+													</svg>
+												) : (
+													<svg
+														className="w-3.5 h-3.5"
+														fill="none"
+														stroke="currentColor"
+														viewBox="0 0 24 24"
+													>
+														<path
+															strokeLinecap="round"
+															strokeLinejoin="round"
+															strokeWidth="2"
+															d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+														/>
+													</svg>
+												)}
+											</button>
+										)}
+									</div>
 								))}
 							</div>
 						)}

@@ -64,3 +64,14 @@ export async function fetchUserPapers(
 	if (!res.ok) throw new Error("Failed to fetch papers");
 	return res.json();
 }
+
+export async function deletePaper(
+	token: string,
+	paperId: string,
+): Promise<void> {
+	const res = await fetch(`${API_URL}/api/papers/${paperId}`, {
+		method: "DELETE",
+		headers: buildAuthHeaders(token),
+	});
+	if (!res.ok) throw new Error("Failed to delete paper");
+}

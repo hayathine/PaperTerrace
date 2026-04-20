@@ -70,10 +70,11 @@ class FigureInsightService:
                 mime_type=mime_type,
                 using_pdf_cache=pdf_cache_name is not None,
             )
+            _timeout = 90.0
             log.debug(
                 "analyze",
                 "Calling AI provider with timeout",
-                timeout=20,
+                timeout=_timeout,
             )
             import asyncio
 
@@ -89,10 +90,10 @@ class FigureInsightService:
                         max_tokens=4096,
                         cached_content_name=pdf_cache_name,
                     ),
-                    timeout=20.0,  # Vision AI は時間がかかるため長めに設定
+                    timeout=_timeout,
                 )
             except asyncio.TimeoutError:
-                log.error("analyze", "AI provider analysis timed out", timeout=90)
+                log.error("analyze", "AI provider analysis timed out", timeout=_timeout)
                 raise Exception(
                     "AI分析がタイムアウトしました。もう一度お試しください。"
                 )

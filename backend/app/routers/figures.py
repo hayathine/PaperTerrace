@@ -9,12 +9,17 @@ from app.crud import get_storage_provider
 from app.domain.features.figure_insight import FigureInsightService
 from common import settings
 from common.logger import ServiceLogger
+from functools import cache
 
 log = ServiceLogger("Figures")
 
 
 router = APIRouter(tags=["Figures"])
-figure_service = FigureInsightService()
+
+
+@cache
+def _get_figure_service() -> FigureInsightService:
+    return FigureInsightService()
 
 
 class ExplainRequest(BaseModel):
@@ -137,7 +142,7 @@ async def explain_figure(
                 gcs_uri=gcs_uri,
                 mime_type=mime_type,
             )
-            explanation = await figure_service.analyze_figure(
+            explanation = await _get_figure_service().analyze_figure(
                 image_uri=gcs_uri, caption=caption, target_lang="ja", mime_type=mime_type,
                 paper_id=paper_id,
             )
@@ -151,7 +156,7 @@ async def explain_figure(
                     image_url=image_url,
                 )
                 raise HTTPException(status_code=404, detail="Image file not found")
-            explanation = await figure_service.analyze_figure(
+            explanation = await _get_figure_service().analyze_figure(
                 image_bytes=image_bytes, caption=caption, target_lang="ja", mime_type="image/jpeg",
                 paper_id=paper_id,
             )

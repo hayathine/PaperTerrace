@@ -9,6 +9,7 @@ import re
 import time
 import uuid
 from dataclasses import dataclass
+from functools import cache
 
 from fastapi import APIRouter, BackgroundTasks, File, Form, Query, UploadFile
 from fastapi.responses import HTMLResponse, JSONResponse, Response, StreamingResponse
@@ -38,11 +39,25 @@ log = ServiceLogger("PDF")
 
 router = APIRouter(tags=["PDF Analysis"])
 
-# Services
-service = EnglishAnalysisService()
-summary_service = SummaryService()
-redis_service = RedisService()
-img_storage = get_image_storage()
+
+@cache
+def _get_service() -> EnglishAnalysisService:
+    return EnglishAnalysisService()
+
+
+@cache
+def _get_summary_service() -> SummaryService:
+    return SummaryService()
+
+
+@cache
+def _get_redis_service() -> RedisService:
+    return RedisService()
+
+
+@cache
+def _get_img_storage():
+    return get_image_storage()
 
 
 @dataclass
@@ -78,7 +93,7 @@ async def _read_and_validate_pdf(
 
     file_hash = _get_file_hash(content)
 
-    detected_lang = await service.ocr_service.language_service.detect_language(content)
+    detected_lang = await _get_service().ocr_service.language_service.detect_language(content)
     if detected_lang and detected_lang != "en":
         return (
             "Currently, only English papers are supported. / 現在、英語の論文のみサポートしています。",
@@ -166,7 +181,7 @@ async def update_session_context(
         # Redis のセッションコンテキストも更新
         paper = storage.get_paper(paper_id)
         if paper and paper.get("ocr_text"):
-            redis_service.set(f"session:ctx:{session_id}", paper["ocr_text"], expire=3600)
+            _get_redis_service().set(f"session:ctx:{session_id}", paper["ocr_text"], expire=3600)
         log.info(
             "session_context",
             "セッションコンテキストを更新しました",
@@ -226,12 +241,12 @@ async def analyze_pdf(
     }
 
     if raw_text is None:
-        doc_path = img_storage.save_doc(validated.file_hash, validated.content)
+        doc_path = _get_img_storage().save_doc(validated.file_hash, validated.content)
         task_data.update({"pending_ocr": True, "pdf_path": doc_path})
     else:
         task_data.update({"text": raw_text})
 
-    redis_service.set(f"task:{task_id}", task_data, expire=3600)
+    _get_redis_service().set(f"task:{task_id}", task_data, expire=3600)
 
     return HTMLResponse(f"""
     <div hx-ext="sse" sse-connect="/stream/{task_id}" sse-swap="message">
@@ -314,7 +329,7 @@ async def analyze_pdf_json(
 
         if raw_text is None:
             # Save PDF to disk instead of Redis to prevent OOM
-            doc_path = img_storage.save_doc(validated.file_hash, validated.content)
+            doc_path = _get_img_storage().save_doc(validated.file_hash, validated.content)
             log.info(
                 "analyze_json",
                 "PDFをストレージに保存しました",
@@ -344,7 +359,7 @@ async def analyze_pdf_json(
             task_data.update({"text": raw_text})
 
         # Set 1-hour sliding expiration for paper sessions (3600s)
-        redis_service.set(f"task:{task_id}", task_data, expire=3600)
+        _get_redis_service().set(f"task:{task_id}", task_data, expire=3600)
 
         total_elapsed = time.time() - start_time
         log.info(
@@ -496,7 +511,7 @@ async def analyze_pdf_hash(
     }
 
     if raw_text is None:
-        doc_path = img_storage.get_doc_path(req.file_hash)
+        doc_path = _get_img_storage().get_doc_path(req.file_hash)
         task_data.update({"pending_ocr": True, "pdf_path": doc_path})
 
         # Cloud Tasks が設定されている場合はワーカーにエンキュー
@@ -517,7 +532,7 @@ async def analyze_pdf_hash(
     else:
         task_data.update({"text": raw_text})
 
-    redis_service.set(f"task:{task_id}", task_data, expire=3600)
+    _get_redis_service().set(f"task:{task_id}", task_data, expire=3600)
 
     elapsed = time.time() - start_time
     log.info(
@@ -577,7 +592,7 @@ async def analyze_paper(
                 {"error": "Paper content is missing, please re-upload"}, status_code=400
             )
 
-        redis_service.set(f"task:{task_id}", task_data, expire=3600)  # 1-hour session
+        _get_redis_service().set(f"task:{task_id}", task_data, expire=3600)  # 1-hour session
 
         return JSONResponse(
             {"task_id": task_id, "stream_url": f"/api/stream/{task_id}"}
@@ -604,7 +619,7 @@ async def _poll_worker_progress(task_id: str):
     start = time.time()
 
     while time.time() - start < POLL_TIMEOUT:
-        item = redis_service.lpop(progress_key)
+        item = _get_redis_service().lpop(progress_key)
         if item:
             try:
                 payload = json.loads(item) if isinstance(item, str) else item
@@ -618,7 +633,7 @@ async def _poll_worker_progress(task_id: str):
                 return
         else:
             # ワーカーがまだ書き込んでいない場合はタスクステータスを確認
-            fresh = redis_service.get(f"task:{task_id}")
+            fresh = _get_redis_service().get(f"task:{task_id}")
             if not fresh:
                 yield f"event: message\ndata: {json.dumps({'type': 'error', 'message': 'task expired'})}\n\n"
                 return
@@ -638,10 +653,10 @@ async def stream(task_id: str):
 
     log.info("stream", "開始", task_id=task_id)
 
-    data = redis_service.get(f"task:{task_id}")
+    data = _get_redis_service().get(f"task:{task_id}")
     if data:
         # Refresh task TTL on access
-        redis_service.expire(f"task:{task_id}", 3600)
+        _get_redis_service().expire(f"task:{task_id}", 3600)
 
     # Task not found - return proper error response instead of 204
     if not data:
@@ -699,7 +714,7 @@ async def stream(task_id: str):
 
                     if pdf_path:
                         try:
-                            pdf_content = img_storage.get_doc_bytes(pdf_path)
+                            pdf_content = _get_img_storage().get_doc_bytes(pdf_path)
                         except Exception as e:
                             log.error(
                                 "stream",
@@ -741,7 +756,7 @@ async def stream(task_id: str):
                     collected_figures = []
 
                     page_count = 0
-                    async for result_tuple in service.ocr_service.extract_text_streaming(
+                    async for result_tuple in _get_service().ocr_service.extract_text_streaming(
                         pdf_content, filename, user_plan=user_plan
                     ):
                         # Check for Heartbeat
@@ -961,7 +976,7 @@ async def stream(task_id: str):
                     s_id = session_id or new_paper_id
                     # Store only the first 20,000 characters in Redis as "recent context"
                     recent_context = full_text[:20000]
-                    redis_service.set(f"session:ctx:{s_id}", recent_context, expire=3600)
+                    _get_redis_service().set(f"session:ctx:{s_id}", recent_context, expire=3600)
 
                     yield f"event: message\ndata: {json.dumps({'type': 'done', 'paper_id': new_paper_id, 'db_saved': _db_saved})}\n\n"
                     await asyncio.sleep(0.01)
@@ -1067,7 +1082,7 @@ async def stream(task_id: str):
                     # キャッシュ時もセッションコンテキストを保存（Summary等のため）
                     s_id = session_id or paper_id
                     if s_id and paper_data and paper_data.get("ocr_text"):
-                        redis_service.set(
+                        _get_redis_service().set(
                             f"session:ctx:{s_id}", paper_data["ocr_text"], expire=3600
                         )  # Align TTL to 1 hour
                         log.info(
@@ -1138,11 +1153,11 @@ async def stream(task_id: str):
                 except Exception:
                     pass  # Client may already be disconnected
                 # Delete task only on actual errors, not client disconnects
-                redis_service.delete(f"task:{task_id}")
+                _get_redis_service().delete(f"task:{task_id}")
                 log.info("stream", "Cleaned up task due to error", task_id=task_id)
             else:
                 # Normal completion - delete task
-                redis_service.delete(f"task:{task_id}")
+                _get_redis_service().delete(f"task:{task_id}")
                 log.info(
                     "stream",
                     "Cleaned up task after normal completion",
@@ -1158,7 +1173,7 @@ async def stream(task_id: str):
 
         if pdf_path:
             try:
-                pdf_content = img_storage.get_doc_bytes(pdf_path)
+                pdf_content = _get_img_storage().get_doc_bytes(pdf_path)
             except Exception as e:
                 log.error(
                     "stream", f"{task_id}: Failed to read PDF from {pdf_path}: {e}"
@@ -1191,7 +1206,7 @@ async def stream(task_id: str):
             collected_figures = []
 
             # ページ単位OCRストリーム
-            async for result_tuple in service.ocr_service.extract_text_streaming(
+            async for result_tuple in _get_service().ocr_service.extract_text_streaming(
                 pdf_content, filename
             ):
                 if len(result_tuple) != 7:
@@ -1222,7 +1237,7 @@ async def stream(task_id: str):
                     )
                     yield f'event: message\ndata: <div id="sse-container-{task_id}" hx-swap-oob="outerHTML" style="display:none"></div>\n\n'
                     yield "event: close\ndata: done\n\n"
-                    redis_service.delete(f"task:{task_id}")
+                    _get_redis_service().delete(f"task:{task_id}")
                     return
 
                 full_text_fragments.append(page_text)
@@ -1292,7 +1307,7 @@ async def stream(task_id: str):
 
                     # テキストトークン化ストリーム
                     page_prefix = f"p-pg{page_num}"
-                    async for chunk in service.tokenize_stream(
+                    async for chunk in _get_service().tokenize_stream(
                         page_text,
                         paper_id=paper_id,
                         target_id=content_id,
@@ -1386,10 +1401,10 @@ async def stream(task_id: str):
 
             # Redisセッションコンテキストを1時間保持 (sliding)
             if session_id:
-                redis_service.set(f"session:ctx:{session_id}", full_text, expire=3600)
+                _get_redis_service().set(f"session:ctx:{session_id}", full_text, expire=3600)
 
             # 完了処理
-            redis_service.delete(f"task:{task_id}")
+            _get_redis_service().delete(f"task:{task_id}")
             # フロントエンドにpaper_idを通知
             yield f'event: message\ndata: <input type="hidden" id="current-paper-id" value="{paper_id}" hx-swap-oob="true" />\n\n'
             # data-paper-id 更新が画面消失のトリガーになっている可能性があるため削除
@@ -1428,19 +1443,19 @@ async def stream(task_id: str):
                 elapsed=f"{time.time() - stream_start:.2f}s",
             )
 
-        redis_service.delete(f"task:{task_id}")
+        _get_redis_service().delete(f"task:{task_id}")
         return StreamingResponse(cached_generate(), media_type="text/event-stream")
 
     log.info("stream", "Starting tokenization", paper_id=paper_id)
 
     async def generate():
-        async for chunk in service.tokenize_stream(
+        async for chunk in _get_service().tokenize_stream(
             text, paper_id, lang=lang, session_id=session_id
         ):
             yield chunk
             await asyncio.sleep(0.01)
 
-        redis_service.delete(f"task:{task_id}")
+        _get_redis_service().delete(f"task:{task_id}")
         log.info(
             "generate",
             "END",
