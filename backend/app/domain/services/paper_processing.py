@@ -10,6 +10,12 @@ log = ServiceLogger("Processing")
 # コネクションを占有し続けるため、各タスク内で都度生成・クローズする。
 figure_insight = FigureInsightService()
 
+_FIGURE_ANALYSIS_LOCK_TTL = 180  # 秒: AI解析の最大所要時間より長く設定
+
+
+def _figure_lock_key(figure_id: str) -> str:
+    return f"figure_analyzing:{figure_id}"
+
 
 async def process_figure_analysis_task(
     figure_id: str,
@@ -22,6 +28,21 @@ async def process_figure_analysis_task(
     Background task to analyze figure.
     """
     if not figure_id:
+        return
+
+    from redis_provider.provider import RedisService
+
+    redis = RedisService()
+    lock_key = _figure_lock_key(figure_id)
+
+    # 同一 figure の並行解析を防ぐ Redisロック（SET NX）
+    acquired = redis.set_nx(lock_key, "1", expire=_FIGURE_ANALYSIS_LOCK_TTL)
+    if not acquired:
+        log.info(
+            "figure_task",
+            "Another analysis is in progress, skipping.",
+            figure_id=figure_id,
+        )
         return
 
     log.info("figure_task", "Analysis task started", figure_id=figure_id)
@@ -94,6 +115,7 @@ async def process_figure_analysis_task(
         )
     finally:
         storage.close()
+        redis.delete(lock_key)
 
 
 async def process_paper_summary_task(

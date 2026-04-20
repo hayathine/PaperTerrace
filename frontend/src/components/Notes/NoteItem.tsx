@@ -15,9 +15,11 @@ const NoteItem: React.FC<NoteItemProps> = memo(({ note, onDelete, onJump }) => {
 	return (
 		<div className="bg-white p-3 rounded-xl border border-slate-100 shadow-sm overflow-hidden group mb-3 hover:shadow-md transition-all">
 			<div className="flex justify-between items-start">
-				<span className="font-bold text-xs text-orange-600 break-words">
-					{note.term}
-				</span>
+				{note.term && (
+					<span className="font-bold text-xs text-orange-600 break-words">
+						{note.term}
+					</span>
+				)}
 				<div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
 					<CopyButton text={`${note.term}\n${note.note}`} size={11} />
 					<button

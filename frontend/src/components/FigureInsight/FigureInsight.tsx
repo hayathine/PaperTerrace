@@ -27,6 +27,10 @@ interface FigureResult {
 	traceId?: string;
 }
 
+interface FetchFigureOptions {
+	force?: boolean;
+}
+
 // セッション単位のキャッシュ（アンマウントされても状態を保持する）
 const globalStackCache: Record<string, FigureResult[]> = {};
 const globalAnalyzedIds: Record<string, Set<string>> = {};
@@ -69,55 +73,47 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 		});
 	};
 
-	/**
-	 * selectedFigure が変化したとき、まだ解析していない図であれば
-	 * スタックに追加してAPIを呼び出す。
-	 * 既に解析済みの場合はAPIを呼ばない。
-	 */
-	useEffect(() => {
-		if (!selectedFigure) return;
-
+	const fetchFigureAnalysis = (
+		figure: SelectedFigure,
+		{ force = false }: FetchFigureOptions = {},
+	) => {
 		const figureId =
-			selectedFigure.id ||
-			(selectedFigure.image_url
-				? `transient-${selectedFigure.image_url}`
-				: null);
+			figure.id || (figure.image_url ? `transient-${figure.image_url}` : null);
 		if (!figureId) return;
 
-		// 既に解析済み or 現在リクエスト中の場合はスキップ
-		if (
-			globalAnalyzedIds[sessionId].has(figureId) ||
-			globalRequestingIds[sessionId].has(figureId)
-		) {
+		if (globalRequestingIds[sessionId].has(figureId)) return;
+
+		if (force) {
+			globalAnalyzedIds[sessionId].delete(figureId);
+		} else if (globalAnalyzedIds[sessionId].has(figureId)) {
 			return;
 		}
 
-		// スタックに「ローディング中」の要素を追加
-		const newEntry: FigureResult = {
-			figure: selectedFigure,
-			explanation: null,
-			isLoading: true,
-			error: null,
-		};
-
 		setStack((prev) => {
-			// 同じ figureId が既にスタックにある場合は重複追加しない
-			if (prev.some((r) => getFigureId(r.figure) === figureId)) {
-				return prev;
+			const exists = prev.some((r) => getFigureId(r.figure) === figureId);
+			if (exists) {
+				return prev.map((r) =>
+					getFigureId(r.figure) === figureId
+						? { ...r, isLoading: true, error: null, explanation: null }
+						: r,
+				);
 			}
-			return [newEntry, ...prev];
+			return [
+				{ figure, explanation: null, isLoading: true, error: null },
+				...prev,
+			];
 		});
 
 		const controller = new AbortController();
-		const timeoutId = setTimeout(() => controller.abort(), 120_000); // 120秒でタイムアウト
+		const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
 		globalRequestingIds[sessionId].add(figureId);
 
-		const idForApi = selectedFigure.id || "transient";
+		const idForApi = figure.id || "transient";
 		fetch(`${API_URL}/api/figures/${idForApi}/explain`, {
 			method: "POST",
 			headers: buildAuthHeaders(token, { "Content-Type": "application/json" }),
-			body: JSON.stringify({ image_url: selectedFigure?.image_url }),
+			body: JSON.stringify({ image_url: figure.image_url, force }),
 			signal: controller.signal,
 		})
 			.then(async (res) => {
@@ -186,6 +182,15 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 			.finally(() => {
 				globalRequestingIds[sessionId].delete(figureId);
 			});
+	};
+
+	/**
+	 * selectedFigure が変化したとき、まだ解析していない図であれば
+	 * スタックに追加してAPIを呼び出す。
+	 */
+	useEffect(() => {
+		if (!selectedFigure) return;
+		fetchFigureAnalysis(selectedFigure);
 	}, [selectedFigure?.id, selectedFigure?.image_url, sessionId, token]); // token も依存関係に追加
 
 	if (!selectedFigure && stackState.length === 0) {
@@ -244,6 +249,9 @@ const FigureInsight: React.FC<FigureInsightProps> = ({
 					sessionId={sessionId}
 					onZoom={(url) => setZoomedImage(url)}
 					onAskInChat={onAskInChat}
+					onReanalyze={() =>
+						fetchFigureAnalysis(result.figure, { force: true })
+					}
 				/>
 			))}
 
@@ -310,6 +318,7 @@ interface FigureCardProps {
 	sessionId: string;
 	onZoom: (url: string) => void;
 	onAskInChat?: (figureId?: string | null) => void;
+	onReanalyze?: () => void;
 }
 
 const FigureCard: React.FC<FigureCardProps> = ({
@@ -318,6 +327,7 @@ const FigureCard: React.FC<FigureCardProps> = ({
 	sessionId,
 	onZoom,
 	onAskInChat,
+	onReanalyze,
 }) => {
 	const { figure, explanation, isLoading, error, traceId } = result;
 	const [collapsed, setCollapsed] = useState(!isLatest);
@@ -477,6 +487,29 @@ const FigureCard: React.FC<FigureCardProps> = ({
 											/>
 										</svg>
 										チャット
+									</button>
+								)}
+								{onReanalyze && (
+									<button
+										type="button"
+										onClick={onReanalyze}
+										title="再解析"
+										className="flex items-center gap-1 px-2 py-1 text-[10px] font-bold text-slate-500 bg-slate-50 hover:bg-slate-100 rounded-lg transition-colors"
+									>
+										<svg
+											className="w-3 h-3"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+										>
+											<path
+												strokeLinecap="round"
+												strokeLinejoin="round"
+												strokeWidth={2}
+												d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+											/>
+										</svg>
+										再解析
 									</button>
 								)}
 								<CopyButton text={explanation} size={12} traceId={traceId} />

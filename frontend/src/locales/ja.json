@@ -139,7 +139,7 @@
 	},
 	"notes": {
 		"title": "ノート",
-		"placeholder_term": "用語 / キーワード",
+		"placeholder_term": "用語 / キーワード（任意）",
 		"placeholder_content": "メモを入力...",
 		"add": "ノートを追加",
 		"update": "ノートを更新",

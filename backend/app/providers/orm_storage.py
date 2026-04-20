@@ -218,6 +218,19 @@ class ORMStorageAdapter(StorageInterface):
 
         RedisService().delete(f"paper_meta:{paper_id}")
 
+    def _invalidate_public_papers_cache(self) -> None:
+        """公開論文リストキャッシュを削除する。visibilityやdelete時に呼ぶ。"""
+        from redis_provider.provider import get_redis_client
+
+        rc = get_redis_client()
+        if rc:
+            try:
+                keys = rc.keys("papers:public:*")
+                if keys:
+                    rc.delete(*keys)
+            except Exception:
+                pass
+
     def update_processing_status(self, paper_id: str, field: str, status: str) -> bool:
         """grobid_status / summary_status / layout_status を更新する。"""
         result = self._with_recovery(
@@ -293,6 +306,7 @@ class ORMStorageAdapter(StorageInterface):
     def delete_paper(self, paper_id: str) -> bool:
         result = self._with_recovery(lambda: self.papers.delete(paper_id))
         self._invalidate_paper_cache(paper_id)
+        self._invalidate_public_papers_cache()
         return result
 
     def update_paper_layout(self, paper_id: str, layout_json: str) -> bool:
@@ -303,6 +317,7 @@ class ORMStorageAdapter(StorageInterface):
     def update_paper_visibility(self, paper_id: str, visibility: str) -> bool:
         result = self._with_recovery(lambda: self.papers.update_visibility(paper_id, visibility))
         self._invalidate_paper_cache(paper_id)
+        self._invalidate_public_papers_cache()
         return result
 
     def increment_like_count(self, paper_id: str) -> bool:

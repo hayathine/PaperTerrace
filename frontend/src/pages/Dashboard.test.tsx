@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 vi.mock("@/contexts/AuthContext", () => ({
 	useAuth: () => ({
 		user: {
+			id: "test-user-id",
 			name: "Test User",
 			email: "test@example.com",
 			image: "https://example.com/avatar.jpg",
@@ -80,6 +81,8 @@ vi.mock("@/db/hooks", () => ({
 		getBookmarks: mockGetBookmarks,
 		deleteBookmark: vi.fn().mockResolvedValue(true),
 	}),
+	getUICache: vi.fn().mockResolvedValue(null),
+	setUICache: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("@/lib/logger", () => ({

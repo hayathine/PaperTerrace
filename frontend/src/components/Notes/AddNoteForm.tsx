@@ -43,12 +43,10 @@ const AddNoteForm: React.FC<AddNoteFormProps> = ({
 }) => {
 	const { t } = useTranslation();
 	const [term, setTerm] = useState(initialTerm);
-
 	const [note, setNote] = useState(initialContent);
 	const [imageUrl, setImageUrl] = useState<string | undefined>(initialImage);
 	const [isSubmitting, setIsSubmitting] = useState(false);
 
-	// Effect for handling selection text/image injection
 	React.useEffect(() => {
 		if (!editingNote) {
 			if (initialContent) setNote(initialContent);
@@ -57,7 +55,6 @@ const AddNoteForm: React.FC<AddNoteFormProps> = ({
 		}
 	}, [initialContent, initialTerm, initialImage, editingNote]);
 
-	// Effect for handling edit mode
 	React.useEffect(() => {
 		if (editingNote) {
 			setTerm(editingNote.term);
@@ -72,7 +69,7 @@ const AddNoteForm: React.FC<AddNoteFormProps> = ({
 
 	const handleSubmit = async (e: React.FormEvent) => {
 		e.preventDefault();
-		if (!term.trim() || (!note.trim() && !imageUrl)) return;
+		if (!note.trim() && !imageUrl) return;
 
 		setIsSubmitting(true);
 		try {
@@ -126,13 +123,20 @@ const AddNoteForm: React.FC<AddNoteFormProps> = ({
 				</div>
 			)}
 
+			<input
+				type="text"
+				placeholder={t("notes.placeholder_term")}
+				className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5 mb-2 focus:ring-2 focus:ring-orange-100 focus:border-orange-300 outline-none"
+				value={term}
+				onChange={(e) => setTerm(e.target.value)}
+				disabled={isSubmitting}
+			/>
 			<div className="relative">
-				<input
-					type="text"
-					placeholder={t("notes.placeholder_term")}
-					className="w-full text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg px-2 py-1.5 mb-2 focus:ring-2 focus:ring-orange-100 focus:border-orange-300 outline-none pr-8"
-					value={term}
-					onChange={(e) => setTerm(e.target.value)}
+				<textarea
+					placeholder={t("notes.placeholder_content")}
+					className="w-full text-[10px] text-slate-600 bg-white border border-slate-200 rounded-lg px-2 py-2 mb-2 h-20 resize-none focus:ring-2 focus:ring-orange-100 focus:border-orange-300 outline-none pr-7"
+					value={note}
+					onChange={(e) => setNote(e.target.value)}
 					disabled={isSubmitting}
 				/>
 				{coordinates && (
@@ -151,25 +155,18 @@ const AddNoteForm: React.FC<AddNoteFormProps> = ({
 								strokeLinecap="round"
 								strokeLinejoin="round"
 								strokeWidth={2}
-								d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 00.5656 0l-4 4a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-4 4"
+								d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 00-5.656 5.656l4-4a4 4 0 005.656-5.656z"
 							/>
 							<path
 								strokeLinecap="round"
 								strokeLinejoin="round"
 								strokeWidth={2}
-								d="M10.172 13.828a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-4 4a4 4 0 005.656 5.656"
+								d="M10.172 13.828a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-4 4a4 4 0 005.656 5.656z"
 							/>
 						</svg>
 					</div>
 				)}
 			</div>
-			<textarea
-				placeholder={t("notes.placeholder_content")}
-				className="w-full text-[10px] text-slate-600 bg-white border border-slate-200 rounded-lg px-2 py-2 mb-2 h-16 resize-none focus:ring-2 focus:ring-orange-100 focus:border-orange-300 outline-none"
-				value={note}
-				onChange={(e) => setNote(e.target.value)}
-				disabled={isSubmitting}
-			/>
 			<div className="flex gap-2">
 				{editingNote && onCancelEdit && (
 					<button
@@ -183,7 +180,7 @@ const AddNoteForm: React.FC<AddNoteFormProps> = ({
 				)}
 				<button
 					type="submit"
-					disabled={isSubmitting || !term || (!note && !imageUrl)}
+					disabled={isSubmitting || (!note.trim() && !imageUrl)}
 					className="flex-1 py-1.5 bg-orange-600 hover:bg-orange-700 disabled:bg-orange-300 text-white rounded-lg text-[10px] font-bold uppercase tracking-wider transition-colors shadow-sm"
 				>
 					{isSubmitting

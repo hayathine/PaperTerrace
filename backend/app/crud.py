@@ -44,12 +44,11 @@ def save_figure_to_db(
         storage.close()
 
 
-def save_figures_to_db(
-    paper_id: str,
-    figures: list[dict],
-) -> list[str]:
+def save_figures_to_db(paper_id: str, figures: list[dict]) -> list[str]:
     storage = get_storage_provider()
     try:
         return storage.save_figures_batch(paper_id, figures)
     finally:
         storage.close()
+
+

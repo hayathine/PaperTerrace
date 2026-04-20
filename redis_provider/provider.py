@@ -213,6 +213,27 @@ class RedisService:
 
         return deleted_count
 
+    def set_nx(self, key: str, value: Any, expire: int | None = None) -> bool:
+        """Set key only if it does not exist (atomic NX). Returns True if acquired."""
+        if isinstance(value, (dict, list)):
+            value_str = json.dumps(value, cls=DateTimeEncoder)
+        else:
+            value_str = str(value)
+
+        client = get_redis_client()
+        if client:
+            try:
+                result = client.set(key, value_str, nx=True, ex=expire)
+                return result is True
+            except Exception as e:
+                log.warning("set_nx", f"Redis error: {e}. Falling back to memory NX.")
+
+        # メモリキャッシュでのNXフォールバック（シングルプロセス環境のみ有効）
+        if key in self.memory_cache:
+            return False
+        self.memory_cache[key] = value_str
+        return True
+
     def exists(self, key: str) -> bool:
         """Check if key exists in cache."""
         client = get_redis_client()

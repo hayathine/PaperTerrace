@@ -139,7 +139,7 @@
 	},
 	"notes": {
 		"title": "Notes",
-		"placeholder_term": "Term / Keyword",
+		"placeholder_term": "Term / Keyword (optional)",
 		"placeholder_content": "Write your note here...",
 		"add": "Add Note",
 		"update": "Update Note",

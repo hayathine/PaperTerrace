@@ -26,6 +26,7 @@ class ExplainRequest(BaseModel):
     """AI解析リクエスト。DBに存在しないトランジェントfigureの場合は image_url を渡す。"""
 
     image_url: str | None = None
+    force: bool = False
 
 
 @router.get("/papers/{paper_id}/figures")
@@ -94,8 +95,8 @@ async def explain_figure(
         figure = storage.get_figure(figure_id)
 
         if figure:
-            # DB登録済み: キャッシュ済み解説があればそのまま返す
-            if figure.get("explanation"):
+            # DB登録済み: キャッシュ済み解説があればそのまま返す（forceの場合は再解析）
+            if figure.get("explanation") and not body.force:
                 return {"explanation": figure["explanation"]}
             image_url = figure.get("image_url")
             caption = figure.get("caption", "")
@@ -163,7 +164,13 @@ async def explain_figure(
 
         # DB登録済みfigureのみ解説をキャッシュする
         if figure:
-            storage.update_figure_explanation(figure_id, explanation)
+            saved = storage.update_figure_explanation(figure_id, explanation)
+            if not saved:
+                log.warning(
+                    "explain_figure",
+                    "update_figure_explanation returned False (0 rows updated)",
+                    figure_id=figure_id,
+                )
 
         return {"explanation": explanation}
 
