@@ -120,7 +120,7 @@ class PersonaAdapter(dspy.Module):
     """
     ユーザーペルソナとタスク種別から純粋な行動指示（persona_instruction）を生成するアダプター。
 
-    GEPA 最適化の対象はこのモジュールのみ。system_context の制約に従いつつ、
+    system_context の制約に従いつつ、
     コンテンツ（input_data）には依存せず「どう振る舞うか」という行動ポリシーのみを出力する。
     """
 
@@ -253,8 +253,7 @@ class UniversalTaskModule(dspy.Module):
 
         # Layer 3: パイプライン内部キーを除いた kwargs を downstream に渡して実行
         solve_kwargs = {
-            k: v for k, v in kwargs.items()
-            if k not in self._PIPELINE_INTERNAL_KEYS
+            k: v for k, v in kwargs.items() if k not in self._PIPELINE_INTERNAL_KEYS
         }
         return self.solve(persona_instruction=persona_instruction, **solve_kwargs)
 
