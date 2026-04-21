@@ -15,6 +15,7 @@ from app.core.config import is_local
 from app.database import get_orm_storage
 from app.domain.features.cache_utils import get_pdf_cache_key
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
+from app.domain.features.persona_utils import resolve_user_persona
 from app.domain.services.analysis_service import EnglishAnalysisService
 from app.providers import get_ai_provider
 from app.providers.orm_storage import ORMStorageAdapter
@@ -460,7 +461,7 @@ async def explain(
                     {
                         "paper_context": paper_context,
                         "target_word": original_word,
-                        "user_persona": "Professional Academic Translator",
+                        "user_persona": resolve_user_persona(current_user_id, "Professional Academic Translator"),
                         "lang_name": lang_name,
                     },
                     context=TraceContext(
@@ -479,7 +480,7 @@ async def explain(
                     {
                         "paper_context": paper_context,
                         "target_word": lemma,
-                        "user_persona": "Professional Academic Translator",
+                        "user_persona": resolve_user_persona(current_user_id, "Professional Academic Translator"),
                         "lang_name": lang_name,
                     },
                     context=TraceContext(
@@ -585,7 +586,7 @@ async def explain_deep(
                 {
                     "paper_context": paper_context,
                     "target_word": original_word,
-                    "user_persona": "Professional Academic Translator",
+                    "user_persona": resolve_user_persona(current_user_id, "Professional Academic Translator"),
                     "lang_name": lang_name,
                 },
                 context=TraceContext(
@@ -705,7 +706,7 @@ async def explain_with_context(
                     {
                         "paper_context": paper_context,
                         "target_word": req.word,
-                        "user_persona": "Professional Academic Translator",
+                        "user_persona": resolve_user_persona(current_user_id, "Professional Academic Translator"),
                         "lang_name": lang_name,
                     },
                     context=trace_ctx,
@@ -720,7 +721,7 @@ async def explain_with_context(
                     {
                         "paper_context": paper_context,
                         "target_word": req.word,
-                        "user_persona": "Professional Academic Translator",
+                        "user_persona": resolve_user_persona(current_user_id, "Professional Academic Translator"),
                         "lang_name": lang_name,
                     },
                     context=trace_ctx,

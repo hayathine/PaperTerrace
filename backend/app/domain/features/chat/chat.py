@@ -6,6 +6,7 @@ AIチャットアシスタント機能を提供するモジュール
 
 
 from app.domain.features.cache_utils import PDF_CACHE_MODEL, get_or_create_pdf_cache, get_pdf_cache_key
+from app.domain.features.persona_utils import resolve_user_persona
 from app.providers import get_ai_provider
 from common.config import settings
 from common.dspy_utils.modules import ChatModule
@@ -116,7 +117,7 @@ class ChatService:
                         "document_context": "PDF経由",
                         "history_text": history_text_for_prompt,
                         "user_message": user_message,
-                        "user_persona": "Helpful Research Assistant",
+                        "user_persona": resolve_user_persona(user_id, "Helpful Research Assistant"),
                         "lang_name": lang_name,
                     },
                     outputs={"answer": _response_text},
@@ -188,7 +189,7 @@ class ChatService:
                         else "See Context Cache",
                         "history_text": history_text_for_prompt,
                         "user_message": user_message,
-                        "user_persona": "Helpful Research Assistant",
+                        "user_persona": resolve_user_persona(user_id, "Helpful Research Assistant"),
                         "lang_name": lang_name,
                     },
                     context=TraceContext(

@@ -6,6 +6,7 @@
     再現性リスク
 """
 
+from app.domain.features.persona_utils import resolve_user_persona
 from app.providers import get_ai_provider
 from common.dspy_utils.config import setup_dspy
 from common.dspy_utils.modules import AdversarialModule
@@ -110,7 +111,7 @@ class AdversarialReviewService:
                     self.adversarial_mod,
                     {
                         "paper_text": text[:12000],
-                        "user_persona": "Critical Academic Reviewer",
+                        "user_persona": resolve_user_persona(user_id, "Critical Academic Reviewer"),
                         "lang_name": lang_name,
                     },
                     context=TraceContext(user_id=user_id, session_id=session_id),

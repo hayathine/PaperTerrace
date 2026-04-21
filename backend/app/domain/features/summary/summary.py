@@ -2,6 +2,7 @@
 
 from app.domain.features.cache_utils import PDF_CACHE_MODEL, get_or_create_pdf_cache
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
+from app.domain.features.persona_utils import resolve_user_persona
 from app.providers import get_ai_provider, get_storage_provider
 from common.config import settings
 from common.dspy_utils.config import setup_dspy
@@ -145,7 +146,7 @@ class SummaryService:
                     trace_id = save_trace(
                         module_name="PaperSummaryModule",
                         signature="PaperSummary",
-                        inputs={"paper_text": "PDF経由", "lang_name": lang_name, "user_persona": "Professional Academic Advisor"},
+                        inputs={"paper_text": "PDF経由", "lang_name": lang_name, "user_persona": resolve_user_persona(user_id, "Professional Academic Advisor")},
                         outputs={"summary": _text[:500]},
                         context=TraceContext(user_id=user_id, session_id=session_id, paper_id=paper_id),
                     )
@@ -170,7 +171,7 @@ class SummaryService:
                     {
                         "paper_text": safe_text,
                         "lang_name": lang_name,
-                        "user_persona": "Professional Academic Advisor",
+                        "user_persona": resolve_user_persona(user_id, "Professional Academic Advisor"),
                     },
                     context=TraceContext(
                         user_id=user_id, session_id=session_id, paper_id=paper_id
@@ -251,7 +252,7 @@ class SummaryService:
                 {
                     "paper_text": safe_text,
                     "lang_name": lang_name,
-                    "user_persona": "Professional Academic Advisor",
+                    "user_persona": resolve_user_persona(user_id, "Professional Academic Advisor"),
                 },
                 context=TraceContext(
                     user_id=user_id, session_id=session_id, paper_id=paper_id

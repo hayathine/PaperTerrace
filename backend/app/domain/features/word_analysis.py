@@ -1,6 +1,7 @@
 
 from concurrent.futures import ThreadPoolExecutor
 
+from app.domain.features.persona_utils import resolve_user_persona
 from app.providers import RedisService, get_ai_provider
 from app.providers.dictionary_provider import get_dictionary_provider
 from common.config import settings
@@ -124,7 +125,7 @@ class WordAnalysisService:
                     {
                         "target_word": word,
                         "paper_context": truncated,
-                        "user_persona": "Professional Translator",
+                        "user_persona": resolve_user_persona(user_id, "Professional Translator"),
                         "lang_name": lang_name,
                     },
                     context=TraceContext(user_id=user_id, session_id=session_id),

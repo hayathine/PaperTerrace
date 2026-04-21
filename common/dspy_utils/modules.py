@@ -146,20 +146,24 @@ class PersonaAdapter(dspy.Module):
 
 class UniversalTaskModule(dspy.Module):
     """
-    3層パイプラインで任意の下流タスクを実行する汎用モジュール。
+    4層パイプラインで任意の下流タスクを実行する汎用モジュール。
 
     パイプライン構造:
-        [Layer 1] SystemModule (_compiled=True で凍結)
+        [Layer 0] SystemModule (_compiled=True で凍結)
             task_type + lang_name → system_context
 
-        [Layer 2] PersonaAdapter (GEPA最適化対象)
+        [Layer 1] UserPersonaModule (最適化対象, オプション)
+            behavior_logs + current_logs + user_feedback → user_persona
+            ※ behavior_logs が渡されない場合は user_persona 引数にフォールバック
+
+        [Layer 2] PersonaAdapter (最適化対象)
             system_context + user_persona + task_description + lang_name → persona_instruction
 
         [Layer 3] downstream Predict (_compiled=True で凍結)
             persona_instruction + task_inputs → 出力
 
-    GEPAは PersonaAdapter (PersonaAdapterSignature) のみを最適化する。
-    Layer 1 と Layer 3 は _compiled=True を設定することで DSPy 公式の凍結メカニズムにより
+    GEPA は Layer 1 (UserPersonaModule) と Layer 2 (PersonaAdapter) を最適化する。
+    Layer 0, 3 は _compiled=True を設定することで DSPy 公式の凍結メカニズムにより
     optimizer のパラメータ走査対象から除外される。
     downstream は __init__ 時に拡張した固定シグネチャで実行する。
     """
@@ -176,13 +180,20 @@ class UniversalTaskModule(dspy.Module):
         "ChatGeneral": "Answer a user's question about an academic paper.",
     }
 
+    # Layer 0, 1, 3 がパイプライン内部で消費するキー（Layer 3 の solve に渡さない）
+    _PIPELINE_INTERNAL_KEYS = frozenset(
+        {"behavior_logs", "current_logs", "user_feedback", "user_persona"}
+    )
+
     def __init__(self, signature=SolveTask):
         super().__init__()
         self.target_signature = signature
-        # Layer 1: システムコンテキスト（_compiled=True で凍結 → optimizer の走査対象外）
+        # Layer 0: システムコンテキスト（_compiled=True で凍結 → optimizer の走査対象外）
         self.system_module = SystemModule()
         self.system_module._compiled = True
-        # Layer 2: ペルソナアダプター（GEPA最適化対象 → _compiled を設定しない）
+        # Layer 1: ユーザーペルソナ生成（最適化対象 → _compiled を設定しない）
+        self.user_persona_module = UserPersonaModule()
+        # Layer 2: ペルソナアダプター（最適化対象 → _compiled を設定しない）
         self.persona_adapter = PersonaAdapter()
         # Layer 3: 下流シグネチャに persona_instruction と lang_name を動的追加
         # 既にフィールドが存在するシグネチャへの重複追加を防止
@@ -213,22 +224,39 @@ class UniversalTaskModule(dspy.Module):
         lang_name = kwargs.get("lang_name", "")
         sig_name = self.target_signature.__name__
 
-        # Layer 1: 固定システムコンテキストを生成（LLMなし）
+        # Layer 0: 固定システムコンテキストを生成（凍結）
         system_context = self.system_module(
             task_type=sig_name,
             lang_name=lang_name,
         )
 
-        # Layer 2: system_context を受け取りコンテンツ非依存の行動ポリシーを生成（GEPA最適化対象）
+        # Layer 1: behavior_logs が渡された場合は UserPersonaModule でペルソナを動的生成（最適化対象）。
+        # 渡されない場合は user_persona 引数にフォールバック（後方互換性）。
+        behavior_logs = kwargs.get("behavior_logs", "")
+        if behavior_logs:
+            persona_result = self.user_persona_module(
+                behavior_logs=behavior_logs,
+                current_logs=kwargs.get("current_logs", ""),
+                user_feedback=kwargs.get("user_feedback", ""),
+            )
+            user_persona = persona_result.user_persona
+        else:
+            user_persona = kwargs.get("user_persona", "")
+
+        # Layer 2: ユーザーペルソナ + システムコンテキストから行動ポリシーを生成（GEPA最適化対象）
         persona_instruction = self.persona_adapter(
             system_context=system_context,
-            user_persona=kwargs.get("user_persona", ""),
+            user_persona=user_persona,
             task_description=self._get_task_description(),
             lang_name=lang_name,
         )
 
-        # Layer 3: 行動ポリシーとコンテンツを下流タスクに渡して実行（固定）
-        return self.solve(persona_instruction=persona_instruction, **kwargs)
+        # Layer 3: パイプライン内部キーを除いた kwargs を downstream に渡して実行
+        solve_kwargs = {
+            k: v for k, v in kwargs.items()
+            if k not in self._PIPELINE_INTERNAL_KEYS
+        }
+        return self.solve(persona_instruction=persona_instruction, **solve_kwargs)
 
 
 # --- 以下、UniversalTaskModule のラッパーとして各モジュールを定義 ---

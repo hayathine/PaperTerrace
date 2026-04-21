@@ -1,24 +1,107 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { getUICache, setUICache, useBookmarks } from "@/db/hooks";
-import type { Bookmark } from "@/db/index";
-import {
-	deletePaper,
-	fetchUserPapers,
-	fetchUserPersona,
-	fetchUserStats,
-	fetchUserTranslations,
-	type PaperEntry,
-	type TranslationEntry,
-	type UserPersona,
-	type UserStats,
-} from "@/lib/dashboard";
+import { useDashboardData } from "@/hooks/useDashboardData";
+import type { PaperEntry } from "@/lib/dashboard";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("Dashboard");
 
-const TRANSLATIONS_PER_PAGE = 20;
+// ─── Shared UI primitives ────────────────────────────────────────────────────
+
+function SectionHeading({ title, count }: { title: string; count?: number }) {
+	return (
+		<div className="flex items-center justify-between mb-3">
+			<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
+				{title}
+			</h2>
+			{count != null && (
+				<span className="text-xs text-slate-400">{count} 件</span>
+			)}
+		</div>
+	);
+}
+
+function EmptyState({
+	icon,
+	title,
+	description,
+	py = "py-16",
+}: {
+	icon: React.ReactNode;
+	title: string;
+	description?: React.ReactNode;
+	py?: string;
+}) {
+	return (
+		<div
+			className={`flex flex-col items-center justify-center ${py} text-slate-300`}
+		>
+			{icon}
+			<p className="text-sm font-semibold mt-3">{title}</p>
+			{description && <p className="text-xs mt-1 text-center">{description}</p>}
+		</div>
+	);
+}
+
+type TagColor = "orange" | "purple";
+const TAG_COLORS: Record<TagColor, string> = {
+	orange: "bg-orange-50 text-orange-600 border-orange-100",
+	purple: "bg-purple-50 text-purple-600 border-purple-100",
+};
+
+function TagChip({
+	label,
+	color = "orange",
+}: {
+	label: string;
+	color?: TagColor;
+}) {
+	return (
+		<span
+			className={`text-xs px-2 py-0.5 rounded-full border ${TAG_COLORS[color]}`}
+		>
+			{label}
+		</span>
+	);
+}
+
+type PersonaColor = "blue" | "orange" | "green" | "purple";
+const PERSONA_COLORS: Record<PersonaColor, { bg: string; icon: string }> = {
+	blue: { bg: "bg-blue-50", icon: "text-blue-500" },
+	orange: { bg: "bg-orange-50", icon: "text-orange-500" },
+	green: { bg: "bg-green-50", icon: "text-green-500" },
+	purple: { bg: "bg-purple-50", icon: "text-purple-500" },
+};
+
+function PersonaRow({
+	color,
+	label,
+	icon,
+	children,
+}: {
+	color: PersonaColor;
+	label: string;
+	icon: React.ReactNode;
+	children: React.ReactNode;
+}) {
+	const { bg, icon: iconColor } = PERSONA_COLORS[color];
+	return (
+		<div className="flex items-start gap-3">
+			<div
+				className={`w-8 h-8 rounded-xl ${bg} flex items-center justify-center ${iconColor} shrink-0 mt-0.5`}
+			>
+				{icon}
+			</div>
+			<div>
+				<p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+					{label}
+				</p>
+				{children}
+			</div>
+		</div>
+	);
+}
 
 function StatCard({
 	label,
@@ -42,22 +125,109 @@ function StatCard({
 	);
 }
 
+// ─── Skeleton helpers ─────────────────────────────────────────────────────────
+
+function StatSkeleton() {
+	return (
+		<div className="flex gap-3 overflow-x-auto pb-1">
+			{[...Array(4)].map((_, i) => (
+				<div
+					key={i}
+					className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col items-center gap-2 min-w-[130px] animate-pulse"
+				>
+					<div className="w-10 h-10 rounded-xl bg-slate-100" />
+					<div className="w-8 h-6 bg-slate-100 rounded" />
+					<div className="w-16 h-3 bg-slate-100 rounded" />
+				</div>
+			))}
+		</div>
+	);
+}
+
+function ListSkeleton({ rows = 4 }: { rows?: number }) {
+	return (
+		<div className="divide-y divide-slate-100">
+			{[...Array(rows)].map((_, i) => (
+				<div key={i} className="px-5 py-4 animate-pulse flex gap-3">
+					<div className="w-8 h-8 rounded-lg bg-slate-100 shrink-0" />
+					<div className="flex-1 space-y-2 py-1">
+						<div className="w-3/4 h-3.5 bg-slate-100 rounded" />
+						<div className="w-1/3 h-2.5 bg-slate-100 rounded" />
+					</div>
+				</div>
+			))}
+		</div>
+	);
+}
+
+// ─── Icons (shared paths) ─────────────────────────────────────────────────────
+
+const ICON_PAPER_PATH =
+	"M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z";
+const ICON_TRASH_PATH =
+	"M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16";
+
+function IconPaper({ className = "w-5 h-5" }: { className?: string }) {
+	return (
+		<svg
+			className={className}
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+		>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth="2"
+				d={ICON_PAPER_PATH}
+			/>
+		</svg>
+	);
+}
+
+function IconTrash({ className = "w-3.5 h-3.5" }: { className?: string }) {
+	return (
+		<svg
+			className={className}
+			fill="none"
+			stroke="currentColor"
+			viewBox="0 0 24 24"
+		>
+			<path
+				strokeLinecap="round"
+				strokeLinejoin="round"
+				strokeWidth="2"
+				d={ICON_TRASH_PATH}
+			/>
+		</svg>
+	);
+}
+
+// ─── Dashboard ────────────────────────────────────────────────────────────────
+
 export default function Dashboard() {
 	const { user, token } = useAuth();
 	const navigate = useNavigate();
 
-	const { getBookmarks, deleteBookmark } = useBookmarks();
-	const [stats, setStats] = useState<UserStats | null>(null);
-	const [papers, setPapers] = useState<PaperEntry[]>([]);
-	const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
+	const {
+		stats,
+		statsLoading,
+		papers,
+		papersLoading,
+		removePaper,
+		persona,
+		bookmarks,
+		removeBookmark,
+		translations,
+		totalTranslations,
+		translationsLoading,
+		translationPage,
+		setTranslationPage,
+		totalPages,
+	} = useDashboardData(token, user?.id);
+
+	// UI-only state for paper delete confirmation
 	const [paperSearch, setPaperSearch] = useState("");
-	const [translations, setTranslations] = useState<TranslationEntry[]>([]);
-	const [totalTranslations, setTotalTranslations] = useState(0);
-	const [page, setPage] = useState(1);
-	const [loading, setLoading] = useState(false);
-	const [papersLoading, setPapersLoading] = useState(false);
-	const [translationsLoading, setTranslationsLoading] = useState(false);
-	const [persona, setPersona] = useState<UserPersona | null>(null);
 	const [deletingPaperId, setDeletingPaperId] = useState<string | null>(null);
 	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -73,69 +243,17 @@ export default function Dashboard() {
 		);
 	}, [papers, paperSearch]);
 
-	useEffect(() => {
-		if (!token || !user?.id) return;
-		const userId = user.id;
-
-		const load = async () => {
-			// キャッシュがあれば即座に表示（スケルトンなし）
-			const [cachedStats, cachedPapers] = await Promise.all([
-				getUICache<UserStats>(`dashboard_stats:${userId}`),
-				getUICache<PaperEntry[]>(`dashboard_papers:${userId}`),
-			]);
-			if (cachedStats) {
-				setStats(cachedStats);
-			} else {
-				setLoading(true);
-			}
-			if (cachedPapers) {
-				setPapers(cachedPapers);
-			} else {
-				setPapersLoading(true);
-			}
-
-			// バックグラウンドでAPI取得・キャッシュ更新
-			fetchUserStats(token)
-				.then((s) => {
-					setStats(s);
-					setUICache(`dashboard_stats:${userId}`, s);
-				})
-				.catch((e) => log.error("fetch_stats", "Failed to fetch stats", { e }))
-				.finally(() => setLoading(false));
-			fetchUserPapers(token, 100)
-				.then((res) => {
-					setPapers(res.papers);
-					setUICache(`dashboard_papers:${userId}`, res.papers);
-				})
-				.catch((e) =>
-					log.error("fetch_papers", "Failed to fetch papers", { e }),
-				)
-				.finally(() => setPapersLoading(false));
-			fetchUserPersona(token)
-				.then((p) => setPersona(p))
-				.catch((e) =>
-					log.error("fetch_persona", "Failed to fetch persona", { e }),
-				);
-			getBookmarks().then(setBookmarks);
-		};
-		load();
-	}, [token, user?.id, getBookmarks]);
-
-	useEffect(() => {
-		if (!token) return;
-		setTranslationsLoading(true);
-		fetchUserTranslations(token, page, TRANSLATIONS_PER_PAGE)
-			.then((res) => {
-				setTranslations(res.translations);
-				setTotalTranslations(res.total);
-			})
-			.catch((e) =>
-				log.error("fetch_translations", "Failed to fetch translations", { e }),
-			)
-			.finally(() => setTranslationsLoading(false));
-	}, [token, page]);
-
-	const totalPages = Math.ceil(totalTranslations / TRANSLATIONS_PER_PAGE);
+	const handleDeletePaper = async (paperId: string) => {
+		setDeletingPaperId(paperId);
+		setConfirmDeleteId(null);
+		try {
+			await removePaper(paperId);
+		} catch (e) {
+			log.error("delete_paper", "Failed to delete paper", { e });
+		} finally {
+			setDeletingPaperId(null);
+		}
+	};
 
 	const avatarUrl = user?.image;
 	const displayName = user?.name ?? user?.email ?? "ユーザー";
@@ -174,19 +292,7 @@ export default function Dashboard() {
 						</svg>
 					</button>
 					<div className="w-7 h-7 rounded-lg bg-gradient-to-tr from-orange-600 to-amber-500 flex items-center justify-center">
-						<svg
-							className="w-4 h-4 text-white"
-							fill="none"
-							stroke="currentColor"
-							viewBox="0 0 24 24"
-						>
-							<path
-								strokeLinecap="round"
-								strokeLinejoin="round"
-								strokeWidth="2"
-								d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
-							/>
-						</svg>
+						<IconPaper className="w-4 h-4 text-white" />
 					</div>
 					<span className="font-bold text-slate-700">マイダッシュボード</span>
 				</div>
@@ -221,15 +327,15 @@ export default function Dashboard() {
 
 				{/* User Persona */}
 				<section>
-					<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-						あなたのペルソナ
-					</h2>
+					<SectionHeading title="あなたのペルソナ" />
 					<div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
 						{persona ? (
 							<div className="space-y-4">
 								{persona.knowledge_level && (
-									<div className="flex items-start gap-3">
-										<div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0 mt-0.5">
+									<PersonaRow
+										color="blue"
+										label="専門レベル"
+										icon={
 											<svg
 												className="w-4 h-4"
 												fill="none"
@@ -243,21 +349,19 @@ export default function Dashboard() {
 													d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
 												/>
 											</svg>
-										</div>
-										<div>
-											<p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
-												専門レベル
-											</p>
-											<p className="text-sm text-slate-700">
-												{persona.knowledge_level}
-											</p>
-										</div>
-									</div>
+										}
+									>
+										<p className="text-sm text-slate-700">
+											{persona.knowledge_level}
+										</p>
+									</PersonaRow>
 								)}
 								{Array.isArray(persona.interests) &&
 									persona.interests.length > 0 && (
-										<div className="flex items-start gap-3">
-											<div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500 shrink-0 mt-0.5">
+										<PersonaRow
+											color="orange"
+											label="興味分野"
+											icon={
 												<svg
 													className="w-4 h-4"
 													fill="none"
@@ -271,27 +375,20 @@ export default function Dashboard() {
 														d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
 													/>
 												</svg>
+											}
+										>
+											<div className="flex flex-wrap gap-1.5 mt-1">
+												{(persona.interests as string[]).map((interest) => (
+													<TagChip key={interest} label={interest} />
+												))}
 											</div>
-											<div>
-												<p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-													興味分野
-												</p>
-												<div className="flex flex-wrap gap-1.5">
-													{(persona.interests as string[]).map((interest) => (
-														<span
-															key={interest}
-															className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full border border-orange-100"
-														>
-															{interest}
-														</span>
-													))}
-												</div>
-											</div>
-										</div>
+										</PersonaRow>
 									)}
 								{persona.preferred_direction && (
-									<div className="flex items-start gap-3">
-										<div className="w-8 h-8 rounded-xl bg-green-50 flex items-center justify-center text-green-500 shrink-0 mt-0.5">
+									<PersonaRow
+										color="green"
+										label="好みの説明スタイル"
+										icon={
 											<svg
 												className="w-4 h-4"
 												fill="none"
@@ -305,21 +402,19 @@ export default function Dashboard() {
 													d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
 												/>
 											</svg>
-										</div>
-										<div>
-											<p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
-												好みの説明スタイル
-											</p>
-											<p className="text-sm text-slate-700">
-												{persona.preferred_direction}
-											</p>
-										</div>
-									</div>
+										}
+									>
+										<p className="text-sm text-slate-700">
+											{persona.preferred_direction}
+										</p>
+									</PersonaRow>
 								)}
 								{Array.isArray(persona.unknown_concepts) &&
 									persona.unknown_concepts.length > 0 && (
-										<div className="flex items-start gap-3">
-											<div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center text-purple-500 shrink-0 mt-0.5">
+										<PersonaRow
+											color="purple"
+											label="学習中の概念"
+											icon={
 												<svg
 													className="w-4 h-4"
 													fill="none"
@@ -333,25 +428,20 @@ export default function Dashboard() {
 														d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
 													/>
 												</svg>
+											}
+										>
+											<div className="flex flex-wrap gap-1.5 mt-1">
+												{(persona.unknown_concepts as string[])
+													.slice(0, 8)
+													.map((concept) => (
+														<TagChip
+															key={concept}
+															label={concept}
+															color="purple"
+														/>
+													))}
 											</div>
-											<div>
-												<p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
-													学習中の概念
-												</p>
-												<div className="flex flex-wrap gap-1.5">
-													{(persona.unknown_concepts as string[])
-														.slice(0, 8)
-														.map((concept) => (
-															<span
-																key={concept}
-																className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full border border-purple-100"
-															>
-																{concept}
-															</span>
-														))}
-												</div>
-											</div>
-										</div>
+										</PersonaRow>
 									)}
 								{persona.updated_at && (
 									<p className="text-[10px] text-slate-300 text-right pt-1">
@@ -365,57 +455,11 @@ export default function Dashboard() {
 								)}
 							</div>
 						) : (
-							<div className="flex flex-col items-center justify-center py-8 text-slate-300">
-								<svg
-									className="w-10 h-10 mb-3"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth="1.5"
-										d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-									/>
-								</svg>
-								<p className="text-sm font-semibold">ペルソナ未生成</p>
-								<p className="text-xs mt-1 text-center">
-									論文を読んで推薦を受けると
-									<br />
-									あなたのペルソナが作成されます
-								</p>
-							</div>
-						)}
-					</div>
-				</section>
-
-				{/* Stats */}
-				<section>
-					<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
-						学習サマリー
-					</h2>
-					{loading ? (
-						<div className="flex gap-3 overflow-x-auto pb-1">
-							{[...Array(4)].map((_, i) => (
-								<div
-									key={i}
-									className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200 flex flex-col items-center gap-2 min-w-[130px] animate-pulse"
-								>
-									<div className="w-10 h-10 rounded-xl bg-slate-100" />
-									<div className="w-8 h-6 bg-slate-100 rounded" />
-									<div className="w-16 h-3 bg-slate-100 rounded" />
-								</div>
-							))}
-						</div>
-					) : (
-						<div className="flex gap-3 overflow-x-auto pb-1">
-							<StatCard
-								label="読んだ論文"
-								value={stats?.paper_count ?? 0}
+							<EmptyState
+								py="py-8"
 								icon={
 									<svg
-										className="w-5 h-5"
+										className="w-10 h-10"
 										fill="none"
 										stroke="currentColor"
 										viewBox="0 0 24 24"
@@ -423,11 +467,35 @@ export default function Dashboard() {
 										<path
 											strokeLinecap="round"
 											strokeLinejoin="round"
-											strokeWidth="2"
-											d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+											strokeWidth="1.5"
+											d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
 										/>
 									</svg>
 								}
+								title="ペルソナ未生成"
+								description={
+									<>
+										論文を読んで推薦を受けると
+										<br />
+										あなたのペルソナが作成されます
+									</>
+								}
+							/>
+						)}
+					</div>
+				</section>
+
+				{/* Stats */}
+				<section>
+					<SectionHeading title="学習サマリー" />
+					{statsLoading ? (
+						<StatSkeleton />
+					) : (
+						<div className="flex gap-3 overflow-x-auto pb-1">
+							<StatCard
+								label="読んだ論文"
+								value={stats?.paper_count ?? 0}
+								icon={<IconPaper />}
 							/>
 							<StatCard
 								label="ノート"
@@ -492,15 +560,10 @@ export default function Dashboard() {
 
 				{/* Papers History */}
 				<section>
-					<div className="flex items-center justify-between mb-3">
-						<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-							読んだ論文
-						</h2>
-						{papers.length > 0 && (
-							<span className="text-xs text-slate-400">{papers.length} 件</span>
-						)}
-					</div>
-					{/* Search bar */}
+					<SectionHeading
+						title="読んだ論文"
+						count={papers.length > 0 ? papers.length : undefined}
+					/>
 					{papers.length > 0 && (
 						<div className="relative mb-2">
 							<svg
@@ -548,203 +611,34 @@ export default function Dashboard() {
 					)}
 					<div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
 						{papersLoading ? (
-							<div className="divide-y divide-slate-100">
-								{[...Array(4)].map((_, i) => (
-									<div key={i} className="px-5 py-4 animate-pulse flex gap-3">
-										<div className="w-8 h-8 rounded-lg bg-slate-100 shrink-0" />
-										<div className="flex-1 space-y-2 py-1">
-											<div className="w-3/4 h-3.5 bg-slate-100 rounded" />
-											<div className="w-1/3 h-2.5 bg-slate-100 rounded" />
-										</div>
-									</div>
-								))}
-							</div>
+							<ListSkeleton rows={4} />
 						) : filteredPapers.length === 0 ? (
-							<div className="flex flex-col items-center justify-center py-16 text-slate-300">
-								<svg
-									className="w-12 h-12 mb-3"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth="1.5"
-										d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-									/>
-								</svg>
-								<p className="text-sm font-semibold">
-									{paperSearch
+							<EmptyState
+								icon={<IconPaper className="w-12 h-12" />}
+								title={
+									paperSearch
 										? "一致する論文がありません"
-										: "論文はまだありません"}
-								</p>
-								{!paperSearch && (
-									<p className="text-xs mt-1">
-										PDFをアップロードして読み始めましょう
-									</p>
-								)}
-							</div>
+										: "論文はまだありません"
+								}
+								description={
+									!paperSearch
+										? "PDFをアップロードして読み始めましょう"
+										: undefined
+								}
+							/>
 						) : (
 							<div className="divide-y divide-slate-100">
 								{filteredPapers.map((p) => (
-									<div
+									<PaperRow
 										key={p.paper_id}
-										className="w-full px-5 py-4 hover:bg-orange-50 transition-colors flex items-center gap-3 group"
-									>
-										<button
-											type="button"
-											onClick={() => navigate(`/paper/${p.paper_id}`)}
-											className="flex items-center gap-3 flex-1 min-w-0 text-left"
-										>
-											<div className="w-8 h-8 rounded-lg bg-orange-50 group-hover:bg-orange-100 flex items-center justify-center text-orange-500 shrink-0 transition-colors">
-												<svg
-													className="w-4 h-4"
-													fill="none"
-													stroke="currentColor"
-													viewBox="0 0 24 24"
-												>
-													<path
-														strokeLinecap="round"
-														strokeLinejoin="round"
-														strokeWidth="2"
-														d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-													/>
-												</svg>
-											</div>
-											<div className="flex-1 min-w-0">
-												<p className="text-sm font-semibold text-slate-700 truncate group-hover:text-orange-700 transition-colors">
-													{p.title ?? "タイトル未設定"}
-												</p>
-												<div className="flex items-center gap-2 mt-0.5">
-													<p className="text-xs text-slate-400">
-														{new Date(p.created_at).toLocaleDateString(
-															"ja-JP",
-															{
-																year: "numeric",
-																month: "short",
-																day: "numeric",
-															},
-														)}
-													</p>
-													{Array.isArray(p.tags) && p.tags.length > 0 && (
-														<div className="flex gap-1 flex-wrap">
-															{(p.tags as string[]).slice(0, 3).map((tag) => (
-																<span
-																	key={tag}
-																	className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded-full"
-																>
-																	{tag}
-																</span>
-															))}
-														</div>
-													)}
-												</div>
-											</div>
-											<svg
-												className="w-4 h-4 text-slate-300 group-hover:text-orange-400 shrink-0 transition-colors"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-											>
-												<path
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													strokeWidth="2"
-													d="M9 5l7 7-7 7"
-												/>
-											</svg>
-										</button>
-										{confirmDeleteId === p.paper_id ? (
-											<div className="flex items-center gap-1 shrink-0">
-												<button
-													type="button"
-													onClick={async () => {
-														if (!token) return;
-														setDeletingPaperId(p.paper_id);
-														setConfirmDeleteId(null);
-														try {
-															await deletePaper(token, p.paper_id);
-															setPapers((prev) =>
-																prev.filter((x) => x.paper_id !== p.paper_id),
-															);
-															if (user?.id) {
-																const key = `dashboard_papers:${user.id}`;
-																const c = await getUICache<PaperEntry[]>(key);
-																if (c)
-																	await setUICache(
-																		key,
-																		c.filter((x) => x.paper_id !== p.paper_id),
-																	);
-															}
-														} catch (e) {
-															log.error(
-																"delete_paper",
-																"Failed to delete paper",
-																{ e },
-															);
-														} finally {
-															setDeletingPaperId(null);
-														}
-													}}
-													className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
-												>
-													削除
-												</button>
-												<button
-													type="button"
-													onClick={() => setConfirmDeleteId(null)}
-													className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
-												>
-													戻る
-												</button>
-											</div>
-										) : (
-											<button
-												type="button"
-												onClick={() => setConfirmDeleteId(p.paper_id)}
-												disabled={deletingPaperId === p.paper_id}
-												className="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors shrink-0 opacity-0 group-hover:opacity-100"
-												title="論文を削除"
-											>
-												{deletingPaperId === p.paper_id ? (
-													<svg
-														className="w-3.5 h-3.5 animate-spin"
-														fill="none"
-														viewBox="0 0 24 24"
-													>
-														<circle
-															className="opacity-25"
-															cx="12"
-															cy="12"
-															r="10"
-															stroke="currentColor"
-															strokeWidth="4"
-														/>
-														<path
-															className="opacity-75"
-															fill="currentColor"
-															d="M4 12a8 8 0 018-8v8H4z"
-														/>
-													</svg>
-												) : (
-													<svg
-														className="w-3.5 h-3.5"
-														fill="none"
-														stroke="currentColor"
-														viewBox="0 0 24 24"
-													>
-														<path
-															strokeLinecap="round"
-															strokeLinejoin="round"
-															strokeWidth="2"
-															d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-														/>
-													</svg>
-												)}
-											</button>
-										)}
-									</div>
+										paper={p}
+										isDeleting={deletingPaperId === p.paper_id}
+										isConfirming={confirmDeleteId === p.paper_id}
+										onNavigate={() => navigate(`/paper/${p.paper_id}`)}
+										onRequestDelete={() => setConfirmDeleteId(p.paper_id)}
+										onConfirmDelete={() => handleDeletePaper(p.paper_id)}
+										onCancelDelete={() => setConfirmDeleteId(null)}
+									/>
 								))}
 							</div>
 						)}
@@ -754,14 +648,7 @@ export default function Dashboard() {
 				{/* Bookmarks */}
 				{bookmarks.length > 0 && (
 					<section>
-						<div className="flex items-center justify-between mb-3">
-							<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-								しおり
-							</h2>
-							<span className="text-xs text-slate-400">
-								{bookmarks.length} 件
-							</span>
-						</div>
+						<SectionHeading title="しおり" count={bookmarks.length} />
 						<div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
 							<div className="divide-y divide-slate-100">
 								{bookmarks.map((bm) => (
@@ -798,30 +685,11 @@ export default function Dashboard() {
 										</button>
 										<button
 											type="button"
-											onClick={async () => {
-												if (bm.id != null) {
-													await deleteBookmark(bm.id);
-													setBookmarks((prev) =>
-														prev.filter((b) => b.id !== bm.id),
-													);
-												}
-											}}
+											onClick={() => bm.id != null && removeBookmark(bm.id)}
 											className="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors shrink-0"
 											title="しおりを削除"
 										>
-											<svg
-												className="w-3.5 h-3.5"
-												fill="none"
-												stroke="currentColor"
-												viewBox="0 0 24 24"
-											>
-												<path
-													strokeLinecap="round"
-													strokeLinejoin="round"
-													strokeWidth="2"
-													d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
-												/>
-											</svg>
+											<IconTrash />
 										</button>
 									</div>
 								))}
@@ -832,17 +700,10 @@ export default function Dashboard() {
 
 				{/* Translation History */}
 				<section>
-					<div className="flex items-center justify-between mb-3">
-						<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400">
-							翻訳・解説履歴
-						</h2>
-						{totalTranslations > 0 && (
-							<span className="text-xs text-slate-400">
-								全 {totalTranslations} 件
-							</span>
-						)}
-					</div>
-
+					<SectionHeading
+						title="翻訳・解説履歴"
+						count={totalTranslations > 0 ? totalTranslations : undefined}
+					/>
 					<div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
 						{translationsLoading ? (
 							<div className="divide-y divide-slate-100">
@@ -857,27 +718,25 @@ export default function Dashboard() {
 								))}
 							</div>
 						) : translations.length === 0 ? (
-							<div className="flex flex-col items-center justify-center py-16 text-slate-300">
-								<svg
-									className="w-12 h-12 mb-3"
-									fill="none"
-									stroke="currentColor"
-									viewBox="0 0 24 24"
-								>
-									<path
-										strokeLinecap="round"
-										strokeLinejoin="round"
-										strokeWidth="1.5"
-										d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
-									/>
-								</svg>
-								<p className="text-sm font-semibold">
-									翻訳・解説履歴はありません
-								</p>
-								<p className="text-xs mt-1 text-center">
-									辞書タブで単語を保存すると履歴が表示されます
-								</p>
-							</div>
+							<EmptyState
+								icon={
+									<svg
+										className="w-12 h-12"
+										fill="none"
+										stroke="currentColor"
+										viewBox="0 0 24 24"
+									>
+										<path
+											strokeLinecap="round"
+											strokeLinejoin="round"
+											strokeWidth="1.5"
+											d="M3 5h12M9 3v2m1.048 9.5A18.022 18.022 0 016.412 9m6.088 9h7M11 21l5-10 5 10M12.751 5C11.783 10.77 8.07 15.61 3 18.129"
+										/>
+									</svg>
+								}
+								title="翻訳・解説履歴はありません"
+								description="辞書タブで単語を保存すると履歴が表示されます"
+							/>
 						) : (
 							<div className="divide-y divide-slate-100">
 								{translations.map((t, i) => (
@@ -914,25 +773,25 @@ export default function Dashboard() {
 								))}
 							</div>
 						)}
-
-						{/* Pagination */}
 						{totalPages > 1 && (
 							<div className="border-t border-slate-200 px-5 py-3 flex items-center justify-between">
 								<button
 									type="button"
-									onClick={() => setPage((p) => Math.max(1, p - 1))}
-									disabled={page <= 1}
+									onClick={() => setTranslationPage((p) => Math.max(1, p - 1))}
+									disabled={translationPage <= 1}
 									className="text-xs font-semibold text-orange-600 disabled:text-slate-300 hover:underline disabled:no-underline"
 								>
 									← 前へ
 								</button>
 								<span className="text-xs text-slate-400">
-									{page} / {totalPages}
+									{translationPage} / {totalPages}
 								</span>
 								<button
 									type="button"
-									onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-									disabled={page >= totalPages}
+									onClick={() =>
+										setTranslationPage((p) => Math.min(totalPages, p + 1))
+									}
+									disabled={translationPage >= totalPages}
 									className="text-xs font-semibold text-orange-600 disabled:text-slate-300 hover:underline disabled:no-underline"
 								>
 									次へ →
@@ -942,6 +801,129 @@ export default function Dashboard() {
 					</div>
 				</section>
 			</main>
+		</div>
+	);
+}
+
+// ─── PaperRow ─────────────────────────────────────────────────────────────────
+
+function PaperRow({
+	paper,
+	isDeleting,
+	isConfirming,
+	onNavigate,
+	onRequestDelete,
+	onConfirmDelete,
+	onCancelDelete,
+}: {
+	paper: PaperEntry;
+	isDeleting: boolean;
+	isConfirming: boolean;
+	onNavigate: () => void;
+	onRequestDelete: () => void;
+	onConfirmDelete: () => void;
+	onCancelDelete: () => void;
+}) {
+	return (
+		<div className="w-full px-5 py-4 hover:bg-orange-50 transition-colors flex items-center gap-3 group">
+			<button
+				type="button"
+				onClick={onNavigate}
+				className="flex items-center gap-3 flex-1 min-w-0 text-left"
+			>
+				<div className="w-8 h-8 rounded-lg bg-orange-50 group-hover:bg-orange-100 flex items-center justify-center text-orange-500 shrink-0 transition-colors">
+					<IconPaper className="w-4 h-4" />
+				</div>
+				<div className="flex-1 min-w-0">
+					<p className="text-sm font-semibold text-slate-700 truncate group-hover:text-orange-700 transition-colors">
+						{paper.title ?? "タイトル未設定"}
+					</p>
+					<div className="flex items-center gap-2 mt-0.5">
+						<p className="text-xs text-slate-400">
+							{new Date(paper.created_at).toLocaleDateString("ja-JP", {
+								year: "numeric",
+								month: "short",
+								day: "numeric",
+							})}
+						</p>
+						{Array.isArray(paper.tags) && paper.tags.length > 0 && (
+							<div className="flex gap-1 flex-wrap">
+								{(paper.tags as string[]).slice(0, 3).map((tag) => (
+									<span
+										key={tag}
+										className="text-[10px] bg-orange-50 text-orange-600 px-1.5 py-0.5 rounded-full"
+									>
+										{tag}
+									</span>
+								))}
+							</div>
+						)}
+					</div>
+				</div>
+				<svg
+					className="w-4 h-4 text-slate-300 group-hover:text-orange-400 shrink-0 transition-colors"
+					fill="none"
+					stroke="currentColor"
+					viewBox="0 0 24 24"
+				>
+					<path
+						strokeLinecap="round"
+						strokeLinejoin="round"
+						strokeWidth="2"
+						d="M9 5l7 7-7 7"
+					/>
+				</svg>
+			</button>
+			{isConfirming ? (
+				<div className="flex items-center gap-1 shrink-0">
+					<button
+						type="button"
+						onClick={onConfirmDelete}
+						className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-red-100 text-red-600 hover:bg-red-200 transition-colors"
+					>
+						削除
+					</button>
+					<button
+						type="button"
+						onClick={onCancelDelete}
+						className="text-[10px] font-semibold px-2 py-1 rounded-lg bg-slate-100 text-slate-500 hover:bg-slate-200 transition-colors"
+					>
+						戻る
+					</button>
+				</div>
+			) : (
+				<button
+					type="button"
+					onClick={onRequestDelete}
+					disabled={isDeleting}
+					className="p-1.5 rounded-lg text-slate-300 hover:text-red-400 hover:bg-red-50 transition-colors shrink-0 opacity-0 group-hover:opacity-100"
+					title="論文を削除"
+				>
+					{isDeleting ? (
+						<svg
+							className="w-3.5 h-3.5 animate-spin"
+							fill="none"
+							viewBox="0 0 24 24"
+						>
+							<circle
+								className="opacity-25"
+								cx="12"
+								cy="12"
+								r="10"
+								stroke="currentColor"
+								strokeWidth="4"
+							/>
+							<path
+								className="opacity-75"
+								fill="currentColor"
+								d="M4 12a8 8 0 018-8v8H4z"
+							/>
+						</svg>
+					) : (
+						<IconTrash />
+					)}
+				</button>
+			)}
 		</div>
 	);
 }
