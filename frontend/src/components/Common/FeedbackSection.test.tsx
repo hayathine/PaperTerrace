@@ -42,7 +42,7 @@ describe("FeedbackSection Component", () => {
 
 		expect(feedbackLib.submitFeedback).toHaveBeenCalledWith(
 			expect.objectContaining({
-				user_score: 1,
+				user_rating: 1,
 				target_type: "chat",
 			}),
 		);

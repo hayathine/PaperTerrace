@@ -6,10 +6,12 @@ import type { Bookmark } from "@/db/index";
 import {
 	deletePaper,
 	fetchUserPapers,
+	fetchUserPersona,
 	fetchUserStats,
 	fetchUserTranslations,
 	type PaperEntry,
 	type TranslationEntry,
+	type UserPersona,
 	type UserStats,
 } from "@/lib/dashboard";
 import { createLogger } from "@/lib/logger";
@@ -55,6 +57,7 @@ export default function Dashboard() {
 	const [loading, setLoading] = useState(false);
 	const [papersLoading, setPapersLoading] = useState(false);
 	const [translationsLoading, setTranslationsLoading] = useState(false);
+	const [persona, setPersona] = useState<UserPersona | null>(null);
 	const [deletingPaperId, setDeletingPaperId] = useState<string | null>(null);
 	const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
@@ -108,6 +111,11 @@ export default function Dashboard() {
 					log.error("fetch_papers", "Failed to fetch papers", { e }),
 				)
 				.finally(() => setPapersLoading(false));
+			fetchUserPersona(token)
+				.then((p) => setPersona(p))
+				.catch((e) =>
+					log.error("fetch_persona", "Failed to fetch persona", { e }),
+				);
 			getBookmarks().then(setBookmarks);
 		};
 		load();
@@ -207,6 +215,177 @@ export default function Dashboard() {
 						)}
 						{createdAt && (
 							<p className="text-xs text-slate-300 mt-1">{createdAt} 登録</p>
+						)}
+					</div>
+				</section>
+
+				{/* User Persona */}
+				<section>
+					<h2 className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-3">
+						あなたのペルソナ
+					</h2>
+					<div className="bg-white rounded-2xl p-5 shadow-sm border border-slate-200">
+						{persona ? (
+							<div className="space-y-4">
+								{persona.knowledge_level && (
+									<div className="flex items-start gap-3">
+										<div className="w-8 h-8 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500 shrink-0 mt-0.5">
+											<svg
+												className="w-4 h-4"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth="2"
+													d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"
+												/>
+											</svg>
+										</div>
+										<div>
+											<p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+												専門レベル
+											</p>
+											<p className="text-sm text-slate-700">
+												{persona.knowledge_level}
+											</p>
+										</div>
+									</div>
+								)}
+								{Array.isArray(persona.interests) &&
+									persona.interests.length > 0 && (
+										<div className="flex items-start gap-3">
+											<div className="w-8 h-8 rounded-xl bg-orange-50 flex items-center justify-center text-orange-500 shrink-0 mt-0.5">
+												<svg
+													className="w-4 h-4"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth="2"
+														d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+													/>
+												</svg>
+											</div>
+											<div>
+												<p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+													興味分野
+												</p>
+												<div className="flex flex-wrap gap-1.5">
+													{(persona.interests as string[]).map((interest) => (
+														<span
+															key={interest}
+															className="text-xs bg-orange-50 text-orange-600 px-2 py-0.5 rounded-full border border-orange-100"
+														>
+															{interest}
+														</span>
+													))}
+												</div>
+											</div>
+										</div>
+									)}
+								{persona.preferred_direction && (
+									<div className="flex items-start gap-3">
+										<div className="w-8 h-8 rounded-xl bg-green-50 flex items-center justify-center text-green-500 shrink-0 mt-0.5">
+											<svg
+												className="w-4 h-4"
+												fill="none"
+												stroke="currentColor"
+												viewBox="0 0 24 24"
+											>
+												<path
+													strokeLinecap="round"
+													strokeLinejoin="round"
+													strokeWidth="2"
+													d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+												/>
+											</svg>
+										</div>
+										<div>
+											<p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">
+												好みの説明スタイル
+											</p>
+											<p className="text-sm text-slate-700">
+												{persona.preferred_direction}
+											</p>
+										</div>
+									</div>
+								)}
+								{Array.isArray(persona.unknown_concepts) &&
+									persona.unknown_concepts.length > 0 && (
+										<div className="flex items-start gap-3">
+											<div className="w-8 h-8 rounded-xl bg-purple-50 flex items-center justify-center text-purple-500 shrink-0 mt-0.5">
+												<svg
+													className="w-4 h-4"
+													fill="none"
+													stroke="currentColor"
+													viewBox="0 0 24 24"
+												>
+													<path
+														strokeLinecap="round"
+														strokeLinejoin="round"
+														strokeWidth="2"
+														d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"
+													/>
+												</svg>
+											</div>
+											<div>
+												<p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">
+													学習中の概念
+												</p>
+												<div className="flex flex-wrap gap-1.5">
+													{(persona.unknown_concepts as string[])
+														.slice(0, 8)
+														.map((concept) => (
+															<span
+																key={concept}
+																className="text-xs bg-purple-50 text-purple-600 px-2 py-0.5 rounded-full border border-purple-100"
+															>
+																{concept}
+															</span>
+														))}
+												</div>
+											</div>
+										</div>
+									)}
+								{persona.updated_at && (
+									<p className="text-[10px] text-slate-300 text-right pt-1">
+										{new Date(persona.updated_at).toLocaleDateString("ja-JP", {
+											year: "numeric",
+											month: "short",
+											day: "numeric",
+										})}{" "}
+										更新
+									</p>
+								)}
+							</div>
+						) : (
+							<div className="flex flex-col items-center justify-center py-8 text-slate-300">
+								<svg
+									className="w-10 h-10 mb-3"
+									fill="none"
+									stroke="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path
+										strokeLinecap="round"
+										strokeLinejoin="round"
+										strokeWidth="1.5"
+										d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
+									/>
+								</svg>
+								<p className="text-sm font-semibold">ペルソナ未生成</p>
+								<p className="text-xs mt-1 text-center">
+									論文を読んで推薦を受けると
+									<br />
+									あなたのペルソナが作成されます
+								</p>
+							</div>
 						)}
 					</div>
 				</section>

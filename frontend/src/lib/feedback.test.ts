@@ -15,7 +15,7 @@ describe("feedback lib", () => {
 		const payload: FeedbackPayload = {
 			session_id: "sess-123",
 			target_type: "chat",
-			user_score: 1,
+			user_rating: 1,
 			user_comment: "Good job!",
 		};
 

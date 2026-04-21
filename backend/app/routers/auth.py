@@ -173,6 +173,18 @@ async def get_current_user_stats(user: CurrentUser):
         return UserStats()
 
 
+@router.get("/me/persona")
+async def get_user_persona(user: CurrentUser):
+    """ユーザーのペルソナプロファイルを返す。未生成の場合は空オブジェクト。"""
+    storage = get_storage_provider()
+    try:
+        persona = storage.get_user_persona(user.uid)
+        return persona or {}
+    except Exception as e:
+        log.exception("persona", "ペルソナの取得に失敗しました", uid=user.uid, error=str(e))
+        return {}
+
+
 @router.get("/me/translations")
 async def get_user_translations(
     user: CurrentUser,

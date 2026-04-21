@@ -75,6 +75,36 @@ describe("recommendation lib", () => {
 		});
 	});
 
+	describe("submitRecommendationRollout", () => {
+		it("should throw error if response is not ok", async () => {
+			(fetch as any).mockResolvedValue({
+				ok: false,
+				status: 500,
+				text: async () => "External Error",
+			});
+
+			await expect(
+				submitRecommendationRollout(
+					{ session_id: "s1", user_score: 5 },
+					"token",
+				),
+			).rejects.toThrow("Failed to submit rollout (500): External Error");
+		});
+
+		it("should return json on success", async () => {
+			(fetch as any).mockResolvedValue({
+				ok: true,
+				json: async () => ({ status: "ok" }),
+			});
+
+			const result = await submitRecommendationRollout(
+				{ session_id: "s1", user_score: 5 },
+				"token",
+			);
+			expect(result).toEqual({ status: "ok" });
+		});
+	});
+
 	describe("generateRecommendations", () => {
 		it("should call energy/generate endpoint", async () => {
 			(fetch as any).mockResolvedValue({

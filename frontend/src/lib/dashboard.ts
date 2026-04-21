@@ -65,6 +65,26 @@ export async function fetchUserPapers(
 	return res.json();
 }
 
+export interface UserPersona {
+	knowledge_level: string | null;
+	interests: string[] | null;
+	unknown_concepts: string[] | null;
+	preferred_direction: string | null;
+	updated_at: string | null;
+}
+
+export async function fetchUserPersona(
+	token: string,
+): Promise<UserPersona | null> {
+	const res = await fetch(`${API_URL}/api/auth/me/persona`, {
+		headers: buildAuthHeaders(token),
+	});
+	if (!res.ok) return null;
+	const data = await res.json();
+	if (!data || Object.keys(data).length === 0) return null;
+	return data as UserPersona;
+}
+
 export async function deletePaper(
 	token: string,
 	paperId: string,

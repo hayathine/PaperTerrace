@@ -102,9 +102,8 @@ class UserPersonaModule(dspy.Module):
 
 class SystemModule(dspy.Module):
     """
-    グローバルシステムコンテキストを生成するモジュール。GEPA最適化対象。
+    グローバルシステムコンテキストを生成するモジュール。
 
-    SystemContextSignature の __doc__ が GEPA の最適化対象になる。
     出力はユーザー非依存の不変制約（役割定義・言語強制・品質基準）のみを含む。
     """
 
@@ -130,7 +129,11 @@ class PersonaAdapter(dspy.Module):
         self.adapter = dspy.Predict(PersonaAdapterSignature)
 
     def forward(
-        self, system_context: str, user_persona: str, task_description: str, lang_name: str
+        self,
+        system_context: str,
+        user_persona: str,
+        task_description: str,
+        lang_name: str,
     ) -> str:
         result = self.adapter(
             system_context=system_context,
@@ -146,17 +149,18 @@ class UniversalTaskModule(dspy.Module):
     3層パイプラインで任意の下流タスクを実行する汎用モジュール。
 
     パイプライン構造:
-        [Layer 1] SystemModule (固定・LLMなし)
+        [Layer 1] SystemModule (_compiled=True で凍結)
             task_type + lang_name → system_context
 
         [Layer 2] PersonaAdapter (GEPA最適化対象)
             system_context + user_persona + task_description + lang_name → persona_instruction
 
-        [Layer 3] downstream Predict (固定)
+        [Layer 3] downstream Predict (_compiled=True で凍結)
             persona_instruction + task_inputs → 出力
 
     GEPAは PersonaAdapter (PersonaAdapterSignature) のみを最適化する。
-    SystemModule は dspy.Predict を持たないため optimizer から不可視。
+    Layer 1 と Layer 3 は _compiled=True を設定することで DSPy 公式の凍結メカニズムにより
+    optimizer のパラメータ走査対象から除外される。
     downstream は __init__ 時に拡張した固定シグネチャで実行する。
     """
 
@@ -175,11 +179,12 @@ class UniversalTaskModule(dspy.Module):
     def __init__(self, signature=SolveTask):
         super().__init__()
         self.target_signature = signature
-        # Layer 1: 固定システムコンテキスト（LLMなし・最適化対象外）
+        # Layer 1: システムコンテキスト（_compiled=True で凍結 → optimizer の走査対象外）
         self.system_module = SystemModule()
-        # Layer 2: ペルソナアダプター（GEPA最適化対象）
+        self.system_module._compiled = True
+        # Layer 2: ペルソナアダプター（GEPA最適化対象 → _compiled を設定しない）
         self.persona_adapter = PersonaAdapter()
-        # Layer 3: 下流シグネチャに persona_instruction と lang_name を動的追加（固定・最適化対象外）
+        # Layer 3: 下流シグネチャに persona_instruction と lang_name を動的追加
         # 既にフィールドが存在するシグネチャへの重複追加を防止
         extended_sig = signature
         if "persona_instruction" not in signature.input_fields:
@@ -193,12 +198,12 @@ class UniversalTaskModule(dspy.Module):
         if "lang_name" not in extended_sig.input_fields:
             extended_sig = extended_sig.append(
                 "lang_name",
-                dspy.InputField(
-                    desc="Target language name for the response"
-                ),
+                dspy.InputField(desc="Target language name for the response"),
                 type_=str,
             )
         self.solve = dspy.Predict(extended_sig)
+        # Layer 3: downstream Predict を凍結（_compiled=True → optimizer の走査対象外）
+        self.solve._compiled = True
 
     def _get_task_description(self) -> str:
         sig_name = self.target_signature.__name__
@@ -339,7 +344,13 @@ class SentenceTranslationModule(dspy.Module):
         super().__init__()
         self.translate = dspy.Predict(SentenceTranslation)
 
-    def forward(self, paper_context: str, target_word: str, lang_name: str = "Japanese", **kwargs):
+    def forward(
+        self,
+        paper_context: str,
+        target_word: str,
+        lang_name: str = "Japanese",
+        **kwargs,
+    ):
         return self.translate(
             input_data=target_word,
             paper_context=paper_context,

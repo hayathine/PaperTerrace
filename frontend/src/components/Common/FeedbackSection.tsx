@@ -46,7 +46,7 @@ const FeedbackSection: React.FC<FeedbackSectionProps> = ({
 				target_type: targetType,
 				target_id: targetId,
 				trace_id: traceId,
-				user_score: currentScore,
+				user_rating: currentScore,
 				user_comment: currentComment?.trim() || undefined,
 			});
 			setStatus("submitted");

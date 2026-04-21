@@ -15,7 +15,7 @@ export interface FeedbackPayload {
 		| "figure_insight";
 	target_id?: string;
 	trace_id?: string;
-	user_score?: number; // 1 for Good, 0 for Bad
+	user_rating?: number; // 1 for Good, 0 for Bad (binary feedback)
 	user_comment?: string;
 }
 

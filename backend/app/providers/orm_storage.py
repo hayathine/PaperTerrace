@@ -22,6 +22,7 @@ from app.models.repositories.note_repository import NoteRepository
 from app.models.repositories.ocr_repository import OCRRepository
 from app.models.repositories.paper_repository import PaperRepository
 from app.models.repositories.stamp_repository import StampRepository
+from app.models.repositories.user_profile_repository import UserProfileRepository
 from app.models.repositories.user_repository import UserRepository
 from app.providers.storage_provider import StorageInterface
 
@@ -113,6 +114,7 @@ class ORMStorageAdapter(StorageInterface):
         self.figures = FigureRepository(db)
         self.stamps = StampRepository(db)
         self.users = UserRepository(db)
+        self.user_profiles = UserProfileRepository(db)
         self.ocr = OCRRepository(db)
         self.chat = ChatHistoryRepository(db)
 
@@ -518,6 +520,21 @@ class ORMStorageAdapter(StorageInterface):
             lambda: self.chat.get_count_by_user(user_id)
         )
         return stats
+
+    def get_user_persona(self, user_id: str) -> Optional[dict]:
+        """ユーザーのペルソナプロファイルを返す。未生成の場合は None。"""
+        profile = self._with_recovery(
+            lambda: self.user_profiles.get_by_user_id(user_id)
+        )
+        if not profile:
+            return None
+        return {
+            "knowledge_level": profile.knowledge_level,
+            "interests": profile.interests,
+            "unknown_concepts": profile.unknown_concepts,
+            "preferred_direction": profile.preferred_direction,
+            "updated_at": profile.updated_at,
+        }
 
     def get_user_translations(
         self, user_id: str, page: int = 1, per_page: int = 20

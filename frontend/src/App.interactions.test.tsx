@@ -63,7 +63,7 @@ vi.mock("@/components/Upload/UploadScreen", () => ({
 // react-router-dom: /* ルートのみレンダリングして Dashboard の lazy import を回避
 vi.mock("react-router-dom", () => ({
 	Routes: ({ children }: any) => <>{children}</>,
-	Route: ({ path, element }: any) => (path === "/*" ? <>{element}</> : null),
+	Route: ({ path, element }: any) => (path === "/*" ? element : null),
 	useNavigate: () => vi.fn(),
 	useLocation: () => ({ pathname: "/", search: "", hash: "", state: null }),
 }));

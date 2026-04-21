@@ -29,14 +29,14 @@ async def submit_feedback(
         target_type=req.target_type,
         target_id=req.target_id,
         trace_id=req.trace_id,
-        user_score=req.user_score,
+        user_score=req.user_rating,  # user_rating (0/1) を user_score に変換
         user_comment=req.user_comment,
     )
     log.debug(
         "submit",
         "New feedback received",
         type=req.target_type,
-        score=req.user_score,
+        rating=req.user_rating,
         comment=req.user_comment,
     )
 
