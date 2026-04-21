@@ -24,6 +24,14 @@ def setup_dspy():
     if credentials:
         kwargs["vertex_credentials"] = credentials
 
+    langsmith_api_key = settings.get("LANGSMITH_API_KEY", "")
+    if langsmith_api_key:
+        os.environ["LANGSMITH_API_KEY"] = langsmith_api_key
+        os.environ["LANGCHAIN_API_KEY"] = langsmith_api_key
+        os.environ["LANGCHAIN_TRACING_V2"] = "true"
+        os.environ["LANGCHAIN_PROJECT"] = settings.get("LANGSMITH_PROJECT", "paperterrace")
+        log.info("setup_dspy", "LangSmith tracing enabled", project=os.environ["LANGCHAIN_PROJECT"])
+
     lm = dspy.LM(model_name, **kwargs)
     dspy.configure(lm=lm)
     return lm

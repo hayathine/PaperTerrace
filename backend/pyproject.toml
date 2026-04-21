@@ -36,6 +36,7 @@ dependencies = [
     "arq>=0.26.1",
     "sentry-sdk[fastapi]<2.0.0",
     "dspy>=2.5.26,<2.6",
+    "langsmith>=0.2",
     "pymupdf4llm>=0.3.4",
     "python-jose[cryptography]>=3.5.0",
     "google-cloud-vision>=3.12.1",

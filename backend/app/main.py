@@ -275,23 +275,42 @@ if _storage_type == "gcs":
         file_hash: str = FastAPIPath(...),
         filename: str = FastAPIPath(...),
     ):
-        """Proxy GCS images to avoid CORS issues."""
+        """Proxy GCS images to avoid CORS issues.
+
+        拡張子が一致しない場合、jpg/webp を相互にフォールバックして探す。
+        フロントエンドが .webp を要求してもバックエンドが .jpg で保存している場合に対応。
+        """
         import asyncio
+
+        _EXT_ALT = {"webp": "jpg", "jpg": "webp", "jpeg": "webp"}
 
         try:
             from app.providers.image_storage import _get_instance
 
             storage_inst = _get_instance()
-            blob_name = f"paper_images/{file_hash}/{filename}"
-            blob = storage_inst.bucket.blob(blob_name)
 
-            exists = await asyncio.to_thread(blob.exists)
-            if not exists:
+            async def _try_blob(name: str):
+                b = storage_inst.bucket.blob(name)
+                ok = await asyncio.to_thread(b.exists)
+                return b if ok else None
+
+            blob_name = f"paper_images/{file_hash}/{filename}"
+            blob = await _try_blob(blob_name)
+
+            if blob is None:
+                # 拡張子フォールバック: page_5.webp → page_5.jpg など
+                stem, _, ext = filename.rpartition(".")
+                alt_ext = _EXT_ALT.get(ext.lower())
+                if stem and alt_ext:
+                    alt_blob_name = f"paper_images/{file_hash}/{stem}.{alt_ext}"
+                    blob = await _try_blob(alt_blob_name)
+
+            if blob is None:
                 return FastAPIResponse(status_code=404, content=b"Not Found")
 
             data = await asyncio.to_thread(blob.download_as_bytes)
-            ext = blob.name.rsplit(".", 1)[-1].lower()
-            content_type = "image/webp" if ext == "webp" else "image/jpeg"
+            blob_ext = blob.name.rsplit(".", 1)[-1].lower()
+            content_type = "image/webp" if blob_ext == "webp" else "image/jpeg"
             return FastAPIResponse(
                 content=data,
                 media_type=content_type,

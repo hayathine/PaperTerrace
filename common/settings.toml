@@ -126,6 +126,10 @@ OCR_DET_MIN_BBOX_WIDTH = 25 # 最小 bbox 幅: 単一文字レベルの細切れ
 OCR_DET_POOL_SIZE = 1
 OCR_REC_POOL_SIZE = 1
 
+# LangSmith トレーシング（APIキーは local-files/secrets/.env で設定）
+LANGSMITH_API_KEY = ""
+LANGSMITH_PROJECT = "paperterrace"
+
 # Sentry / GlitchTip
 SENTRY_ENABLED = false
 SENTRY_DSN = ""
