@@ -683,7 +683,7 @@ export function usePDFViewerLogic({
 					const cachedPages: PageData[] = layoutList.map(
 						(layout: any, i: number) => ({
 							page_num: i + 1,
-							image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.webp`,
+							image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.jpg`,
 							width: layout?.width || 0,
 							height: layout?.height || 0,
 							words: layout?.words || [],
@@ -774,7 +774,7 @@ export function usePDFViewerLogic({
 									const bgPages: PageData[] = bgLayoutList.map(
 										(layout: any, i: number) => ({
 											page_num: i + 1,
-											image_url: `${API_URL}/static/paper_images/${bgData.file_hash}/page_${i + 1}.webp`,
+											image_url: `${API_URL}/static/paper_images/${bgData.file_hash}/page_${i + 1}.jpg`,
 											width: layout?.width || 0,
 											height: layout?.height || 0,
 											words: layout?.words || [],
@@ -874,7 +874,7 @@ export function usePDFViewerLogic({
 						const fullPages: PageData[] = layoutList.map(
 							(layout: any, i: number) => ({
 								page_num: i + 1,
-								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.webp`,
+								image_url: `${API_URL}/static/paper_images/${fileHash}/page_${i + 1}.jpg`,
 								width: layout?.width || 0,
 								height: layout?.height || 0,
 								words: layout?.words || [],
