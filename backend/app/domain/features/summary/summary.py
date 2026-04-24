@@ -1,6 +1,10 @@
 
 
-from app.domain.features.cache_utils import PDF_CACHE_MODEL, get_or_create_pdf_cache
+from app.domain.features.cache_utils import (
+    PDF_CACHE_MODEL,
+    get_or_create_pdf_cache,
+    get_or_create_system_context_cache,
+)
 from app.domain.features.correspondence_lang_dict import SUPPORTED_LANGUAGES
 from app.domain.features.persona_utils import resolve_user_persona
 from app.providers import get_ai_provider, get_storage_provider
@@ -164,6 +168,14 @@ class SummaryService:
                 if key_word:
                     keyword_focus = f"Focus on: {key_word}"
 
+                # 初回の DSPy 呼び出し（要約タスク）でシステムコンテキストを Gemini Context Cache に登録
+                sys_cache_name = await get_or_create_system_context_cache(
+                    ai_provider=self.ai_provider,
+                    redis=self.redis,
+                    model=self.model,
+                    lang_name=lang_name,
+                )
+
                 res, trace_id = await trace_dspy_call(
                     "PaperSummaryModule",
                     "PaperSummary",
@@ -172,6 +184,7 @@ class SummaryService:
                         "paper_text": safe_text,
                         "lang_name": lang_name,
                         "user_persona": resolve_user_persona(user_id, "Professional Academic Advisor"),
+                        **({"system_context_cache_name": sys_cache_name} if sys_cache_name else {}),
                     },
                     context=TraceContext(
                         user_id=user_id, session_id=session_id, paper_id=paper_id

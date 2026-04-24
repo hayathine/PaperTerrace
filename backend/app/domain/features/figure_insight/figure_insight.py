@@ -1,5 +1,5 @@
-from app.domain.features.cache_utils import PDF_CACHE_MODEL, get_pdf_cache_key
-from app.providers import get_ai_provider
+from app.domain.features.cache_utils import PDF_CACHE_MODEL, get_or_create_pdf_cache
+from app.providers import get_ai_provider, get_storage_provider
 from app.schemas.gemini_schema import (
     FigureAnalysisResponse,
 )
@@ -18,6 +18,7 @@ class FigureInsightService:
         self.ai_provider = get_ai_provider()
         self.model = settings.get("FIGURE_EXPLAIN_MODEL", "gemini-2.5-flash")
         self.redis = RedisService()
+        self.storage = get_storage_provider()
 
     async def analyze_figure(
         self,
@@ -53,10 +54,28 @@ class FigureInsightService:
             lang_name=lang_name, caption_hint=caption_hint
         )
 
-        # paper_id に紐づく PDF コンテキストキャッシュを Redis から取得（共有モデルのキー）
+        # paper_id に紐づく PDF コンテキストキャッシュを取得、なければ GCS から再作成
         pdf_cache_name: str | None = None
         if paper_id:
-            pdf_cache_name = self.redis.get(get_pdf_cache_key(paper_id))
+            pdf_bytes: bytes | None = None
+            try:
+                paper_info = self.storage.get_paper(paper_id)
+                if paper_info and paper_info.get("file_hash"):
+                    from app.providers import get_image_storage
+                    img_storage = get_image_storage()
+                    pdf_bytes = img_storage.get_doc_bytes(
+                        img_storage.get_doc_path(paper_info["file_hash"])
+                    )
+            except Exception as e:
+                log.warning("analyze", "PDFバイナリの取得に失敗しました", paper_id=paper_id, error=str(e))
+
+            if pdf_bytes:
+                pdf_cache_name = await get_or_create_pdf_cache(
+                    paper_id=paper_id,
+                    pdf_contents=pdf_bytes,
+                    ai_provider=self.ai_provider,
+                    redis=self.redis,
+                )
 
         import time
 

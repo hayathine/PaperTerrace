@@ -224,38 +224,64 @@ class UniversalTaskModule(dspy.Module):
         lang_name = kwargs.get("lang_name", "")
         sig_name = self.target_signature.__name__
 
-        # Layer 0: 固定システムコンテキストを生成（凍結）
-        system_context = self.system_module(
-            task_type=sig_name,
-            lang_name=lang_name,
-        )
+        # persona_instruction が呼び出し側から事前計算済みで渡された場合は
+        # Layer 0/2 の LLM 呼び出しをスキップする
+        persona_instruction = kwargs.get("persona_instruction")
 
-        # Layer 1: behavior_logs が渡された場合は UserPersonaModule でペルソナを動的生成（最適化対象）。
-        # 渡されない場合は user_persona 引数にフォールバック（後方互換性）。
-        behavior_logs = kwargs.get("behavior_logs", "")
-        if behavior_logs:
-            persona_result = self.user_persona_module(
-                behavior_logs=behavior_logs,
-                current_logs=kwargs.get("current_logs", ""),
-                user_feedback=kwargs.get("user_feedback", ""),
+        # system_context_cache_name が渡された場合は Gemini Context Cache を使う LM に切り替える
+        sys_cache_name: str | None = kwargs.get("system_context_cache_name")
+
+        if persona_instruction is None:
+            # Layer 0: システムコンテキスト
+            system_context = self.system_module(
+                task_type=sig_name,
+                lang_name=lang_name,
             )
-            user_persona = persona_result.user_persona
-        else:
-            user_persona = kwargs.get("user_persona", "")
 
-        # Layer 2: ユーザーペルソナ + システムコンテキストから行動ポリシーを生成（GEPA最適化対象）
-        persona_instruction = self.persona_adapter(
-            system_context=system_context,
-            user_persona=user_persona,
-            task_description=self._get_task_description(),
-            lang_name=lang_name,
-        )
+            # Layer 1: behavior_logs が渡された場合は UserPersonaModule でペルソナを動的生成（最適化対象）。
+            # 渡されない場合は user_persona 引数にフォールバック（後方互換性）。
+            behavior_logs = kwargs.get("behavior_logs", "")
+            if behavior_logs:
+                persona_result = self.user_persona_module(
+                    behavior_logs=behavior_logs,
+                    current_logs=kwargs.get("current_logs", ""),
+                    user_feedback=kwargs.get("user_feedback", ""),
+                )
+                user_persona = persona_result.user_persona
+            else:
+                user_persona = kwargs.get("user_persona", "")
+
+            # Layer 2: ユーザーペルソナ + システムコンテキストから行動ポリシーを生成（GEPA最適化対象）
+            # cached_lm が指定されている場合はそのコンテキスト内で実行
+            if sys_cache_name:
+                from common.dspy_utils.config import create_lm_with_cache
+                cached_lm = create_lm_with_cache(sys_cache_name)
+                with dspy.context(lm=cached_lm):
+                    persona_instruction = self.persona_adapter(
+                        system_context=system_context,
+                        user_persona=user_persona,
+                        task_description=self._get_task_description(),
+                        lang_name=lang_name,
+                    )
+            else:
+                persona_instruction = self.persona_adapter(
+                    system_context=system_context,
+                    user_persona=user_persona,
+                    task_description=self._get_task_description(),
+                    lang_name=lang_name,
+                )
+
 
         # Layer 3: パイプライン内部キーを除いた kwargs を downstream に渡して実行
         solve_kwargs = {
             k: v for k, v in kwargs.items() if k not in self._PIPELINE_INTERNAL_KEYS
         }
+        if sys_cache_name:
+            from common.dspy_utils.config import create_lm_with_cache
+            with dspy.context(lm=create_lm_with_cache(sys_cache_name)):
+                return self.solve(persona_instruction=persona_instruction, **solve_kwargs)
         return self.solve(persona_instruction=persona_instruction, **solve_kwargs)
+
 
 
 # --- 以下、UniversalTaskModule のラッパーとして各モジュールを定義 ---

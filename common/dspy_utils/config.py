@@ -7,9 +7,16 @@ from common.logger import get_logger
 
 log = get_logger(__name__)
 
+# setup_dspy() で設定した LM の構築パラメータを保持する。
+# create_lm_with_cache() でキャッシュ付き LM を作るために参照する。
+_lm_model_name: str = ""
+_lm_kwargs: dict = {}
+
 
 def setup_dspy():
     """Configure DSPy with Vertex AI."""
+    global _lm_model_name, _lm_kwargs
+
     # Use vertex_ai/ prefix for litellm
     model_name = settings.get("DSPY_MODEL", "vertex_ai/gemini-2.5-flash-lite")
     project = settings.get("GCP_PROJECT_ID")
@@ -29,12 +36,32 @@ def setup_dspy():
         os.environ["LANGSMITH_API_KEY"] = langsmith_api_key
         os.environ["LANGCHAIN_API_KEY"] = langsmith_api_key
         os.environ["LANGCHAIN_TRACING_V2"] = "true"
-        os.environ["LANGCHAIN_PROJECT"] = settings.get("LANGSMITH_PROJECT", "paperterrace")
-        log.info("setup_dspy", "LangSmith tracing enabled", project=os.environ["LANGCHAIN_PROJECT"])
+        project_name = settings.get("LANGSMITH_PROJECT", "paperterrace")
+        os.environ["LANGCHAIN_PROJECT"] = project_name
+        os.environ["LANGSMITH_PROJECT"] = project_name
+        import litellm
+        litellm.success_callback = ["langsmith"]
+        log.info("setup_dspy", "LangSmith tracing enabled", project=project_name)
 
     lm = dspy.LM(model_name, **kwargs)
     dspy.configure(lm=lm)
+
+    _lm_model_name = model_name
+    _lm_kwargs = kwargs
     return lm
+
+
+def create_lm_with_cache(cached_content_name: str) -> dspy.LM:
+    """Gemini Context Cache を使う DSPy LM を生成する。
+
+    setup_dspy() で設定したモデル・認証情報をそのまま引き継ぎ、
+    cached_content パラメータだけを追加して返す。
+    """
+    return dspy.LM(
+        _lm_model_name or settings.get("DSPY_MODEL", "vertex_ai/gemini-2.5-flash-lite"),
+        cached_content=cached_content_name,
+        **_lm_kwargs,
+    )
 
 
 def get_dspy_gcs_bucket():

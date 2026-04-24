@@ -288,7 +288,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 					<img
 						src={displayUrl}
 						alt={`Page ${page.page_num}`}
-						className="absolute inset-0 w-full h-full object-contain block select-none"
+						className="absolute inset-0 w-full h-full object-fill block select-none"
 						loading="lazy"
 						onError={() => {
 							log.warn("load_image", "Image failed to load", {
@@ -381,7 +381,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 												<div className="absolute top-0 right-0 translate-x-1/2 -translate-y-1/2 z-[9999] pointer-events-auto opacity-0 group-hover:opacity-100 transition-opacity duration-200">
 													<button
 														type="button"
-														className="bg-orange-600 text-white w-5 h-5 rounded-full shadow shadow-orange-500/30 hover:bg-orange-500 hover:shadow-orange-600/40 transition-all flex items-center justify-center cursor-pointer hover:scale-110 active:scale-95"
+														className="bg-orange-600 text-white w-[60px] h-[60px] rounded-full shadow-xl shadow-orange-500/40 hover:bg-orange-500 hover:shadow-orange-600/50 transition-all flex items-center justify-center cursor-pointer hover:scale-105 active:scale-95"
 														onClick={(e) => {
 															e.stopPropagation();
 															if (onFigureSelect) {
@@ -397,7 +397,7 @@ const PDFPage: React.FC<PDFPageProps> = ({
 														}}
 														title={t("menu.ask_ai")}
 													>
-														<span className="text-[9px] leading-none">✨</span>
+														<span className="text-[27px] leading-none">✨</span>
 													</button>
 												</div>
 											)}

@@ -1,5 +1,10 @@
 import { useCallback, useEffect, useState } from "react";
-import { getUICache, setUICache, useBookmarks } from "@/db/hooks";
+import {
+	getUICache,
+	setUICache,
+	useBookmarks,
+	usePaperCache,
+} from "@/db/hooks";
 import type { Bookmark } from "@/db/index";
 import {
 	deletePaper as deletePaperApi,
@@ -48,6 +53,7 @@ export function useDashboardData(
 	userId: string | undefined,
 ) {
 	const { getBookmarks, deleteBookmark } = useBookmarks();
+	const { deletePaperCache } = usePaperCache();
 
 	const [stats, setStats] = useState<UserStats | null>(null);
 	const [statsLoading, setStatsLoading] = useState(false);
@@ -101,17 +107,25 @@ export function useDashboardData(
 			if (!token) return;
 			await deletePaperApi(token, paperId);
 			setPapers((prev) => prev.filter((x) => x.paper_id !== paperId));
+			await deletePaperCache(paperId);
 			if (userId) {
-				const key = `dashboard_papers:${userId}`;
-				const cached = await getUICache<PaperEntry[]>(key);
-				if (cached)
+				const dashKey = `dashboard_papers:${userId}`;
+				const dashCached = await getUICache<PaperEntry[]>(dashKey);
+				if (dashCached)
 					await setUICache(
-						key,
-						cached.filter((x) => x.paper_id !== paperId),
+						dashKey,
+						dashCached.filter((x) => x.paper_id !== paperId),
+					);
+				const listKey = `paper_list:${userId}`;
+				const listCached = await getUICache<{ paper_id: string }[]>(listKey);
+				if (listCached)
+					await setUICache(
+						listKey,
+						listCached.filter((x) => x.paper_id !== paperId),
 					);
 			}
 		},
-		[token, userId],
+		[token, userId, deletePaperCache],
 	);
 
 	const removeBookmark = useCallback(

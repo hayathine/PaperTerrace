@@ -1,6 +1,6 @@
 """
 DSPy module trace recording utility.
-Records input/output pairs to BigQuery for later use as DSPy training examples.
+Records input/output pairs to PostgreSQL for later use as DSPy training examples.
 """
 
 import asyncio
@@ -232,14 +232,32 @@ async def trace_dspy_call(
     Returns:
         Tuple of (DSPy Prediction result, trace_id string)
     """
+    import dspy
+    current_settings = dspy.settings.copy()
     last_exception: Exception | None = None
 
     for attempt in range(_MAX_RETRIES):
         start = time.perf_counter()
         trace_id = "error"
         try:
-            # Run sync DSPy module in a separate thread to avoid event loop issues
-            result = await asyncio.to_thread(module_callable, **inputs)
+            # Sync wrapper to preserve DSPy settings in the new thread
+            def _run_with_context():
+                with dspy.settings.context(**current_settings):
+                    return module_callable(**inputs)
+
+            # In testing environment, run in the same thread to avoid "no running event loop"
+            # errors when using async-aware mocks like respx or litellm's internals.
+            # In production, use to_thread to avoid blocking the main event loop.
+            is_testing = (
+                settings.get("APP_ENV") == "testing" or 
+                settings.get("PYTEST_CURRENT_TEST") is not None
+            )
+
+            if is_testing:
+                result = _run_with_context()
+            else:
+                result = await asyncio.to_thread(_run_with_context)
+
             elapsed_ms = int((time.perf_counter() - start) * 1000)
             outputs = _prediction_to_dict(result)
             prompt = _get_last_prompt()

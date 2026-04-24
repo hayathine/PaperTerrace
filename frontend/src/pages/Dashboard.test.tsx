@@ -81,6 +81,15 @@ vi.mock("@/db/hooks", () => ({
 		getBookmarks: mockGetBookmarks,
 		deleteBookmark: vi.fn().mockResolvedValue(true),
 	}),
+	usePaperCache: () => ({
+		getCachedPaper: vi.fn().mockResolvedValue(undefined),
+		savePaperToCache: vi.fn().mockResolvedValue(undefined),
+		getCachedImage: vi.fn().mockResolvedValue(undefined),
+		saveImageToCache: vi.fn().mockResolvedValue(undefined),
+		deletePaperCache: vi.fn().mockResolvedValue(undefined),
+		cachePaperImages: vi.fn().mockResolvedValue([]),
+		deleteCorruptedCache: vi.fn().mockResolvedValue(undefined),
+	}),
 	getUICache: vi.fn().mockResolvedValue(null),
 	setUICache: vi.fn().mockResolvedValue(true),
 }));

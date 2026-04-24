@@ -661,7 +661,6 @@ export function usePDFViewerLogic({
 	};
 
 	const loadExistingPaper = async (id: string) => {
-		setStatus("processing");
 		setLoadedPaperId(id);
 		setGrobidText(null);
 
@@ -815,6 +814,7 @@ export function usePDFViewerLogic({
 				}
 			}
 
+			setStatus("processing");
 			const headers = buildAuthHeaders(token);
 			const paperRes = await fetch(`${API_URL}/api/papers/${id}`, { headers });
 			if (paperRes.ok) {

@@ -5,7 +5,12 @@ AIチャットアシスタント機能を提供するモジュール
 
 
 
-from app.domain.features.cache_utils import PDF_CACHE_MODEL, get_or_create_pdf_cache, get_pdf_cache_key
+from app.domain.features.cache_utils import (
+    PDF_CACHE_MODEL,
+    get_or_create_pdf_cache,
+    get_or_create_system_context_cache,
+    get_pdf_cache_key,
+)
 from app.domain.features.persona_utils import resolve_user_persona
 from app.providers import get_ai_provider
 from common.config import settings
@@ -178,6 +183,15 @@ class ChatService:
                                 f"コンテキストキャッシュの作成に失敗しました ({paper_id}): {e}"
                             )
 
+                # システムコンテキストの Gemini Context Cache 名を取得（初回のみ LLM 生成＋登録）
+                sys_cache_name = await get_or_create_system_context_cache(
+                    ai_provider=self.ai_provider,
+                    redis=self.redis,
+                    model=self.model,
+                    lang_name=lang_name,
+                    ttl_minutes=self.cache_ttl_minutes,
+                )
+
                 # DSPy version
                 res, trace_id = await trace_dspy_call(
                     "ChatModule",
@@ -191,6 +205,7 @@ class ChatService:
                         "user_message": user_message,
                         "user_persona": resolve_user_persona(user_id, "Helpful Research Assistant"),
                         "lang_name": lang_name,
+                        **({"system_context_cache_name": sys_cache_name} if sys_cache_name else {}),
                     },
                     context=TraceContext(
                         user_id=user_id, session_id=session_id, paper_id=paper_id
