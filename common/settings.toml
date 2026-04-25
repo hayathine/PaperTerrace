@@ -19,7 +19,13 @@ MODEL_TRANSLATE = "gemini-2.5-flash-lite"
 MODEL_OCR = "gemini-2.5-flash-lite"
 FIGURE_EXPLAIN_MODEL = "gemini-2.5-flash-lite"
 DSPY_MODEL = "vertex_ai/gemini-2.5-flash-lite"
-GEPA_REFLECTION_MODEL = "gemini/gemini-2.5-flash"
+SIMBA_PROMPT_MODEL = "gemini/gemini-2.5-flash"
+SIMBA_MAX_STEPS = 8
+SIMBA_BSIZE = 16
+SIMBA_NUM_CANDIDATES = 6
+SIMBA_MAX_DEMOS = 4
+SIMBA_TEMPERATURE_FOR_SAMPLING = 0.4
+SIMBA_TEMPERATURE_FOR_CANDIDATES = 0.2
 
 # Cloud Tasks OCR ワーカー設定
 # 本番/staging のみ設定。空の場合はインライン OCR にフォールバック。
